@@ -2,8 +2,20 @@
 // provisioning (spec §3). Requires a real Meta App (META_APP_ID/META_APP_SECRET) and
 // a WhatsApp product config (META_CONFIG_ID) — none of that exists in dev by default,
 // so every call here will fail with a clear error until real credentials are set.
+const { validateTemplateText, defaultExampleFor } = require('./templateParams');
+
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+
+// A template body/header failed local named-parameter validation before ever
+// reaching Meta — distinct from a real Graph API rejection so callers (the
+// templates route) can return 400 instead of 502.
+class TemplateValidationError extends Error {
+  constructor(errors) {
+    super(errors.join(' '));
+    this.errors = errors;
+  }
+}
 
 function assertConfigured() {
   if (!process.env.META_APP_ID || !process.env.META_APP_SECRET) {
@@ -104,9 +116,28 @@ async function sendTextMessage(phoneNumberId, accessToken, toPhone, body) {
   return data.messages?.[0]?.id;
 }
 
+// Builds the `components` array for sending a template whose BODY uses
+// named parameters — `paramValues` is { [param_name]: value }. Unlike the
+// old positional shape (an ordered array), each object here carries its own
+// `parameter_name`, so order doesn't matter. Pass {} (or omit) for a
+// template with no variables — sendTemplateMessage defaults `components` to [].
+function buildNamedBodyComponents(paramValues) {
+  const names = Object.keys(paramValues || {});
+  if (names.length === 0) return [];
+  return [{
+    type: 'body',
+    parameters: names.map((parameter_name) => ({
+      type: 'text',
+      parameter_name,
+      text: String(paramValues[parameter_name]),
+    })),
+  }];
+}
+
 // Template messages — deliverable any time (business-initiated), required
 // outside the 24h window and for all broadcast/campaign sends. `components`
-// follows Meta's template component array shape (e.g. body parameters);
+// follows Meta's template component array shape — build it with
+// buildNamedBodyComponents() for a template with named body parameters, or
 // pass [] for a template with no variables.
 async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, language = 'en_US', components = [] }) {
   const data = await graphFetch(`/${phoneNumberId}/messages`, {
@@ -122,19 +153,46 @@ async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, 
   return data.messages?.[0]?.id;
 }
 
+// Builds the Meta Graph API request body for template creation — separated
+// from the actual fetch call so it's unit-testable without a real Meta App
+// (see server/test/templateParams.test.js). Throws TemplateValidationError
+// if the body fails named-parameter validation (numbered params, mixed
+// numbered/named, or a variable at the very start/end).
+function buildTemplateCreatePayload({ name, category, language = 'en_US', body }) {
+  const validation = validateTemplateText(body, { label: 'Body' });
+  if (!validation.valid) throw new TemplateValidationError(validation.errors);
+
+  const bodyComponent = { type: 'BODY', text: body };
+  if (validation.params.length > 0) {
+    bodyComponent.example = {
+      body_text_named_params: validation.params.map((param_name) => ({
+        param_name,
+        example: defaultExampleFor(param_name),
+      })),
+    };
+  }
+
+  const payload = {
+    name,
+    category: category.toUpperCase(),
+    language,
+    components: [bodyComponent],
+  };
+  // Omitted entirely for a template with no variables — Meta defaults to
+  // "positional" when absent, which is irrelevant with zero parameters.
+  if (validation.paramFormat === 'named') payload.parameter_format = 'named';
+  return payload;
+}
+
 // Submits a message template to Meta for approval. Approval status arrives
 // asynchronously via the `message_template_status_update` webhook field
 // (already handled in metaWebhook.js) — this call just registers it.
-async function createMessageTemplate(wabaId, accessToken, { name, category, language = 'en_US', body }) {
+async function createMessageTemplate(wabaId, accessToken, templateData) {
+  const payload = buildTemplateCreatePayload(templateData);
   const data = await graphFetch(`/${wabaId}/message_templates`, {
     method: 'POST',
     accessToken,
-    body: {
-      name,
-      category: category.toUpperCase(),
-      language,
-      components: [{ type: 'BODY', text: body }],
-    },
+    body: payload,
   });
   return data; // { id, status, category }
 }
@@ -147,5 +205,8 @@ module.exports = {
   getPhoneNumberDetails,
   sendTextMessage,
   sendTemplateMessage,
+  buildNamedBodyComponents,
+  buildTemplateCreatePayload,
   createMessageTemplate,
+  TemplateValidationError,
 };

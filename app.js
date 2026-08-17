@@ -713,7 +713,15 @@ document.addEventListener('DOMContentLoaded', () => {
       e.target.reset();
       document.getElementById('modal-create-template')?.classList.remove('open');
     } catch (err) {
-      showToast(err.message);
+      // Named-parameter validation failures (server/src/utils/templateParams.js)
+      // come back as { error, details: [string, ...] } — surface the specific
+      // reason (e.g. "numbered parameters not allowed") rather than a generic
+      // message. (Zod's own 400s also have a `details` array, but of issue
+      // objects, not strings — the typeof check below skips those.)
+      const details = err.body && Array.isArray(err.body.details) && err.body.details.every((d) => typeof d === 'string')
+        ? err.body.details.join(' ')
+        : null;
+      showToast(details || err.message);
     }
   });
 

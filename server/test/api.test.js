@@ -116,7 +116,7 @@ test('broadcasts, automation rules, templates: create + list round trip', async 
   const broadcast = await fetch(`${baseUrl}/api/broadcasts`, {
     method: 'POST',
     headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: `${SUITE_PREFIX}Broadcast` }),
+    body: JSON.stringify({ title: `${SUITE_PREFIX}Broadcast`, templateName: 'welcome_offer_v1' }),
   }).then((r) => r.json());
   assert.equal(broadcast.title, `${SUITE_PREFIX}Broadcast`);
 
@@ -127,12 +127,25 @@ test('broadcasts, automation rules, templates: create + list round trip', async 
   }).then((r) => r.json());
   assert.equal(rule.title, `${SUITE_PREFIX}Rule`);
 
+  // Named parameters, not numbered — Meta rejects {{1}}-style now (see
+  // server/test/templateParams.test.js for the dedicated coverage of that).
   const template = await fetch(`${baseUrl}/api/templates`, {
     method: 'POST',
     headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: `${SUITE_PREFIX}template_${Date.now()}`, category: 'Utility', body: 'Hello {{1}}' }),
+    body: JSON.stringify({ name: `${SUITE_PREFIX}template_${Date.now()}`, category: 'Utility', body: 'Hello {{customer_name}}, thanks!' }),
   }).then((r) => r.json());
   assert.equal(template.category, 'Utility');
+});
+
+test('templates: numbered parameters are rejected with 400 through the real route', async () => {
+  const res = await fetch(`${baseUrl}/api/templates`, {
+    method: 'POST',
+    headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `${SUITE_PREFIX}bad_template`, category: 'Utility', body: 'Hello {{1}}, thanks!' }),
+  });
+  assert.equal(res.status, 400);
+  const data = await res.json();
+  assert.match(data.details.join(' '), /numbered parameters/i);
 });
 
 test('support tickets: client creates, admin sees and updates status', async () => {

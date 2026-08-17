@@ -33,6 +33,13 @@ async function sendOneRecipient(broadcast, recipient) {
   };
   try {
     const chat = await chatsRepo.findOrCreateByContact(broadcast.client_id, contact);
+    // templateComponents is always [] here — there's no per-recipient named-
+    // parameter mapping yet (which contact field fills {{customer_name}},
+    // etc.), so a broadcast template with body variables sends with them
+    // unresolved. When that mapping is built, use
+    // metaClient.buildNamedBodyComponents({ param_name: value, ... }) rather
+    // than a positional array — Meta's send API expects named parameter
+    // objects now (see server/src/utils/templateParams.js).
     const message = await messagingService.sendChatMessage(broadcast.client_id, chat, {
       type: 'template',
       templateName: broadcast.template_name,

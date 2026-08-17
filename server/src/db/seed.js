@@ -31,10 +31,12 @@ const MOCK_CHATS = [
   { name: '919123456789', phone: '+91 91234 56789', tag: 'Lead', unread_count: 2 },
 ];
 
+// Named parameters, not numbered — Meta now rejects the numbered {{1}}/{{2}}
+// style for new templates (see server/src/utils/templateParams.js).
 const MOCK_TEMPLATES = [
-  { name: 'welcome_offer_v1', category: 'Marketing', body: 'Hello {{1}}, welcome! Use code SAVE10 for 10% off on your next purchase.' },
-  { name: 'order_status_update', category: 'Utility', body: 'Hi {{1}}, your order #{{2}} has been shipped and is on its way!' },
-  { name: 'otp_verification', category: 'Authentication', body: 'Your security verification code is {{1}}. Valid for 10 minutes.' },
+  { name: 'welcome_offer_v1', category: 'Marketing', body: 'Hello {{customer_name}}, welcome! Use code SAVE10 for 10% off on your next purchase.' },
+  { name: 'order_status_update', category: 'Utility', body: 'Hi {{customer_name}}, your order #{{order_number}} has been shipped and is on its way!' },
+  { name: 'otp_verification', category: 'Authentication', body: 'Your security verification code is {{otp_code}}. Valid for 10 minutes.' },
 ];
 
 const MOCK_BROADCASTS = [

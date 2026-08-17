@@ -5,6 +5,7 @@ const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { messageTemplateCreateSchema } = require('../utils/validate');
+const { validateTemplateText } = require('../utils/templateParams');
 
 const router = Router();
 
@@ -20,6 +21,15 @@ router.get('/', asyncHandler(async (req, res) => {
 // onboarding order (spec allows connecting WhatsApp after initial signup).
 router.post('/', asyncHandler(async (req, res) => {
   const data = messageTemplateCreateSchema.parse(req.body);
+
+  // Validated up front, regardless of WABA connection state, so a template
+  // using numbered {{1}}/{{2}} parameters (which Meta now rejects) never
+  // gets silently saved as 'pending' without telling the author it's broken.
+  const validation = validateTemplateText(data.body, { label: 'Body' });
+  if (!validation.valid) {
+    return res.status(400).json({ error: 'Invalid template body', details: validation.errors });
+  }
+
   const waba = await wabasRepo.findByClientId(req.clientId);
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
@@ -27,6 +37,9 @@ router.post('/', asyncHandler(async (req, res) => {
       const accessToken = decrypt(waba.access_token_encrypted);
       await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
     } catch (err) {
+      if (err instanceof metaClient.TemplateValidationError) {
+        return res.status(400).json({ error: 'Invalid template body', details: err.errors });
+      }
       return res.status(502).json({ error: 'Meta rejected this template', detail: err.message });
     }
   }
