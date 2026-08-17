@@ -8,6 +8,17 @@ async function listByClientId(clientId) {
   return rows;
 }
 
+// Consent enforcement (messagingService.sendChatMessage) looks up a
+// template's category by name to decide whether it's subject to the
+// opt-in gate — a template name is only unique per client, not globally.
+async function findByNameAndClient(clientId, name) {
+  const { rows } = await pool.query(
+    'select * from message_templates where client_id = $1 and name = $2 order by created_at desc limit 1',
+    [clientId, name]
+  );
+  return rows[0] || null;
+}
+
 async function create({ client_id, name, category, status, body }) {
   const { rows } = await pool.query(
     `insert into message_templates (client_id, name, category, status, body)
@@ -40,4 +51,4 @@ async function updateStatus(id, status) {
   return rows[0] || null;
 }
 
-module.exports = { listByClientId, create, listAll, updateStatus };
+module.exports = { listByClientId, create, listAll, updateStatus, findByNameAndClient };

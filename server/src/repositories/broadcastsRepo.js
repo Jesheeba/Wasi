@@ -9,6 +9,7 @@ async function list(clientId) {
     `select b.id, b.client_id, b.title, b.tag_id, b.status, b.template_name, b.scheduled_date, b.created_at,
             coalesce(rc.total, 0)::int as recipient_count,
             coalesce(rc.sent, 0)::int as delivered_count,
+            coalesce(rc.skipped, 0)::int as skipped_consent_count,
             case when coalesce(rc.sent, 0) = 0 then 0
                  else round((coalesce(rc.delivered, 0)::numeric / rc.sent) * 100, 2)
             end as delivered_rate,
@@ -19,6 +20,7 @@ async function list(clientId) {
      left join lateral (
        select count(*) as total,
               count(*) filter (where br.status = 'sent') as sent,
+              count(*) filter (where br.status = 'skipped') as skipped,
               count(*) filter (where m.status in ('delivered', 'read')) as delivered,
               count(*) filter (where m.status = 'read') as read
        from broadcast_recipients br

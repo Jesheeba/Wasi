@@ -3,10 +3,18 @@ const { pool } = require('../db/pool');
 // Fans a broadcast out to every contact matching its audience tag (or every
 // contact, if no tag was set — a "send to everyone" campaign).
 async function createFromAudience(broadcastId, clientId, tagId) {
+  // Joins back to contacts.opt_in_status in the same statement — the
+  // caller (routes/broadcasts.js) needs it immediately, to warn before any
+  // send happens, not just to insert the rows.
   const { rows } = await pool.query(
-    `insert into broadcast_recipients (broadcast_id, contact_id)
-     select $1, id from contacts where client_id = $2 and ($3::uuid is null or tag_id = $3)
-     returning *`,
+    `with inserted as (
+       insert into broadcast_recipients (broadcast_id, contact_id)
+       select $1, id from contacts where client_id = $2 and ($3::uuid is null or tag_id = $3)
+       returning *
+     )
+     select inserted.*, contacts.opt_in_status
+     from inserted
+     join contacts on contacts.id = inserted.contact_id`,
     [broadcastId, clientId, tagId || null]
   );
   return rows;
@@ -67,6 +75,16 @@ async function markFailed(id, errorReason) {
   );
 }
 
+// Distinct from markFailed on purpose (build plan Phase 4) — a non-opted-in
+// recipient is never attempted, so it isn't a send failure. Reported
+// separately on the broadcast (see broadcastsRepo.list's skipped_count).
+async function markSkipped(id, reason) {
+  await pool.query(
+    `update broadcast_recipients set status = 'skipped', error_reason = $2 where id = $1`,
+    [id, reason]
+  );
+}
+
 async function hasPending(broadcastId) {
   const { rows } = await pool.query(
     `select 1 from broadcast_recipients where broadcast_id = $1 and status in ('pending', 'sending') limit 1`,
@@ -75,4 +93,4 @@ async function hasPending(broadcastId) {
   return rows.length > 0;
 }
 
-module.exports = { createFromAudience, claimBatch, markSent, markFailed, hasPending };
+module.exports = { createFromAudience, claimBatch, markSent, markFailed, markSkipped, hasPending };

@@ -69,7 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
       phone: c.phone,
       tag: state.tagsById[c.tag_id]?.name || '—',
       status: c.status,
-      created: (c.created_at || '').slice(0, 10)
+      created: (c.created_at || '').slice(0, 10),
+      optInStatus: c.opt_in_status || 'unknown',
+      optInSource: c.opt_in_source || null,
+      optInAt: c.opt_in_status === 'opted_in' ? c.opt_in_at : c.opt_out_at
     };
   }
 
@@ -91,7 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
       status: b.status,
       delivered: String(b.delivered_count),
       readRate: `${Number(b.read_rate).toFixed(1)}%`,
-      date: (b.scheduled_date || b.created_at || '').toString().slice(0, 10)
+      date: (b.scheduled_date || b.created_at || '').toString().slice(0, 10),
+      skippedConsent: b.skipped_consent_count || 0
     };
   }
 
@@ -517,18 +521,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Contacts Table ---
+  const OPT_IN_BADGE = {
+    opted_in: { label: 'Opted In', bg: '#DCFCE7', color: '#15803D' },
+    opted_out: { label: 'Opted Out', bg: '#FEE2E2', color: '#B91C1C' },
+    unknown: { label: 'Unknown', bg: '#F1F5F9', color: '#475569' }
+  };
+
   function renderContacts() {
     const contactsTableBody = document.getElementById('contacts-table-body');
     if (!contactsTableBody) return;
 
     contactsTableBody.innerHTML = '';
     state.contacts.forEach(c => {
+      const badge = OPT_IN_BADGE[c.optInStatus] || OPT_IN_BADGE.unknown;
+      const detail = c.optInSource
+        ? `${c.optInSource}${c.optInAt ? ' · ' + c.optInAt.slice(0, 10) : ''}`
+        : '—';
       const tr = `
         <tr>
           <td style="font-weight: 600;">${c.name}</td>
           <td>${c.phone}</td>
           <td><span class="tag-badge">${c.tag}</span></td>
           <td><span class="status-badge active">${c.status}</span></td>
+          <td>
+            <span class="status-badge" style="background: ${badge.bg}; color: ${badge.color};" title="${detail}">${badge.label}</span>
+            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${detail}</div>
+          </td>
           <td>${c.created}</td>
         </tr>
       `;
@@ -543,6 +561,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     broadcastsTableBody.innerHTML = '';
     state.broadcasts.forEach(b => {
+      const skippedCell = b.skippedConsent > 0
+        ? `<span class="status-badge" style="background: #FEF3C7; color: #B45309;" title="Contacts not opted in for marketing — skipped, not sent">${b.skippedConsent} skipped</span>`
+        : '—';
       const tr = `
         <tr>
           <td style="font-weight: 600;">${b.title}</td>
@@ -550,6 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td><span class="status-badge active">${b.status}</span></td>
           <td>${b.delivered}</td>
           <td>${b.readRate}</td>
+          <td>${skippedCell}</td>
           <td>${b.date}</td>
         </tr>
       `;
@@ -678,7 +700,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      await authFetch('/api/broadcasts', {
+      const created = await authFetch('/api/broadcasts', {
         method: 'POST',
         body: JSON.stringify({ title, tag_id: tagId || undefined, templateName })
       });
@@ -686,6 +708,9 @@ document.addEventListener('DOMContentLoaded', () => {
       renderBroadcasts();
       e.target.reset();
       document.getElementById('modal-create-campaign')?.classList.remove('open');
+      if (created?.consentWarning) {
+        showToast(created.consentWarning);
+      }
     } catch (err) {
       showToast(err.message);
     }

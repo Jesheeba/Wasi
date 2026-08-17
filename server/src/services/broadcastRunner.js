@@ -8,6 +8,7 @@ const broadcastsRepo = require('../repositories/broadcastsRepo');
 const broadcastRecipientsRepo = require('../repositories/broadcastRecipientsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const messagingService = require('../services/messagingService');
+const { MessagingError } = messagingService;
 
 const TICK_MS = 5000;
 const BATCH_SIZE = 25;
@@ -48,7 +49,15 @@ async function sendOneRecipient(broadcast, recipient) {
     });
     await broadcastRecipientsRepo.markSent(recipient.id, message.id);
   } catch (err) {
-    await broadcastRecipientsRepo.markFailed(recipient.id, err.message);
+    // Consent gate rejected it before any Cloud API call was made — skip,
+    // not fail (build plan Phase 4). Reusing messagingService's own check
+    // rather than re-implementing it here means there's exactly one place
+    // that decides whether a template send needs consent.
+    if (err instanceof MessagingError && err.code === 'consent_required') {
+      await broadcastRecipientsRepo.markSkipped(recipient.id, err.message);
+    } else {
+      await broadcastRecipientsRepo.markFailed(recipient.id, err.message);
+    }
   }
 }
 
@@ -102,4 +111,4 @@ function stop() {
   timer = null;
 }
 
-module.exports = { start, stop, tick };
+module.exports = { start, stop, tick, processBroadcast };

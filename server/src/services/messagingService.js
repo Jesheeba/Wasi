@@ -4,6 +4,8 @@
 // sent/failed bookkeeping only exist in one place.
 const wabasRepo = require('../repositories/wabasRepo');
 const chatsRepo = require('../repositories/chatsRepo');
+const contactsRepo = require('../repositories/contactsRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const subscriptionsRepo = require('../repositories/subscriptionsRepo');
 const plansRepo = require('../repositories/plansRepo');
 const usageRepo = require('../repositories/usageRepo');
@@ -33,6 +35,26 @@ async function canSendFreeform(clientId, chatId) {
   return Date.now() - new Date(lastIn).getTime() < SESSION_WINDOW_MS;
 }
 
+// Marketing consent gate (build plan Phase 4) — the send path is the
+// enforcement point precisely so it can't be bypassed by a different
+// caller (chats.js's manual send route, broadcastRunner, or anything
+// future) the way a UI-only check could be. Utility and authentication
+// templates are exempt; a template whose category can't be determined
+// locally is treated as marketing — fail closed, not open.
+async function assertConsentForTemplate(clientId, chat, templateName) {
+  const template = await messageTemplatesRepo.findByNameAndClient(clientId, templateName);
+  const requiresConsent = !template || template.category === 'Marketing';
+  if (!requiresConsent) return;
+
+  const contact = chat.contact_id ? await contactsRepo.findById(clientId, chat.contact_id) : null;
+  if (!contact || contact.opt_in_status !== 'opted_in') {
+    throw new MessagingError(
+      'This contact has not opted in to marketing messages — utility/authentication templates are unaffected.',
+      'consent_required'
+    );
+  }
+}
+
 // Approximate plan enforcement — see usageRepo.monthToDateSent for the
 // "outbound messages this month" proxy this checks against.
 async function assertWithinPlanLimit(clientId) {
@@ -56,6 +78,9 @@ async function sendChatMessage(clientId, chat, { type, body, templateName, templ
       'This chat is outside the 24-hour customer service window — send a template message instead.',
       'session_window_closed'
     );
+  }
+  if (type === 'template') {
+    await assertConsentForTemplate(clientId, chat, templateName);
   }
   await assertWithinPlanLimit(clientId);
 

@@ -5,9 +5,11 @@ const auditLogRepo = require('../repositories/auditLogRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
+const consentRepo = require('../repositories/consentRepo');
 const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
 const automationEngine = require('../services/automationEngine');
+const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = Router();
@@ -78,6 +80,18 @@ async function handleInboundMessages(clientId, value) {
 
     if (inserted) {
       await usageRepo.incrementReceived(clientId);
+
+      // Opt-out (build plan Phase 4) — recorded before automation runs, so
+      // the consent_events row exists regardless of whatever a client's own
+      // automation rules do with this same inbound message.
+      if (isOptOutMessage(body)) {
+        await consentRepo.recordEvent(clientId, contact.id, {
+          event: 'opted_out',
+          source: 'inbound_stop_keyword',
+          evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
+        });
+      }
+
       await automationEngine.evaluate(clientId, chat, body);
       await forwardToClientWebhook(clientId, 'message.received', { chat_id: chat.id, message: inserted });
     }
