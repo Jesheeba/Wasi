@@ -1,0 +1,20 @@
+{
+  "name": "wasi-crm-clone",
+  "version": "1.0.0",
+  "description": "Wasi WhatsApp CRM & Smart Conversations Application Clone",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx -y serve -l 3000 ."
+  },
+  "keywords": [
+    "whatsapp",
+    "crm",
+    "wasi",
+    "clone"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

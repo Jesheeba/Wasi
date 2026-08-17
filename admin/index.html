@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wasi Admin Panel</title>
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="admin.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- ===================== LOGIN VIEW ===================== -->
+  <div id="login-view" class="auth-container">
+    <div class="auth-banner">
+      <div class="auth-banner-content">
+        <div class="admin-logo-mark">
+          <i data-lucide="shield-check"></i>
+        </div>
+        <h1 style="font-size:1.75rem; font-weight:700; color: var(--color-heading);">Wasi Admin Panel</h1>
+        <p style="color: var(--text-muted); font-size:0.95rem;">
+          Internal operations console for managing clients, onboarding, WhatsApp Business
+          Account health, and platform audit history.
+        </p>
+      </div>
+    </div>
+    <div class="auth-card-container">
+      <div class="auth-card">
+        <div class="auth-title">Admin Sign In</div>
+        <div id="login-error" class="inline-error" style="display:none;"></div>
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label" for="login-email">Email</label>
+            <input type="email" id="login-email" class="form-input" placeholder="admin@wasi.local" autocomplete="username" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-password">Password</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="login-password" class="form-input" placeholder="••••••••" autocomplete="current-password" required />
+              <button type="button" class="password-toggle-btn" id="toggle-password-btn"><i data-lucide="eye"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="login-submit-btn">
+            <span id="login-submit-label">Sign In</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== APP SHELL ===================== -->
+  <div id="app-shell" style="display:none;">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <i data-lucide="shield-check" style="color:#4AC959;"></i>
+          <span style="color:#fff; font-weight:700; font-size:1.05rem;">Wasi Admin</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span class="nav-text">Dashboard</span></a>
+        <a class="nav-item" data-view="clients"><i data-lucide="users"></i><span class="nav-text">Clients</span></a>
+        <a class="nav-item" data-view="onboarding"><i data-lucide="list-checks"></i><span class="nav-text">Onboarding Queue</span></a>
+        <a class="nav-item" data-view="waba-health"><i data-lucide="activity"></i><span class="nav-text">WABA Health</span></a>
+        <a class="nav-item" data-view="billing"><i data-lucide="credit-card"></i><span class="nav-text">Billing</span></a>
+        <a class="nav-item" data-view="templates-review"><i data-lucide="file-check"></i><span class="nav-text">Templates Review</span></a>
+        <a class="nav-item" data-view="tickets"><i data-lucide="life-buoy"></i><span class="nav-text">Support / Tickets</span></a>
+        <a class="nav-item" data-view="team"><i data-lucide="users-round"></i><span class="nav-text">Team &amp; Roles</span></a>
+        <a class="nav-item" data-view="audit-log"><i data-lucide="scroll-text"></i><span class="nav-text">Audit Log</span></a>
+        <a class="nav-item" data-view="settings"><i data-lucide="settings"></i><span class="nav-text">Settings</span></a>
+      </nav>
+      <div class="sidebar-bottom">
+        <a class="nav-item" id="logout-btn"><i data-lucide="log-out"></i><span class="nav-text">Log Out</span></a>
+      </div>
+    </aside>
+
+    <div class="main-wrapper">
+      <header class="top-header">
+        <div class="header-left">
+          <span class="page-title-inline" id="header-title">Dashboard</span>
+        </div>
+        <div class="header-right">
+          <div class="user-profile-btn">
+            <div class="avatar" id="admin-avatar">A</div>
+            <div>
+              <div style="font-size:0.85rem; font-weight:600; color:var(--text-main);" id="admin-name">—</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);" id="admin-role">—</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content-area">
+
+        <!-- ---------- Dashboard ---------- -->
+        <section id="view-dashboard" class="admin-view active">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Dashboard</div>
+              <div class="page-subtitle">Platform-wide KPIs at a glance</div>
+            </div>
+            <button class="btn-secondary" id="refresh-dashboard-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="dashboard-error" class="inline-error" style="display:none;"></div>
+          <div class="stats-grid" id="dashboard-stats"></div>
+
+          <div class="table-card" style="margin-top:1.5rem;">
+            <div class="table-header-tools">
+              <div style="font-weight:600; color:var(--color-heading);">Clients by Status</div>
+            </div>
+            <div style="padding:1.25rem;">
+              <div id="clients-by-status-bars"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Clients ---------- -->
+        <section id="view-clients" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Clients</div>
+              <div class="page-subtitle">All tenants on the platform</div>
+            </div>
+          </div>
+          <div id="clients-error" class="inline-error" style="display:none;"></div>
+
+          <div class="table-card">
+            <div class="table-header-tools">
+              <div class="search-box">
+                <i data-lucide="search" style="width:16px; color:var(--text-muted);"></i>
+                <input type="text" id="clients-search" placeholder="Search by name, email, or status..." />
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted);" id="clients-count-label"></div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Tenant Slug</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody id="clients-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Client Detail ---------- -->
+        <section id="view-client-detail" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <button class="btn-secondary" id="back-to-clients-btn"><i data-lucide="arrow-left" style="width:14px;"></i> Back to Clients</button>
+            </div>
+          </div>
+          <div id="client-detail-error" class="inline-error" style="display:none;"></div>
+          <div id="client-detail-loading" class="empty-state" style="display:none;">Loading client detail…</div>
+          <div id="client-detail-content"></div>
+        </section>
+
+        <!-- ---------- Onboarding Queue ---------- -->
+        <section id="view-onboarding" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Onboarding Queue</div>
+              <div class="page-subtitle">Clients who are not yet fully active</div>
+            </div>
+            <button class="btn-secondary" id="refresh-onboarding-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="onboarding-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Client Status</th>
+                    <th>Plan</th>
+                    <th>Stuck At</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="onboarding-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- WABA Health ---------- -->
+        <section id="view-waba-health" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">WABA Health Monitor</div>
+              <div class="page-subtitle">WhatsApp Business Account connections across all tenants</div>
+            </div>
+            <button class="btn-secondary" id="refresh-wabas-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="wabas-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Tenant Slug</th>
+                    <th>WABA ID</th>
+                    <th>Phone Number ID</th>
+                    <th>Quality Rating</th>
+                    <th>Status</th>
+                    <th>Verified At</th>
+                  </tr>
+                </thead>
+                <tbody id="wabas-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Billing ---------- -->
+        <section id="view-billing" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Billing</div>
+              <div class="page-subtitle">Subscriptions and estimated recurring revenue</div>
+            </div>
+            <button class="btn-secondary" id="refresh-billing-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="billing-error" class="inline-error" style="display:none;"></div>
+          <div class="stats-grid" id="billing-stats"></div>
+          <div class="table-card" style="margin-top:1.5rem;">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Renews At</th>
+                    <th>Payment Ref</th>
+                  </tr>
+                </thead>
+                <tbody id="billing-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Templates Review ---------- -->
+        <section id="view-templates-review" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Templates Review</div>
+              <div class="page-subtitle">Message templates submitted across every client</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <select id="templates-review-status-filter" class="form-input" style="width:auto;">
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <button class="btn-secondary" id="refresh-templates-review-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+            </div>
+          </div>
+          <div id="templates-review-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Body</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="templates-review-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Support / Tickets ---------- -->
+        <section id="view-tickets" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Support / Tickets</div>
+              <div class="page-subtitle">Client-reported issues</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <select id="tickets-status-filter" class="form-input" style="width:auto;">
+                <option value="">All statuses</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+              <button class="btn-secondary" id="refresh-tickets-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+            </div>
+          </div>
+          <div id="tickets-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Subject</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tickets-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Team & Roles ---------- -->
+        <section id="view-team" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Team &amp; Roles</div>
+              <div class="page-subtitle">Internal admin users and access control</div>
+            </div>
+            <button class="btn-primary" id="open-invite-admin-btn" style="width:auto; padding:0 16px;"><i data-lucide="user-plus" style="width:14px;"></i> Invite Admin</button>
+          </div>
+          <div id="team-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody id="team-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Audit Log ---------- -->
+        <section id="view-audit-log" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Audit Log</div>
+              <div class="page-subtitle">Chronological record of platform actions</div>
+            </div>
+            <button class="btn-secondary" id="refresh-audit-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="audit-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div class="table-header-tools">
+              <div class="search-box" style="width:340px;">
+                <i data-lucide="filter" style="width:16px; color:var(--text-muted);"></i>
+                <input type="text" id="audit-client-filter" placeholder="Filter by client_id (UUID)…" />
+              </div>
+              <button class="btn-secondary" id="audit-clear-filter-btn">Clear Filter</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Actor Type</th>
+                    <th>Actor ID</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Settings ---------- -->
+        <section id="view-settings" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Settings</div>
+              <div class="page-subtitle">Platform configuration status (read-only — edit real values in server/.env)</div>
+            </div>
+            <button class="btn-secondary" id="refresh-settings-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="settings-error" class="inline-error" style="display:none;"></div>
+          <div id="settings-content"></div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ===================== CONFIRM DIALOG ===================== -->
+  <div id="confirm-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="confirm-modal-title">Are you sure?</div>
+        <button class="close-modal-btn" data-close-confirm><i data-lucide="x"></i></button>
+      </div>
+      <div id="confirm-modal-body" style="font-size:0.9rem; color:var(--text-main); line-height:1.5; margin-bottom:1.5rem;"></div>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn-secondary" data-close-confirm>Cancel</button>
+        <button class="btn-primary" id="confirm-modal-action-btn" style="width:auto; padding:0 20px; background:#DC2626;">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== INVITE ADMIN MODAL ===================== -->
+  <div id="invite-admin-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">Invite Admin</div>
+        <button class="close-modal-btn" data-close-invite-admin><i data-lucide="x"></i></button>
+      </div>
+      <div id="invite-admin-error" class="inline-error" style="display:none;"></div>
+      <form id="invite-admin-form">
+        <div class="form-group">
+          <label class="form-label" for="invite-admin-name">Name</label>
+          <input type="text" id="invite-admin-name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="invite-admin-email">Email</label>
+          <input type="email" id="invite-admin-email" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="invite-admin-password">Temporary Password</label>
+          <input type="text" id="invite-admin-password" class="form-input" minlength="8" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="invite-admin-role">Role</label>
+          <select id="invite-admin-role" class="form-input">
+            <option value="support">Support</option>
+            <option value="billing">Billing</option>
+            <option value="super_admin">Super Admin</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary" id="invite-admin-submit-btn">Create Admin User</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

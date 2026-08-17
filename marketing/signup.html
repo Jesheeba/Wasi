@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create your Wasi CRM account</title>
+  <meta name="description" content="Sign up, pick a plan and connect WhatsApp — get your Wasi CRM workspace live in a few minutes." />
+  <link rel="stylesheet" href="/marketing/marketing.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <div class="wizard-shell">
+    <header class="wizard-nav">
+      <div class="container">
+        <a href="/marketing/index.html" class="nav-logo">
+          <svg width="112" height="34" viewBox="0 0 130 40" fill="none">
+            <rect width="130" height="40" rx="8" fill="#43B751" fill-opacity="0.15"/>
+            <text x="22" y="27" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#304742">wasi</text>
+            <circle cx="98" cy="18" r="4" fill="#4AC959"/>
+          </svg>
+        </a>
+        <a href="/marketing/index.html" class="btn btn-secondary" style="height:38px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to site
+        </a>
+      </div>
+    </header>
+
+    <main class="wizard-main">
+      <div class="wizard-card">
+
+        <!-- Step indicator -->
+        <div class="step-indicator" id="step-indicator">
+          <div class="step-dot" data-dot="1"><span class="circle">1</span><span class="lbl">Account</span></div>
+          <div class="connector" data-connector="1"></div>
+          <div class="step-dot" data-dot="2"><span class="circle">2</span><span class="lbl">Plan</span></div>
+          <div class="connector" data-connector="2"></div>
+          <div class="step-dot" data-dot="3"><span class="circle">3</span><span class="lbl">Connect</span></div>
+          <div class="connector" data-connector="3"></div>
+          <div class="step-dot" data-dot="4"><span class="circle">4</span><span class="lbl">Done</span></div>
+        </div>
+
+        <div class="wizard-panel">
+
+          <!-- ===== STEP 1 — ACCOUNT ===== -->
+          <section class="wizard-step" data-step="1">
+            <h2>Create your account</h2>
+            <p class="panel-sub">Takes less than a minute. You'll pick a plan and connect WhatsApp next.</p>
+
+            <div class="form-error-banner" id="step1-error"></div>
+
+            <form id="step1-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="businessName">Business name</label>
+                <input class="form-input" type="text" id="businessName" name="businessName" placeholder="e.g. Priya's Boutique" autocomplete="organization" required />
+                <div class="field-error" data-error-for="businessName"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="email">Work email</label>
+                <input class="form-input" type="email" id="email" name="email" placeholder="you@business.com" autocomplete="email" required />
+                <div class="field-error" data-error-for="email"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <input class="form-input" type="password" id="password" name="password" placeholder="At least 8 characters" autocomplete="new-password" required minlength="8" />
+                <div class="field-error" data-error-for="password"></div>
+              </div>
+
+              <div class="wizard-actions">
+                <span class="spacer"></span>
+                <button type="submit" class="btn btn-primary" id="step1-submit">
+                  Continue
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </button>
+              </div>
+            </form>
+            <p style="text-align:center;font-size:0.8rem;color:var(--text-muted);margin-top:20px;">
+              Already have an account? <a href="/index.html" style="color:var(--color-primary-700);font-weight:600;text-decoration:none;">Log in to the CRM</a>
+            </p>
+          </section>
+
+          <!-- ===== STEP 2 — PLAN & PAYMENT ===== -->
+          <section class="wizard-step" data-step="2" hidden>
+            <h2>Choose your plan</h2>
+            <p class="panel-sub">Prices are in INR per month. WhatsApp conversation charges from Meta are billed separately.</p>
+
+            <div class="form-error-banner" id="step2-error"></div>
+            <div class="form-warn-banner" id="step2-warn"></div>
+            <div class="form-info-banner" id="step2-info"></div>
+
+            <div class="plan-option-grid" id="plan-options">
+              <label class="plan-option" data-plan="Starter">
+                <div class="plan-option-main">
+                  <span class="radio"></span>
+                  <div>
+                    <div class="plan-option-name">Starter</div>
+                    <div class="plan-option-desc">1 number · 500 conversations/mo</div>
+                  </div>
+                </div>
+                <div class="plan-option-price">₹999<small>/mo</small></div>
+              </label>
+              <label class="plan-option" data-plan="Growth">
+                <div class="plan-option-main">
+                  <span class="radio"></span>
+                  <div>
+                    <div class="plan-option-name">Growth</div>
+                    <div class="plan-option-desc">1 number · 3,000 conversations/mo · campaigns, templates, analytics</div>
+                  </div>
+                </div>
+                <div class="plan-option-price">₹2,999<small>/mo</small></div>
+              </label>
+              <label class="plan-option" data-plan="Scale">
+                <div class="plan-option-main">
+                  <span class="radio"></span>
+                  <div>
+                    <div class="plan-option-name">Scale</div>
+                    <div class="plan-option-desc">Multiple numbers · unlimited conversations* · team seats, API access</div>
+                  </div>
+                </div>
+                <div class="plan-option-price">₹7,999<small>/mo</small></div>
+              </label>
+            </div>
+
+            <div id="payment-status" style="margin-bottom:18px;"></div>
+
+            <div class="wizard-actions">
+              <button type="button" class="btn btn-secondary" data-back="1">Back</button>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-primary" id="step2-checkout-btn">
+                Continue to payment
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </button>
+              <button type="button" class="btn btn-primary" id="step2-next-btn" hidden>
+                Next: Connect WhatsApp
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <!-- ===== STEP 3 — CONNECT WHATSAPP ===== -->
+          <section class="wizard-step" data-step="3" hidden>
+            <h2>Connect WhatsApp</h2>
+            <p class="panel-sub">This uses Meta's official Embedded Signup flow — you'll log into your own Facebook Business Manager in a popup.</p>
+
+            <div class="form-error-banner" id="step3-error"></div>
+
+            <div id="step3-body">
+              <div class="connect-box" id="step3-loading">
+                <div class="connect-icon"><span class="spinner" style="border-color: rgba(74,201,89,0.3); border-top-color: var(--color-primary);"></span></div>
+                <h3>Checking WhatsApp connection settings…</h3>
+                <p>One moment.</p>
+              </div>
+            </div>
+
+            <div class="wizard-actions">
+              <button type="button" class="btn btn-secondary" data-back="2">Back</button>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-primary" id="step3-next-btn" hidden>
+                Next
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <!-- ===== STEP 4 — DONE ===== -->
+          <section class="wizard-step" data-step="4" hidden>
+            <div class="done-panel">
+              <div class="done-check">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+              <h2>You're all set</h2>
+              <p class="panel-sub" style="text-align:center;">Your Wasi CRM workspace has been created.</p>
+
+              <div class="done-summary" id="done-summary"></div>
+
+              <a href="/index.html" class="btn btn-primary btn-lg btn-block">
+                Go to your CRM
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/embeddedSignup.js"></script>
+  <script src="/marketing/signup.js"></script>
+</body>
+</html>

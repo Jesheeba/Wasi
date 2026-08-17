@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wasi - Smart Conversations & WhatsApp CRM</title>
+  <meta name="description" content="Securely log in or sign up to access your account." />
+  <link rel="stylesheet" href="index.css" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- ================= AUTHENTICATION VIEW ================= -->
+  <div id="auth-view" class="auth-container">
+    <div class="auth-banner">
+      <div class="auth-banner-content">
+        <div class="logo-container">
+          <svg width="130" height="40" viewBox="0 0 130 40" fill="none">
+            <rect width="130" height="40" rx="8" fill="#43B751" fill-opacity="0.15"/>
+            <text x="22" y="27" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#304742">wasi</text>
+            <circle cx="98" cy="18" r="4" fill="#4AC959"/>
+          </svg>
+        </div>
+        <svg width="280" height="220" viewBox="0 0 315 258" fill="none">
+          <path d="M159.883 48.6539L230.185 158.122C161.754 149.629 135.485 167.929 135.485 167.929L111.194 130.105C111.194 130.105 138.905 114.05 159.883 48.6532V48.6539Z" fill="#4AC959"></path>
+          <path d="M170.489 38.9504L243.484 152.611C245.594 155.897 244.629 160.264 241.329 162.364C238.029 164.464 233.642 163.504 231.532 160.218L158.537 46.5573C156.428 43.272 157.392 38.9052 160.692 36.8049C163.993 34.7046 168.379 35.6651 170.489 38.9504Z" fill="#43B751"></path>
+          <path d="M107.496 124.348L139.182 173.687C141.658 177.541 140.526 182.663 136.654 185.127L91.4518 213.896C87.5803 216.36 82.4355 215.233 79.9602 211.379L48.2741 162.04C45.7988 158.186 46.9306 153.064 50.8022 150.6L96.0047 121.832C99.8762 119.367 105.021 120.494 107.496 124.348Z" fill="#5CBA5B"></path>
+          <circle cx="194" cy="221" r="26" fill="#E1B6D5"/>
+          <path d="M205.444 224.446L194.094 233.502C191.513 235.561 187.687 233.732 187.687 230.44V212.328C187.687 209.035 191.513 207.206 194.094 209.265L205.444 218.321C207.414 219.892 207.414 222.875 205.444 224.446Z" fill="white"></path>
+        </svg>
+        <h2 style="font-size: 1.75rem; font-weight: 700; color: #304742; line-height: 1.3;">Welcome Back to Smart<br/>Conversations</h2>
+      </div>
+    </div>
+
+    <div class="auth-card-container">
+      <div class="auth-card">
+        <h3 class="auth-title">Log In</h3>
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" id="login-email" class="form-input" placeholder="you@example.com" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="login-password" class="form-input" placeholder="Password" required />
+              <button type="button" id="toggle-pwd-btn" class="password-toggle-btn">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
+            <a href="#" id="forgot-password-link" style="font-size: 0.75rem; font-weight: 600; color: var(--text-main); text-decoration: none;">Forget Password ?</a>
+          </div>
+          <button type="submit" class="btn-primary">Login</button>
+          <div style="text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-main);">
+            New to Wasi? <a href="#" style="color: var(--color-primary-600); font-weight: 600; text-decoration: none;">Signup</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= MAIN APPLICATION SHELL ================= -->
+  <div id="app-shell" style="display: none;">
+
+    <!-- Left Sidebar Navigation (Dark Forest Green matching screenshot) -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <svg width="100" height="32" viewBox="0 0 120 36" fill="none">
+            <circle cx="20" cy="18" r="14" fill="#4AC959"/>
+            <path d="M14 18H26M20 12V24" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+            <text x="42" y="25" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#FFFFFF">wasi</text>
+          </svg>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-view="chat">
+          <i data-lucide="message-square"></i>
+          <span class="nav-text">Chat</span>
+        </a>
+        <a class="nav-item" data-view="contacts">
+          <i data-lucide="users"></i>
+          <span class="nav-text">Contacts</span>
+        </a>
+        <a class="nav-item" data-view="campaigns">
+          <i data-lucide="megaphone"></i>
+          <span class="nav-text">Campaigns</span>
+        </a>
+        <a class="nav-item" data-view="template">
+          <i data-lucide="layout"></i>
+          <span class="nav-text">Template</span>
+        </a>
+        <a class="nav-item" data-view="automation">
+          <i data-lucide="bot"></i>
+          <span class="nav-text">Automation</span>
+        </a>
+        <a class="nav-item" data-view="ecommerce">
+          <i data-lucide="shopping-cart"></i>
+          <span class="nav-text">Ecommerce</span>
+        </a>
+        <a class="nav-item" data-view="whatsapp-flows">
+          <i data-lucide="workflow"></i>
+          <span class="nav-text">Whatsapp Flows</span>
+        </a>
+        <a class="nav-item" data-view="instagram">
+          <i data-lucide="camera"></i>
+          <span class="nav-text">Instagram</span>
+        </a>
+        <a class="nav-item" data-view="ctwa">
+          <i data-lucide="target"></i>
+          <span class="nav-text">CTWA</span>
+        </a>
+        <a class="nav-item" data-view="integrations">
+          <i data-lucide="puzzle"></i>
+          <span class="nav-text">Integrations</span>
+        </a>
+        <a class="nav-item" data-view="payments">
+          <i data-lucide="credit-card"></i>
+          <span class="nav-text">Payments</span>
+        </a>
+        <a class="nav-item" data-view="analytics">
+          <i data-lucide="bar-chart-2"></i>
+          <span class="nav-text">Analytics</span>
+        </a>
+        <a class="nav-item" data-view="support">
+          <i data-lucide="life-buoy"></i>
+          <span class="nav-text">Support</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <a class="nav-item" data-view="settings">
+          <i data-lucide="settings"></i>
+          <span class="nav-text">Settings</span>
+        </a>
+        <div class="nav-item" id="user-profile-item" style="cursor: pointer;">
+          <div class="avatar" style="width: 26px; height: 26px; font-size: 0.75rem; background: #4AC959; color: #0E2916;">M</div>
+          <span class="nav-text" style="font-weight: 600; color: #FFFFFF;">Mohamed</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="main-wrapper">
+
+      <!-- Dynamic View Containers -->
+      <main class="main-content" style="padding: 0; height: 100vh;">
+
+        <!-- 1. CHAT VIEW (3-Column Workspace) -->
+        <div id="view-chat" class="view-container active" style="height: 100vh;">
+          <div style="display: flex; height: 100%;">
+
+            <!-- Left Chat List Sidebar -->
+            <div style="width: 320px; border-right: 1px solid var(--border-light); background: white; display: flex; flex-direction: column;">
+              <div style="padding: 1rem; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn-secondary" style="font-size: 0.8rem; height: 34px;" id="start-new-chat-btn">
+                  <i data-lucide="plus" style="width:14px;"></i>
+                </button>
+                <div class="filter-dropdown">
+                  <button class="btn-secondary" style="font-size: 0.8rem; height: 34px;" id="chat-filters-btn">
+                    <i data-lucide="sliders-horizontal" style="width:14px;"></i> Filters
+                  </button>
+                  <div class="filter-dropdown-panel" id="chat-filters-panel">
+                    <button class="filter-option active" data-tag-filter="all">All Chats</button>
+                    <button class="filter-option" data-tag-filter="Lead">Lead</button>
+                    <button class="filter-option" data-tag-filter="Customer">Customer</button>
+                    <button class="filter-option" data-tag-filter="VIP">VIP</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chat-list" id="inbox-chat-list" style="flex: 1; overflow-y: auto;">
+                <!-- Chat list items populated by JS -->
+              </div>
+            </div>
+
+            <!-- Empty Placeholder View -->
+            <div id="chat-empty-placeholder" style="flex: 1; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center;">
+              <div style="margin-bottom: 1.5rem;">
+                <svg width="120" height="100" viewBox="0 0 120 100" fill="none">
+                  <path d="M15 45C15 22.9086 32.9086 5 55 5C77.0914 5 95 22.9086 95 45C95 67.0914 77.0914 85 55 85C46.8521 85 39.2612 82.5574 32.9372 78.3601L15 85L21.8415 67.576C17.5254 61.1645 15 53.3855 15 45Z" fill="#4AC959"/>
+                  <path d="M40 70C40 50.1177 56.1177 34 76 34C95.8823 34 112 50.1177 112 70C112 89.8823 95.8823 106 76 106C68.6669 106 61.833 103.802 56.1404 100.024L40 106L46.1574 90.3184C42.2729 84.547 40 77.547 40 70Z" fill="#ACE6B3" fill-opacity="0.6"/>
+                  <circle cx="42" cy="45" r="4.5" fill="white"/>
+                  <circle cx="55" cy="45" r="4.5" fill="white"/>
+                  <circle cx="68" cy="45" r="4.5" fill="white"/>
+                </svg>
+              </div>
+              <h2 style="font-size: 1.5rem; font-weight: 700; color: #1F2937; margin-bottom: 0.5rem;">Start Managing Your Messages</h2>
+              <p style="font-size: 0.925rem; color: #6B7280; max-width: 480px; line-height: 1.5; margin-bottom: 1.75rem;">
+                Select a conversation from your list or start a new chat to engage with your customers. Your inbox is ready for action!
+              </p>
+              <button class="btn-primary" style="width: auto; padding: 0 24px; height: 42px; font-size: 0.9rem;" id="new-conversation-trigger">
+                Start a new conversation
+              </button>
+            </div>
+
+            <!-- Active Chat Workspace + Right Contact Drawer -->
+            <div id="chat-active-workspace" style="display: none; flex: 1;">
+              <div style="flex: 1; display: flex; flex-direction: column; background: #FAFDFB;">
+                <div class="chat-header">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="chat-avatar" id="active-chat-avatar">AK</div>
+                    <div>
+                      <div style="font-size: 0.875rem; font-weight: 600;" id="active-chat-name">Alex Kumar</div>
+                      <div style="font-size: 0.75rem; color: #22C55E; font-weight: 500;">WhatsApp Business</div>
+                    </div>
+                  </div>
+                  <span class="tag-badge" id="active-chat-tag">Lead</span>
+                </div>
+
+                <div class="chat-messages" id="chat-messages-container"></div>
+
+                <div class="chat-input-bar">
+                  <input type="file" id="chat-attachment-input" style="display: none;" />
+                  <button class="btn-secondary" style="border: none; padding: 6px;" id="chat-attachment-btn"><i data-lucide="paperclip"></i></button>
+                  <input type="text" id="chat-message-input" class="chat-input" placeholder="Type a message or '/' for templates..." />
+                  <button class="btn-primary" style="width: 40px; padding: 0;" id="send-msg-btn"><i data-lucide="send"></i></button>
+                </div>
+              </div>
+
+              <!-- Right Contact Details Drawer -->
+              <div class="contact-details-sidebar">
+                <div class="details-card-header">
+                  <div class="avatar" style="width: 56px; height: 56px; font-size: 1.25rem; background: var(--color-primary-100); color: var(--color-primary-900); margin-bottom: 8px;">AK</div>
+                  <div style="font-weight: 700; font-size: 1rem; color: #1F2937;" id="drawer-contact-name">Alex Kumar</div>
+                  <div style="font-size: 0.8rem; color: #6B7280;" id="drawer-contact-phone">+91 98765 43210</div>
+                </div>
+
+                <div>
+                  <div class="details-section-title">Tags</div>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <span class="tag-badge">Lead</span>
+                    <span class="tag-badge" style="background: #E0F2FE; color: #0369A1;">High Intent</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="details-section-title">Attributes</div>
+                  <div style="font-size: 0.825rem; color: #4B5563; display: flex; flex-direction: column; gap: 6px;">
+                    <div><strong>City:</strong> Mumbai</div>
+                    <div><strong>Lead Score:</strong> 85</div>
+                    <div><strong>Source:</strong> WhatsApp Web</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 2. CONTACTS VIEW -->
+        <div id="view-contacts" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Contacts</h1>
+              <p class="page-subtitle">Manage customer database, tags, and custom attributes</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-add-contact-modal">
+              <i data-lucide="user-plus"></i> Add Contact
+            </button>
+          </div>
+          <div class="table-card">
+            <div class="table-header-tools">
+              <div class="search-box">
+                <i data-lucide="search" style="width: 16px; color: var(--text-muted);"></i>
+                <input type="text" id="contact-search" placeholder="Search contacts..." />
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary"><i data-lucide="upload"></i> Import CSV</button>
+                <button class="btn-secondary"><i data-lucide="download"></i> Export CSV</button>
+              </div>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone Number</th>
+                  <th>Tags</th>
+                  <th>Status</th>
+                  <th>Created Date</th>
+                </tr>
+              </thead>
+              <tbody id="contacts-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. CAMPAIGNS VIEW -->
+        <div id="view-campaigns" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Campaigns</h1>
+              <p class="page-subtitle">Bulk WhatsApp broadcast campaigns and analytics</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-broadcast-modal">
+              <i data-lucide="plus"></i> New Campaign
+            </button>
+          </div>
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Campaign Name</th>
+                  <th>Audience Tag</th>
+                  <th>Status</th>
+                  <th>Delivered</th>
+                  <th>Read Rate</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="broadcasts-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 4. TEMPLATE VIEW -->
+        <div id="view-template" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">WhatsApp Templates</h1>
+              <p class="page-subtitle">Approved Meta WhatsApp Message Templates</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-template-modal"><i data-lucide="plus"></i> Create Template</button>
+          </div>
+          <div class="table-card" style="padding: 1.5rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="templates-grid"></div>
+          </div>
+        </div>
+
+        <!-- 5. AUTOMATION VIEW -->
+        <div id="view-automation" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Automation & Workflows</h1>
+              <p class="page-subtitle">Configure bot flow rules, keyword triggers, and auto-responders</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-rule-modal"><i data-lucide="plus"></i> Create Rule</button>
+          </div>
+          <div class="table-card" style="padding: 1.5rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;" id="automation-rules-grid"></div>
+          </div>
+        </div>
+
+        <!-- SUPPORT VIEW -->
+        <div id="view-support" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Support</h1>
+              <p class="page-subtitle">Get help from the Wasi CRM team</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-ticket-modal">
+              <i data-lucide="plus"></i> New Ticket
+            </button>
+          </div>
+          <div id="tickets-list"></div>
+        </div>
+
+        <!-- 6. ECOMMERCE VIEW -->
+        <div id="view-ecommerce" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Ecommerce Catalog & Cart Recovery</h1>
+              <p class="page-subtitle">Product catalogs, cart recovery automation, and WhatsApp checkout</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="sync-catalog-btn"><i data-lucide="refresh-cw"></i> Sync Meta Catalog</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="table-card" style="padding: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Classic Cotton T-Shirt</span><span class="status-badge active">In Stock</span></div>
+              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 4px;">₹ 450.00</div>
+              <div style="font-size: 0.75rem; color: #6B7280;">SKU: BSR-TSH-01 • Synced with WhatsApp</div>
+            </div>
+            <div class="table-card" style="padding: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Ceramic Table Lamp</span><span class="status-badge active">In Stock</span></div>
+              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 4px;">₹ 680.00</div>
+              <div style="font-size: 0.75rem; color: #6B7280;">SKU: BSR-LMP-02 • Synced with WhatsApp</div>
+            </div>
+            <div class="table-card" style="padding: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Steel Water Bottle</span><span class="status-badge active">In Stock</span></div>
+              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 4px;">₹ 320.00</div>
+              <div style="font-size: 0.75rem; color: #6B7280;">SKU: BSR-BTL-03 • Synced with WhatsApp</div>
+            </div>
+          </div>
+
+          <div class="table-card" style="padding: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Abandoned Cart Recovery Rules</h3>
+            <table class="data-table">
+              <thead><tr><th>Trigger Condition</th><th>Target Audience</th><th>Auto Message Template</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td style="font-weight:600;">1 Hour After Cart Abandoned</td><td>All Shoppers</td><td>Cart Recovery Reminder 1</td><td><span class="status-badge active">Active</span></td></tr>
+                <tr><td style="font-weight:600;">24 Hours After Cart Abandoned</td><td>High Value (>&nbsp;₹1000)</td><td>Special 5% Discount Coupon</td><td><span class="status-badge active">Active</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 7. WHATSAPP FLOWS VIEW -->
+        <div id="view-whatsapp-flows" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Whatsapp Flows</h1>
+              <p class="page-subtitle">Interactive native forms and appointment booking flows</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-flow-modal"><i data-lucide="plus"></i> Create Flow</button>
+          </div>
+
+          <div class="table-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="flows-grid">
+              <div style="border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; background: white;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Lead Qualification Flow</span><span class="status-badge active">Published</span></div>
+                <p style="font-size: 0.85rem; color: #4B5563; margin-bottom: 0.75rem;">3-step native form capturing name, requirement, and budget range.</p>
+                <div style="font-size: 0.75rem; color: #6B7280;">Submissions: 342 • Completion Rate: 89.5%</div>
+              </div>
+              <div style="border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; background: white;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Appointment Scheduler</span><span class="status-badge active">Published</span></div>
+                <p style="font-size: 0.85rem; color: #4B5563; margin-bottom: 0.75rem;">Select date, time slot, and preferred consultant directly in chat.</p>
+                <div style="font-size: 0.75rem; color: #6B7280;">Submissions: 185 • Completion Rate: 94.2%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. INSTAGRAM VIEW -->
+        <div id="view-instagram" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Instagram DM Automation</h1>
+              <p class="page-subtitle">Auto-reply to Story Mentions, DMs, and Comments</p>
+            </div>
+          </div>
+
+          <div class="channel-status-card">
+            <div class="channel-info-left">
+              <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
+              <div>
+                <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">@wasi_official</div>
+                <div style="font-size: 0.8rem; color: #6B7280;">Instagram Business Account</div>
+              </div>
+            </div>
+            <span class="status-badge active" style="padding: 4px 14px; font-weight: 700;">Connected</span>
+          </div>
+
+          <div class="table-card" style="padding: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Active Instagram Rules</h3>
+            <table class="data-table">
+              <thead><tr><th>Trigger Type</th><th>Keyword</th><th>Action</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td style="font-weight:600;">Story Mention</td><td>Any Mention</td><td>Send Discount Link via DM</td><td><span class="status-badge active">Active</span></td></tr>
+                <tr><td style="font-weight:600;">Post Comment</td><td>"price", "info"</td><td>Reply Comment & Send DM Catalog</td><td><span class="status-badge active">Active</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 9. CTWA VIEW -->
+        <div id="view-ctwa" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Click to WhatsApp Ads (CTWA)</h1>
+              <p class="page-subtitle">Track conversions and leads from Meta Facebook & Instagram Ads</p>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon"><i data-lucide="target"></i></div>
+              <div>
+                <div class="stat-val">1,420</div>
+                <div class="stat-label">Ad Clicks</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i data-lucide="user-check"></i></div>
+              <div>
+                <div class="stat-val">385</div>
+                <div class="stat-label">Leads Captured</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
+              <div>
+                <div class="stat-val">₹ 14.20</div>
+                <div class="stat-label">Cost Per Lead</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. INTEGRATIONS VIEW -->
+        <div id="view-integrations" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Integrations</h1>
+              <p class="page-subtitle">Connect Shopify, CRM, Webhooks, and Zapier</p>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+            <div class="table-card" style="padding: 1.25rem;">
+              <h4 style="font-weight: 700;">Shopify</h4>
+              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Sync orders & abandoned carts</p>
+              <span class="status-badge active">Connected</span>
+            </div>
+            <div class="table-card" style="padding: 1.25rem;">
+              <h4 style="font-weight: 700;">HubSpot CRM</h4>
+              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Sync contacts & deals</p>
+              <span class="status-badge active">Connected</span>
+            </div>
+            <div class="table-card" style="padding: 1.25rem;">
+              <h4 style="font-weight: 700;">Razorpay</h4>
+              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">In-chat payment links</p>
+              <span class="status-badge active">Connected</span>
+            </div>
+            <div class="table-card" style="padding: 1.25rem;">
+              <h4 style="font-weight: 700;">Zapier</h4>
+              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Automate 5000+ app workflows</p>
+              <span class="status-badge active">Connected</span>
+            </div>
+            <div class="table-card" style="padding: 1.25rem;">
+              <h4 style="font-weight: 700;">Google Sheets</h4>
+              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Export leads automatically</p>
+              <span class="status-badge active">Connected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 11. PAYMENTS VIEW -->
+        <div id="view-payments" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Payments & UPI</h1>
+              <p class="page-subtitle">WhatsApp Pay & Razorpay in-chat payment links</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-payment-modal"><i data-lucide="plus"></i> Create Payment Link</button>
+          </div>
+          <div class="table-card" style="padding: 1.5rem;">
+            <h3 style="font-weight: 700; margin-bottom: 1rem;">Recent Payment Transactions</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Gateway</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="payments-table-body">
+                <tr>
+                  <td>#TXN-98401</td>
+                  <td>Alex Kumar</td>
+                  <td>₹1,499.00</td>
+                  <td>Razorpay UPI</td>
+                  <td><span class="status-badge active">Paid</span></td>
+                </tr>
+                <tr>
+                  <td>#TXN-98402</td>
+                  <td>Priya Sharma</td>
+                  <td>₹2,999.00</td>
+                  <td>WhatsApp Pay</td>
+                  <td><span class="status-badge active">Paid</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 12. ANALYTICS & REPORTS VIEW (Matching exact screenshot https://app.kwic.in/app/reports/message) -->
+        <div id="view-analytics" class="view-container" style="height: 100vh;">
+          <div class="reports-layout">
+
+            <!-- Secondary Reports Navigation Sidebar -->
+            <div class="reports-sec-sidebar">
+              <div class="sec-nav-header">Message</div>
+              <div class="sec-nav-list">
+                <a class="sec-nav-item active" data-rep-view="message">
+                  <span>Message</span>
+                </a>
+                <a class="sec-nav-item" data-rep-view="tags">
+                  <span>Tags</span>
+                </a>
+                <a class="sec-nav-item" data-rep-view="campaign">
+                  <span>Campaign</span>
+                </a>
+                <a class="sec-nav-item" data-rep-view="flow">
+                  <span>Flow</span>
+                </a>
+                <a class="sec-nav-item" data-rep-view="api">
+                  <span>API</span>
+                </a>
+                <a class="sec-nav-item" data-rep-view="live-chat">
+                  <span>Live Chat</span>
+                </a>
+                <a class="sec-nav-item" data-rep-view="operator-stats">
+                  <span>Operator Stats</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Reports Main Panel -->
+            <div class="settings-main-area" style="padding: 1.5rem 2rem;">
+
+              <!-- Sub-page 1: MESSAGE ANALYTICS (Matching screenshot https://app.kwic.in/app/reports/message) -->
+              <div id="rep-view-message" class="rep-content-view active">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                  <h2 style="font-size: 1.25rem; font-weight: 700; color: #1F2937; display: flex; align-items: center; gap: 6px;">
+                    Message <i data-lucide="info" style="width: 16px; color: #9CA3AF;"></i>
+                  </h2>
+
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-secondary" style="height: 36px; padding: 0 10px;" id="refresh-reports-btn"><i data-lucide="rotate-cw" style="width: 14px;"></i></button>
+                    <div style="display: flex; align-items: center; gap: 8px; background: white; border: 1px solid var(--border-light); padding: 0 12px; height: 36px; border-radius: 8px; font-size: 0.85rem; color: #374151; font-weight: 500;">
+                      <i data-lucide="calendar" style="width: 14px; color: #6B7280;"></i>
+                      <span>Past 7 days</span>
+                      <i data-lucide="chevron-down" style="width: 14px;"></i>
+                      <span style="color: #9CA3AF; margin-left: 8px;">25 Jul 2026 - 01 Aug 2026</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 6 Metrics Cards -->
+                <div class="metrics-cards-grid">
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Sent <i data-lucide="info" style="width: 14px;"></i></div>
+                    <div class="metric-card-val" id="metric-sent">—</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Delivered <i data-lucide="info" style="width: 14px;"></i></div>
+                    <div class="metric-card-val" id="metric-delivered">—</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Read <i data-lucide="info" style="width: 14px;"></i></div>
+                    <div class="metric-card-val" id="metric-read">—</div>
+                  </div>
+
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Failed <i data-lucide="info" style="width: 14px;"></i></div>
+                    <div class="metric-card-val" id="metric-failed">—</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Incoming <i data-lucide="info" style="width: 14px;"></i></div>
+                    <div class="metric-card-val" id="metric-incoming">—</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Outgoing <i data-lucide="info" style="width: 14px;"></i></div>
+                    <div class="metric-card-val" id="metric-outgoing">—</div>
+                  </div>
+                </div>
+                <p style="font-size:0.75rem;color:#9CA3AF;margin-top:0.5rem;">Last 7 days, live from your account.</p>
+
+                <!-- Messages (daily) Line Chart Card -->
+                <div class="chart-card-box">
+                  <div class="chart-header-row">
+                    <div>
+                      <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937;">Messages <span style="font-size: 0.85rem; font-weight: 400; color: #6B7280;">(daily)</span></h3>
+                      <div style="font-size: 0.75rem; color: #9CA3AF;">Past 7 days</div>
+                    </div>
+                    <div class="chart-legend">
+                      <span><span class="legend-dot" style="background: #38BDF8;"></span> Incoming</span>
+                      <span><span class="legend-dot" style="background: #F59E0B;"></span> Outgoing</span>
+                    </div>
+                  </div>
+
+                  <div style="width: 100%; height: 260px; position: relative;">
+                    <svg width="100%" height="100%" viewBox="0 0 700 220" preserveAspectRatio="none" style="overflow: visible;">
+                      <line x1="40" y1="20" x2="680" y2="20" stroke="#F1F5F9" stroke-width="1"/>
+                      <text x="15" y="24" font-size="11" fill="#9CA3AF">600</text>
+
+                      <line x1="40" y1="70" x2="680" y2="70" stroke="#F1F5F9" stroke-width="1"/>
+                      <text x="15" y="74" font-size="11" fill="#9CA3AF">400</text>
+
+                      <line x1="40" y1="120" x2="680" y2="120" stroke="#F1F5F9" stroke-width="1"/>
+                      <text x="15" y="124" font-size="11" fill="#9CA3AF">200</text>
+
+                      <line x1="40" y1="170" x2="680" y2="170" stroke="#E2E8F0" stroke-width="1"/>
+                      <text x="25" y="174" font-size="11" fill="#9CA3AF">0</text>
+
+                      <text x="40" y="195" font-size="11" fill="#6B7280">Sun Jul 26</text>
+                      <text x="145" y="195" font-size="11" fill="#6B7280">Mon Jul 27</text>
+                      <text x="250" y="195" font-size="11" fill="#6B7280">Tue Jul 28</text>
+                      <text x="355" y="195" font-size="11" fill="#6B7280">Wed Jul 29</text>
+                      <text x="460" y="195" font-size="11" fill="#6B7280">Thu Jul 30</text>
+                      <text x="565" y="195" font-size="11" fill="#6B7280">Fri Jul 31</text>
+                      <text x="645" y="195" font-size="11" fill="#6B7280">Sat Aug 01</text>
+
+                      <path d="M 40,170 Q 300,168 565,160 Q 620,157 670,125" fill="none" stroke="#38BDF8" stroke-width="2.5"/>
+                      <circle cx="670" cy="125" r="3" fill="#38BDF8"/>
+
+                      <path d="M 40,170 C 250,169 460,165 565,150 Q 620,100 670,40" fill="none" stroke="#F59E0B" stroke-width="2.5"/>
+                      <circle cx="670" cy="40" r="3" fill="#F59E0B"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub-page 2: TAGS ANALYTICS -->
+              <div id="rep-view-tags" class="rep-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Tag Performance Analytics</h2>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Tag Name</th><th>Contacts Count</th><th>Conversion Rate</th><th>Status</th></tr></thead>
+                    <tbody id="tag-analytics-tbody">
+                      <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Sub-page 3: CAMPAIGN ANALYTICS -->
+              <div id="rep-view-campaign" class="rep-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Campaign Analytics</h2>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Campaign Name</th><th>Sent</th><th>Delivered Rate</th><th>Read Rate</th></tr></thead>
+                    <tbody id="campaign-analytics-tbody">
+                      <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Sub-page 4: FLOW ANALYTICS -->
+              <div id="rep-view-flow" class="rep-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">WhatsApp Flow Submissions</h2>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Flow Title</th><th>Submissions</th><th>Completion Rate</th><th>Drop-off Step</th></tr></thead>
+                    <tbody>
+                      <tr><td style="font-weight:600;">Lead Qualification Form</td><td>342</td><td>89.5%</td><td>Step 3 (Budget)</td></tr>
+                      <tr><td style="font-weight:600;">Appointment Scheduler</td><td>185</td><td>94.2%</td><td>Step 2 (Time Slot)</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Sub-page 5: API ANALYTICS -->
+              <div id="rep-view-api" class="rep-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Webhook Performance</h2>
+                <div class="metrics-cards-grid" style="grid-template-columns: repeat(4, 1fr);">
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">API Calls</div>
+                    <div class="metric-card-val">14,280</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Success Rate</div>
+                    <div class="metric-card-val" style="color:#16A34A;">99.4%</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Avg Latency</div>
+                    <div class="metric-card-val">120ms</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Errors</div>
+                    <div class="metric-card-val" style="color:#EF4444;">12</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub-page 6: LIVE CHAT ANALYTICS -->
+              <div id="rep-view-live-chat" class="rep-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Live Chat Widget Analytics</h2>
+                <div class="metrics-cards-grid">
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Total Chats Initiated</div>
+                    <div class="metric-card-val">320</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">Avg Response Time</div>
+                    <div class="metric-card-val">45s</div>
+                  </div>
+                  <div class="metric-card-simple">
+                    <div class="metric-card-title">CSAT Satisfaction</div>
+                    <div class="metric-card-val" style="color:#16A34A;">4.8 / 5.0</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub-page 7: OPERATOR STATS -->
+              <div id="rep-view-operator-stats" class="rep-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Operator & Agent Performance</h2>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Agent Name</th><th>Assigned Chats</th><th>Closed Chats</th><th>Avg Response Time</th><th>CSAT</th></tr></thead>
+                    <tbody>
+                      <tr><td style="font-weight:600;">Riyaz</td><td>142</td><td>138</td><td>1.8 mins</td><td>4.9/5</td></tr>
+                      <tr><td style="font-weight:600;">Mohamed</td><td>98</td><td>92</td><td>2.4 mins</td><td>4.7/5</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 13. ACCOUNT SETTINGS VIEW (Matching exact screenshot https://app.kwic.in/app/settings/whatsapp) -->
+        <div id="view-settings" class="view-container" style="height: 100vh;">
+          <div class="settings-layout">
+
+            <!-- Secondary Settings Navigation Sidebar -->
+            <div class="secondary-sidebar">
+              <div class="sec-nav-header">Account Settings</div>
+
+              <div>
+                <div class="sec-nav-group-title">Channels</div>
+                <div class="sec-nav-list">
+                  <a class="sec-nav-item active" data-sec-view="whatsapp">
+                    <i data-lucide="message-circle" style="color: #25D366;"></i>
+                    <span>Whatsapp</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="live-chat">
+                    <i data-lucide="message-square" style="color: #4AC959;"></i>
+                    <span>Live Chat</span>
+                    <span class="beta-badge">Beta</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="instagram">
+                    <i data-lucide="camera" style="color: #E1306C;"></i>
+                    <span>Instagram</span>
+                  </a>
+                </div>
+              </div>
+
+              <div>
+                <div class="sec-nav-group-title">General</div>
+                <div class="sec-nav-list">
+                  <a class="sec-nav-item" data-sec-view="team">
+                    <i data-lucide="users"></i>
+                    <span>Manage Team</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="wallet">
+                    <i data-lucide="wallet"></i>
+                    <span>Wallet</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="subscription">
+                    <i data-lucide="dollar-sign"></i>
+                    <span>My Subscription</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="developer">
+                    <i data-lucide="code"></i>
+                    <span>Developer</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="tags">
+                    <i data-lucide="tag"></i>
+                    <span>Tag Manager</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="attributes">
+                    <i data-lucide="sliders"></i>
+                    <span>Attributes</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="webhook">
+                    <i data-lucide="share-2"></i>
+                    <span>Webhook</span>
+                  </a>
+                  <a class="sec-nav-item" data-sec-view="billing">
+                    <i data-lucide="file-text"></i>
+                    <span>Billing</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settings Dynamic Content Panel -->
+            <div class="settings-main-area" id="settings-dynamic-content">
+
+              <!-- Sub-page 1: WHATSAPP SETTINGS -->
+              <div id="sec-view-whatsapp" class="sec-content-view active">
+                <h2 style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Channels</h2>
+
+                <div class="channel-status-card">
+                  <div class="channel-info-left">
+                    <div class="wa-icon-circle"><i data-lucide="phone-call"></i></div>
+                    <div>
+                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">Wasi</div>
+                      <div style="font-size: 0.8rem; color: #6B7280;">ID: 000000000000000000000001</div>
+                      <div style="font-size: 0.875rem; font-weight: 600; color: #374151; margin-top: 2px;">919900011122</div>
+                    </div>
+                  </div>
+                  <span class="status-badge active" style="padding: 4px 14px; font-weight: 700;">Active</span>
+                </div>
+
+                <div class="inner-tabs-list">
+                  <button class="inner-tab-btn active" data-inner-tab="profile">Profile</button>
+                  <button class="inner-tab-btn" data-inner-tab="automation">Automation</button>
+                  <button class="inner-tab-btn" data-inner-tab="catalog">Catalog</button>
+                  <button class="inner-tab-btn" data-inner-tab="message-link">Message Link</button>
+                  <button class="inner-tab-btn" data-inner-tab="channel-settings">Settings</button>
+                  <button class="inner-tab-btn" data-inner-tab="embed">Embed</button>
+                </div>
+
+                <div id="inner-tab-profile" class="inner-tab-panel active">
+                  <div class="profile-workspace-grid">
+                    <div class="profile-form-card">
+                      <div class="form-group">
+                        <label class="form-label">Business Verticals</label>
+                        <select class="form-input">
+                          <option value="Shopping and retail" selected>Shopping and retail</option>
+                          <option value="E-commerce">E-commerce</option>
+                        </select>
+                      </div>
+
+                      <div class="form-group">
+                        <label class="form-label">Business Description</label>
+                        <textarea class="form-input" style="height: 100px; padding: 10px; line-height: 1.4;">Quality products available at wholesale and retail prices. Serving you with trust and excellence for over 20 years! Contact us for the best deals!</textarea>
+                      </div>
+
+                      <div class="form-group">
+                        <label class="form-label">Business address</label>
+                        <input type="text" class="form-input" value="123 Market Street, Business Park, Sample City, State 500001" />
+                      </div>
+
+                      <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" value="contact@wasi.com" />
+                      </div>
+
+                      <div class="form-group">
+                        <label class="form-label">Websites</label>
+                        <div style="display: flex; flex-direction: column; gap: 8px;" id="website-list">
+                          <div style="display: flex; gap: 8px;">
+                            <input type="text" class="form-input" value="https://optin.wasi.com/lp/" />
+                            <button class="btn-secondary remove-website-btn" style="padding: 0 12px;"><i data-lucide="trash-2" style="width: 16px; color: #EF4444;"></i></button>
+                          </div>
+                          <div style="display: flex; gap: 8px;">
+                            <input type="text" class="form-input" value="https://wasi.com/pages/products.php" />
+                            <button class="btn-secondary remove-website-btn" style="padding: 0 12px;"><i data-lucide="trash-2" style="width: 16px; color: #EF4444;"></i></button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="whatsapp-preview-card">
+                      <div class="preview-avatar">WA</div>
+                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">Wasi</div>
+                      <div style="font-size: 0.85rem; font-weight: 600; color: #4B5563; margin-top: 2px;">919900011122</div>
+
+                      <div class="preview-details-list">
+                        <div class="preview-detail-item"><i data-lucide="info"></i><span>Our Wasi products are available for wholesale and retail...</span></div>
+                        <div class="preview-detail-item"><i data-lucide="shopping-bag"></i><span>Shopping and retail</span></div>
+                        <div class="preview-detail-item"><i data-lucide="map-pin"></i><span>123 Market Street, Business Park, Sample City...</span></div>
+                        <div class="preview-detail-item"><i data-lucide="mail"></i><a href="#">contact@wasi.com</a></div>
+                        <div class="preview-detail-item"><i data-lucide="globe"></i><a href="#">https://optin.wasi.com/lp/</a></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="inner-tab-automation" class="inner-tab-panel">
+                  <div class="profile-form-card" style="max-width: 600px;">
+                    <p style="font-size: 0.875rem; color: #6B7280;">Configure per-channel auto-reply and away-message rules for this WhatsApp number. Manage keyword rules in the main <strong>Automation</strong> section.</p>
+                  </div>
+                </div>
+
+                <div id="inner-tab-catalog" class="inner-tab-panel">
+                  <div class="profile-form-card" style="max-width: 600px;">
+                    <p style="font-size: 0.875rem; color: #6B7280;">Product catalog synced for this channel is managed under <strong>Ecommerce</strong>.</p>
+                  </div>
+                </div>
+
+                <div id="inner-tab-message-link" class="inner-tab-panel">
+                  <div class="profile-form-card" style="max-width: 600px;">
+                    <div class="form-group">
+                      <label class="form-label">Click-to-Chat Link</label>
+                      <input type="text" class="form-input" readonly value="https://wa.me/919900011122?text=Hi" />
+                    </div>
+                  </div>
+                </div>
+
+                <div id="inner-tab-channel-settings" class="inner-tab-panel">
+                  <div class="profile-form-card" style="max-width: 600px;">
+                    <div class="form-group">
+                      <label class="form-label">Display Name</label>
+                      <input type="text" class="form-input" value="Wasi" />
+                    </div>
+                  </div>
+                </div>
+
+                <div id="inner-tab-embed" class="inner-tab-panel">
+                  <div class="profile-form-card" style="max-width: 600px;">
+                    <label class="form-label">Embed Snippet</label>
+                    <textarea class="form-input" style="height: 90px; padding: 10px;" readonly>&lt;script src="https://cdn.yourcrm.example/widget.js" data-id="000000000000000000000001"&gt;&lt;/script&gt;</textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub-page 2: LIVE CHAT WIDGET -->
+              <div id="sec-view-live-chat" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Live Chat Widget Customizer</h2>
+                <div style="display: flex; gap: 2rem; align-items: start;">
+                  <div class="profile-form-card" style="flex: 1;">
+                    <div class="form-group">
+                      <label class="form-label">Widget Primary Color</label>
+                      <input type="color" class="form-input" value="#4AC959" style="height: 42px; padding: 4px;" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Greeting Message</label>
+                      <input type="text" class="form-input" value="Hi! How can we help you today?" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Widget Position</label>
+                      <select class="form-input"><option value="bottom-right" selected>Bottom Right</option><option value="bottom-left">Bottom Left</option></select>
+                    </div>
+                  </div>
+                  <div class="livechat-preview-box">
+                    <div class="livechat-header">
+                      <div class="avatar" style="width: 32px; height: 32px; font-size: 0.75rem; background: white; color: #4AC959;">K</div>
+                      <div>
+                        <div style="font-weight: 700; font-size: 0.875rem;">Wasi Support</div>
+                        <div style="font-size: 0.7rem; opacity: 0.9;">Online</div>
+                      </div>
+                    </div>
+                    <div style="padding: 1.25rem; background: #F9FAFB; height: 140px; font-size: 0.85rem; color: #374151;">
+                      <div class="msg-bubble msg-in" style="font-size: 0.8rem;">Hi! How can we help you today?</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub-page 3: INSTAGRAM CHANNEL -->
+              <div id="sec-view-instagram" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Instagram Settings</h2>
+                <div class="channel-status-card">
+                  <div class="channel-info-left">
+                    <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
+                    <div>
+                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">@wasi_official</div>
+                      <div style="font-size: 0.8rem; color: #6B7280;">Connected Instagram Business Account</div>
+                    </div>
+                  </div>
+                  <span class="status-badge active" style="padding: 4px 14px; font-weight: 700;">Connected</span>
+                </div>
+              </div>
+
+              <!-- Sub-page 4: TEAM MANAGEMENT -->
+              <div id="sec-view-team" class="sec-content-view" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                  <h2 style="font-size: 1.25rem; font-weight: 700;">Manage Team Members</h2>
+                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-invite-member-modal"><i data-lucide="user-plus"></i> Invite Member</button>
+                </div>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="team-table-body">
+                      <tr><td>Riyaz</td><td>riyaz@example.com</td><td>Admin</td><td><span class="status-badge active">Active</span></td><td>Owner</td></tr>
+                      <tr><td>Mohamed</td><td>mohamed@example.com</td><td>Manager</td><td><span class="status-badge active">Active</span></td><td>Edit</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Sub-page 5: WALLET -->
+              <div id="sec-view-wallet" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">WhatsApp Conversation Wallet</h2>
+                <div class="wallet-card">
+                  <div>
+                    <div style="font-size: 0.875rem; opacity: 0.8;">Available Credit Balance</div>
+                    <div style="font-size: 2.25rem; font-weight: 700; margin-top: 4px;" id="wallet-balance-display">₹ 4,850.00</div>
+                  </div>
+                  <button class="btn-primary" style="width: auto; padding: 0 20px; background: #4AC959; color: #0E2916; font-weight: 700;" id="open-recharge-modal">+ Recharge Balance</button>
+                </div>
+              </div>
+
+              <!-- Sub-page 6: SUBSCRIPTION -->
+              <div id="sec-view-subscription" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">My Subscription Plan</h2>
+                <div class="profile-form-card" style="max-width: 600px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937;">Pro Business Plan</div>
+                      <div style="font-size: 0.85rem; color: #6B7280;">Includes 100,000 Messages/month, Unlimited Agents</div>
+                    </div>
+                    <span class="status-badge active" style="font-weight: 700; padding: 6px 14px;">Active</span>
+                  </div>
+                  <button class="btn-primary" style="width: auto; padding: 0 20px; margin-top: 1rem;" id="upgrade-subscription-btn">Upgrade Subscription</button>
+                </div>
+              </div>
+
+              <!-- Sub-page 7: DEVELOPER -->
+              <div id="sec-view-developer" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Access Tokens</h2>
+                <div class="profile-form-card" style="max-width: 600px;">
+                  <div class="form-group">
+                    <label class="form-label">API Access Key</label>
+                    <input type="password" class="form-input" id="api-key-input" value="crm_live_sample000000000000" readonly />
+                  </div>
+                  <button class="btn-secondary" style="width: fit-content;" id="copy-api-key-btn"><i data-lucide="copy"></i> Copy API Key</button>
+                </div>
+              </div>
+
+              <!-- Sub-page 8: TAG MANAGER -->
+              <div id="sec-view-tags" class="sec-content-view" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                  <h2 style="font-size: 1.25rem; font-weight: 700;">Tag Manager</h2>
+                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-tag-modal"><i data-lucide="plus"></i> Add Tag</button>
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;" id="tags-manager-list"></div>
+              </div>
+
+              <!-- Sub-page 9: ATTRIBUTES (Fixes the exact screenshot issue!) -->
+              <div id="sec-view-attributes" class="sec-content-view" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                  <h2 style="font-size: 1.25rem; font-weight: 700;">Custom Contact Attributes</h2>
+                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-attribute-modal"><i data-lucide="plus"></i> Add Attribute</button>
+                </div>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Attribute Name</th><th>Key</th><th>Field Type</th><th>Description</th></tr></thead>
+                    <tbody id="attributes-table-body">
+                      <tr><td style="font-weight:600;">City</td><td>custom_city</td><td>Text</td><td>Customer home location</td></tr>
+                      <tr><td style="font-weight:600;">Lead Score</td><td>custom_lead_score</td><td>Number</td><td>AI Lead Priority Rating</td></tr>
+                      <tr><td style="font-weight:600;">Order ID</td><td>custom_order_id</td><td>Text</td><td>Latest purchase order number</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Sub-page 10: WEBHOOK -->
+              <div id="sec-view-webhook" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Webhook Callbacks</h2>
+                <div class="profile-form-card" style="max-width: 600px;">
+                  <div class="form-group">
+                    <label class="form-label">Webhook URL</label>
+                    <input type="text" class="form-input" id="webhook-url-input" value="https://api.yourcrm.example/v1/webhook" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Signing Secret (generated — verify the <code>x-wasi-signature-256</code> header with this)</label>
+                    <input type="text" class="form-input" id="webhook-secret-display" readonly value="Save a URL to generate one" />
+                  </div>
+                  <button class="btn-primary" style="width: auto; padding: 0 20px;" id="save-webhook-btn">Save Webhook</button>
+                </div>
+              </div>
+
+              <!-- Sub-page 11: BILLING -->
+              <div id="sec-view-billing" class="sec-content-view" style="display: none;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Billing & Invoices</h2>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>Invoice #</th><th>Date</th><th>Amount</th><th>Status</th><th>Download</th></tr></thead>
+                    <tbody>
+                      <tr><td style="font-weight:600;">#INV-2026-001</td><td>2026-07-01</td><td>₹ 2,999.00</td><td><span class="status-badge active">Paid</span></td><td><a href="#" style="color:#0284C7;">PDF</a></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <div id="modal-add-contact" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Add New Contact</h3>
+        <button class="close-modal-btn" data-close-modal="modal-add-contact"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-contact-form">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="new-contact-name" class="form-input" placeholder="e.g. Rahul Sharma" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone Number</label>
+          <input type="text" id="new-contact-phone" class="form-input" placeholder="+91 9876543210" required />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-add-contact">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Contact</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-create-ticket" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">New Support Ticket</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-ticket"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-ticket-form">
+        <div class="form-group">
+          <label class="form-label">Subject</label>
+          <input type="text" id="new-ticket-subject" class="form-input" placeholder="e.g. Broadcast failing to send" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message</label>
+          <textarea id="new-ticket-message" class="form-input" rows="4" placeholder="Describe the issue…" required></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-ticket">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Submit Ticket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-create-campaign" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">New Campaign</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-campaign"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-campaign-form">
+        <div class="form-group">
+          <label class="form-label">Campaign Name</label>
+          <input type="text" id="new-campaign-name" class="form-input" placeholder="e.g. September Flash Sale" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Audience Tag</label>
+          <select id="new-campaign-tag" class="form-input"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message Template</label>
+          <select id="new-campaign-template" class="form-input"></select>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-campaign">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Launch Campaign</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-create-template" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Template</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-template"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-template-form">
+        <div class="form-group">
+          <label class="form-label">Template Name</label>
+          <input type="text" id="new-template-name" class="form-input" placeholder="e.g. shipping_update_v2" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select id="new-template-category" class="form-input">
+            <option value="Marketing">Marketing</option>
+            <option value="Utility">Utility</option>
+            <option value="Authentication">Authentication</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message Body</label>
+          <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" placeholder="Hi {{1}}, ..." required></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-template">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Submit for Approval</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-add-tag" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Tag</h3>
+        <button class="close-modal-btn" data-close-modal="modal-add-tag"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-tag-form">
+        <div class="form-group">
+          <label class="form-label">Tag Name</label>
+          <input type="text" id="new-tag-name" class="form-input" placeholder="e.g. Wholesale" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <input type="color" id="new-tag-color" class="form-input" style="height: 42px; padding: 4px;" value="#4AC959" />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-add-tag">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Tag</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-invite-member" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Invite Member</h3>
+        <button class="close-modal-btn" data-close-modal="modal-invite-member"><i data-lucide="x"></i></button>
+      </div>
+      <form id="invite-member-form">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="new-member-name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="new-member-email" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select id="new-member-role" class="form-input">
+            <option value="Manager">Manager</option>
+            <option value="Agent">Agent</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-invite-member">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Send Invite</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-add-attribute" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Attribute</h3>
+        <button class="close-modal-btn" data-close-modal="modal-add-attribute"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-attribute-form">
+        <div class="form-group">
+          <label class="form-label">Attribute Name</label>
+          <input type="text" id="new-attribute-name" class="form-input" placeholder="e.g. Preferred Language" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Key</label>
+          <input type="text" id="new-attribute-key" class="form-input" placeholder="e.g. custom_language" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Field Type</label>
+          <select id="new-attribute-type" class="form-input">
+            <option value="Text">Text</option>
+            <option value="Number">Number</option>
+            <option value="Date">Date</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" id="new-attribute-description" class="form-input" />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-add-attribute">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Attribute</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-create-payment" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Payment Link</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-payment"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-payment-form">
+        <div class="form-group">
+          <label class="form-label">Customer Name</label>
+          <input type="text" id="new-payment-customer" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (₹)</label>
+          <input type="number" id="new-payment-amount" class="form-input" min="1" step="0.01" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gateway</label>
+          <select id="new-payment-gateway" class="form-input">
+            <option value="Razorpay UPI">Razorpay UPI</option>
+            <option value="WhatsApp Pay">WhatsApp Pay</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-payment">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Generate Link</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-create-flow" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Flow</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-flow"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-flow-form">
+        <div class="form-group">
+          <label class="form-label">Flow Title</label>
+          <input type="text" id="new-flow-title" class="form-input" placeholder="e.g. Feedback Survey" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea id="new-flow-description" class="form-input" style="height: 70px; padding: 10px;" required></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-flow">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Publish Flow</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-recharge-wallet" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Recharge Balance</h3>
+        <button class="close-modal-btn" data-close-modal="modal-recharge-wallet"><i data-lucide="x"></i></button>
+      </div>
+      <form id="recharge-wallet-form">
+        <div class="form-group">
+          <label class="form-label">Amount (₹)</label>
+          <input type="number" id="recharge-amount" class="form-input" min="1" step="1" placeholder="e.g. 1000" required />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-recharge-wallet">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Add Balance</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-create-rule" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Automation Rule</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-rule"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-rule-form">
+        <div class="form-group">
+          <label class="form-label">Rule Title</label>
+          <input type="text" id="new-rule-title" class="form-input" placeholder="e.g. Out of Office Reply" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Trigger</label>
+          <input type="text" id="new-rule-trigger" class="form-input" placeholder='e.g. Keyword: "hours", "open"' required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Action</label>
+          <input type="text" id="new-rule-action" class="form-input" placeholder="e.g. Send Business Hours Template" required />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-rule">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Rule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/embeddedSignup.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify Email — Wasi CRM</title>
+  <link rel="stylesheet" href="/marketing/marketing.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <header class="site-nav">
+    <div class="container">
+      <a href="/marketing/index.html" class="nav-logo">
+        <svg width="112" height="34" viewBox="0 0 130 40" fill="none">
+          <rect width="130" height="40" rx="8" fill="#43B751" fill-opacity="0.15"/>
+          <text x="22" y="27" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#304742">wasi</text>
+          <circle cx="98" cy="18" r="4" fill="#4AC959"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <section class="section-tight">
+    <div class="container" style="max-width: 420px; text-align:center;">
+      <h1 id="verify-heading" style="margin-bottom: 0.5rem;">Verifying your email…</h1>
+      <p id="verify-message" style="color: var(--text-muted); margin-bottom: 1.5rem;">One moment.</p>
+      <a href="/index.html" class="btn btn-primary btn-block">Go to Wasi CRM</a>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '4000')
+        ? 'http://localhost:4000'
+        : '';
+      const token = new URLSearchParams(location.search).get('token');
+      const heading = document.getElementById('verify-heading');
+      const message = document.getElementById('verify-message');
+
+      if (!token) {
+        heading.textContent = 'Missing verification token';
+        message.textContent = 'This link is incomplete. Request a new verification email from inside the app.';
+        return;
+      }
+
+      fetch(`${API_BASE}/api/auth/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Verification failed');
+          heading.textContent = 'Email verified';
+          message.textContent = 'You can now use your account.';
+        })
+        .catch((err) => {
+          heading.textContent = 'Verification failed';
+          message.textContent = err.message;
+        });
+    })();
+  </script>
+</body>
+</html>
