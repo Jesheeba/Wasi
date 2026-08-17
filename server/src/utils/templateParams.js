@@ -50,6 +50,29 @@ function isVariableAtStartOrEnd(text) {
   return matches[0].index === 0 || matches[matches.length - 1].end === trimmed.length;
 }
 
+// Meta enforces a words-to-parameters ratio server-side (error_subcode
+// 2388293, error_user_title "Params Words Ratio Exceeds Limit") but has
+// never published the exact formula — checked Meta's Template Overview,
+// Guidelines, and Error Codes reference pages directly; none state a
+// threshold. This rule is reverse-engineered, corroborated independently by
+// two BSPs (Mercuri, Syniverse docs): total words >= 3 * parameter count + 1.
+// Applied here with one extra word of safety margin (+2 total) since it's
+// unofficial and Meta could tighten it without notice. Validated against a
+// real rejection hit live during Phase 2 verification: "Hello
+// {{customer_name}}, thanks!" (3 whitespace tokens, 1 param) was rejected by
+// Meta with this exact subcode — this rule requires 5, correctly blocking it
+// locally instead of round-tripping to Meta for the same rejection.
+const MIN_WORDS_PER_PARAM = 3;
+const MIN_WORDS_SAFETY_MARGIN = 2;
+
+function countWords(text) {
+  return (text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function minWordsRequired(paramCount) {
+  return MIN_WORDS_PER_PARAM * paramCount + MIN_WORDS_SAFETY_MARGIN;
+}
+
 // Validates one piece of template text. Returns
 // { valid, paramFormat: 'named'|'positional'|'none', params, errors }.
 function validateTemplateText(text, { label = 'Body' } = {}) {
@@ -80,6 +103,21 @@ function validateTemplateText(text, { label = 'Body' } = {}) {
     return { valid: false, paramFormat: 'named', params: [], errors };
   }
 
+  // Occurrence count, not deduped — a repeated {{name}} still occupies its
+  // own slot and dilutes the ratio the same way a distinct parameter would.
+  const paramCount = matches.length;
+  const wordCount = countWords(text);
+  const required = minWordsRequired(paramCount);
+  if (wordCount < required) {
+    errors.push(
+      `${label} has too few words for its ${paramCount} parameter${paramCount === 1 ? '' : 's'} ` +
+      `(${wordCount} word${wordCount === 1 ? '' : 's'}, needs at least ${required}) — Meta rejects templates that ` +
+      `are mostly variables with little surrounding text (error 2388293, "Params Words Ratio Exceeds Limit"). ` +
+      `Add more descriptive text around the variable(s), or reduce the number of parameters.`
+    );
+    return { valid: false, paramFormat: 'named', params: [], errors };
+  }
+
   return { valid: true, paramFormat: 'named', params: uniqueInOrder(namedMatches.map((m) => m.name)), errors: [] };
 }
 
@@ -96,6 +134,8 @@ module.exports = {
   extractPlaceholders,
   isPurelyNumeric,
   isVariableAtStartOrEnd,
+  countWords,
+  minWordsRequired,
   validateTemplateText,
   defaultExampleFor,
 };

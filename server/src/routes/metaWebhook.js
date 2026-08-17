@@ -106,12 +106,80 @@ async function handleStatuses(clientId, value) {
   }
 }
 
+// Each handler returns true/false for whether it actually did something —
+// an explicit boolean, not a truthy/falsy value inferred from a DB call's
+// return (pool.query() resolves to a result object either way, which would
+// make "did this handle the event" impossible to tell from the return value
+// alone).
+async function handleTemplateStatusUpdate(entryId, value) {
+  if (!value?.message_template_name) return false;
+  await pool.query(
+    `update message_templates set status = $1, updated_at = now()
+     where name = $2 and client_id in (select client_id from wabas where waba_id = $3)`,
+    [String(value.event || '').toLowerCase() || 'pending', value.message_template_name, entryId]
+  );
+  return true;
+}
+
+async function handleAccountUpdate(entryId, value) {
+  if (!value?.phone_number) return false;
+  await pool.query(
+    `update wabas set quality_rating = coalesce($1, quality_rating) where waba_id = $2`,
+    [value.quality_rating || null, entryId]
+  );
+  return true;
+}
+
+// message_template_quality_update, phone_number_quality_update, and
+// phone_number_name_update are recognized field names (so they don't fall
+// into the "unhandled" warning below), but their real payload shapes haven't
+// been verified against a live example the way messages/statuses now have —
+// see the raw capture in server/test/metaWebhookDispatch.test.js for what
+// *is* verified. Rather than guess a DB update against an unconfirmed shape,
+// this records the full payload to the audit log so nothing is silently
+// lost; upgrade to a real column update once a live payload confirms the shape.
+async function handleUnmappedWabaEvent(field, entryId, value) {
+  await auditLogRepo.record({
+    actor_type: 'meta_webhook',
+    actor_id: null,
+    action: `${field}_unmapped`,
+    target: `${entryId}: ${JSON.stringify(value).slice(0, 500)}`,
+  });
+  return true;
+}
+
+// Fields Meta sends under a distinct field name (unlike messages/statuses,
+// which both arrive under field: "messages" — see below) — field-based
+// dispatch is correct for these.
+const WABA_SCOPED_FIELD_HANDLERS = {
+  message_template_status_update: handleTemplateStatusUpdate,
+  account_update: handleAccountUpdate,
+  message_template_quality_update: (entryId, value) => handleUnmappedWabaEvent('message_template_quality_update', entryId, value),
+  phone_number_quality_update: (entryId, value) => handleUnmappedWabaEvent('phone_number_quality_update', entryId, value),
+  phone_number_name_update: (entryId, value) => handleUnmappedWabaEvent('phone_number_name_update', entryId, value),
+};
+
 router.post('/', asyncHandler(async (req, res) => {
+  // Server-side timing (hrtime, not wall-clock through any tunnel/proxy) —
+  // Meta expects a 2xx within ~3s and treats slower as a failed delivery
+  // (triggering retries), so this is a real operational budget to watch,
+  // not just diagnostics. Logged unconditionally since this handler is low
+  // enough volume that always-on timing is cheap and worth having for the
+  // life of the app, not just this verification pass.
+  const startedAt = process.hrtime.bigint();
+
   if (!verifySignature(req.rawBody, req.get('x-hub-signature-256'))) {
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 
   const entries = req.body?.entry || [];
+  const fieldsSeen = [];
+  // Genuine processing failure (a change we recognized and attempted, whose
+  // handler threw), not "we don't have a handler for this field" — those
+  // are counted separately (see the `handled` warning below) and never
+  // cause a non-200 response, since retrying a field we'll never process
+  // just wastes Meta's retry budget for no benefit.
+  let anyChangeFailed = false;
 
   for (const entry of entries) {
     let waba = null;
@@ -123,28 +191,59 @@ router.post('/', asyncHandler(async (req, res) => {
 
     for (const change of entry.changes || []) {
       const { field, value } = change;
+      fieldsSeen.push(field);
+      let handled = false;
 
       try {
-        if (field === 'messages' && waba) {
+        // Meta sends BOTH new inbound messages and delivery status updates
+        // under field: "messages" — field name alone can't distinguish them
+        // (confirmed against a live payload: a status-only delivery still
+        // arrives with field: "messages", not field: "statuses"). Content
+        // decides what runs, and a single change can legitimately carry
+        // both arrays at once, so these are independent checks, not
+        // if/else — process whichever is actually present.
+        if (waba && Array.isArray(value?.messages) && value.messages.length > 0) {
           await handleInboundMessages(waba.client_id, value);
-        } else if (field === 'statuses' && waba) {
+          handled = true;
+        }
+        if (waba && Array.isArray(value?.statuses) && value.statuses.length > 0) {
           await handleStatuses(waba.client_id, value);
-        } else if (field === 'message_template_status_update' && value?.message_template_name) {
-          await pool.query(
-            `update message_templates set status = $1, updated_at = now()
-             where name = $2 and client_id in (select client_id from wabas where waba_id = $3)`,
-            [String(value.event || '').toLowerCase() || 'pending', value.message_template_name, entry.id]
-          );
-        } else if (field === 'account_update' && value?.phone_number) {
-          await pool.query(
-            `update wabas set quality_rating = coalesce($1, quality_rating) where waba_id = $2`,
-            [value.quality_rating || null, entry.id]
+          handled = true;
+        }
+
+        // These fields, unlike messages/statuses, genuinely are distinct by
+        // name — field-based dispatch is correct here.
+        const wabaScopedHandler = WABA_SCOPED_FIELD_HANDLERS[field];
+        if (wabaScopedHandler && (await wabaScopedHandler(entry.id, value))) {
+          handled = true;
+        }
+
+        if (!handled) {
+          console.warn(
+            `metaWebhook: unhandled payload — field="${field}", entry=${entry.id}, ` +
+            `value keys=[${Object.keys(value || {}).join(', ')}]`
           );
         }
       } catch (err) {
-        // One bad change in a batch shouldn't 500 the whole delivery and
-        // cause Meta to retry the entire (possibly large) payload.
-        console.error(`metaWebhook: failed to process field "${field}" for entry ${entry.id}:`, err.message);
+        // Deliberately DOES 500 the whole delivery, so Meta retries the
+        // entire payload — the asymmetry matters: inbound message inserts
+        // are idempotent on meta_message_id, so reprocessing an
+        // already-succeeded change alongside the retry costs nothing, but
+        // a write that fails and gets acknowledged with 200 is gone
+        // forever once Meta's 7-day retry window lapses. This is the same
+        // failure shape (failed write, swallowed error, 200 returned) that
+        // caused the Sirah CRM incident referenced in wasi-build-plan.md.
+        anyChangeFailed = true;
+        // Loud and structured on purpose — grep-able as "metaWebhook FAILURE"
+        // distinctly from the "unhandled payload" warning below, so this is
+        // alertable later (see Phase 6 §6.1) rather than scrolling past in
+        // a log nobody's watching.
+        console.error('metaWebhook FAILURE:', {
+          field,
+          entryId: entry.id,
+          error: err.message,
+          stack: err.stack,
+        });
       }
 
       await auditLogRepo.record({
@@ -156,7 +255,14 @@ router.post('/', asyncHandler(async (req, res) => {
     }
   }
 
-  res.sendStatus(200);
+  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+  const budgetFlag = durationMs > 2000 ? ' NEAR/OVER META\'S ~3s BUDGET' : '';
+  console.log(
+    `metaWebhook: processed [${fieldsSeen.join(', ') || 'no changes'}] in ${durationMs.toFixed(1)}ms${budgetFlag}` +
+    (anyChangeFailed ? ' — FAILED, returning 500 for Meta to retry' : '')
+  );
+
+  res.sendStatus(anyChangeFailed ? 500 : 200);
 }));
 
 module.exports = router;

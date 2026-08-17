@@ -63,6 +63,15 @@ async function sendOneRecipient(broadcast, recipient) {
 
 async function processBroadcast(broadcast) {
   const client = await pool.connect();
+  // A checked-out client is a separate EventEmitter from the pool it came
+  // from — pool.on('error', ...) (server/src/db/pool.js) only covers idle
+  // clients still sitting in the pool, not one actively held here mid-
+  // transaction. Same crash risk (see pool.js's comment for the mechanism),
+  // different object; needs its own listener. This runs every 5s for the
+  // life of the process, so it's held far more often than any single route.
+  client.on('error', (err) => {
+    console.error('broadcastRunner: checked-out client error (non-fatal):', err.message);
+  });
   let batch;
   try {
     await client.query('BEGIN');

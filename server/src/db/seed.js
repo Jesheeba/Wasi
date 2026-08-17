@@ -56,6 +56,10 @@ const OPEN_CHAT_MESSAGES = [
 
 async function seed() {
   const client = await pool.connect();
+  // See server/src/db/pool.js's comment — a checked-out client is a
+  // separate EventEmitter from the pool and needs its own 'error' listener
+  // to avoid an uncaught-exception crash on a dropped connection.
+  client.on('error', (err) => console.error('seed: checked-out client error:', err.message));
   try {
     await client.query('BEGIN');
 

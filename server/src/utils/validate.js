@@ -135,6 +135,16 @@ const tagCreateSchema = z.object({
   color: z.string().optional(),
 });
 
+// Deliberately its own schema, not part of contactUpdateSchema — consent
+// changes require a source (an explicit declaration, an inbound STOP, etc.)
+// and go through consentRepo.recordEvent so the change and its evidence are
+// always written together. See server/src/repositories/consentRepo.js.
+const consentEventCreateSchema = z.object({
+  event: z.enum(['opted_in', 'opted_out']),
+  source: z.string().min(1),
+  evidence: z.record(z.any()).optional(),
+});
+
 module.exports = {
   uuid,
   clientCreateSchema,
@@ -162,4 +172,5 @@ module.exports = {
   paymentLinkCreateSchema,
   walletRechargeSchema,
   clientWebhookSchema,
+  consentEventCreateSchema,
 };

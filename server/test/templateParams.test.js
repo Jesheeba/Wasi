@@ -8,6 +8,8 @@ const {
   extractPlaceholders,
   isPurelyNumeric,
   isVariableAtStartOrEnd,
+  countWords,
+  minWordsRequired,
   validateTemplateText,
   defaultExampleFor,
 } = require('../src/utils/templateParams');
@@ -55,7 +57,7 @@ test('validateTemplateText: plain text with no placeholders is valid, format "no
 });
 
 test('validateTemplateText: named parameters in the middle are valid', () => {
-  const result = validateTemplateText('Hi {{customer_name}}, your order #{{order_number}} shipped.');
+  const result = validateTemplateText('Hi {{customer_name}}, your order #{{order_number}} has shipped and is on its way.');
   assert.equal(result.valid, true);
   assert.equal(result.paramFormat, 'named');
   assert.deepEqual(result.params, ['customer_name', 'order_number']);
@@ -91,10 +93,34 @@ test('validateTemplateText: a variable at the end is rejected', () => {
   assert.match(result.errors[0], /start or end/i);
 });
 
-test('validateTemplateText: duplicate param names collapse to one entry', () => {
-  const result = validateTemplateText('Hi {{customer_name}}, thanks {{customer_name}}!');
+test('validateTemplateText: duplicate param names collapse to one entry in params, but still count twice for the words ratio', () => {
+  const result = validateTemplateText('Hi {{customer_name}}, thanks so much {{customer_name}}, we appreciate you!');
   assert.equal(result.valid, true);
   assert.deepEqual(result.params, ['customer_name']);
+});
+
+test('validateTemplateText: rejects a real body that Meta rejected live (error 2388293 regression)', () => {
+  // The exact body that triggered error_subcode 2388293 ("Params Words
+  // Ratio Exceeds Limit") against real Meta during Phase 2 verification —
+  // must be caught locally now, not just by the round trip to Meta.
+  const result = validateTemplateText('Hello {{customer_name}}, thanks!');
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /too few words/i);
+  assert.match(result.errors.join(' '), /2388293/);
+});
+
+test('validateTemplateText: words-ratio rejection message states the actual counts', () => {
+  const result = validateTemplateText('Hi {{a}} {{b}} {{c}}.');
+  assert.equal(result.valid, false);
+  assert.match(result.errors[0], /too few words for its 3 parameters/i);
+  assert.match(result.errors[0], new RegExp(`needs at least ${minWordsRequired(3)}`));
+});
+
+test('countWords / minWordsRequired: formula matches the documented reverse-engineered rule (3 * params + 2)', () => {
+  assert.equal(countWords('Hello {{customer_name}}, thanks!'), 3);
+  assert.equal(minWordsRequired(1), 5);
+  assert.equal(minWordsRequired(2), 8);
+  assert.equal(minWordsRequired(0), 2);
 });
 
 test('defaultExampleFor derives a readable placeholder from a snake_case name', () => {
@@ -119,7 +145,7 @@ test('buildTemplateCreatePayload: named variables -> parameter_format "named" + 
   const payload = buildTemplateCreatePayload({
     name: 'order_status_update',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, order #{{order_number}} shipped.',
+    body: 'Hi {{customer_name}}, your order #{{order_number}} has shipped and is on its way.',
   });
   assert.equal(payload.parameter_format, 'named');
   assert.deepEqual(payload.components[0].example, {
