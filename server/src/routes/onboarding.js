@@ -61,9 +61,9 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       status: 'connected',
     });
 
-    const existingTemplates = await messageTemplatesRepo.listByClientId(clientId);
+    const existingTemplates = await messageTemplatesRepo.listByClientId(req.db, clientId);
     if (existingTemplates.length === 0) {
-      await messageTemplatesRepo.create({
+      await messageTemplatesRepo.create(req.db, {
         client_id: clientId,
         name: 'welcome_message',
         category: 'Utility',
@@ -72,9 +72,9 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       });
     }
 
-    const client = await clientsRepo.findById(clientId);
+    const client = await clientsRepo.findById(req.db, clientId);
     if (client && client.status === 'payment_confirmed') {
-      await clientsRepo.update(clientId, { status: 'active' });
+      await clientsRepo.update(req.db, clientId, { status: 'active' });
     }
 
     await auditLogRepo.record({

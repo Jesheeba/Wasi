@@ -7,6 +7,17 @@ const isLocal = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isLocal ? false : { rejectUnauthorized: false },
+  // No timeout here means a hung TCP handshake (a network blip against
+  // Supabase's Supavisor pooler — the same class of transient drop
+  // pool.on('error') below already handles for idle connections) blocks
+  // whoever called pool.connect() until the OS's own TCP timeout gives up,
+  // which can be minutes. Confirmed live: server/src/middleware/
+  // tenantContext.js now calls pool.connect() on every client-authenticated
+  // request (previously only a handful of call sites did), so this gap went
+  // from rare to something a single test run actually hit. Failing fast
+  // means the request errors out and the caller can see/retry it, instead
+  // of an Express request hanging with no visible cause.
+  connectionTimeoutMillis: 10_000,
 });
 
 // pg.Pool re-emits a dropped idle connection (e.g. Supabase's pooler closing

@@ -1,7 +1,5 @@
-const { pool } = require('../db/pool');
-
-async function listByClientId(clientId) {
-  const { rows } = await pool.query(
+async function listByClientId(db, clientId) {
+  const { rows } = await db.query(
     'select * from message_templates where client_id = $1 order by created_at desc',
     [clientId]
   );
@@ -11,16 +9,16 @@ async function listByClientId(clientId) {
 // Consent enforcement (messagingService.sendChatMessage) looks up a
 // template's category by name to decide whether it's subject to the
 // opt-in gate — a template name is only unique per client, not globally.
-async function findByNameAndClient(clientId, name) {
-  const { rows } = await pool.query(
+async function findByNameAndClient(db, clientId, name) {
+  const { rows } = await db.query(
     'select * from message_templates where client_id = $1 and name = $2 order by created_at desc limit 1',
     [clientId, name]
   );
   return rows[0] || null;
 }
 
-async function create({ client_id, name, category, status, body }) {
-  const { rows } = await pool.query(
+async function create(db, { client_id, name, category, status, body }) {
+  const { rows } = await db.query(
     `insert into message_templates (client_id, name, category, status, body)
      values ($1, $2, $3, coalesce($4, 'pending'), $5)
      returning *`,
@@ -31,8 +29,9 @@ async function create({ client_id, name, category, status, body }) {
 
 // All templates across every tenant, joined with client identity — powers
 // the admin Templates Review queue (spec §5 "Templates Review" row).
-async function listAll(status) {
-  const { rows } = await pool.query(
+// Admin-only, always the privileged connection.
+async function listAll(db, status) {
+  const { rows } = await db.query(
     `select t.*, c.name as client_name, c.tenant_slug
      from message_templates t
      join clients c on c.id = t.client_id
@@ -43,8 +42,11 @@ async function listAll(status) {
   return rows;
 }
 
-async function updateStatus(id, status) {
-  const { rows } = await pool.query(
+// Admin-only (status flips from the Templates Review queue) and the Meta
+// webhook (message_template_status_update) — always the privileged
+// connection, no client_id known up front in the webhook case.
+async function updateStatus(db, id, status) {
+  const { rows } = await db.query(
     `update message_templates set status = $2, updated_at = now() where id = $1 returning *`,
     [id, status]
   );

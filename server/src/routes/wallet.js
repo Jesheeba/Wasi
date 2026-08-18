@@ -8,8 +8,8 @@ const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
   const [balance, transactions] = await Promise.all([
-    walletRepo.balance(req.clientId),
-    walletRepo.listByClientId(req.clientId),
+    walletRepo.balance(req.db, req.clientId),
+    walletRepo.listByClientId(req.db, req.clientId),
   ]);
   res.json({ balance, transactions });
 }));
@@ -25,7 +25,7 @@ router.post('/recharge', asyncHandler(async (req, res) => {
       receipt: `wallet_${req.clientId}_${Date.now()}`,
       notes: { client_id: req.clientId, purpose: 'wallet_recharge' },
     });
-    await walletRepo.createPending(req.clientId, amount_inr, order.id);
+    await walletRepo.createPending(req.db, req.clientId, amount_inr, order.id);
     res.json({
       razorpayOrderId: order.id,
       amount: order.amount,

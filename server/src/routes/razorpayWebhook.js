@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const crypto = require('crypto');
+const { pool } = require('../db/pool');
 const subscriptionsRepo = require('../repositories/subscriptionsRepo');
 const invoicesRepo = require('../repositories/invoicesRepo');
 const clientsRepo = require('../repositories/clientsRepo');
@@ -32,12 +33,12 @@ router.post('/', asyncHandler(async (req, res) => {
 
   if ((event === 'payment.captured' || event === 'order.paid') && orderId) {
     const renewsAt = new Date(Date.now() + RENEWAL_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const subscription = await subscriptionsRepo.updateByProviderRef(orderId, { status: 'active', renews_at: renewsAt });
-    await invoicesRepo.markStatusByOrderId(orderId, 'paid', payment?.id);
+    const subscription = await subscriptionsRepo.updateByProviderRef(pool, orderId, { status: 'active', renews_at: renewsAt });
+    await invoicesRepo.markStatusByOrderId(pool, orderId, 'paid', payment?.id);
     if (subscription) {
-      const client = await clientsRepo.findById(subscription.client_id);
+      const client = await clientsRepo.findById(pool, subscription.client_id);
       if (client && client.status === 'pending_setup') {
-        await clientsRepo.update(subscription.client_id, { status: 'payment_confirmed' });
+        await clientsRepo.update(pool, subscription.client_id, { status: 'payment_confirmed' });
       }
       await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: subscription.client_id, action: event, target: orderId });
     }
@@ -45,24 +46,24 @@ router.post('/', asyncHandler(async (req, res) => {
     // subscription checkout (above) or a wallet recharge (this), never both,
     // so trying both updates and letting the non-matching one no-op is
     // simpler and just as correct as inspecting notes.purpose to branch.
-    const walletTx = await walletRepo.markStatusByOrderId(orderId, 'completed');
+    const walletTx = await walletRepo.markStatusByOrderId(pool, orderId, 'completed');
     if (walletTx) {
       await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: walletTx.client_id, action: 'wallet_recharge_completed', target: orderId });
     }
   } else if (event === 'payment.failed' && orderId) {
-    const subscription = await subscriptionsRepo.updateByProviderRef(orderId, { status: 'payment_failed' });
-    await invoicesRepo.markStatusByOrderId(orderId, 'failed', payment?.id);
+    const subscription = await subscriptionsRepo.updateByProviderRef(pool, orderId, { status: 'payment_failed' });
+    await invoicesRepo.markStatusByOrderId(pool, orderId, 'failed', payment?.id);
     if (subscription) {
       await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: subscription.client_id, action: event, target: orderId });
     }
-    await walletRepo.markStatusByOrderId(orderId, 'failed');
+    await walletRepo.markStatusByOrderId(pool, orderId, 'failed');
   } else if (event === 'refund.processed' && refund?.payment_id) {
-    await invoicesRepo.markStatusByPaymentId(refund.payment_id, 'refunded');
+    await invoicesRepo.markStatusByPaymentId(pool, refund.payment_id, 'refunded');
     await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: null, action: event, target: refund.payment_id });
   } else if (event === 'payment_link.paid') {
     const linkId = req.body.payload?.payment_link?.entity?.id;
     if (linkId) {
-      await paymentLinksRepo.markStatusByRazorpayId(linkId, 'paid');
+      await paymentLinksRepo.markStatusByRazorpayId(pool, linkId, 'paid');
       await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: null, action: event, target: linkId });
     }
   }

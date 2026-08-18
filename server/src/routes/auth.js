@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { pool } = require('../db/pool');
 const clientsRepo = require('../repositories/clientsRepo');
 const authTokensRepo = require('../repositories/authTokensRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -7,6 +8,7 @@ const { slugify } = require('../utils/slug');
 const { sendEmail } = require('../utils/emailService');
 const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../utils/validate');
 const { requireClientAuth } = require('../middleware/requireClientAuth');
+const { withTenantContext } = require('../middleware/tenantContext');
 
 const router = Router();
 
@@ -15,18 +17,18 @@ const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 router.post('/register', asyncHandler(async (req, res) => {
   const { businessName, email, password } = registerSchema.parse(req.body);
 
-  const existing = await clientsRepo.findByEmail(email);
+  const existing = await clientsRepo.findByEmail(pool, email);
   if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
 
   const baseSlug = slugify(businessName) || 'client';
   let tenant_slug = baseSlug;
   let suffix = 1;
-  while (await clientsRepo.slugExists(tenant_slug)) {
+  while (await clientsRepo.slugExists(pool, tenant_slug)) {
     tenant_slug = `${baseSlug}-${suffix++}`;
   }
 
   const password_hash = await hashPassword(password);
-  const client = await clientsRepo.create({
+  const client = await clientsRepo.create(pool, {
     name: businessName,
     email,
     tenant_slug,
@@ -49,7 +51,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 router.post('/login', asyncHandler(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
-  const client = await clientsRepo.findByEmail(email);
+  const client = await clientsRepo.findByEmail(pool, email);
   if (!client || !client.password_hash) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
@@ -62,18 +64,17 @@ router.post('/login', asyncHandler(async (req, res) => {
   res.json({ token, client: safeClient });
 }));
 
-router.get('/me', requireClientAuth, asyncHandler(async (req, res) => {
-  const client = await clientsRepo.findById(req.clientId);
+router.get('/me', requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {
+  const client = await clientsRepo.findById(req.db, req.clientId);
   if (!client) return res.status(404).json({ error: 'Not found' });
-  const { password_hash: _omit, ...safeClient } = client;
-  res.json(safeClient);
+  res.json(client);
 }));
 
 // Always 200 regardless of whether the email exists — a differing response
 // would let an attacker enumerate registered accounts.
 router.post('/forgot-password', asyncHandler(async (req, res) => {
   const { email } = forgotPasswordSchema.parse(req.body);
-  const client = await clientsRepo.findByEmail(email);
+  const client = await clientsRepo.findByEmail(pool, email);
   if (client) {
     const token = await authTokensRepo.create('client', client.id, 'password_reset', 60);
     await sendEmail({
@@ -92,12 +93,12 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
   }
   const password_hash = await hashPassword(password);
-  await clientsRepo.update(consumed.subject_id, { password_hash });
+  await clientsRepo.update(pool, consumed.subject_id, { password_hash });
   res.json({ message: 'Password updated — you can log in now.' });
 }));
 
-router.post('/verify-email/request', requireClientAuth, asyncHandler(async (req, res) => {
-  const client = await clientsRepo.findById(req.clientId);
+router.post('/verify-email/request', requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {
+  const client = await clientsRepo.findById(req.db, req.clientId);
   if (!client) return res.status(404).json({ error: 'Not found' });
   if (client.email_verified) return res.json({ message: 'Already verified.' });
 
@@ -117,7 +118,7 @@ router.post('/verify-email', asyncHandler(async (req, res) => {
   if (!consumed || consumed.subject_type !== 'client') {
     return res.status(400).json({ error: 'This verification link is invalid or has expired.' });
   }
-  await clientsRepo.update(consumed.subject_id, { email_verified: true });
+  await clientsRepo.update(pool, consumed.subject_id, { email_verified: true });
   res.json({ message: 'Email verified.' });
 }));
 

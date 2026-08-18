@@ -1,15 +1,13 @@
-const { pool } = require('../db/pool');
-
-async function findByClientId(clientId) {
-  const { rows } = await pool.query(
+async function findByClientId(db, clientId) {
+  const { rows } = await db.query(
     'select * from subscriptions where client_id = $1 order by created_at desc limit 1',
     [clientId]
   );
   return rows[0] || null;
 }
 
-async function create({ client_id, plan, status, payment_provider_ref }) {
-  const { rows } = await pool.query(
+async function create(db, { client_id, plan, status, payment_provider_ref }) {
+  const { rows } = await db.query(
     `insert into subscriptions (client_id, plan, status, payment_provider_ref)
      values ($1, $2, coalesce($3, 'pending_payment'), $4)
      returning *`,
@@ -18,11 +16,15 @@ async function create({ client_id, plan, status, payment_provider_ref }) {
   return rows[0];
 }
 
-async function updateByProviderRef(payment_provider_ref, fields) {
+// Looked up by provider ref rather than client_id — used both by the
+// Razorpay webhook (privileged connection, no client context at all) and by
+// billing.js's client-initiated cancel route (req.db); RLS's policy still
+// applies on top of whatever WHERE clause is here, so either caller is safe.
+async function updateByProviderRef(db, payment_provider_ref, fields) {
   const columns = Object.keys(fields);
   const setClause = columns.map((col, i) => `${col} = $${i + 2}`).join(', ');
   const values = columns.map((col) => fields[col]);
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `update subscriptions set ${setClause} where payment_provider_ref = $1 returning *`,
     [payment_provider_ref, ...values]
   );
@@ -30,9 +32,9 @@ async function updateByProviderRef(payment_provider_ref, fields) {
 }
 
 // Latest subscription per client, joined with client identity — powers the
-// admin Billing page (spec §5 "Billing" row).
-async function listAllWithClient() {
-  const { rows } = await pool.query(`
+// admin Billing page (spec §5 "Billing" row). Admin-only, privileged.
+async function listAllWithClient(db) {
+  const { rows } = await db.query(`
     select distinct on (s.client_id)
       s.*, c.name as client_name, c.email as client_email, c.tenant_slug
     from subscriptions s

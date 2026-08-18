@@ -46,7 +46,7 @@ function verifySignature(rawBody, signatureHeader) {
 async function forwardToClientWebhook(clientId, event, payload) {
   let webhook;
   try {
-    webhook = await clientWebhooksRepo.findByClientId(clientId);
+    webhook = await clientWebhooksRepo.findByClientId(pool, clientId);
   } catch (_err) {
     return;
   }
@@ -70,16 +70,16 @@ async function handleInboundMessages(clientId, value) {
     const name = contactInfo?.profile?.name || phone;
     const body = msg.text?.body || `[${msg.type}]`; // MVP: non-text types render as a type tag, not fetched/decoded
 
-    const contact = await contactsRepo.upsertByPhone(clientId, { phone, name, wa_id: phone });
-    const chat = await chatsRepo.findOrCreateByContact(clientId, contact);
-    const inserted = await chatsRepo.insertInbound(clientId, chat.id, {
+    const contact = await contactsRepo.upsertByPhone(pool, clientId, { phone, name, wa_id: phone });
+    const chat = await chatsRepo.findOrCreateByContact(pool, clientId, contact);
+    const inserted = await chatsRepo.insertInbound(pool, clientId, chat.id, {
       metaMessageId: msg.id,
       body,
       sentAt: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null,
     });
 
     if (inserted) {
-      await usageRepo.incrementReceived(clientId);
+      await usageRepo.incrementReceived(pool, clientId);
 
       // Opt-out (build plan Phase 4) — recorded before automation runs, so
       // the consent_events row exists regardless of whatever a client's own
@@ -92,7 +92,7 @@ async function handleInboundMessages(clientId, value) {
         });
       }
 
-      await automationEngine.evaluate(clientId, chat, body);
+      await automationEngine.evaluate(pool, clientId, chat, body);
       await forwardToClientWebhook(clientId, 'message.received', { chat_id: chat.id, message: inserted });
     }
   }
@@ -102,7 +102,7 @@ async function handleInboundMessages(clientId, value) {
 async function handleStatuses(clientId, value) {
   for (const status of value.statuses || []) {
     const errorReason = status.errors?.[0]?.title || null;
-    await chatsRepo.updateStatusByMetaId(clientId, status.id, status.status, errorReason);
+    await chatsRepo.updateStatusByMetaId(pool, clientId, status.id, status.status, errorReason);
   }
 }
 

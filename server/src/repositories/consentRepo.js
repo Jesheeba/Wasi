@@ -7,6 +7,17 @@ const { pool } = require('../db/pool');
 // updates AND an immutable consent_events row gets appended in the same
 // transaction — one without the other would leave either a status with no
 // evidence, or evidence that never took effect.
+//
+// Deliberately NOT converted to the `db`-first-param convention (see
+// tagsRepo.js) — this function manages its own atomic transaction, and its
+// caller on the client-request path (routes/contacts.js) already runs
+// inside the tenantContext middleware's own transaction on req.db. Reusing
+// that connection here would mean a nested BEGIN (a no-op warning, not a
+// real nested transaction) and a COMMIT/ROLLBACK that would prematurely end
+// the *whole request's* transaction, not just this one write. Simpler and
+// correct to keep this self-contained on its own privileged connection —
+// the two writes inside are still atomic with each other, just not part of
+// the outer request transaction.
 async function recordEvent(clientId, contactId, { event, source, evidence }) {
   const client = await pool.connect();
   client.on('error', (err) => console.error('consentRepo: checked-out client error (non-fatal):', err.message));
@@ -42,8 +53,8 @@ async function recordEvent(clientId, contactId, { event, source, evidence }) {
   }
 }
 
-async function listEventsForContact(clientId, contactId) {
-  const { rows } = await pool.query(
+async function listEventsForContact(db, clientId, contactId) {
+  const { rows } = await db.query(
     'select * from consent_events where client_id = $1 and contact_id = $2 order by created_at desc',
     [clientId, contactId]
   );

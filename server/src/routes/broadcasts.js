@@ -8,15 +8,15 @@ const { broadcastCreateSchema } = require('../utils/validate');
 const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
-  res.json(await broadcastsRepo.list(req.clientId));
+  res.json(await broadcastsRepo.list(req.db, req.clientId));
 }));
 
 router.post('/', asyncHandler(async (req, res) => {
   const { templateName, ...data } = broadcastCreateSchema.parse(req.body);
-  const broadcast = await broadcastsRepo.create(req.clientId, { ...data, template_name: templateName });
-  const recipients = await broadcastRecipientsRepo.createFromAudience(broadcast.id, req.clientId, data.tag_id);
+  const broadcast = await broadcastsRepo.create(req.db, req.clientId, { ...data, template_name: templateName });
+  const recipients = await broadcastRecipientsRepo.createFromAudience(req.db, broadcast.id, req.clientId, data.tag_id);
   if (recipients.length === 0) {
-    await broadcastsRepo.markStatus(broadcast.id, 'Completed');
+    await broadcastsRepo.markStatus(req.db, broadcast.id, 'Completed');
   }
 
   // Consent warning (build plan Phase 4) — computed here, before
@@ -24,7 +24,7 @@ router.post('/', asyncHandler(async (req, res) => {
   // non-opted-in recipients rather than sending to them, same rule as
   // messagingService.assertConsentForTemplate: unrecognized category fails
   // closed, treated as marketing).
-  const template = await messageTemplatesRepo.findByNameAndClient(req.clientId, templateName);
+  const template = await messageTemplatesRepo.findByNameAndClient(req.db, req.clientId, templateName);
   const requiresConsent = !template || template.category === 'Marketing';
   let consentWarning = null;
   if (requiresConsent && recipients.length > 0) {

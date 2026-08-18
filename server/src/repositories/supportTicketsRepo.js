@@ -1,7 +1,5 @@
-const { pool } = require('../db/pool');
-
-async function listByClientId(clientId) {
-  const { rows } = await pool.query(
+async function listByClientId(db, clientId) {
+  const { rows } = await db.query(
     'select * from support_tickets where client_id = $1 order by created_at desc',
     [clientId]
   );
@@ -9,9 +7,10 @@ async function listByClientId(clientId) {
 }
 
 // All tickets across every tenant, joined with client identity — powers the
-// admin Support/Tickets page (spec §5 "Support / Tickets" row).
-async function listAll(status) {
-  const { rows } = await pool.query(
+// admin Support/Tickets page (spec §5 "Support / Tickets" row). Admin-only,
+// always the privileged connection.
+async function listAll(db, status) {
+  const { rows } = await db.query(
     `select t.*, c.name as client_name, c.email as client_email
      from support_tickets t
      join clients c on c.id = t.client_id
@@ -22,8 +21,8 @@ async function listAll(status) {
   return rows;
 }
 
-async function create(clientId, { subject, message }) {
-  const { rows } = await pool.query(
+async function create(db, clientId, { subject, message }) {
+  const { rows } = await db.query(
     `insert into support_tickets (client_id, subject, message)
      values ($1, $2, $3)
      returning *`,
@@ -32,8 +31,9 @@ async function create(clientId, { subject, message }) {
   return rows[0];
 }
 
-async function updateStatus(id, status) {
-  const { rows } = await pool.query(
+// Admin-only status flip — always the privileged connection.
+async function updateStatus(db, id, status) {
+  const { rows } = await db.query(
     `update support_tickets set status = $2, updated_at = now() where id = $1 returning *`,
     [id, status]
   );

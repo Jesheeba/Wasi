@@ -7,7 +7,7 @@ const { paymentLinkCreateSchema } = require('../utils/validate');
 const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
-  res.json(await paymentLinksRepo.list(req.clientId));
+  res.json(await paymentLinksRepo.list(req.db, req.clientId));
 }));
 
 router.post('/', asyncHandler(async (req, res) => {
@@ -19,7 +19,7 @@ router.post('/', asyncHandler(async (req, res) => {
       description: title,
       referenceId: `${req.clientId}_${Date.now()}`,
     });
-    const saved = await paymentLinksRepo.create(req.clientId, {
+    const saved = await paymentLinksRepo.create(req.db, req.clientId, {
       title,
       amount_inr,
       razorpay_payment_link_id: link.id,

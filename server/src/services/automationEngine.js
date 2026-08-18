@@ -5,8 +5,10 @@
 const automationRulesRepo = require('../repositories/automationRulesRepo');
 const messagingService = require('../services/messagingService');
 
-async function evaluate(clientId, chat, inboundBody) {
-  const rules = await automationRulesRepo.list(clientId);
+// Only ever called from metaWebhook.js, with the privileged `pool` as `db`
+// (see repositories/tagsRepo.js's module comment for the convention).
+async function evaluate(db, clientId, chat, inboundBody) {
+  const rules = await automationRulesRepo.list(db, clientId);
   const enabled = rules.filter((r) => r.status === 'Enabled');
   const haystack = (inboundBody || '').toLowerCase();
 
@@ -18,7 +20,7 @@ async function evaluate(clientId, chat, inboundBody) {
       // The reply is itself a free-form text send — always legal here since
       // we're running this right after the inbound message that just
       // reopened the 24h window.
-      await messagingService.sendChatMessage(clientId, chat, { type: 'text', body: rule.action });
+      await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: rule.action });
     } catch (err) {
       // Don't let one bad rule (e.g. WABA disconnected mid-flight) block
       // ingestion of the message that triggered it — already committed.

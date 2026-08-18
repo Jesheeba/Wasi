@@ -10,7 +10,7 @@ const { validateTemplateText } = require('../utils/templateParams');
 const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
-  res.json(await messageTemplatesRepo.listByClientId(req.clientId));
+  res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
 }));
 
 // Submits to Meta for real approval when a WABA is connected — approval
@@ -44,7 +44,7 @@ router.post('/', asyncHandler(async (req, res) => {
     }
   }
 
-  const template = await messageTemplatesRepo.create({ client_id: req.clientId, ...data, status: 'pending' });
+  const template = await messageTemplatesRepo.create(req.db, { client_id: req.clientId, ...data, status: 'pending' });
   res.status(201).json(template);
 }));
 

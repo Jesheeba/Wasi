@@ -1,3 +1,14 @@
+// Deliberately NOT converted to the `db`-first-param convention the other
+// tenant repos use (see tagsRepo.js) — every function here does `select *`
+// / `returning *`, and access_token_encrypted is revoked from the restricted
+// wasi_app role at the column level (migration 013_tenant_isolation.js).
+// Column-level SELECT privilege can't be "partially" satisfied by a
+// `select *` query, so running any of these under the restricted role would
+// simply error. Rather than special-case column lists per call site, every
+// wabas read/write in the app (admin.js, onboarding.js, templates.js,
+// messagingService.js) stays on the privileged `pool` — RLS is still
+// enabled on wabas as a backstop, but in practice this table's isolation
+// relies on the same app-layer `where client_id = $1` it always has.
 const { pool } = require('../db/pool');
 
 async function findByClientId(clientId) {

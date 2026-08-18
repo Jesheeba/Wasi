@@ -5,6 +5,7 @@ const { authLimiter, webhookLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { requireClientAuth } = require('./middleware/requireClientAuth');
 const { requireAdminAuth } = require('./middleware/requireAdminAuth');
+const { withTenantContext } = require('./middleware/tenantContext');
 
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
@@ -65,22 +66,26 @@ function createApp() {
   app.use('/api/auth', authLimiter, authRouter);
   app.use('/api/admin/auth', authLimiter, adminAuthRouter);
 
-  // Tenant-scoped: real client JWT required.
-  app.use('/api/contacts', requireClientAuth, contactsRouter);
-  app.use('/api/chats', requireClientAuth, chatsRouter);
-  app.use('/api/tags', requireClientAuth, tagsRouter);
-  app.use('/api/onboarding', requireClientAuth, onboardingRouter);
-  app.use('/api/billing', requireClientAuth, billingRouter);
-  app.use('/api/broadcasts', requireClientAuth, broadcastsRouter);
-  app.use('/api/automation-rules', requireClientAuth, automationRulesRouter);
-  app.use('/api/templates', requireClientAuth, templatesRouter);
-  app.use('/api/support-tickets', requireClientAuth, supportTicketsRouter);
-  app.use('/api/analytics', requireClientAuth, analyticsRouter);
-  app.use('/api/team-members', requireClientAuth, teamMembersRouter);
-  app.use('/api/contact-attributes', requireClientAuth, contactAttributesRouter);
-  app.use('/api/payment-links', requireClientAuth, paymentLinksRouter);
-  app.use('/api/wallet', requireClientAuth, walletRouter);
-  app.use('/api/client-webhook', requireClientAuth, clientWebhookRouter);
+  // Tenant-scoped: real client JWT required. withTenantContext runs every
+  // request inside its own transaction as the restricted `wasi_app` role
+  // with app.current_client_id set (migration 013_tenant_isolation.js) —
+  // RLS is the actual enforcement, this just makes the connection subject
+  // to it.
+  app.use('/api/contacts', requireClientAuth, withTenantContext, contactsRouter);
+  app.use('/api/chats', requireClientAuth, withTenantContext, chatsRouter);
+  app.use('/api/tags', requireClientAuth, withTenantContext, tagsRouter);
+  app.use('/api/onboarding', requireClientAuth, withTenantContext, onboardingRouter);
+  app.use('/api/billing', requireClientAuth, withTenantContext, billingRouter);
+  app.use('/api/broadcasts', requireClientAuth, withTenantContext, broadcastsRouter);
+  app.use('/api/automation-rules', requireClientAuth, withTenantContext, automationRulesRouter);
+  app.use('/api/templates', requireClientAuth, withTenantContext, templatesRouter);
+  app.use('/api/support-tickets', requireClientAuth, withTenantContext, supportTicketsRouter);
+  app.use('/api/analytics', requireClientAuth, withTenantContext, analyticsRouter);
+  app.use('/api/team-members', requireClientAuth, withTenantContext, teamMembersRouter);
+  app.use('/api/contact-attributes', requireClientAuth, withTenantContext, contactAttributesRouter);
+  app.use('/api/payment-links', requireClientAuth, withTenantContext, paymentLinksRouter);
+  app.use('/api/wallet', requireClientAuth, withTenantContext, walletRouter);
+  app.use('/api/client-webhook', requireClientAuth, withTenantContext, clientWebhookRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);

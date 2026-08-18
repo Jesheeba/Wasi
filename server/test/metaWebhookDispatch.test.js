@@ -91,13 +91,13 @@ before(async () => {
   // updateStatusByMetaId has a real row to flip — otherwise the assertion
   // below would pass even if dispatch were still broken (0 rows updated
   // looks the same as "nothing to update").
-  const chat = await chatsRepo.create(testClientId, {
+  const chat = await chatsRepo.create(pool, testClientId, {
     name: '__test_suite__ webhook dispatch fixture',
     phone: '919092766740',
     unread_count: 0,
   });
-  const pending = await chatsRepo.insertOutboundPending(testClientId, chat.id, 'test outbound');
-  const sent = await chatsRepo.markSent(testClientId, pending.id, TEST_META_MESSAGE_ID);
+  const pending = await chatsRepo.insertOutboundPending(pool, testClientId, chat.id, 'test outbound');
+  const sent = await chatsRepo.markSent(pool, testClientId, pending.id, TEST_META_MESSAGE_ID);
   testMessageId = sent.id;
 });
 

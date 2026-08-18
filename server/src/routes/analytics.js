@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const { pool } = require('../db/pool');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = Router();
@@ -7,7 +6,7 @@ const router = Router();
 // Real message counts for the last 7 days — replaces the hardcoded numbers
 // that used to live directly in index.html's Reports > Message view.
 router.get('/messages', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query(
+  const { rows } = await req.db.query(
     `select
        count(*) filter (where direction = 'out')::int as outgoing,
        count(*) filter (where direction = 'in')::int as incoming,
@@ -26,7 +25,7 @@ router.get('/messages', asyncHandler(async (req, res) => {
 // who have at least one outbound message ever (no separate conversion-event
 // tracking exists, so this is the closest real signal to "engaged").
 router.get('/tags', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query(
+  const { rows } = await req.db.query(
     `select t.id, t.name, t.bg, t.color,
             count(c.id)::int as contact_count,
             case when count(c.id) = 0 then 0

@@ -72,13 +72,13 @@ router.get('/wabas', asyncHandler(async (req, res) => {
 // --- Rich client detail: client + subscription + waba + templates + audit trail ---
 router.get('/clients/:id', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
-  const client = await clientsRepo.findById(id);
+  const client = await clientsRepo.findById(pool, id);
   if (!client) return res.status(404).json({ error: 'Not found' });
 
   const [subscription, waba, templates, auditTrail] = await Promise.all([
-    subscriptionsRepo.findByClientId(id),
+    subscriptionsRepo.findByClientId(pool, id),
     wabasRepo.findByClientId(id),
-    messageTemplatesRepo.listByClientId(id),
+    messageTemplatesRepo.listByClientId(pool, id),
     auditLogRepo.list({ clientId: id, limit: 50 }),
   ]);
 
@@ -156,7 +156,7 @@ router.post('/admin-users', asyncHandler(async (req, res) => {
 
 // --- Billing (spec §5 "Billing" row) ---
 router.get('/billing/overview', asyncHandler(async (req, res) => {
-  const [subscriptions, plans] = await Promise.all([subscriptionsRepo.listAllWithClient(), plansRepo.list()]);
+  const [subscriptions, plans] = await Promise.all([subscriptionsRepo.listAllWithClient(pool), plansRepo.list()]);
   const priceByPlan = Object.fromEntries(plans.map((p) => [p.id, p.price_inr]));
   const active = subscriptions.filter((s) => s.status === 'active');
   const estimatedMrr = active.reduce((sum, s) => sum + (priceByPlan[s.plan] || 0), 0);
@@ -177,13 +177,13 @@ router.get('/billing/overview', asyncHandler(async (req, res) => {
 // --- Templates Review (spec §5 "Templates Review" row) ---
 router.get('/templates', asyncHandler(async (req, res) => {
   const status = ['approved', 'pending', 'rejected'].includes(req.query.status) ? req.query.status : null;
-  res.json(await messageTemplatesRepo.listAll(status));
+  res.json(await messageTemplatesRepo.listAll(pool, status));
 }));
 
 router.patch('/templates/:id', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { status } = templateStatusUpdateSchema.parse(req.body);
-  const template = await messageTemplatesRepo.updateStatus(id, status);
+  const template = await messageTemplatesRepo.updateStatus(pool, id, status);
   if (!template) return res.status(404).json({ error: 'Not found' });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: `template_${status}`, target: id });
   res.json(template);
@@ -192,13 +192,13 @@ router.patch('/templates/:id', asyncHandler(async (req, res) => {
 // --- Support / Tickets (spec §5 "Support / Tickets" row) ---
 router.get('/tickets', asyncHandler(async (req, res) => {
   const status = ['open', 'in_progress', 'resolved', 'closed'].includes(req.query.status) ? req.query.status : null;
-  res.json(await supportTicketsRepo.listAll(status));
+  res.json(await supportTicketsRepo.listAll(pool, status));
 }));
 
 router.patch('/tickets/:id', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { status } = ticketStatusUpdateSchema.parse(req.body);
-  const ticket = await supportTicketsRepo.updateStatus(id, status);
+  const ticket = await supportTicketsRepo.updateStatus(pool, id, status);
   if (!ticket) return res.status(404).json({ error: 'Not found' });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: `ticket_${status}`, target: id });
   res.json(ticket);

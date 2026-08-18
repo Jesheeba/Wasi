@@ -13,12 +13,12 @@ router.get('/plans', asyncHandler(async (req, res) => {
 }));
 
 router.get('/subscription', asyncHandler(async (req, res) => {
-  const subscription = await subscriptionsRepo.findByClientId(req.clientId);
+  const subscription = await subscriptionsRepo.findByClientId(req.db, req.clientId);
   res.json(subscription);
 }));
 
 router.get('/invoices', asyncHandler(async (req, res) => {
-  res.json(await invoicesRepo.listByClientId(req.clientId));
+  res.json(await invoicesRepo.listByClientId(req.db, req.clientId));
 }));
 
 router.post('/checkout', asyncHandler(async (req, res) => {
@@ -34,14 +34,14 @@ router.post('/checkout', asyncHandler(async (req, res) => {
       notes: { client_id: req.clientId, plan },
     });
 
-    const subscription = await subscriptionsRepo.create({
+    const subscription = await subscriptionsRepo.create(req.db, {
       client_id: req.clientId,
       plan,
       status: 'pending_payment',
       payment_provider_ref: order.id,
     });
 
-    await invoicesRepo.create({
+    await invoicesRepo.create(req.db, {
       client_id: req.clientId,
       subscription_id: subscription.id,
       plan,
@@ -71,11 +71,11 @@ router.post('/checkout', asyncHandler(async (req, res) => {
 // renewal. See DEPLOY.md / platform spec §7 if upgrading to real recurring
 // billing later.
 router.post('/cancel', asyncHandler(async (req, res) => {
-  const subscription = await subscriptionsRepo.findByClientId(req.clientId);
+  const subscription = await subscriptionsRepo.findByClientId(req.db, req.clientId);
   if (!subscription || subscription.status !== 'active') {
     return res.status(400).json({ error: 'No active subscription to cancel.' });
   }
-  const updated = await subscriptionsRepo.updateByProviderRef(subscription.payment_provider_ref, { status: 'cancelled' });
+  const updated = await subscriptionsRepo.updateByProviderRef(req.db, subscription.payment_provider_ref, { status: 'cancelled' });
   res.json(updated);
 }));
 

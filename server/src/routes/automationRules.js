@@ -6,12 +6,12 @@ const { automationRuleCreateSchema } = require('../utils/validate');
 const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
-  res.json(await automationRulesRepo.list(req.clientId));
+  res.json(await automationRulesRepo.list(req.db, req.clientId));
 }));
 
 router.post('/', asyncHandler(async (req, res) => {
   const data = automationRuleCreateSchema.parse(req.body);
-  const rule = await automationRulesRepo.create(req.clientId, data);
+  const rule = await automationRulesRepo.create(req.db, req.clientId, data);
   res.status(201).json(rule);
 }));
 

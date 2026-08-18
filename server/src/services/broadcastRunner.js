@@ -33,7 +33,7 @@ async function sendOneRecipient(broadcast, recipient) {
     tag_id: recipient.contact_tag_id,
   };
   try {
-    const chat = await chatsRepo.findOrCreateByContact(broadcast.client_id, contact);
+    const chat = await chatsRepo.findOrCreateByContact(pool, broadcast.client_id, contact);
     // templateComponents is always [] here — there's no per-recipient named-
     // parameter mapping yet (which contact field fills {{customer_name}},
     // etc.), so a broadcast template with body variables sends with them
@@ -41,22 +41,22 @@ async function sendOneRecipient(broadcast, recipient) {
     // metaClient.buildNamedBodyComponents({ param_name: value, ... }) rather
     // than a positional array — Meta's send API expects named parameter
     // objects now (see server/src/utils/templateParams.js).
-    const message = await messagingService.sendChatMessage(broadcast.client_id, chat, {
+    const message = await messagingService.sendChatMessage(pool, broadcast.client_id, chat, {
       type: 'template',
       templateName: broadcast.template_name,
       templateLanguage: 'en_US',
       templateComponents: [],
     });
-    await broadcastRecipientsRepo.markSent(recipient.id, message.id);
+    await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {
     // Consent gate rejected it before any Cloud API call was made — skip,
     // not fail (build plan Phase 4). Reusing messagingService's own check
     // rather than re-implementing it here means there's exactly one place
     // that decides whether a template send needs consent.
     if (err instanceof MessagingError && err.code === 'consent_required') {
-      await broadcastRecipientsRepo.markSkipped(recipient.id, err.message);
+      await broadcastRecipientsRepo.markSkipped(pool, recipient.id, err.message);
     } else {
-      await broadcastRecipientsRepo.markFailed(recipient.id, err.message);
+      await broadcastRecipientsRepo.markFailed(pool, recipient.id, err.message);
     }
   }
 }
@@ -88,20 +88,20 @@ async function processBroadcast(broadcast) {
     await runWithConcurrency(batch, SEND_CONCURRENCY, (recipient) => sendOneRecipient(broadcast, recipient));
   }
 
-  const stillPending = await broadcastRecipientsRepo.hasPending(broadcast.id);
+  const stillPending = await broadcastRecipientsRepo.hasPending(pool, broadcast.id);
   if (!stillPending) {
-    await broadcastsRepo.markStatus(broadcast.id, 'Completed');
+    await broadcastsRepo.markStatus(pool, broadcast.id, 'Completed');
   }
 }
 
 async function tick() {
   try {
-    const due = await broadcastsRepo.listDueScheduled();
+    const due = await broadcastsRepo.listDueScheduled(pool);
     for (const broadcast of due) {
-      await broadcastsRepo.markStatus(broadcast.id, 'Sending');
+      await broadcastsRepo.markStatus(pool, broadcast.id, 'Sending');
     }
 
-    const active = await broadcastsRepo.listActive();
+    const active = await broadcastsRepo.listActive(pool);
     for (const broadcast of active) {
       await processBroadcast(broadcast);
     }

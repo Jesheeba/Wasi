@@ -1,11 +1,9 @@
-const { pool } = require('../db/pool');
-
 // delivered_count/read_rate are computed live from the underlying messages'
 // real Cloud API delivery status (joined via broadcast_recipients.message_id)
 // rather than trusted as stored columns — one source of truth, no staleness
 // between what the webhook knows and what this list shows.
-async function list(clientId) {
-  const { rows } = await pool.query(
+async function list(db, clientId) {
+  const { rows } = await db.query(
     `select b.id, b.client_id, b.title, b.tag_id, b.status, b.template_name, b.scheduled_date, b.created_at,
             coalesce(rc.total, 0)::int as recipient_count,
             coalesce(rc.sent, 0)::int as delivered_count,
@@ -34,16 +32,16 @@ async function list(clientId) {
   return rows;
 }
 
-async function findById(clientId, id) {
-  const { rows } = await pool.query('select * from broadcasts where client_id = $1 and id = $2', [clientId, id]);
+async function findById(db, clientId, id) {
+  const { rows } = await db.query('select * from broadcasts where client_id = $1 and id = $2', [clientId, id]);
   return rows[0] || null;
 }
 
-async function create(clientId, { title, tag_id, template_name, scheduled_date }) {
+async function create(db, clientId, { title, tag_id, template_name, scheduled_date }) {
   // No scheduled_date (or one that's today/past) -> ready to send now.
   const isFuture = scheduled_date && new Date(scheduled_date) > new Date(new Date().toDateString());
   const status = isFuture ? 'Scheduled' : 'Sending';
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `insert into broadcasts (client_id, title, tag_id, template_name, scheduled_date, status)
      values ($1, $2, $3, $4, $5, $6)
      returning *`,
@@ -52,21 +50,25 @@ async function create(clientId, { title, tag_id, template_name, scheduled_date }
   return rows[0];
 }
 
-async function markStatus(id, status) {
-  await pool.query('update broadcasts set status = $2 where id = $1', [id, status]);
+// Used both by routes/broadcasts.js (req.db, on creation with a
+// zero-recipient audience) and broadcastRunner (pool, once sending
+// completes) — no client_id in the WHERE clause, but RLS's policy still
+// restricts it to the caller's own tenant when run via req.db.
+async function markStatus(db, id, status) {
+  await db.query('update broadcasts set status = $2 where id = $1', [id, status]);
 }
 
 // Every broadcast whose scheduled date has arrived and still has pending
 // recipients — the runner promotes these to 'Sending' each tick.
-async function listDueScheduled() {
-  const { rows } = await pool.query(
+async function listDueScheduled(db) {
+  const { rows } = await db.query(
     `select * from broadcasts where status = 'Scheduled' and (scheduled_date is null or scheduled_date <= current_date)`
   );
   return rows;
 }
 
-async function listActive() {
-  const { rows } = await pool.query(`select * from broadcasts where status = 'Sending'`);
+async function listActive(db) {
+  const { rows } = await db.query(`select * from broadcasts where status = 'Sending'`);
   return rows;
 }
 

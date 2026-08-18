@@ -6,17 +6,17 @@ const { uuid, contactAttributeCreateSchema } = require('../utils/validate');
 const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
-  res.json(await contactAttributesRepo.list(req.clientId));
+  res.json(await contactAttributesRepo.list(req.db, req.clientId));
 }));
 
 router.post('/', asyncHandler(async (req, res) => {
   const data = contactAttributeCreateSchema.parse(req.body);
-  res.status(201).json(await contactAttributesRepo.create(req.clientId, data));
+  res.status(201).json(await contactAttributesRepo.create(req.db, req.clientId, data));
 }));
 
 router.delete('/:id', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
-  const deleted = await contactAttributesRepo.remove(req.clientId, req.params.id);
+  const deleted = await contactAttributesRepo.remove(req.db, req.clientId, req.params.id);
   if (!deleted) return res.status(404).json({ error: 'Not found' });
   res.status(204).send();
 }));

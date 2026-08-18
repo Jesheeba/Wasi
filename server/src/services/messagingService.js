@@ -2,6 +2,16 @@
 // automation-rule actions, and (server/src/services/broadcastRunner.js)
 // campaign sends all call this, so the session-window rule and
 // sent/failed bookkeeping only exist in one place.
+//
+// Every function here takes `db` first, forwarded straight through from the
+// caller (req.db for a client-authenticated chat reply, the privileged
+// `pool` for broadcastRunner/automationEngine) — same convention as the
+// repos it calls (see repositories/tagsRepo.js's module comment). The one
+// exception is the WABA lookup in getSendableWaba: it always uses the
+// privileged `pool` directly, never the passed-in `db`, because
+// wabas.access_token_encrypted is revoked from the restricted role at the
+// column level (migration 013_tenant_isolation.js) — see wabasRepo.js's
+// module comment for the full reasoning.
 const wabasRepo = require('../repositories/wabasRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const contactsRepo = require('../repositories/contactsRepo');
@@ -29,8 +39,8 @@ async function getSendableWaba(clientId) {
   return waba;
 }
 
-async function canSendFreeform(clientId, chatId) {
-  const lastIn = await chatsRepo.lastInboundAt(clientId, chatId);
+async function canSendFreeform(db, clientId, chatId) {
+  const lastIn = await chatsRepo.lastInboundAt(db, clientId, chatId);
   if (!lastIn) return false;
   return Date.now() - new Date(lastIn).getTime() < SESSION_WINDOW_MS;
 }
@@ -41,12 +51,12 @@ async function canSendFreeform(clientId, chatId) {
 // future) the way a UI-only check could be. Utility and authentication
 // templates are exempt; a template whose category can't be determined
 // locally is treated as marketing — fail closed, not open.
-async function assertConsentForTemplate(clientId, chat, templateName) {
-  const template = await messageTemplatesRepo.findByNameAndClient(clientId, templateName);
+async function assertConsentForTemplate(db, clientId, chat, templateName) {
+  const template = await messageTemplatesRepo.findByNameAndClient(db, clientId, templateName);
   const requiresConsent = !template || template.category === 'Marketing';
   if (!requiresConsent) return;
 
-  const contact = chat.contact_id ? await contactsRepo.findById(clientId, chat.contact_id) : null;
+  const contact = chat.contact_id ? await contactsRepo.findById(db, clientId, chat.contact_id) : null;
   if (!contact || contact.opt_in_status !== 'opted_in') {
     throw new MessagingError(
       'This contact has not opted in to marketing messages — utility/authentication templates are unaffected.',
@@ -57,12 +67,12 @@ async function assertConsentForTemplate(clientId, chat, templateName) {
 
 // Approximate plan enforcement — see usageRepo.monthToDateSent for the
 // "outbound messages this month" proxy this checks against.
-async function assertWithinPlanLimit(clientId) {
-  const subscription = await subscriptionsRepo.findByClientId(clientId);
+async function assertWithinPlanLimit(db, clientId) {
+  const subscription = await subscriptionsRepo.findByClientId(db, clientId);
   if (!subscription || subscription.status !== 'active') return; // no active paid plan to enforce yet — don't block dev/demo use
   const plan = await plansRepo.findById(subscription.plan);
   if (!plan || plan.conversation_limit == null) return; // unlimited (Scale) or unknown plan
-  const used = await usageRepo.monthToDateSent(clientId);
+  const used = await usageRepo.monthToDateSent(db, clientId);
   if (used >= plan.conversation_limit) {
     throw new MessagingError(
       `Monthly conversation limit reached for the ${subscription.plan} plan (${plan.conversation_limit}/mo). Upgrade to send more.`,
@@ -72,24 +82,24 @@ async function assertWithinPlanLimit(clientId) {
 }
 
 // type: 'text' -> { body }. type: 'template' -> { templateName, templateLanguage, templateComponents }.
-async function sendChatMessage(clientId, chat, { type, body, templateName, templateLanguage, templateComponents }) {
-  if (type === 'text' && !(await canSendFreeform(clientId, chat.id))) {
+async function sendChatMessage(db, clientId, chat, { type, body, templateName, templateLanguage, templateComponents }) {
+  if (type === 'text' && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
       'session_window_closed'
     );
   }
   if (type === 'template') {
-    await assertConsentForTemplate(clientId, chat, templateName);
+    await assertConsentForTemplate(db, clientId, chat, templateName);
   }
-  await assertWithinPlanLimit(clientId);
+  await assertWithinPlanLimit(db, clientId);
 
   const waba = await getSendableWaba(clientId);
   const accessToken = decrypt(waba.access_token_encrypted);
   const toPhone = chat.phone;
   const displayBody = type === 'text' ? body : `[template: ${templateName}]`;
 
-  const message = await chatsRepo.insertOutboundPending(clientId, chat.id, displayBody);
+  const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody);
 
   try {
     const metaMessageId = type === 'text'
@@ -99,11 +109,11 @@ async function sendChatMessage(clientId, chat, { type, body, templateName, templ
           language: templateLanguage,
           components: templateComponents || [],
         });
-    const sent = await chatsRepo.markSent(clientId, message.id, metaMessageId);
-    await usageRepo.incrementSent(clientId);
+    const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId);
+    await usageRepo.incrementSent(db, clientId);
     return sent;
   } catch (err) {
-    await chatsRepo.markFailed(clientId, message.id, err.message);
+    await chatsRepo.markFailed(db, clientId, message.id, err.message);
     throw new MessagingError(err.message, 'send_failed');
   }
 }
@@ -113,11 +123,11 @@ async function sendChatMessage(clientId, chat, { type, body, templateName, templ
 // Cloud API error); a template retry should go through sendChatMessage again
 // with the template explicitly, since we don't persist which template a
 // message used.
-async function retryMessage(clientId, chat, message) {
+async function retryMessage(db, clientId, chat, message) {
   if (message.status !== 'failed') {
     throw new MessagingError('Only a failed message can be retried.', 'not_failed');
   }
-  if (!(await canSendFreeform(clientId, chat.id))) {
+  if (!(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
       'session_window_closed'
@@ -129,9 +139,9 @@ async function retryMessage(clientId, chat, message) {
 
   try {
     const metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
-    return chatsRepo.markSent(clientId, message.id, metaMessageId);
+    return chatsRepo.markSent(db, clientId, message.id, metaMessageId);
   } catch (err) {
-    await chatsRepo.markFailed(clientId, message.id, err.message);
+    await chatsRepo.markFailed(db, clientId, message.id, err.message);
     throw new MessagingError(err.message, 'send_failed');
   }
 }

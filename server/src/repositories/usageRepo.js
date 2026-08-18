@@ -1,7 +1,5 @@
-const { pool } = require('../db/pool');
-
-async function incrementSent(clientId) {
-  await pool.query(
+async function incrementSent(db, clientId) {
+  await db.query(
     `insert into usage_logs (client_id, date, messages_sent)
      values ($1, current_date, 1)
      on conflict (client_id, date) do update set messages_sent = usage_logs.messages_sent + 1`,
@@ -9,8 +7,8 @@ async function incrementSent(clientId) {
   );
 }
 
-async function incrementReceived(clientId) {
-  await pool.query(
+async function incrementReceived(db, clientId) {
+  await db.query(
     `insert into usage_logs (client_id, date, messages_received)
      values ($1, current_date, 1)
      on conflict (client_id, date) do update set messages_received = usage_logs.messages_received + 1`,
@@ -22,8 +20,8 @@ async function incrementReceived(clientId) {
 // a proxy for Meta's actual 24h "conversation" billing unit, which would
 // need per-conversation-window tracking to compute exactly. Good enough to
 // gate against a plan's conversation_limit without overbuilding this.
-async function monthToDateSent(clientId) {
-  const { rows } = await pool.query(
+async function monthToDateSent(db, clientId) {
+  const { rows } = await db.query(
     `select coalesce(sum(messages_sent), 0)::int as total
      from usage_logs
      where client_id = $1 and date >= date_trunc('month', current_date)`,
