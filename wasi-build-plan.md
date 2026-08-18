@@ -4,7 +4,7 @@
 
 **Meta side is complete.** App `27135450269410430`, Tech Provider verified, both WhatsApp permissions at Advanced access, app published. No reviews pending, nothing waiting on Meta. Everything below is code.
 
-**Current state per audit:** ~60–65% of a shippable v1. The hard parts are genuinely built — HMAC signature verification with `timingSafeEqual`, AES-256-GCM token storage, the 24-hour window rule enforced in the send path, idempotent inbound inserts, a real broadcast worker using `FOR UPDATE SKIP LOCKED`, plan limits wired into the send path. Database fully migrated, 11 migrations, 25 tables.
+**Current state per audit:** ~60–65% of a shippable v1 *at the time of the original audit*. Phases 1–4 below are now done (Phase 2 except one step blocked on Meta's side, not this codebase) — this line is left as the historical baseline, not updated to a new percentage, since the remaining phases (5–8) haven't been re-scoped against what actually shipped. The hard parts are genuinely built — HMAC signature verification with `timingSafeEqual`, AES-256-GCM token storage, the 24-hour window rule enforced in the send path, idempotent inbound inserts, a real broadcast worker using `FOR UPDATE SKIP LOCKED`, plan limits wired into the send path, database-level tenant isolation via RLS, opt-in/consent tracking. Database fully migrated, 13 migrations, 26 tables.
 
 ---
 
@@ -71,61 +71,64 @@ This is the same category of risk that hit the CRM (see "Unrelated but still out
 
 ---
 
-## PHASE 1 — Named parameters (2 hrs)
+## PHASE 1 — Named parameters (2 hrs) — DONE (commit `292dbf3`)
 
-Wasi's template system handles numbered parameters (`{{1}}`, `{{2}}`) only. **Meta now rejects these** — confirmed by live rejection in WhatsApp Manager. Templates would fail on first real use.
+Wasi's template system handled numbered parameters (`{{1}}`, `{{2}}`) only. **Meta now rejects these** — confirmed by live rejection in WhatsApp Manager. Templates would have failed on first real use.
 
-- [ ] Port the validator from Sirah CRM (`lib/whatsapp-template-validator.ts`) — already written and tested
-- [ ] Parser extracts named params: `/\{\{\s*([a-z0-9_]+)\s*\}\}/g`
-- [ ] Reject purely numeric parameter names
-- [ ] Reject mixed numbered/named usage in one template
-- [ ] Keep the variable-at-start/end check — that rule still applies and is the most common auto-rejection
-- [ ] Create payload sends `parameter_format: "named"` (lowercase)
-- [ ] Body example shape: `example.body_text_named_params: [{ param_name, example }]`
-- [ ] Send path passes `{ type: "text", parameter_name, text }` objects, not a positional array
-- [ ] Update seed data — audit confirmed it uses numbered params
+- [x] Validator built as `server/src/utils/templateParams.js` (reimplemented for this codebase, not a literal port of Sirah CRM's TS file)
+- [x] Parser extracts named params: `/\{\{\s*([a-z0-9_]+)\s*\}\}/g`
+- [x] Rejects purely numeric parameter names
+- [x] Rejects mixed numbered/named usage in one template
+- [x] Kept the variable-at-start/end check
+- [x] Create payload sends `parameter_format: "named"` (lowercase)
+- [x] Body example shape: `example.body_text_named_params: [{ param_name, example }]`
+- [x] Send path passes `{ type: "text", parameter_name, text }` objects, not a positional array
+- [x] Seed data updated to named parameters
+- [x] Beyond original scope: a params-words-ratio rule (`words >= 3*params + 2`), reverse-engineered after a real template got live-rejected by Meta (error 2388293) for too few words per parameter — no official Meta threshold is documented; this is corroborated against third-party BSP docs, not Meta's own spec, and should be revisited if Meta ever publishes the real rule
 
-> Header and button named-parameter shapes are not documented by Meta. Test body-only first, then header, then URL buttons last.
-
----
-
-## PHASE 2 — First real message (half a day)
-
-Nothing in Wasi has ever run against a live Meta App. Every Meta-dependent path is unverified.
-
-- [ ] Add a WABA record with a real `phone_number_id`, `waba_id`, and system user token
-- [ ] Set a webhook override on that WABA pointing at Wasi's `/webhooks/meta`
-- [ ] Verify Meta's GET handshake succeeds
-- [ ] Send one text message via `metaClient.js` → confirm delivery on a real phone
-- [ ] Reply from the phone → confirm the inbound row lands in `messages`
-- [ ] Create one template through Wasi → confirm it appears in WhatsApp Manager as Pending
-- [ ] Confirm `message_template_status_update` flips it to approved without manual polling
-- [ ] Send that template with named parameters → confirm values resolve, not literal `{{customer_name}}`
-
-Expect bugs here. This is where unverified code meets reality.
+> Header and button named-parameter shapes are still not documented by Meta and still untested — this phase only covers the body.
 
 ---
 
-## PHASE 3 — Tenant isolation via RLS (1 day)
+## PHASE 2 — First real message (half a day) — DONE except step 6, blocked on Meta config, not code
 
-Isolation is currently app-layer `WHERE client_id = $1` only. One query written without that clause leaks another client's conversations, and nothing catches it.
+Verified live against the real Meta App (`27135450269410430`) and a real WABA (`983390651411856`), through a short-lived ngrok webhook override — added, used, and removed again for each verification window, per the plan.
 
-- [ ] Enable RLS on every tenant-scoped table: `wabas`, `contacts`, `chats`, `messages`, `broadcasts`, `broadcast_recipients`, `message_templates`, `subscriptions`, `invoices`, `team_members`, `contact_attributes`
-- [ ] Add a `current_client_id()` helper resolving from the JWT
-- [ ] Policies keyed off it — match the pattern in the CRM's `0021_integration_settings.sql`
-- [ ] **Revoke column privileges** on `wabas.access_token_encrypted` so only the service role can read it, mirroring the CRM's approach
-- [ ] Keep the app-layer `WHERE` clauses — defence in depth, not a replacement
-- [ ] Test cross-tenant access is genuinely blocked at the DB, not just the app
+- [x] Added a WABA record with a real `phone_number_id`, `waba_id`, and system user token (pasted directly for this verification pass, not obtained through Embedded Signup — see new §6.2: Embedded Signup itself has still never been run end-to-end)
+- [x] Set a webhook override on that WABA pointing at Wasi's `/webhooks/meta`
+- [x] Verified Meta's GET handshake succeeds
+- [x] Sent one text message via `metaClient.js` → confirmed delivery on a real phone
+- [x] Replied from the phone → confirmed the inbound row lands in `messages`
+- [x] Created a template through Wasi → confirmed it appears in WhatsApp Manager as Pending
+- [ ] **Step 6 — blocked, not failed.** Webhook fields (including `message_template_status_update`) were subscribed in the Meta App Dashboard as instructed, the override was confirmed active, and a new template was approved during the verification window — but the ngrok request log (ground truth, not inference) showed **zero** `message_template_status_update` POSTs arriving across the whole session. That points at a Meta App Dashboard configuration issue outside this codebase's control, not a bug here — the dispatch logic for this exact field is implemented and covered by a regression test using a real captured payload shape (`server/test/metaWebhookDispatch.test.js`), it's just never been exercised by an actual Meta delivery. Needs re-attempting from the Meta side (re-check field subscription, re-subscribe, or open a Meta support case) before this can be marked done.
+- [x] Sent that template with named parameters → confirmed values resolve, not literal `{{customer_name}}`
 
-> Retrofitting this after clients are live is significantly harder. Do it before onboarding anyone.
+Real bugs found here, not hypothetical ones — see §6.1: a `pg.Pool` idle-connection crash (fixed, later validated against a real subsequent outage) and a webhook handler that swallowed per-change failures and always returned 200 regardless (fixed — this is the same failure shape that permanently destroyed inbound messages on Sirah CRM).
 
 ---
 
-## PHASE 4 — Opt-in tracking (half a day)
+## PHASE 3 — Tenant isolation via RLS (1 day) — DONE (commit `61b8685`)
 
-No consent column exists anywhere. `contacts.status` is generic, not WhatsApp consent.
+Isolation was app-layer `WHERE client_id = $1` only. One query written without that clause would have leaked another client's conversations, with nothing to catch it.
 
-This is a compliance gap, not a missing feature. Sending to non-consenting numbers destroys quality ratings — and **quality is portfolio-level**, so one client's bad sending affects every other client's messaging tier.
+- [x] Enabled + **forced** RLS on 20 tables total: the original 11 (`wabas`, `contacts`, `chats`, `messages`, `broadcasts`, `broadcast_recipients`, `message_templates`, `subscriptions`, `invoices`, `team_members`, `contact_attributes`) plus 9 more added to the schema since this plan was written (`usage_logs`, `tags`, `automation_rules`, `support_tickets`, `consent_events`, `payment_links`, `wallet_transactions`, `client_webhooks`, and `clients` itself, keyed on `id` rather than `client_id`). `broadcast_recipients` needed a new denormalized `client_id` column first — it only carried `broadcast_id`
+- [x] **Deviation from plan, found by investigating first, not assumed:** a plain `current_client_id()` JWT-resolving helper isn't enough on its own — this app connects to Postgres as Supabase's `postgres` role, confirmed live to have `rolbypassrls = true`. Enabling RLS with no other change would have been a complete no-op. Fix: a new restricted `wasi_app` role (`NOLOGIN`, `NOBYPASSRLS`) that ordinary client requests run as, switched into per-request via `SET LOCAL ROLE` inside a transaction (`server/src/middleware/tenantContext.js`), with `app.current_client_id` set the same way — the privileged `postgres` connection is kept for admin routes, the Meta webhook, `broadcastRunner`, and a few pre-auth/system paths
+- [x] Policies keyed off `current_setting('app.current_client_id', true)` — not literally the CRM's `0021_integration_settings.sql` pattern (never read that file directly; built independently for this app's actual connection model, which has no Supabase Auth JWT reaching the database the way PostgREST-based RLS normally assumes)
+- [x] **Revoked column privileges** on `wabas.access_token_encrypted` (and, going further than originally scoped, `clients.password_hash`) so only the privileged connection can read them
+- [x] Kept the app-layer `WHERE` clauses — defence in depth, not replaced
+- [x] Tested cross-tenant access is genuinely blocked at the DB: `server/test/tenantIsolation.test.js` runs a query with **no** `client_id` filter in the SQL at all and proves it still returns only the current tenant's rows — the actual proof this is DB-enforced, not app-enforced — plus proof the admin path and `broadcastRunner`'s cross-client listing still work, and that the token column really is unreadable by the restricted role
+
+Two real bugs found and fixed while building this, both against the live dev database, not caught by review alone: a wrong call site (a repo function was passed the connection pool object as a query parameter by mistake) caught immediately by the new tests; and a genuine Postgres gotcha where a custom session GUC defaults to `''` (not `NULL`) after the transaction that first set it ends, which would otherwise make an unscoped query throw instead of cleanly denying access — fixed with `nullif(current_setting(...), '')` in the policy expressions.
+
+> Retrofitting this after clients are live would have been significantly harder. Done before onboarding anyone real.
+
+---
+
+## PHASE 4 — Opt-in tracking (half a day) — DONE (commit `d8a7a0d`)
+
+No consent column existed anywhere. `contacts.status` was generic, not WhatsApp consent.
+
+This was a compliance gap, not a missing feature. Sending to non-consenting numbers destroys quality ratings — and **quality is portfolio-level**, so one client's bad sending affects every other client's messaging tier. Motivated directly by a live near-miss during Phase 2 verification: the broadcast worker nearly sent an unsolicited template to a real personal number.
 
 ```sql
 alter table contacts
@@ -136,10 +139,11 @@ alter table contacts
   add column opt_out_at timestamptz;
 ```
 
-- [ ] Block marketing broadcasts to anything not `opted_in`
-- [ ] Auto-set `opted_out` on STOP-type inbound messages
-- [ ] Surface opt-in state in the contact UI
-- [ ] Record source — where consent came from — since that's what you'd need if challenged
+- [x] Blocks marketing broadcasts (and marketing chat sends, the enforcement point is `messagingService.sendChatMessage`, not just the broadcast path) to anything not `opted_in`; a template whose category can't be resolved locally fails closed and is treated as marketing
+- [x] Auto-sets `opted_out` on STOP-type inbound messages, including Tamil/Tanglish variants (best-effort list, not native-speaker-verified)
+- [x] Surfaced opt-in state, source, and date in the contact UI, plus a skipped-for-consent count on broadcast results and a pre-send warning when most of the audience hasn't opted in
+- [x] Records source in an append-only `consent_events` table, separate from the current-state column on `contacts` — exactly what you'd need if challenged
+- [x] Existing contacts default to `unknown`, never backfilled to `opted_in` — verified live against the real seeded demo contacts
 
 ---
 
@@ -211,6 +215,16 @@ This matters specifically for Wasi because of one fact: **Meta retries a failed 
 - [ ] Once the super admin panel exists, surface "last successful webhook processed at" per WABA on the Health view — a stale timestamp is a more specific signal than generic uptime
 - [x] ~~Consider whether a crash mid-webhook-processing needs Meta to actually retry~~ — **done**: found live during this same verification pass that it did NOT retry (per-change errors were caught, logged, and the handler still returned 200 regardless — the identical failure shape, "failed write, swallowed error, 200 returned," that caused the Sirah CRM incident this plan already references). Fixed: `metaWebhook.js` now tracks whether any change genuinely failed to process (as opposed to a field with no handler at all, which is not a failure and still returns 200) and returns 500 if so, so Meta retries the whole payload. Safe because inbound inserts are idempotent on `meta_message_id` — reprocessing an already-succeeded change costs nothing, a lost one is unrecoverable after 7 days. Covered by a regression test with a real DB constraint violation (`server/test/metaWebhookDispatch.test.js`).
 - [ ] **New risk introduced by the fix above, needs its own alert**: Meta can disable a webhook subscription after sustained non-2xx responses (exact threshold undocumented — verify against current Meta docs before relying on a number). A prolonged outage now fails loudly (500s) instead of silently (200s), which is the right tradeoff, but "loudly" only helps if something is listening — this is the concrete reason §6.1's uptime alerting can't be optional. The `console.error('metaWebhook FAILURE:', ...)` log line is deliberately structured and distinctly grep-able from routine "unhandled field" warnings specifically so it can be wired to an alert before Meta's own disable-threshold is reached, not after.
+- [x] **Related config gap, found during Phase 3, fixed:** `pool.js`'s `pg.Pool` had no `connectionTimeoutMillis` set. Harmless when `pool.connect()` was called from a handful of places, but Phase 3's `tenantContext.js` middleware now calls it on *every* client-authenticated request — a single transient Supabase pooler blip during testing hung a connection attempt for over 4 minutes with no error, because Node had no timeout to fall back on and just waited on the OS's own TCP timeout. Fixed with a 10s `connectionTimeoutMillis`. **The gap this points at is bigger than this one setting**: nothing in this codebase has been audited end-to-end for missing timeouts (Meta API calls via `metaClient.js`, Razorpay calls, `fetch()` calls in `forwardToClientWebhook`) — each was written assuming the network behaves, none has been verified against an induced hang the way this one now has. Worth a dedicated pass before relying on any of them under real production load.
+
+**Checkpoint after Phases 1–4:** the two items above that are still unchecked — external uptime alerting, and Render's actual restart behavior — remain genuinely unverified, not just undocumented. Nothing in Phases 1–4 touched either of them.
+
+### 6.2 Embedded Signup has never actually been run
+
+Every live verification in Phase 2 used a WABA connected by pasting a real `waba_id`, `phone_number_id`, and system-user token directly into the database — not by going through `/api/onboarding/whatsapp/connect`, the actual code path a real client would use (Meta's `FB.login()` popup → `config_id` → authorization code → `metaClient.exchangeCodeForToken` → `exchangeForLongLivedToken` → `subscribeAppToWaba` → `registerPhoneNumber`). That path is implemented and has exactly one test against it (`onboarding: whatsapp connect fails cleanly with a bogus code`, confirming a real 502 for a fake authorization code) — it has never been exercised with a real one. Everything downstream of it (the send path, the webhook, templates, RLS, opt-in tracking) is now verified; the front door a real client actually walks through to get there is not.
+
+- [ ] Run Embedded Signup end-to-end at least once with a real Meta test user / test WABA before onboarding anyone who isn't this developer
+- [ ] Confirm the frontend's `embeddedSignup.js` (the `FB.login()` + `config_id` popup flow) actually matches what `/api/onboarding/whatsapp/connect` expects — never checked together in a real browser against a live Meta app
 
 ---
 
@@ -262,19 +276,19 @@ These follow clients rather than precede them. Build what a paying client actual
 
 ## Order and effort
 
-| | Phase | Effort | Blocks |
-|---|---|---|---|
-| 0 | Git + credentials | 30 min | Everything |
-| 1 | Named parameters | 2 hrs | Templates working at all |
-| 2 | First real message | 4 hrs | Trusting any of this |
-| 3 | RLS | 1 day | Onboarding real clients |
-| 4 | Opt-in tracking | 4 hrs | Marketing sends, compliance |
-| 5 | Hub capability | 1.5 days | GV Mart, CRM consuming Wasi |
-| 6 | Super admin | 1 day | Operating at >3 clients |
-| 7 | Switch default webhook | 2 hrs | — |
-| 8 | Connect GV Mart | 1 day | Ramesh going live |
+| | Phase | Effort | Blocks | Status |
+|---|---|---|---|---|
+| 0 | Git + credentials | 30 min | Everything | Done |
+| 1 | Named parameters | 2 hrs | Templates working at all | Done |
+| 2 | First real message | 4 hrs | Trusting any of this | Done except step 6 (blocked on Meta, not code) |
+| 3 | RLS | 1 day | Onboarding real clients | Done |
+| 4 | Opt-in tracking | 4 hrs | Marketing sends, compliance | Done |
+| 5 | Hub capability | 1.5 days | GV Mart, CRM consuming Wasi | Not started |
+| 6 | Super admin | 1 day | Operating at >3 clients | Not started |
+| 7 | Switch default webhook | 2 hrs | — | Not started |
+| 8 | Connect GV Mart | 1 day | Ramesh going live | Not started |
 
-**Roughly one working week to hub-ready.** Most of it is verification and hardening, not new features.
+**Roughly one working week to hub-ready** *(original estimate)*. Phases 1–4 are done; Phases 5–8 haven't been re-estimated against what actually shipped, so this total is left as the original plan, not a current forecast.
 
 ---
 
