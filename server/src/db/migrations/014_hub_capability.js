@@ -18,14 +18,16 @@
 // `where key_hash = $1` is the correct tool here — same reasoning
 // authTokensRepo already uses for reset/verification tokens.
 //
-// webhook_deliveries is a separate, independent mechanism from the existing
-// client_webhooks table/route (client's own self-configured integration
-// webhook, message.received only, fire-and-forget, no retry) — a deliberate
-// choice, not an oversight: keeping them separate was chosen over unifying
-// the two delivery mechanisms. forward_secret on wabas is treated with the
-// same care as wabas.access_token_encrypted (excluded from wasi_app's SELECT
-// grant) since it lets whoever holds it forge signed deliveries to the
-// consuming app.
+// webhook_deliveries is the durable retry queue behind BOTH forward
+// targets: wabas.forward_to_url (a hub-connected consuming app) and the
+// pre-existing client_webhooks table (a client's own self-configured
+// integration webhook — see routes/metaWebhook.js's enqueueForwards).
+// client_webhooks itself is untouched by this migration; only its delivery
+// mechanism changed, from a fire-and-forget fetch with no retry to feeding
+// this same queue. forward_secret on wabas is treated with the same care
+// as wabas.access_token_encrypted (excluded from wasi_app's SELECT grant)
+// since it lets whoever holds it forge signed deliveries to the consuming
+// app.
 
 exports.up = (pgm) => {
   pgm.createTable('api_keys', {

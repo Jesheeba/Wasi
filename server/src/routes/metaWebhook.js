@@ -40,26 +40,51 @@ function verifySignature(rawBody, signatureHeader) {
   return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
-// Forwards to the client's own configured endpoint (Settings > Webhook), if
-// any — best-effort, fire-and-forget: a slow or broken client endpoint must
-// never block or fail WhatsApp message ingestion. Signed the same way Meta
-// signs its calls to us, so the client can verify authenticity.
-async function forwardToClientWebhook(clientId, event, payload) {
-  let webhook;
-  try {
-    webhook = await clientWebhooksRepo.findByClientId(pool, clientId);
-  } catch (_err) {
-    return;
+// Enqueues one delivery per configured forward target for this waba's
+// client, into the same durable, retried queue (build plan Phase 5) —
+// wabas.forward_to_url (a hub-connected consuming app) and
+// client_webhooks.callback_url (the client's own generic integration
+// webhook, Settings > Webhook) are independent, optional targets, and a
+// client can have either, both, or neither configured. This replaces what
+// used to be two separate mechanisms: this enqueue for the hub target, and
+// a fire-and-forget fetch with no retry for the client's own webhook.
+// Unifying means client_webhooks now gets the same retry-with-backoff
+// guarantee, and both targets now receive all three event types (message
+// received, template status, account/quality) instead of client_webhooks
+// being limited to message.received only — there was no reason to keep
+// withholding the other two once the delivery mechanism is shared. Signed
+// identically for both targets (x-wasi-signature-256, HMAC-SHA256 of the
+// JSON body), so nothing about how a receiving app verifies a delivery
+// changes based on which target it's configured as.
+async function enqueueForwards(waba, event, payload) {
+  if (waba.forward_to_url) {
+    await webhookDeliveriesRepo.enqueue(pool, {
+      clientId: waba.client_id,
+      wabaId: waba.id,
+      event,
+      payload,
+      targetUrl: waba.forward_to_url,
+      targetSecret: waba.forward_secret,
+    });
   }
-  if (!webhook) return;
 
-  const body = JSON.stringify({ event, data: payload });
-  const signature = crypto.createHmac('sha256', webhook.secret).update(body).digest('hex');
-  fetch(webhook.callback_url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-wasi-signature-256': `sha256=${signature}` },
-    body,
-  }).catch((err) => console.error(`client webhook forward failed for ${clientId}:`, err.message));
+  let clientWebhook;
+  try {
+    clientWebhook = await clientWebhooksRepo.findByClientId(pool, waba.client_id);
+  } catch (err) {
+    console.error('metaWebhook: failed to look up client_webhooks for', waba.client_id, err.message);
+    clientWebhook = null;
+  }
+  if (clientWebhook) {
+    await webhookDeliveriesRepo.enqueue(pool, {
+      clientId: waba.client_id,
+      wabaId: waba.id,
+      event,
+      payload,
+      targetUrl: clientWebhook.callback_url,
+      targetSecret: clientWebhook.secret,
+    });
+  }
 }
 
 // New customer message: upsert the contact, find/open their chat, insert
@@ -98,24 +123,12 @@ async function handleInboundMessages(waba, value) {
       }
 
       await automationEngine.evaluate(pool, clientId, chat, body);
-      await forwardToClientWebhook(clientId, 'message.received', { chat_id: chat.id, message: inserted });
 
-      // Hub forwarding (build plan Phase 5) — a separate, independent
-      // mechanism from forwardToClientWebhook above (see migration
-      // 014_hub_capability.js). This only enqueues; forwardRunner.js does
-      // the actual delivery attempt, on its own schedule, outside this
-      // request entirely — see its module comment for why that separation
-      // is load-bearing, not just tidy.
-      if (waba.forward_to_url) {
-        await webhookDeliveriesRepo.enqueue(pool, {
-          clientId,
-          wabaId: waba.id,
-          event: 'message.received',
-          payload: { chat_id: chat.id, message: inserted },
-          targetUrl: waba.forward_to_url,
-          targetSecret: waba.forward_secret,
-        });
-      }
+      // This only enqueues; forwardRunner.js does the actual delivery
+      // attempt(s), on its own schedule, outside this request entirely —
+      // see its module comment for why that separation is load-bearing,
+      // not just tidy.
+      await enqueueForwards(waba, 'message.received', { chat_id: chat.id, message: inserted });
     }
   }
 }
@@ -126,20 +139,6 @@ async function handleStatuses(clientId, value) {
     const errorReason = status.errors?.[0]?.title || null;
     await chatsRepo.updateStatusByMetaId(pool, clientId, status.id, status.status, errorReason);
   }
-}
-
-// Enqueues a hub forward if this waba has one configured — shared by both
-// handlers below rather than duplicated (build plan Phase 5).
-async function enqueueHubForward(waba, event, payload) {
-  if (!waba.forward_to_url) return;
-  await webhookDeliveriesRepo.enqueue(pool, {
-    clientId: waba.client_id,
-    wabaId: waba.id,
-    event,
-    payload,
-    targetUrl: waba.forward_to_url,
-    targetSecret: waba.forward_secret,
-  });
 }
 
 // Each handler returns true/false for whether it actually did something —
@@ -157,7 +156,7 @@ async function handleTemplateStatusUpdate(waba, value) {
   );
   // A consuming app needs to know when its own template is paused/rejected
   // — it can't poll Meta itself, it only ever talks to Wasi.
-  await enqueueHubForward(waba, 'message_template_status_update', value);
+  await enqueueForwards(waba, 'message_template_status_update', value);
   return true;
 }
 
@@ -169,7 +168,7 @@ async function handleAccountUpdate(waba, value) {
   );
   // A consuming app needs to know when its own WABA is restricted — same
   // reasoning as the template-status forward above.
-  await enqueueHubForward(waba, 'account_update', value);
+  await enqueueForwards(waba, 'account_update', value);
   return true;
 }
 

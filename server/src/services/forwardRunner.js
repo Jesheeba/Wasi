@@ -1,10 +1,13 @@
-// Inbound-event forwarding to hub-connected apps (build plan Phase 5) — a
-// Postgres-backed retry queue polled on an interval, same shape as
+// Delivers everything routes/metaWebhook.js's enqueueForwards() enqueues
+// (build plan Phase 5) — both wabas.forward_to_url (a hub-connected
+// consuming app) and client_webhooks.callback_url (a client's own
+// self-configured integration webhook) feed the same webhook_deliveries
+// queue and get delivered by this one runner; there's no per-target logic
+// here, a delivery row doesn't record which kind of target it came from.
+// A Postgres-backed retry queue polled on an interval, same shape as
 // broadcastRunner.js and for the same reason (FOR UPDATE SKIP LOCKED,
 // row-based so progress survives a process restart, no broker needed at
-// this scale). Deliberately separate from client_webhooks' existing
-// fire-and-forget forward (see migration 014_hub_capability.js) — this is
-// the durable, retried path specifically for wabas.forward_to_url.
+// this scale).
 //
 // CRITICAL, and the whole reason this exists as a separate poller rather
 // than an inline await in metaWebhook.js: the actual HTTP delivery attempt

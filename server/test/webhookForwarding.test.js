@@ -1,11 +1,17 @@
 // Hub inbound forwarding (build plan Phase 5). Covers: a forward fires with
 // a correct HMAC signature, a forward failure never changes the response
 // given to Meta (the whole reason the delivery attempt is decoupled into
-// forwardRunner.js instead of awaited inline in metaWebhook.js), and a
-// failed delivery is retried with backoff rather than dropped. Dedicated
-// test client + a fake waba_id, same pattern as metaWebhookDispatch.test.js
-// — this WABA is never given a real access token, so nothing here can
-// reach a real phone or a real Meta call.
+// forwardRunner.js instead of awaited inline in metaWebhook.js), a failed
+// delivery is retried with backoff rather than dropped, and — since
+// routes/metaWebhook.js's enqueueForwards unifies both forward targets
+// into this one queue — that client_webhooks (the client's own
+// self-configured integration webhook) goes through the exact same
+// durable, retried path as wabas.forward_to_url now, not the fire-and-
+// forget fetch it used to be, and that a client with both configured gets
+// one delivery per target for the same event. Dedicated test client + a
+// fake waba_id, same pattern as metaWebhookDispatch.test.js — this WABA is
+// never given a real access token, so nothing here can reach a real phone
+// or a real Meta call.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
@@ -20,6 +26,7 @@ const forwardRunner = require('../src/services/forwardRunner');
 let server;
 let baseUrl;
 let testClientId;
+let clientToken;
 
 const SUITE_PREFIX = '__test_suite__forwarding_';
 const TEST_WABA_ID = 'test_suite_forwarding_waba_id';
@@ -69,7 +76,8 @@ before(async () => {
     }),
   }).then((r) => r.json());
   testClientId = registered.client?.id;
-  assert.ok(testClientId, 'dedicated test client registration must succeed');
+  clientToken = registered.token;
+  assert.ok(testClientId && clientToken, 'dedicated test client registration must succeed');
 });
 
 after(async () => {
@@ -162,5 +170,88 @@ test('2. a forward failure does not change the 200 Meta receives, and is retried
   assert.ok(
     new Date(after[0].next_attempt_at).getTime() > Date.now(),
     'next_attempt_at must be pushed into the future — a backoff, not an immediate retry'
+  );
+});
+
+test('3. client_webhooks (the client\'s own generic webhook) is delivered through the same durable queue, not a fire-and-forget fetch', async () => {
+  let receivedBody, receivedSignature;
+  const target = http.createServer((req, res) => {
+    let chunks = '';
+    req.on('data', (c) => { chunks += c; });
+    req.on('end', () => {
+      receivedBody = chunks;
+      receivedSignature = req.headers['x-wasi-signature-256'];
+      res.writeHead(200);
+      res.end('ok');
+    });
+  });
+  await new Promise((resolve) => target.listen(0, resolve));
+  const targetUrl = `http://localhost:${target.address().port}/client-hook`;
+
+  // No wabas.forward_to_url this time — isolates the client_webhooks path.
+  await wabasRepo.upsertForClient(testClientId, {
+    waba_id: TEST_WABA_ID,
+    forward_to_url: null,
+    forward_secret: null,
+  });
+
+  const configured = await fetch(`${baseUrl}/api/client-webhook`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_url: targetUrl }),
+  }).then((r) => r.json());
+  assert.ok(configured.secret, 'client_webhook config must have generated a secret');
+
+  const phone = `91907${Date.now()}`.slice(0, 12);
+  const res = await signedMetaPost(inboundMessagePayload(phone));
+  assert.equal(res.status, 200);
+
+  const { rows } = await pool.query(
+    `select * from webhook_deliveries where client_id = $1 and target_url = $2 order by created_at desc limit 1`,
+    [testClientId, targetUrl]
+  );
+  assert.equal(rows.length, 1, 'client_webhooks must enqueue into webhook_deliveries, same as the hub target');
+  const delivery = rows[0];
+  assert.equal(delivery.target_secret, configured.secret);
+
+  await forwardRunner.deliverOne(delivery);
+
+  assert.ok(receivedBody, 'forwardRunner must deliver client_webhooks targets too, not just wabas.forward_to_url');
+  const expectedSignature = 'sha256=' + crypto.createHmac('sha256', configured.secret).update(receivedBody).digest('hex');
+  assert.equal(receivedSignature, expectedSignature);
+
+  const { rows: after } = await pool.query('select status from webhook_deliveries where id = $1', [delivery.id]);
+  assert.equal(after[0].status, 'delivered');
+
+  await new Promise((resolve) => target.close(resolve));
+});
+
+test('4. a client with both a hub forward target and their own client_webhook configured gets one delivery per target', async () => {
+  await wabasRepo.upsertForClient(testClientId, {
+    waba_id: TEST_WABA_ID,
+    forward_to_url: 'http://127.0.0.1:1/hub-target',
+    forward_secret: FORWARD_SECRET,
+  });
+  // client_webhooks was already configured by test 3 above (upsert, so this
+  // just confirms it's still set — one row per client_id, not re-created).
+  const webhook = await fetch(`${baseUrl}/api/client-webhook`, {
+    headers: { Authorization: `Bearer ${clientToken}` },
+  }).then((r) => r.json());
+  assert.ok(webhook?.callback_url, 'client_webhooks config from test 3 must still be present');
+
+  const phone = `91908${Date.now()}`.slice(0, 12);
+  const beforeCount = await pool.query(
+    `select count(*)::int as n from webhook_deliveries where client_id = $1`, [testClientId]
+  );
+
+  const res = await signedMetaPost(inboundMessagePayload(phone));
+  assert.equal(res.status, 200);
+
+  const afterCount = await pool.query(
+    `select count(*)::int as n from webhook_deliveries where client_id = $1`, [testClientId]
+  );
+  assert.equal(
+    afterCount.rows[0].n - beforeCount.rows[0].n, 2,
+    'one inbound message with both targets configured must enqueue exactly two deliveries, not one or zero'
   );
 });
