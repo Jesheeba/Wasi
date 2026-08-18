@@ -8,6 +8,7 @@ const chatsRepo = require('../repositories/chatsRepo');
 const consentRepo = require('../repositories/consentRepo');
 const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
+const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
 const automationEngine = require('../services/automationEngine');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -63,7 +64,11 @@ async function forwardToClientWebhook(clientId, event, payload) {
 
 // New customer message: upsert the contact, find/open their chat, insert
 // (idempotent on Meta's message id), then let automation rules react.
-async function handleInboundMessages(clientId, value) {
+// Takes the resolved waba row (not just clientId) — build plan Phase 5's
+// hub forwarding needs waba.forward_to_url/forward_secret/id, which the
+// caller already has from wabasRepo.findByWabaId and shouldn't re-fetch.
+async function handleInboundMessages(waba, value) {
+  const clientId = waba.client_id;
   const contactInfo = value.contacts?.[0];
   for (const msg of value.messages || []) {
     const phone = msg.from;
@@ -94,6 +99,23 @@ async function handleInboundMessages(clientId, value) {
 
       await automationEngine.evaluate(pool, clientId, chat, body);
       await forwardToClientWebhook(clientId, 'message.received', { chat_id: chat.id, message: inserted });
+
+      // Hub forwarding (build plan Phase 5) — a separate, independent
+      // mechanism from forwardToClientWebhook above (see migration
+      // 014_hub_capability.js). This only enqueues; forwardRunner.js does
+      // the actual delivery attempt, on its own schedule, outside this
+      // request entirely — see its module comment for why that separation
+      // is load-bearing, not just tidy.
+      if (waba.forward_to_url) {
+        await webhookDeliveriesRepo.enqueue(pool, {
+          clientId,
+          wabaId: waba.id,
+          event: 'message.received',
+          payload: { chat_id: chat.id, message: inserted },
+          targetUrl: waba.forward_to_url,
+          targetSecret: waba.forward_secret,
+        });
+      }
     }
   }
 }
@@ -106,27 +128,48 @@ async function handleStatuses(clientId, value) {
   }
 }
 
+// Enqueues a hub forward if this waba has one configured — shared by both
+// handlers below rather than duplicated (build plan Phase 5).
+async function enqueueHubForward(waba, event, payload) {
+  if (!waba.forward_to_url) return;
+  await webhookDeliveriesRepo.enqueue(pool, {
+    clientId: waba.client_id,
+    wabaId: waba.id,
+    event,
+    payload,
+    targetUrl: waba.forward_to_url,
+    targetSecret: waba.forward_secret,
+  });
+}
+
 // Each handler returns true/false for whether it actually did something —
 // an explicit boolean, not a truthy/falsy value inferred from a DB call's
 // return (pool.query() resolves to a result object either way, which would
 // make "did this handle the event" impossible to tell from the return value
-// alone).
-async function handleTemplateStatusUpdate(entryId, value) {
+// alone). Takes the resolved waba row, not just its Meta waba_id — same
+// reasoning as handleInboundMessages above.
+async function handleTemplateStatusUpdate(waba, value) {
   if (!value?.message_template_name) return false;
   await pool.query(
     `update message_templates set status = $1, updated_at = now()
-     where name = $2 and client_id in (select client_id from wabas where waba_id = $3)`,
-    [String(value.event || '').toLowerCase() || 'pending', value.message_template_name, entryId]
+     where name = $2 and client_id = $3`,
+    [String(value.event || '').toLowerCase() || 'pending', value.message_template_name, waba.client_id]
   );
+  // A consuming app needs to know when its own template is paused/rejected
+  // — it can't poll Meta itself, it only ever talks to Wasi.
+  await enqueueHubForward(waba, 'message_template_status_update', value);
   return true;
 }
 
-async function handleAccountUpdate(entryId, value) {
+async function handleAccountUpdate(waba, value) {
   if (!value?.phone_number) return false;
   await pool.query(
-    `update wabas set quality_rating = coalesce($1, quality_rating) where waba_id = $2`,
-    [value.quality_rating || null, entryId]
+    `update wabas set quality_rating = coalesce($1, quality_rating) where id = $2`,
+    [value.quality_rating || null, waba.id]
   );
+  // A consuming app needs to know when its own WABA is restricted — same
+  // reasoning as the template-status forward above.
+  await enqueueHubForward(waba, 'account_update', value);
   return true;
 }
 
@@ -154,9 +197,9 @@ async function handleUnmappedWabaEvent(field, entryId, value) {
 const WABA_SCOPED_FIELD_HANDLERS = {
   message_template_status_update: handleTemplateStatusUpdate,
   account_update: handleAccountUpdate,
-  message_template_quality_update: (entryId, value) => handleUnmappedWabaEvent('message_template_quality_update', entryId, value),
-  phone_number_quality_update: (entryId, value) => handleUnmappedWabaEvent('phone_number_quality_update', entryId, value),
-  phone_number_name_update: (entryId, value) => handleUnmappedWabaEvent('phone_number_name_update', entryId, value),
+  message_template_quality_update: (waba, value) => handleUnmappedWabaEvent('message_template_quality_update', waba.waba_id, value),
+  phone_number_quality_update: (waba, value) => handleUnmappedWabaEvent('phone_number_quality_update', waba.waba_id, value),
+  phone_number_name_update: (waba, value) => handleUnmappedWabaEvent('phone_number_name_update', waba.waba_id, value),
 };
 
 router.post('/', asyncHandler(async (req, res) => {
@@ -203,7 +246,7 @@ router.post('/', asyncHandler(async (req, res) => {
         // both arrays at once, so these are independent checks, not
         // if/else — process whichever is actually present.
         if (waba && Array.isArray(value?.messages) && value.messages.length > 0) {
-          await handleInboundMessages(waba.client_id, value);
+          await handleInboundMessages(waba, value);
           handled = true;
         }
         if (waba && Array.isArray(value?.statuses) && value.statuses.length > 0) {
@@ -212,9 +255,14 @@ router.post('/', asyncHandler(async (req, res) => {
         }
 
         // These fields, unlike messages/statuses, genuinely are distinct by
-        // name — field-based dispatch is correct here.
+        // name — field-based dispatch is correct here. Guarded on `waba`
+        // like the two branches above (previously handleTemplateStatusUpdate
+        // ran even with waba === null, re-resolving client_id itself via a
+        // subquery that was a no-op when the waba didn't exist anyway — same
+        // real-world result, this is just explicit about it now that these
+        // handlers need the full waba row for hub forwarding).
         const wabaScopedHandler = WABA_SCOPED_FIELD_HANDLERS[field];
-        if (wabaScopedHandler && (await wabaScopedHandler(entry.id, value))) {
+        if (waba && wabaScopedHandler && (await wabaScopedHandler(waba, value))) {
           handled = true;
         }
 

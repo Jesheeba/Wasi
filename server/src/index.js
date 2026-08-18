@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { createApp } = require('./app');
 const broadcastRunner = require('./services/broadcastRunner');
+const forwardRunner = require('./services/forwardRunner');
 
 // Defense-in-depth, not a replacement for fixing specific gaps (see
 // db/pool.js and broadcastRunner.js's own listeners for the two confirmed
@@ -35,4 +36,5 @@ const app = createApp();
 app.listen(port, () => {
   console.log(`wasi-crm-server listening on http://localhost:${port}`);
   broadcastRunner.start();
+  forwardRunner.start();
 });
