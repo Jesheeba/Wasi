@@ -46,6 +46,13 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
 
 function createApp() {
   const app = express();
+  // Without this, express-rate-limit's default keyGenerator (req.ip) resolves
+  // to the immediate socket peer — the proxy in front of us (ngrok locally,
+  // Render's load balancer in production) — not the real client, so every
+  // distinct caller shares one rate-limit bucket instead of getting their
+  // own. `1` trusts exactly one hop of X-Forwarded-For, matching both of
+  // those single-proxy setups.
+  app.set('trust proxy', 1);
   app.use(cors({
     origin(origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
