@@ -20,4 +20,16 @@ const webhookLimiter = rateLimit({
   message: { error: 'Too many requests.' },
 });
 
-module.exports = { authLimiter, webhookLimiter };
+// Hub API (build plan Phase 5) — server-to-server, so a much higher ceiling
+// than a browser-facing limiter, but still bounded: a leaked/compromised API
+// key shouldn't be able to hammer this without limit just because it's a
+// valid credential.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+});
+
+module.exports = { authLimiter, webhookLimiter, apiLimiter };

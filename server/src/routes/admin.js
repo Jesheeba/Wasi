@@ -9,6 +9,7 @@ const supportTicketsRepo = require('../repositories/supportTicketsRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const adminUsersRepo = require('../repositories/adminUsersRepo');
 const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRepo');
+const apiKeysRepo = require('../repositories/apiKeysRepo');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { hashPassword } = require('../utils/auth');
@@ -202,6 +203,46 @@ router.patch('/tickets/:id', asyncHandler(async (req, res) => {
   if (!ticket) return res.status(404).json({ error: 'Not found' });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: `ticket_${status}`, target: id });
   res.json(ticket);
+}));
+
+// --- Hub API keys (build plan Phase 5) --- consuming apps (GV Mart, Sirah
+// CRM, etc.) don't self-serve keys — issuing one is a Sirah-team action,
+// same trust tier as creating an admin user above. Full list of keys across
+// every tenant, since this is inherently a cross-tenant admin view (spec
+// §6 "API keys — which app, which tenant, revoke").
+router.get('/api-keys', asyncHandler(async (req, res) => {
+  const clientId = req.query.client_id ? z.string().uuid().parse(req.query.client_id) : null;
+  if (clientId) return res.json(await apiKeysRepo.listByClientId(pool, clientId));
+  const { rows } = await pool.query(`
+    select k.id, k.client_id, k.app_name, k.last_used_at, k.revoked_at, k.created_at, c.name as client_name
+    from api_keys k join clients c on c.id = k.client_id
+    order by k.created_at desc
+  `);
+  res.json(rows);
+}));
+
+// Raw key is returned exactly once, here — never retrievable again after
+// this response, same "show once" rule as everything else that generates a
+// secret in this codebase.
+router.post('/api-keys', asyncHandler(async (req, res) => {
+  const schema = z.object({ client_id: z.string().uuid(), app_name: z.string().min(1) });
+  const { client_id, app_name } = schema.parse(req.body);
+  const client = await clientsRepo.findById(pool, client_id);
+  if (!client) return res.status(404).json({ error: 'Unknown client_id' });
+
+  const { record, rawKey } = await apiKeysRepo.create(pool, client_id, app_name);
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_created', target: `${client_id}: ${app_name}` });
+  res.status(201).json({ ...record, key: rawKey });
+}));
+
+router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const schema = z.object({ client_id: z.string().uuid() });
+  const { client_id } = schema.parse(req.body);
+  const revoked = await apiKeysRepo.revoke(pool, id, client_id);
+  if (!revoked) return res.status(404).json({ error: 'Not found, or already revoked' });
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_revoked', target: id });
+  res.json(revoked);
 }));
 
 // --- Settings (spec §5 "Settings" row) ---
