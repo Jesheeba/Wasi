@@ -39,7 +39,14 @@ async function graphFetch(path, { method = 'GET', accessToken, body } = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message = data?.error?.message || `Meta Graph API error (${res.status})`;
-    throw new Error(message);
+    const error = new Error(message);
+    // Attached, not just the message string — the hub API (routes/
+    // apiV1Messages.js) returns this to the calling app so it can act on
+    // error_subcode (e.g. 131047 = 24h window closed) rather than parsing
+    // a human-readable sentence. Purely additive: existing callers that
+    // only read err.message are unaffected.
+    error.metaError = data?.error || null;
+    throw error;
   }
   return data;
 }

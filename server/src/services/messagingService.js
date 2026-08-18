@@ -114,7 +114,12 @@ async function sendChatMessage(db, clientId, chat, { type, body, templateName, t
     return sent;
   } catch (err) {
     await chatsRepo.markFailed(db, clientId, message.id, err.message);
-    throw new MessagingError(err.message, 'send_failed');
+    const sendError = new MessagingError(err.message, 'send_failed');
+    // Carries Meta's raw error object through, if this failure came from a
+    // real Graph API rejection (see metaClient.js's graphFetch) — the hub
+    // API surfaces it; the internal chat-send route ignores the extra field.
+    sendError.metaError = err.metaError || null;
+    throw sendError;
   }
 }
 

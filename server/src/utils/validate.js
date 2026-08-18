@@ -135,6 +135,23 @@ const tagCreateSchema = z.object({
   color: z.string().optional(),
 });
 
+// Hub API send endpoint (build plan Phase 5) — client_id is required in the
+// body (not just resolved from the API key) as a defense-in-depth sanity
+// check: routes/apiV1Messages.js rejects the request if it doesn't match
+// the key's own client_id, catching a caller that's confused about which
+// key it's using rather than silently acting on the wrong tenant.
+const apiMessageSendSchema = z.object({
+  client_id: uuid,
+  to: z.string().min(1),
+  type: z.enum(['text', 'template']).default('text'),
+  template: z.string().optional(),
+  params: z.record(z.any()).optional(),
+  body: z.string().optional(),
+}).refine(
+  (data) => (data.type === 'text' ? Boolean(data.body) : Boolean(data.template)),
+  { message: "body is required for type 'text'; template is required for type 'template'" }
+);
+
 // Deliberately its own schema, not part of contactUpdateSchema — consent
 // changes require a source (an explicit declaration, an inbound STOP, etc.)
 // and go through consentRepo.recordEvent so the change and its evidence are
@@ -173,4 +190,5 @@ module.exports = {
   walletRechargeSchema,
   clientWebhookSchema,
   consentEventCreateSchema,
+  apiMessageSendSchema,
 };

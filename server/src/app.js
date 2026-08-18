@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { authLimiter, webhookLimiter } = require('./middleware/rateLimit');
+const { authLimiter, webhookLimiter, apiLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { requireClientAuth } = require('./middleware/requireClientAuth');
 const { requireAdminAuth } = require('./middleware/requireAdminAuth');
@@ -30,6 +30,8 @@ const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
 const walletRouter = require('./routes/wallet');
 const clientWebhookRouter = require('./routes/clientWebhook');
+const apiV1MessagesRouter = require('./routes/apiV1Messages');
+const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 
 // Same-origin static pages (this app.js, admin/, marketing/) never send an
 // Origin header Express sees as cross-site, so this allowlist only matters
@@ -102,6 +104,12 @@ function createApp() {
   // Admin-only: internal team, gated by admin JWT + role.
   app.use('/api/clients', requireAdminAuth(['super_admin', 'support']), clientsRouter);
   app.use('/api/admin', requireAdminAuth(), adminRouter);
+
+  // Hub API (build plan Phase 5): other Sirah applications, authenticated by
+  // a Wasi-issued API key (requireApiKey), not a client JWT — always the
+  // privileged connection, see middleware/requireApiKey.js.
+  app.use('/api/v1/messages', apiLimiter, apiV1MessagesRouter);
+  app.use('/api/v1/templates', apiLimiter, apiV1TemplatesRouter);
 
   // Static frontends (no build step) — mounted explicitly by directory
   // rather than serving the whole repo root, so server/.env, node_modules,
