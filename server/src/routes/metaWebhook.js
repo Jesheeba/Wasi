@@ -41,23 +41,30 @@ function verifySignature(rawBody, signatureHeader) {
 }
 
 // Enqueues one delivery per configured forward target for this waba's
-// client, into the same durable, retried queue (build plan Phase 5) —
-// wabas.forward_to_url (a hub-connected consuming app) and
-// client_webhooks.callback_url (the client's own generic integration
-// webhook, Settings > Webhook) are independent, optional targets, and a
-// client can have either, both, or neither configured. This replaces what
-// used to be two separate mechanisms: this enqueue for the hub target, and
-// a fire-and-forget fetch with no retry for the client's own webhook.
-// Unifying means client_webhooks now gets the same retry-with-backoff
-// guarantee, and both targets now receive all three event types (message
-// received, template status, account/quality) instead of client_webhooks
-// being limited to message.received only — there was no reason to keep
-// withholding the other two once the delivery mechanism is shared. Signed
-// identically for both targets (x-wasi-signature-256, HMAC-SHA256 of the
-// JSON body), so nothing about how a receiving app verifies a delivery
-// changes based on which target it's configured as.
+// client that has actually subscribed to this event, into the same
+// durable, retried queue (build plan Phase 5) — wabas.forward_to_url (a
+// hub-connected consuming app) and client_webhooks.callback_url (the
+// client's own generic integration webhook, Settings > Webhook) are
+// independent, optional targets, and a client can have either, both, or
+// neither configured. This replaces what used to be two separate
+// mechanisms: this enqueue for the hub target, and a fire-and-forget fetch
+// with no retry for the client's own webhook.
+//
+// Event selection is explicit per target (migration
+// 015_explicit_forward_events.js), not implicit — each target declares
+// its own `events` array at configuration time (routes/clientWebhook.js,
+// routes/admin.js's hub-forward config) and only receives events it's
+// actually listed. This was a real gap in the initial unification: it
+// widened client_webhooks from message.received-only to silently
+// receiving all three event types with no way to opt out, which would
+// have been a breaking contract change for an existing subscriber (none
+// existed yet, confirmed live before this fix — but the next one would
+// have hit it). Signed identically for both targets
+// (x-wasi-signature-256, HMAC-SHA256 of the JSON body), so nothing about
+// how a receiving app verifies a delivery changes based on which target
+// or which events it's configured for.
 async function enqueueForwards(waba, event, payload) {
-  if (waba.forward_to_url) {
+  if (waba.forward_to_url && waba.forward_events?.includes(event)) {
     await webhookDeliveriesRepo.enqueue(pool, {
       clientId: waba.client_id,
       wabaId: waba.id,
@@ -75,7 +82,7 @@ async function enqueueForwards(waba, event, payload) {
     console.error('metaWebhook: failed to look up client_webhooks for', waba.client_id, err.message);
     clientWebhook = null;
   }
-  if (clientWebhook) {
+  if (clientWebhook && clientWebhook.events?.includes(event)) {
     await webhookDeliveriesRepo.enqueue(pool, {
       clientId: waba.client_id,
       wabaId: waba.id,

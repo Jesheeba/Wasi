@@ -15,10 +15,10 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 router.post('/', asyncHandler(async (req, res) => {
-  const { callback_url } = clientWebhookSchema.parse(req.body);
+  const { callback_url, events } = clientWebhookSchema.parse(req.body);
   const existing = await clientWebhooksRepo.findByClientId(req.db, req.clientId);
   const secret = existing?.secret || crypto.randomBytes(24).toString('hex');
-  const saved = await clientWebhooksRepo.upsert(req.db, req.clientId, callback_url, secret);
+  const saved = await clientWebhooksRepo.upsert(req.db, req.clientId, callback_url, secret, events);
   res.json(saved);
 }));
 

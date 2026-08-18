@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { WEBHOOK_EVENT_TYPES } = require('./webhookEvents');
 
 const uuid = z.string().uuid();
 
@@ -125,8 +126,17 @@ const walletRechargeSchema = z.object({
   amount_inr: z.number().int().positive(),
 });
 
+// events is required, not defaulted — see migration
+// 015_explicit_forward_events.js for why: a subscription that doesn't say
+// which events it wants isn't implicitly "all of them," it's invalid.
 const clientWebhookSchema = z.object({
   callback_url: z.string().url(),
+  events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1),
+});
+
+const hubForwardConfigSchema = z.object({
+  forward_to_url: z.string().url(),
+  events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1),
 });
 
 const tagCreateSchema = z.object({
@@ -189,6 +199,7 @@ module.exports = {
   paymentLinkCreateSchema,
   walletRechargeSchema,
   clientWebhookSchema,
+  hubForwardConfigSchema,
   consentEventCreateSchema,
   apiMessageSendSchema,
 };

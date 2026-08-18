@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const clientsRepo = require('../repositories/clientsRepo');
 const wabasRepo = require('../repositories/wabasRepo');
@@ -15,7 +16,7 @@ const { decrypt } = require('../utils/encryption');
 const { hashPassword } = require('../utils/auth');
 const { sendEmail } = require('../utils/emailService');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { templateStatusUpdateSchema, ticketStatusUpdateSchema } = require('../utils/validate');
+const { templateStatusUpdateSchema, ticketStatusUpdateSchema, hubForwardConfigSchema } = require('../utils/validate');
 const { z } = require('zod');
 
 const router = Router();
@@ -243,6 +244,29 @@ router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
   if (!revoked) return res.status(404).json({ error: 'Not found, or already revoked' });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_revoked', target: id });
   res.json(revoked);
+}));
+
+// --- Hub inbound forwarding config (build plan Phase 5) — sets
+// wabas.forward_to_url/forward_events for a client's connected WABA. Was
+// missing entirely until now: the columns existed (migration
+// 014_hub_capability.js) and metaWebhook.js already read them, but nothing
+// ever wrote them outside a test's direct repo call — this is the actual
+// configuration point. Admin-provisioned, same trust tier as api-keys
+// above, since a hub-connected consuming app is set up by Sirah's own
+// team, not self-served. events is required (hubForwardConfigSchema),
+// not defaulted — see migration 015_explicit_forward_events.js.
+router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const { forward_to_url, events } = hubForwardConfigSchema.parse(req.body);
+
+  const existing = await wabasRepo.findByClientId(id);
+  if (!existing) return res.status(404).json({ error: 'No WABA connected for this client yet' });
+
+  const forward_secret = existing.forward_secret || crypto.randomBytes(24).toString('hex');
+  const updated = await wabasRepo.upsertForClient(id, { forward_to_url, forward_secret, forward_events: events });
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'hub_forward_configured', target: id });
+  const { access_token_encrypted, ...safe } = updated;
+  res.json(safe);
 }));
 
 // --- Settings (spec §5 "Settings" row) ---

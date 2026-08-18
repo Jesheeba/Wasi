@@ -106,6 +106,7 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
     status: 'connected',
     forward_to_url: targetUrl,
     forward_secret: FORWARD_SECRET,
+    forward_events: ['message.received'],
   });
 
   const phone = `91905${Date.now()}`.slice(0, 12);
@@ -145,6 +146,7 @@ test('2. a forward failure does not change the 200 Meta receives, and is retried
     waba_id: TEST_WABA_ID,
     forward_to_url: deadUrl,
     forward_secret: FORWARD_SECRET,
+    forward_events: ['message.received'],
   });
 
   const phone = `91906${Date.now()}`.slice(0, 12);
@@ -189,16 +191,19 @@ test('3. client_webhooks (the client\'s own generic webhook) is delivered throug
   const targetUrl = `http://localhost:${target.address().port}/client-hook`;
 
   // No wabas.forward_to_url this time — isolates the client_webhooks path.
+  // forward_events must go to null alongside it — migration
+  // 015_explicit_forward_events.js's CHECK requires both null or both set.
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: TEST_WABA_ID,
     forward_to_url: null,
     forward_secret: null,
+    forward_events: null,
   });
 
   const configured = await fetch(`${baseUrl}/api/client-webhook`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ callback_url: targetUrl }),
+    body: JSON.stringify({ callback_url: targetUrl, events: ['message.received'] }),
   }).then((r) => r.json());
   assert.ok(configured.secret, 'client_webhook config must have generated a secret');
 
@@ -231,6 +236,7 @@ test('4. a client with both a hub forward target and their own client_webhook co
     waba_id: TEST_WABA_ID,
     forward_to_url: 'http://127.0.0.1:1/hub-target',
     forward_secret: FORWARD_SECRET,
+    forward_events: ['message.received'],
   });
   // client_webhooks was already configured by test 3 above (upsert, so this
   // just confirms it's still set — one row per client_id, not re-created).
@@ -254,4 +260,53 @@ test('4. a client with both a hub forward target and their own client_webhook co
     afterCount.rows[0].n - beforeCount.rows[0].n, 2,
     'one inbound message with both targets configured must enqueue exactly two deliveries, not one or zero'
   );
+});
+
+test('5. a target subscribed to a different event does not receive one it never asked for', async () => {
+  // Subscribed only to message_template_status_update — an inbound message
+  // (message.received) must NOT enqueue a delivery for it. This is the
+  // actual proof for the concern that started this file: unifying the two
+  // forward mechanisms must not silently widen what an existing subscriber
+  // receives.
+  await wabasRepo.upsertForClient(testClientId, {
+    waba_id: TEST_WABA_ID,
+    forward_to_url: 'http://127.0.0.1:1/narrow-target',
+    forward_secret: FORWARD_SECRET,
+    forward_events: ['message_template_status_update'],
+  });
+  await fetch(`${baseUrl}/api/client-webhook`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_url: 'http://127.0.0.1:1/narrow-client-hook', events: ['message_template_status_update'] }),
+  });
+
+  const phone = `91909${Date.now()}`.slice(0, 12);
+  const res = await signedMetaPost(inboundMessagePayload(phone));
+  assert.equal(res.status, 200);
+
+  const { rows } = await pool.query(
+    `select * from webhook_deliveries where client_id = $1 and event = 'message.received'
+     and target_url in ('http://127.0.0.1:1/narrow-target', 'http://127.0.0.1:1/narrow-client-hook')`,
+    [testClientId]
+  );
+  assert.equal(rows.length, 0, 'neither target subscribed only to message_template_status_update should get a message.received delivery');
+});
+
+test('6. the DB rejects a forward target configured with no events, or with an unknown event name', async () => {
+  await assert.rejects(
+    () => wabasRepo.upsertForClient(testClientId, {
+      waba_id: TEST_WABA_ID,
+      forward_to_url: 'http://127.0.0.1:1/incomplete',
+      forward_secret: FORWARD_SECRET,
+      forward_events: null,
+    }),
+    /check constraint|wabas_forward_config_complete_check/i
+  );
+
+  const badConfig = await fetch(`${baseUrl}/api/client-webhook`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_url: 'http://127.0.0.1:1/bad', events: ['not_a_real_event'] }),
+  });
+  assert.equal(badConfig.status, 400, 'an unknown event name must be rejected by request validation, not silently accepted');
 });
