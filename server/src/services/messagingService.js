@@ -81,9 +81,13 @@ async function assertWithinPlanLimit(db, clientId) {
   }
 }
 
-// type: 'text' -> { body }. type: 'template' -> { templateName, templateLanguage, templateComponents }.
-async function sendChatMessage(db, clientId, chat, { type, body, templateName, templateLanguage, templateComponents }) {
-  if (type === 'text' && !(await canSendFreeform(db, clientId, chat.id))) {
+// type: 'text' -> { body }. type: 'interactive' -> { body, buttons: [{id,
+// title}] } (flowEngine.js's send_interactive_buttons node — see
+// metaClient.sendInteractiveMessage; same session-window rule as 'text',
+// no template approval). type: 'template' -> { templateName,
+// templateLanguage, templateComponents }.
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents }) {
+  if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
       'session_window_closed'
@@ -97,18 +101,23 @@ async function sendChatMessage(db, clientId, chat, { type, body, templateName, t
   const waba = await getSendableWaba(clientId);
   const accessToken = decrypt(waba.access_token_encrypted);
   const toPhone = chat.phone;
-  const displayBody = type === 'text' ? body : `[template: ${templateName}]`;
+  const displayBody = type === 'template' ? `[template: ${templateName}]` : body;
 
   const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody);
 
   try {
-    const metaMessageId = type === 'text'
-      ? await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body)
-      : await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
-          name: templateName,
-          language: templateLanguage,
-          components: templateComponents || [],
-        });
+    let metaMessageId;
+    if (type === 'text') {
+      metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body);
+    } else if (type === 'interactive') {
+      metaMessageId = await metaClient.sendInteractiveMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttons });
+    } else {
+      metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
+        name: templateName,
+        language: templateLanguage,
+        components: templateComponents || [],
+      });
+    }
     const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId);
     await usageRepo.incrementSent(db, clientId);
     return sent;

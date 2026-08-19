@@ -9,7 +9,7 @@ const consentRepo = require('../repositories/consentRepo');
 const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
 const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
-const automationEngine = require('../services/automationEngine');
+const flowEngine = require('../services/flowEngine');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -151,7 +151,7 @@ async function handleInboundMessages(waba, value) {
         });
       }
 
-      await automationEngine.evaluate(pool, clientId, chat, body);
+      await flowEngine.evaluate(pool, clientId, contact, chat, msg, body);
 
       // This only enqueues; forwardRunner.js does the actual delivery
       // attempt(s), on its own schedule, outside this request entirely —
