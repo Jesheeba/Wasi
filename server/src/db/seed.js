@@ -36,10 +36,6 @@ const MOCK_BROADCASTS = [
   { title: 'July Special Offer', tag: 'VIP', status: 'Completed', delivered_count: 450, read_rate: 96.8, scheduled_date: '2026-07-30' },
 ];
 
-const MOCK_AUTOMATION_RULES = [
-  { title: 'Welcome Greeting', trigger: 'Keyword: "hello", "hi"', action: 'Send Welcome Template', status: 'Enabled' },
-  { title: 'Lead Qualification', trigger: 'Keyword: "pricing", "cost"', action: 'Assign Tag "Lead"', status: 'Enabled' },
-];
 
 const OPEN_CHAT_MESSAGES = [
   { direction: 'in', body: "Hi, I'm interested in your product catalog." },
@@ -137,14 +133,6 @@ async function seed() {
         `insert into broadcasts (client_id, title, tag_id, status, delivered_count, read_rate, scheduled_date)
          values ($1, $2, $3, $4, $5, $6, $7)`,
         [DEMO_CLIENT_ID, b.title, tagIdByName[b.tag] || null, b.status, b.delivered_count, b.read_rate, b.scheduled_date]
-      );
-    }
-
-    for (const rule of MOCK_AUTOMATION_RULES) {
-      await client.query(
-        `insert into automation_rules (client_id, title, trigger, action, status)
-         values ($1, $2, $3, $4, $5)`,
-        [DEMO_CLIENT_ID, rule.title, rule.trigger, rule.action, rule.status]
       );
     }
 
