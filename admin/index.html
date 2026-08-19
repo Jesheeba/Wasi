@@ -126,6 +126,7 @@
               <div class="page-title">Clients</div>
               <div class="page-subtitle">All tenants on the platform</div>
             </div>
+            <button class="btn-primary" id="open-create-client-btn" style="width:auto; padding:0 16px;"><i data-lucide="user-plus" style="width:14px;"></i> Add Client</button>
           </div>
           <div id="clients-error" class="inline-error" style="display:none;"></div>
 
@@ -658,6 +659,36 @@
           <input type="text" id="create-api-key-app-name" class="form-input" placeholder="e.g. GV Mart" required />
         </div>
         <button type="submit" class="btn-primary" id="create-api-key-submit-btn">Create Key</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== CREATE CLIENT MODAL ===================== -->
+  <div id="create-client-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">Add Client</div>
+        <button class="close-modal-btn" data-close-create-client><i data-lucide="x"></i></button>
+      </div>
+      <div id="create-client-error" class="inline-error" style="display:none;"></div>
+      <div id="create-client-result" style="display:none;"></div>
+      <form id="create-client-form">
+        <div class="form-group">
+          <label class="form-label" for="create-client-name">Business Name</label>
+          <input type="text" id="create-client-name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="create-client-email">Email</label>
+          <input type="email" id="create-client-email" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="create-client-password">Password</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="create-client-password" class="form-input" minlength="8" placeholder="Auto-generated if left blank" />
+            <button type="button" class="btn-secondary" id="generate-client-password-btn" style="width:auto; padding:0 12px; white-space:nowrap;">Generate</button>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" id="create-client-submit-btn">Create Client</button>
       </form>
     </div>
   </div>

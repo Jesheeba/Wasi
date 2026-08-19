@@ -426,6 +426,73 @@ function filterClientsTable() {
 }
 
 /* ---------------------------------------------------------------
+   Create Client
+   --------------------------------------------------------------- */
+function openCreateClientModal() {
+  document.getElementById('create-client-form').reset();
+  document.getElementById('create-client-form').style.display = '';
+  document.getElementById('create-client-submit-btn').style.display = '';
+  document.getElementById('create-client-result').style.display = 'none';
+  document.getElementById('create-client-result').innerHTML = '';
+  setInlineError('create-client-error', null);
+  document.getElementById('create-client-modal').classList.add('open');
+}
+
+function closeCreateClientModal() {
+  document.getElementById('create-client-modal').classList.remove('open');
+}
+
+// Pre-fills the password field so the admin can see/edit it before
+// submitting — leaving it blank still works, the server generates its own
+// if none is sent (routes/clients.js).
+function generateClientPassword() {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  const pw = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, '').slice(0, 12);
+  document.getElementById('create-client-password').value = pw;
+}
+
+async function handleCreateClientSubmit(e) {
+  e.preventDefault();
+  setInlineError('create-client-error', null);
+  const name = document.getElementById('create-client-name').value.trim();
+  const email = document.getElementById('create-client-email').value.trim();
+  const password = document.getElementById('create-client-password').value;
+  const btn = document.getElementById('create-client-submit-btn');
+  btn.disabled = true;
+
+  try {
+    const body = { name, email };
+    if (password) body.password = password;
+    const created = await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(body) });
+
+    document.getElementById('create-client-form').style.display = 'none';
+    const resultEl = document.getElementById('create-client-result');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div class="inline-success" style="margin-bottom:0.75rem;">Client created — this password is shown once, copy it now.</div>
+      <div class="detail-row"><span class="detail-row-label">Login URL</span><span class="detail-row-value">${escapeHtml(created.loginUrl)}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Email</span><span class="detail-row-value">${escapeHtml(created.email)}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Password</span><span class="detail-row-value" style="font-family:monospace; user-select:all;">${escapeHtml(created.temporaryPassword)}</span></div>
+      <div style="margin:1rem 0; padding:0.75rem; background:var(--bg-subtle,#F8FAFC); border-radius:6px; font-size:0.85rem; line-height:1.6;">
+        <strong>Next steps:</strong>
+        <ol style="margin:0.4rem 0 0 1.1rem; padding:0;">
+          <li>Send them the login URL, email, and password above.</li>
+          <li>They log in and connect WhatsApp (Embedded Signup) themselves.</li>
+          <li>Any existing approved templates on their WABA sync in automatically once connected.</li>
+        </ol>
+      </div>
+    `;
+    showToast('Client created.', 'success');
+    loadClients();
+  } catch (err) {
+    if (err.status === 401) return;
+    setInlineError('create-client-error', err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------------------------------------------------------------
    Client Detail
    --------------------------------------------------------------- */
 function openClientDetail(clientId) {
@@ -1396,6 +1463,14 @@ function initEventListeners() {
   document.getElementById('back-to-clients-btn').addEventListener('click', () => switchView('clients'));
 
   document.getElementById('clients-search').addEventListener('input', filterClientsTable);
+
+  document.getElementById('open-create-client-btn').addEventListener('click', openCreateClientModal);
+  document.querySelectorAll('[data-close-create-client]').forEach((btn) => btn.addEventListener('click', closeCreateClientModal));
+  document.getElementById('create-client-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'create-client-modal') closeCreateClientModal();
+  });
+  document.getElementById('create-client-form').addEventListener('submit', handleCreateClientSubmit);
+  document.getElementById('generate-client-password-btn').addEventListener('click', generateClientPassword);
 
   document.getElementById('refresh-dashboard-btn').addEventListener('click', loadDashboard);
   document.getElementById('refresh-onboarding-btn').addEventListener('click', loadOnboarding);

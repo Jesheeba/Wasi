@@ -6,11 +6,19 @@ const uuid = z.string().uuid();
 const clientCreateSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  tenant_slug: z.string().min(1),
+  // Optional: admin-created clients (routes/clients.js) auto-generate this
+  // from name, the same way registerSchema's self-signup path does.
+  tenant_slug: z.string().min(1).optional(),
   status: z.enum(['pending_setup', 'payment_confirmed', 'active', 'suspended']).optional(),
+  // Admin-created-client only. Never persisted as-is — routes/clients.js
+  // hashes it before it reaches clientsRepo.create, and it's deliberately
+  // excluded from clientUpdateSchema below so it can't reach
+  // clientsRepo.update's dynamic set-clause (there is no `password` column,
+  // only `password_hash`).
+  password: z.string().min(8).optional(),
 });
 
-const clientUpdateSchema = clientCreateSchema.partial();
+const clientUpdateSchema = clientCreateSchema.omit({ password: true }).partial();
 
 const contactCreateSchema = z.object({
   name: z.string().min(1),
