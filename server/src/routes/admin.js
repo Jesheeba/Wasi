@@ -364,6 +364,34 @@ router.get('/failures/webhook-deliveries', asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
+// A flow that silently stopped is the same class of problem as a dropped
+// webhook — visible here for the same reason failures/sends and
+// failures/webhook-deliveries are: an operator shouldn't have to query the
+// DB to find out automation broke for a client (flow_events'
+// 'stalled' detail carries the actual MessagingError message/code, see
+// flowEngine.js's runToRest).
+router.get('/failures/stalled-flows', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(`
+    select cfs.id, cfs.client_id, c.name as client_name, ct.name as contact_name, ct.phone as contact_phone,
+           af.name as flow_name, fn.type as node_type, cfs.updated_at, fe.detail as stall_detail
+    from contact_flow_state cfs
+    join clients c on c.id = cfs.client_id
+    join contacts ct on ct.id = cfs.contact_id
+    join automation_flows af on af.id = cfs.flow_id
+    left join flow_nodes fn on fn.id = cfs.current_node_id
+    left join lateral (
+      select detail from flow_events
+      where contact_id = cfs.contact_id and flow_id = cfs.flow_id and event_type = 'stalled'
+      order by created_at desc
+      limit 1
+    ) fe on true
+    where cfs.status = 'stalled'
+    order by cfs.updated_at desc
+    limit 200
+  `);
+  res.json(rows);
+}));
+
 // --- Settings (spec §5 "Settings" row) ---
 // Read-only status, never the actual secret values — this is a platform
 // config health check, not a way to edit secrets from a web form.

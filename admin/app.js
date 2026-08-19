@@ -934,20 +934,25 @@ async function loadFailures() {
   setInlineError('failures-error', null);
   const sendsBody = document.getElementById('failures-sends-table-body');
   const webhooksBody = document.getElementById('failures-webhooks-table-body');
+  const flowsBody = document.getElementById('failures-flows-table-body');
   sendsBody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
   webhooksBody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
+  flowsBody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
 
   try {
-    const [sends, webhooks] = await Promise.all([
+    const [sends, webhooks, flows] = await Promise.all([
       apiFetch('/api/admin/failures/sends'),
       apiFetch('/api/admin/failures/webhook-deliveries'),
+      apiFetch('/api/admin/failures/stalled-flows'),
     ]);
     renderFailedSends(sends);
     renderFailedWebhooks(webhooks);
+    renderStalledFlows(flows);
   } catch (err) {
     if (err.status === 401) return;
     sendsBody.innerHTML = '';
     webhooksBody.innerHTML = '';
+    flowsBody.innerHTML = '';
     setInlineError('failures-error', err.message);
   }
 }
@@ -984,6 +989,24 @@ function renderFailedWebhooks(rows) {
       <td>${r.attempt_count}</td>
       <td style="max-width:280px; white-space:normal;">${escapeHtml(r.last_error || '—')}</td>
       <td>${formatDateTime(r.created_at)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderStalledFlows(rows) {
+  const tbody = document.getElementById('failures-flows-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">No stalled flows.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml(r.client_name)}</td>
+      <td>${escapeHtml(r.contact_name || '—')} <span style="color:var(--text-muted); font-size:0.78rem;">${escapeHtml(r.contact_phone || '')}</span></td>
+      <td>${escapeHtml(r.flow_name)}</td>
+      <td>${escapeHtml(r.node_type || '—')}</td>
+      <td style="max-width:280px; white-space:normal;">${escapeHtml((r.stall_detail && r.stall_detail.error) || '—')}</td>
+      <td>${formatDateTime(r.updated_at)}</td>
     </tr>
   `).join('');
 }

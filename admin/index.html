@@ -329,7 +329,7 @@
           <div class="page-title-bar">
             <div>
               <div class="page-title">Failures</div>
-              <div class="page-subtitle">Failed sends and failed webhook deliveries across every client</div>
+              <div class="page-subtitle">Failed sends, failed webhook deliveries, and stalled automation flows across every client</div>
             </div>
             <button class="btn-secondary" id="refresh-failures-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
           </div>
@@ -373,6 +373,27 @@
                   </tr>
                 </thead>
                 <tbody id="failures-webhooks-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="table-card" style="margin-top:1.5rem;">
+            <div class="table-header-tools">
+              <div style="font-weight:600; color:var(--color-heading);">Stalled Flows</div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Contact</th>
+                    <th>Flow</th>
+                    <th>Stuck At Node</th>
+                    <th>Error</th>
+                    <th>Stalled At</th>
+                  </tr>
+                </thead>
+                <tbody id="failures-flows-table-body"></tbody>
               </table>
             </div>
           </div>
