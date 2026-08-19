@@ -349,6 +349,17 @@
           <div class="table-card" style="padding: 1.5rem;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;" id="automation-rules-grid"></div>
           </div>
+
+          <div class="page-title-bar" style="margin-top: 2rem;">
+            <div>
+              <h2 class="page-title" style="font-size: 1.15rem;">Flows</h2>
+              <p class="page-subtitle">Multi-step flows with branching, buttons, delays, and actions — a rule can start one instead of sending a single reply</p>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-bot-flow-btn"><i data-lucide="plus"></i> Create Flow</button>
+          </div>
+          <div class="table-card" style="padding: 1.5rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="bot-flows-grid"></div>
+          </div>
         </div>
 
         <!-- SUPPORT VIEW -->
@@ -1507,15 +1518,129 @@
         </div>
         <div class="form-group">
           <label class="form-label">Trigger</label>
-          <input type="text" id="new-rule-trigger" class="form-input" placeholder='e.g. Keyword: "hours", "open"' required />
+          <input type="text" id="new-rule-trigger" class="form-input" placeholder='e.g. hours' required />
         </div>
         <div class="form-group">
+          <label class="form-label">What happens when this matches?</label>
+          <select id="new-rule-kind" class="form-input">
+            <option value="text">Send a text reply</option>
+            <option value="flow">Start a flow</option>
+          </select>
+        </div>
+        <div class="form-group" id="new-rule-action-group">
           <label class="form-label">Action</label>
-          <input type="text" id="new-rule-action" class="form-input" placeholder="e.g. Send Business Hours Template" required />
+          <input type="text" id="new-rule-action" class="form-input" placeholder="e.g. Send Business Hours Template" />
+        </div>
+        <div class="form-group" id="new-rule-flow-group" style="display: none;">
+          <label class="form-label">Flow</label>
+          <select id="new-rule-flow-id" class="form-input"></select>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-rule">Cancel</button>
           <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Rule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== CREATE BOT FLOW MODAL =====================
+       "bot-flow" naming throughout this section and the next three modals
+       is deliberate, not decorative — this codebase already has an
+       unrelated pre-existing "WhatsApp Flows" feature (Meta's native-form
+       product, view-whatsapp-flows below) using the plain "flow"/"flows"
+       id vocabulary (modal-create-flow, create-flow-form, flows-grid).
+       These are a different concept (the automation engine's multi-step
+       bot flows, server/src/services/flowEngine.js) and must not collide
+       with it. -->
+  <div id="modal-create-bot-flow" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Flow</h3>
+        <button class="close-modal-btn" data-close-modal="modal-create-bot-flow"><i data-lucide="x"></i></button>
+      </div>
+      <form id="create-bot-flow-form">
+        <div class="form-group">
+          <label class="form-label">Flow Name</label>
+          <input type="text" id="new-bot-flow-name" class="form-input" placeholder="e.g. Order Support" required />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-bot-flow">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Create & Edit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== BOT FLOW EDITOR MODAL ===================== -->
+  <div id="modal-bot-flow-editor" class="modal-overlay">
+    <div class="modal-box modal-box-wide">
+      <div class="modal-header">
+        <h3 class="modal-title" id="bot-flow-editor-title">Edit Flow</h3>
+        <button class="close-modal-btn" data-close-modal="modal-bot-flow-editor"><i data-lucide="x"></i></button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap;">
+        <span id="bot-flow-editor-status-badge" class="status-badge"></span>
+        <button type="button" class="btn-secondary" id="bot-flow-editor-toggle-status-btn" style="width: auto; padding: 0 14px; font-size: 0.8rem;"></button>
+        <span style="font-size: 0.8rem; color: var(--text-muted);" id="bot-flow-editor-entry-label"></span>
+      </div>
+      <div id="bot-flow-editor-nodes"></div>
+      <div style="margin-top: 1rem;">
+        <button type="button" class="btn-secondary" id="bot-flow-editor-add-node-btn" style="width: auto; padding: 0 16px;"><i data-lucide="plus"></i> Add Node</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ADD BOT FLOW NODE MODAL ===================== -->
+  <div id="modal-add-bot-flow-node" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Node</h3>
+        <button class="close-modal-btn" data-close-modal="modal-add-bot-flow-node"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-bot-flow-node-form">
+        <div class="form-group">
+          <label class="form-label">Node Type</label>
+          <select id="new-bot-flow-node-type" class="form-input">
+            <option value="send_text">Send Text</option>
+            <option value="send_interactive_buttons">Send Buttons</option>
+            <option value="send_template">Send Template</option>
+            <option value="delay">Delay</option>
+            <option value="action">Action</option>
+            <option value="end">End</option>
+          </select>
+        </div>
+        <div id="new-bot-flow-node-config-fields"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-add-bot-flow-node">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Add Node</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== ADD BOT FLOW EDGE MODAL ===================== -->
+  <div id="modal-add-bot-flow-edge" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Branch</h3>
+        <button class="close-modal-btn" data-close-modal="modal-add-bot-flow-edge"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-bot-flow-edge-form">
+        <div class="form-group">
+          <label class="form-label">When</label>
+          <select id="new-bot-flow-edge-condition-type" class="form-input"></select>
+        </div>
+        <div class="form-group" id="new-bot-flow-edge-value-group">
+          <label class="form-label" id="new-bot-flow-edge-value-label">Value</label>
+          <input type="text" id="new-bot-flow-edge-condition-value" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Go to node</label>
+          <select id="new-bot-flow-edge-to-node" class="form-input"></select>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" data-close-modal="modal-add-bot-flow-edge">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Add Branch</button>
         </div>
       </form>
     </div>
@@ -1528,6 +1653,6 @@
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260819e"></script>
+  <script src="app.js?v=20260819f"></script>
 </body>
 </html>

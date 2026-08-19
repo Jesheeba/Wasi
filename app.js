@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     tagsById: {},
     broadcasts: [],
     automationRules: [],
+    flows: [],
+    currentFlowGraph: null,
     templates: [],
     tickets: []
   };
@@ -134,12 +136,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadInitialData() {
-    const [tags, contacts, chats, broadcasts, automationRules, templates, tickets] = await Promise.all([
+    const [tags, contacts, chats, broadcasts, automationRules, flows, templates, tickets] = await Promise.all([
       authFetch('/api/tags'),
       authFetch('/api/contacts'),
       authFetch('/api/chats'),
       authFetch('/api/broadcasts'),
       authFetch('/api/automation-rules'),
+      authFetch('/api/automation-flows'),
       authFetch('/api/templates'),
       authFetch('/api/support-tickets')
     ]);
@@ -149,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.chats = chats.map(adaptChat);
     state.broadcasts = broadcasts.map(adaptBroadcast);
     state.automationRules = automationRules;
+    state.flows = flows;
     state.templates = templates;
     state.tickets = tickets;
   }
@@ -321,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'chat') renderChatList();
     if (targetView === 'contacts') renderContacts();
     if (targetView === 'campaigns') renderBroadcasts();
-    if (targetView === 'automation') renderAutomation();
+    if (targetView === 'automation') { renderAutomation(); renderFlowsList(); }
     if (targetView === 'template') renderTemplates();
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
@@ -594,18 +598,286 @@ document.addEventListener('DOMContentLoaded', () => {
 
     automationRulesGrid.innerHTML = '';
     state.automationRules.forEach(rule => {
+      const actionLine = rule.flow_id
+        ? `<strong>Starts flow:</strong> ${escapeHtml(state.flows.find(f => f.id === rule.flow_id)?.name || 'Unknown flow')}`
+        : `<strong>Action:</strong> ${escapeHtml(rule.action || '')}`;
       const card = `
         <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <span style="font-weight: 700; font-size: 1rem; color: var(--color-heading);">${rule.title}</span>
-            <span class="status-badge active">${rule.status}</span>
+            <span style="font-weight: 700; font-size: 1rem; color: var(--color-heading);">${escapeHtml(rule.title)}</span>
+            <span class="status-badge active">${escapeHtml(rule.status)}</span>
           </div>
-          <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;"><strong>Trigger:</strong> ${rule.trigger}</div>
-          <div style="font-size: 0.875rem; color: var(--text-muted);"><strong>Action:</strong> ${rule.action}</div>
+          <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;"><strong>Trigger:</strong> ${escapeHtml(rule.trigger)}</div>
+          <div style="font-size: 0.875rem; color: var(--text-muted);">${actionLine}</div>
         </div>
       `;
       automationRulesGrid.innerHTML += card;
     });
+  }
+
+  // --- Flows (step-list editor) ---
+  // Client-side mirror of flowEngine.js's LEGAL_EDGE_TYPES_BY_NODE_TYPE —
+  // same duplication reasoning as extractTemplateParams above (no-build-step
+  // page, can't require() the server module). The server re-validates on
+  // POST .../edges regardless; this only drives which options the "When"
+  // dropdown offers, so a legal-but-wrong-looking option is never even shown.
+  const FLOW_EDGE_TYPES_BY_NODE_TYPE = {
+    send_interactive_buttons: ['button_id', 'keyword', 'default', 'timeout'],
+    delay: ['always'],
+    send_text: ['always'],
+    send_template: ['always'],
+    action: ['always'],
+    end: [],
+  };
+  const FLOW_EDGE_TYPE_LABELS = {
+    always: 'Always (continues automatically)',
+    button_id: 'A specific button is tapped',
+    keyword: 'The reply matches a keyword',
+    default: "Nothing else matched (fallback)",
+    timeout: 'No reply arrives in time',
+  };
+  const FLOW_NODE_TYPE_LABELS = {
+    send_text: 'Send Text', send_interactive_buttons: 'Send Buttons', send_template: 'Send Template',
+    delay: 'Delay', action: 'Action', end: 'End',
+  };
+
+  async function refreshFlows() {
+    state.flows = await authFetch('/api/automation-flows');
+  }
+
+  function renderFlowsList() {
+    const grid = document.getElementById('bot-flows-grid');
+    if (!grid) return;
+    if (!state.flows.length) {
+      grid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">No flows yet.</div>';
+      return;
+    }
+    grid.innerHTML = state.flows.map(f => `
+      <div class="flow-card" data-flow-id="${f.id}" style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm); cursor: pointer;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 700; font-size: 1rem; color: var(--color-heading);">${escapeHtml(f.name)}</span>
+          <span class="status-badge ${f.status === 'active' ? 'active' : ''}">${escapeHtml(f.status)}</span>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Click to edit</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('[data-flow-id]').forEach(card => {
+      card.addEventListener('click', () => openFlowEditor(card.getAttribute('data-flow-id')));
+    });
+  }
+
+  function nodeConfigSummary(node) {
+    const c = node.config || {};
+    if (node.type === 'send_text') return escapeHtml(c.body || '');
+    if (node.type === 'send_interactive_buttons') return `${escapeHtml(c.body || '')} — buttons: ${(c.buttons || []).map(b => escapeHtml(b.title)).join(', ')}`;
+    if (node.type === 'send_template') return `Template: ${escapeHtml(c.templateName || '')}`;
+    if (node.type === 'delay') return `${c.duration_minutes ?? '?'} minute(s)`;
+    if (node.type === 'action') {
+      if (c.kind === 'assign_tag') return `Assign tag: ${escapeHtml(state.tagsById[c.tag_id]?.name || c.tag_id || '')}`;
+      if (c.kind === 'set_opt_in') return `Set opt-in: ${escapeHtml(c.opt_in_event || '')}`;
+      if (c.kind === 'human_handoff') return 'Hand off to a human';
+      return escapeHtml(c.kind || '');
+    }
+    return '';
+  }
+
+  function findNode(id) {
+    return (state.currentFlowGraph?.nodes || []).find(n => n.id === id);
+  }
+
+  async function openFlowEditor(flowId) {
+    state.currentFlowGraph = await authFetch(`/api/automation-flows/${flowId}`);
+    document.getElementById('bot-flow-editor-title').textContent = state.currentFlowGraph.name;
+    document.getElementById('modal-bot-flow-editor')?.classList.add('open');
+    renderFlowEditor();
+  }
+
+  function renderFlowEditor() {
+    const graph = state.currentFlowGraph;
+    if (!graph) return;
+
+    const statusBadge = document.getElementById('bot-flow-editor-status-badge');
+    statusBadge.textContent = graph.status;
+    statusBadge.className = `status-badge ${graph.status === 'active' ? 'active' : ''}`;
+    const toggleBtn = document.getElementById('bot-flow-editor-toggle-status-btn');
+    toggleBtn.textContent = graph.status === 'active' ? 'Archive Flow' : 'Activate Flow';
+    document.getElementById('bot-flow-editor-entry-label').textContent = graph.entry_node_id
+      ? `Entry node: ${findNode(graph.entry_node_id)?.type ? FLOW_NODE_TYPE_LABELS[findNode(graph.entry_node_id).type] : '—'}`
+      : 'No entry node yet — the first node you add becomes the entry point.';
+
+    const container = document.getElementById('bot-flow-editor-nodes');
+    if (!graph.nodes.length) {
+      container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; padding: 1rem 0;">No nodes yet — add one to get started.</div>';
+      return;
+    }
+
+    container.innerHTML = graph.nodes.map(node => {
+      const edges = graph.edges.filter(e => e.from_node_id === node.id);
+      const isEntry = node.id === graph.entry_node_id;
+      const edgeRows = edges.map(e => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: #F8FAFC; border-radius: 6px; margin-top: 0.4rem; font-size: 0.8rem;">
+          <span>${FLOW_EDGE_TYPE_LABELS[e.condition_type] || e.condition_type}${e.condition_value ? ` "${escapeHtml(e.condition_value)}"` : ''} &rarr; ${escapeHtml(findNode(e.to_node_id) ? FLOW_NODE_TYPE_LABELS[findNode(e.to_node_id).type] : '—')}</span>
+          <button type="button" class="delete-flow-edge-btn" data-edge-id="${e.id}" style="border: none; background: none; color: #DC2626; cursor: pointer; font-size: 0.75rem;">Remove</button>
+        </div>
+      `).join('');
+      const canAddEdge = (FLOW_EDGE_TYPES_BY_NODE_TYPE[node.type] || []).length > 0;
+      return `
+        <div style="border: 1px solid var(--border-light); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem;" data-node-id="${node.id}">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span style="font-weight: 700;">${FLOW_NODE_TYPE_LABELS[node.type] || node.type}</span>
+              ${isEntry ? '<span class="status-badge active" style="margin-left: 8px; font-size: 0.7rem;">Entry</span>' : ''}
+            </div>
+            <div style="display: flex; gap: 8px;">
+              ${!isEntry ? `<button type="button" class="set-entry-node-btn btn-secondary" data-node-id="${node.id}" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">Set as Entry</button>` : ''}
+              <button type="button" class="delete-flow-node-btn" data-node-id="${node.id}" style="border: none; background: none; color: #DC2626; cursor: pointer; font-size: 0.8rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin: 0.5rem 0;">${nodeConfigSummary(node)}</div>
+          ${edgeRows}
+          ${canAddEdge ? `<button type="button" class="add-flow-edge-btn btn-secondary" data-node-id="${node.id}" style="width: auto; padding: 2px 10px; font-size: 0.75rem; margin-top: 0.5rem;"><i data-lucide="plus" style="width: 12px;"></i> Add Branch</button>` : ''}
+        </div>
+      `;
+    }).join('');
+    refreshIcons();
+  }
+
+  function renderNewNodeConfigFields(type) {
+    const container = document.getElementById('new-bot-flow-node-config-fields');
+    if (type === 'send_text') {
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">Message</label><textarea id="new-bot-flow-node-body" class="form-input" rows="3" required></textarea></div>
+      `;
+    } else if (type === 'send_interactive_buttons') {
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">Message</label><textarea id="new-bot-flow-node-body" class="form-input" rows="3" required></textarea></div>
+        <div class="form-group"><label class="form-label">Button 1</label><input type="text" id="new-bot-flow-node-btn-1" class="form-input" maxlength="20" required /></div>
+        <div class="form-group"><label class="form-label">Button 2 (optional)</label><input type="text" id="new-bot-flow-node-btn-2" class="form-input" maxlength="20" /></div>
+        <div class="form-group"><label class="form-label">Button 3 (optional)</label><input type="text" id="new-bot-flow-node-btn-3" class="form-input" maxlength="20" /></div>
+        <div class="form-group"><label class="form-label">Timeout, minutes (optional — only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
+      `;
+    } else if (type === 'send_template') {
+      const options = state.templates.filter(t => t.status === 'approved').map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('');
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">Template</label><select id="new-bot-flow-node-template" class="form-input">${options}</select></div>
+        <div id="new-bot-flow-node-template-params"></div>
+      `;
+      document.getElementById('new-bot-flow-node-template')?.addEventListener('change', renderNewNodeTemplateParams);
+      renderNewNodeTemplateParams();
+    } else if (type === 'delay') {
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">Duration (minutes)</label><input type="number" id="new-bot-flow-node-duration" class="form-input" min="0" step="any" required /></div>
+      `;
+    } else if (type === 'action') {
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">Action Kind</label>
+          <select id="new-bot-flow-node-action-kind" class="form-input">
+            <option value="assign_tag">Assign Tag</option>
+            <option value="set_opt_in">Set Opt-In Status</option>
+            <option value="human_handoff">Hand Off to a Human</option>
+          </select>
+        </div>
+        <div id="new-bot-flow-node-action-fields"></div>
+      `;
+      document.getElementById('new-bot-flow-node-action-kind')?.addEventListener('change', renderNewNodeActionFields);
+      renderNewNodeActionFields();
+    } else {
+      container.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted);">Ends the flow — nothing further to configure.</div>';
+    }
+  }
+
+  function renderNewNodeTemplateParams() {
+    const container = document.getElementById('new-bot-flow-node-template-params');
+    const name = document.getElementById('new-bot-flow-node-template')?.value;
+    const template = state.templates.find(t => t.name === name);
+    if (!container || !template) { if (container) container.innerHTML = ''; return; }
+    const params = extractTemplateParams(template.body || '');
+    if (template.header_type === 'TEXT' && template.header_content) {
+      extractTemplateParams(template.header_content).forEach(p => { if (!params.includes(p)) params.push(p); });
+    }
+    if (!params.length) { container.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted);">This template has no parameters.</div>'; return; }
+    container.innerHTML = params.map(p => `
+      <div class="form-group param-map-row" data-param="${escapeHtml(p)}">
+        <label class="form-label">{{${escapeHtml(p)}}}</label>
+        <select class="form-input param-map-source">
+          <option value="contact_field:name">Contact Name</option>
+          <option value="contact_field:phone">Contact Phone</option>
+          <option value="static">Static Value</option>
+        </select>
+        <input type="text" class="form-input param-map-static-value" placeholder="Value" style="display: none; margin-top: 6px;" />
+      </div>
+    `).join('');
+    container.querySelectorAll('.param-map-source').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const staticInput = e.target.closest('.param-map-row').querySelector('.param-map-static-value');
+        staticInput.style.display = e.target.value === 'static' ? '' : 'none';
+      });
+    });
+  }
+
+  function renderNewNodeActionFields() {
+    const container = document.getElementById('new-bot-flow-node-action-fields');
+    const kind = document.getElementById('new-bot-flow-node-action-kind')?.value;
+    if (!container) return;
+    if (kind === 'assign_tag') {
+      const options = Object.values(state.tagsById).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+      container.innerHTML = `<div class="form-group"><label class="form-label">Tag</label><select id="new-bot-flow-node-tag-id" class="form-input">${options}</select></div>`;
+    } else if (kind === 'set_opt_in') {
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">New Status</label>
+          <select id="new-bot-flow-node-opt-in-event" class="form-input">
+            <option value="opted_in">Opted In</option>
+            <option value="opted_out">Opted Out</option>
+          </select>
+        </div>
+      `;
+    } else {
+      container.innerHTML = '';
+    }
+  }
+
+  function collectNewNodeConfig(type) {
+    if (type === 'send_text') {
+      return { body: document.getElementById('new-bot-flow-node-body').value.trim() };
+    }
+    if (type === 'send_interactive_buttons') {
+      const buttons = [];
+      [1, 2, 3].forEach(i => {
+        const title = document.getElementById(`new-bot-flow-node-btn-${i}`)?.value.trim();
+        if (title) buttons.push({ id: `btn_${i}`, title });
+      });
+      const timeoutVal = document.getElementById('new-bot-flow-node-timeout').value;
+      return {
+        body: document.getElementById('new-bot-flow-node-body').value.trim(),
+        buttons,
+        ...(timeoutVal ? { timeout_minutes: Number(timeoutVal) } : {}),
+      };
+    }
+    if (type === 'send_template') {
+      const templateName = document.getElementById('new-bot-flow-node-template').value;
+      const paramMappings = {};
+      document.querySelectorAll('#new-bot-flow-node-template-params .param-map-row').forEach(row => {
+        const param = row.dataset.param;
+        const sourceVal = row.querySelector('.param-map-source').value;
+        if (sourceVal === 'static') {
+          paramMappings[param] = { source: 'static', value: row.querySelector('.param-map-static-value').value.trim() };
+        } else {
+          const [, field] = sourceVal.split(':');
+          paramMappings[param] = { source: 'contact_field', field };
+        }
+      });
+      return { templateName, paramMappings };
+    }
+    if (type === 'delay') {
+      return { duration_minutes: Number(document.getElementById('new-bot-flow-node-duration').value) };
+    }
+    if (type === 'action') {
+      const kind = document.getElementById('new-bot-flow-node-action-kind').value;
+      if (kind === 'assign_tag') return { kind, tag_id: document.getElementById('new-bot-flow-node-tag-id').value };
+      if (kind === 'set_opt_in') return { kind, opt_in_event: document.getElementById('new-bot-flow-node-opt-in-event').value };
+      return { kind };
+    }
+    return {};
   }
 
   // --- Support Tickets ---
@@ -1405,25 +1677,198 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Create Automation Rule Modal ---
   document.getElementById('open-create-rule-modal')?.addEventListener('click', () => {
+    const flowSelect = document.getElementById('new-rule-flow-id');
+    flowSelect.innerHTML = state.flows.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
     document.getElementById('modal-create-rule')?.classList.add('open');
+  });
+
+  document.getElementById('new-rule-kind')?.addEventListener('change', (e) => {
+    const isFlow = e.target.value === 'flow';
+    document.getElementById('new-rule-action-group').style.display = isFlow ? 'none' : '';
+    document.getElementById('new-rule-flow-group').style.display = isFlow ? '' : 'none';
   });
 
   document.getElementById('create-rule-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = document.getElementById('new-rule-title').value.trim();
     const trigger = document.getElementById('new-rule-trigger').value.trim();
-    const action = document.getElementById('new-rule-action').value.trim();
-    if (!title || !trigger || !action) return;
+    const kind = document.getElementById('new-rule-kind').value;
+    if (!title || !trigger) return;
+
+    const body = kind === 'flow'
+      ? { title, trigger, flow_id: document.getElementById('new-rule-flow-id').value }
+      : { title, trigger, action: document.getElementById('new-rule-action').value.trim() };
+    if (kind === 'flow' && !body.flow_id) { showToast('Create a flow first, then pick it here.'); return; }
+    if (kind !== 'flow' && !body.action) return;
 
     try {
       await authFetch('/api/automation-rules', {
         method: 'POST',
-        body: JSON.stringify({ title, trigger, action })
+        body: JSON.stringify(body)
       });
       await refreshAutomationRules();
       renderAutomation();
       e.target.reset();
+      document.getElementById('new-rule-action-group').style.display = '';
+      document.getElementById('new-rule-flow-group').style.display = 'none';
       document.getElementById('modal-create-rule')?.classList.remove('open');
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  // --- Create Bot Flow Modal ---
+  document.getElementById('open-create-bot-flow-btn')?.addEventListener('click', () => {
+    document.getElementById('modal-create-bot-flow')?.classList.add('open');
+  });
+
+  document.getElementById('create-bot-flow-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('new-bot-flow-name').value.trim();
+    if (!name) return;
+    try {
+      const flow = await authFetch('/api/automation-flows', { method: 'POST', body: JSON.stringify({ name }) });
+      await refreshFlows();
+      renderFlowsList();
+      e.target.reset();
+      document.getElementById('modal-create-bot-flow')?.classList.remove('open');
+      openFlowEditor(flow.id);
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  // --- Bot Flow Editor Modal ---
+  document.getElementById('bot-flow-editor-toggle-status-btn')?.addEventListener('click', async () => {
+    const graph = state.currentFlowGraph;
+    if (!graph) return;
+    const newStatus = graph.status === 'active' ? 'archived' : 'active';
+    try {
+      await authFetch(`/api/automation-flows/${graph.id}`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+      state.currentFlowGraph.status = newStatus;
+      renderFlowEditor();
+      await refreshFlows();
+      renderFlowsList();
+      showToast(`Flow ${newStatus === 'active' ? 'activated' : 'archived'}.`);
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  document.getElementById('bot-flow-editor-add-node-btn')?.addEventListener('click', () => {
+    document.getElementById('add-bot-flow-node-form')?.reset();
+    document.getElementById('new-bot-flow-node-type').value = 'send_text';
+    renderNewNodeConfigFields('send_text');
+    document.getElementById('modal-add-bot-flow-node')?.classList.add('open');
+  });
+
+  document.getElementById('new-bot-flow-node-type')?.addEventListener('change', (e) => renderNewNodeConfigFields(e.target.value));
+
+  document.getElementById('add-bot-flow-node-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('new-bot-flow-node-type').value;
+    const config = collectNewNodeConfig(type);
+    try {
+      await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/nodes`, {
+        method: 'POST',
+        body: JSON.stringify({ type, config })
+      });
+      document.getElementById('modal-add-bot-flow-node')?.classList.remove('open');
+      await openFlowEditor(state.currentFlowGraph.id);
+      await refreshFlows();
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  // Delegated — nodes are re-rendered on every change, so listeners attached
+  // directly to them would be lost each time (same reasoning as this
+  // codebase's other dynamically-rendered lists, e.g. broadcasts/contacts).
+  document.getElementById('bot-flow-editor-nodes')?.addEventListener('click', async (e) => {
+    const deleteNodeBtn = e.target.closest('.delete-flow-node-btn');
+    const setEntryBtn = e.target.closest('.set-entry-node-btn');
+    const addEdgeBtn = e.target.closest('.add-flow-edge-btn');
+    const deleteEdgeBtn = e.target.closest('.delete-flow-edge-btn');
+
+    try {
+      if (deleteNodeBtn) {
+        await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/nodes/${deleteNodeBtn.dataset.nodeId}`, { method: 'DELETE' });
+        await openFlowEditor(state.currentFlowGraph.id);
+      } else if (setEntryBtn) {
+        await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}`, {
+          method: 'PATCH', body: JSON.stringify({ entry_node_id: setEntryBtn.dataset.nodeId })
+        });
+        await openFlowEditor(state.currentFlowGraph.id);
+      } else if (addEdgeBtn) {
+        const nodeId = addEdgeBtn.dataset.nodeId;
+        const node = findNode(nodeId);
+        const legalTypes = FLOW_EDGE_TYPES_BY_NODE_TYPE[node.type] || [];
+        document.getElementById('add-bot-flow-edge-form').dataset.fromNodeId = nodeId;
+        document.getElementById('new-bot-flow-edge-condition-type').innerHTML = legalTypes.map(t => `<option value="${t}">${FLOW_EDGE_TYPE_LABELS[t]}</option>`).join('');
+        document.getElementById('new-bot-flow-edge-to-node').innerHTML = state.currentFlowGraph.nodes
+          .filter(n => n.id !== nodeId)
+          .map(n => `<option value="${n.id}">${FLOW_NODE_TYPE_LABELS[n.type]}: ${nodeConfigSummary(n).slice(0, 40)}</option>`).join('');
+        toggleEdgeValueField();
+        document.getElementById('modal-add-bot-flow-edge')?.classList.add('open');
+      } else if (deleteEdgeBtn) {
+        await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges/${deleteEdgeBtn.dataset.edgeId}`, { method: 'DELETE' });
+        await openFlowEditor(state.currentFlowGraph.id);
+      }
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  function toggleEdgeValueField() {
+    const type = document.getElementById('new-bot-flow-edge-condition-type').value;
+    const group = document.getElementById('new-bot-flow-edge-value-group');
+    const label = document.getElementById('new-bot-flow-edge-value-label');
+    if (type === 'button_id') {
+      group.style.display = '';
+      label.textContent = 'Button (pick the exact button title from the source node)';
+    } else if (type === 'keyword') {
+      group.style.display = '';
+      label.textContent = 'Keyword (exact match, not case-sensitive)';
+    } else {
+      group.style.display = 'none';
+      // Hiding the field doesn't clear it — without this, a value typed for
+      // a button_id/keyword edge earlier in the same modal session would
+      // silently ride along on a later 'always'/'default'/'timeout' edge
+      // (harmless functionally, since those condition_types never read
+      // condition_value, but confusing in the edge list display).
+      document.getElementById('new-bot-flow-edge-condition-value').value = '';
+    }
+  }
+  document.getElementById('new-bot-flow-edge-condition-type')?.addEventListener('change', toggleEdgeValueField);
+
+  document.getElementById('add-bot-flow-edge-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fromNodeId = e.target.dataset.fromNodeId;
+    const conditionType = document.getElementById('new-bot-flow-edge-condition-type').value;
+    const conditionValue = document.getElementById('new-bot-flow-edge-condition-value').value.trim();
+    const toNodeId = document.getElementById('new-bot-flow-edge-to-node').value;
+
+    // button_id edges must carry the button's stable id, not its title —
+    // resolve the typed title back to the id from the source node's config
+    // (see flow_edges.condition_value's schema comment for why).
+    let value = conditionValue;
+    if (conditionType === 'button_id') {
+      const fromNode = findNode(fromNodeId);
+      const match = (fromNode?.config?.buttons || []).find(b => b.title.toLowerCase() === conditionValue.toLowerCase());
+      if (!match) { showToast(`No button titled "${conditionValue}" on this node.`); return; }
+      value = match.id;
+    }
+
+    try {
+      await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges`, {
+        method: 'POST',
+        body: JSON.stringify({
+          from_node_id: fromNodeId, to_node_id: toNodeId, condition_type: conditionType,
+          ...(value ? { condition_value: value } : {}),
+        })
+      });
+      document.getElementById('modal-add-bot-flow-edge')?.classList.remove('open');
+      await openFlowEditor(state.currentFlowGraph.id);
     } catch (err) {
       showToast(err.message);
     }
