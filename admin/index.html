@@ -62,8 +62,13 @@
         <a class="nav-item" data-view="clients"><i data-lucide="users"></i><span class="nav-text">Clients</span></a>
         <a class="nav-item" data-view="onboarding"><i data-lucide="list-checks"></i><span class="nav-text">Onboarding Queue</span></a>
         <a class="nav-item" data-view="waba-health"><i data-lucide="activity"></i><span class="nav-text">WABA Health</span></a>
+        <a class="nav-item" data-view="platform-overview"><i data-lucide="layout-grid"></i><span class="nav-text">Platform Overview</span></a>
+        <a class="nav-item" data-view="health-monitor"><i data-lucide="heart-pulse"></i><span class="nav-text">Health Monitor</span></a>
+        <a class="nav-item" data-view="volume"><i data-lucide="bar-chart-3"></i><span class="nav-text">Usage &amp; Volume</span></a>
+        <a class="nav-item" data-view="failures"><i data-lucide="alert-octagon"></i><span class="nav-text">Failures</span></a>
         <a class="nav-item" data-view="billing"><i data-lucide="credit-card"></i><span class="nav-text">Billing</span></a>
         <a class="nav-item" data-view="templates-review"><i data-lucide="file-check"></i><span class="nav-text">Templates Review</span></a>
+        <a class="nav-item" data-view="api-keys"><i data-lucide="key"></i><span class="nav-text">API Keys</span></a>
         <a class="nav-item" data-view="tickets"><i data-lucide="life-buoy"></i><span class="nav-text">Support / Tickets</span></a>
         <a class="nav-item" data-view="team"><i data-lucide="users-round"></i><span class="nav-text">Team &amp; Roles</span></a>
         <a class="nav-item" data-view="audit-log"><i data-lucide="scroll-text"></i><span class="nav-text">Audit Log</span></a>
@@ -221,6 +226,157 @@
           </div>
         </section>
 
+        <!-- ---------- Platform Overview ---------- -->
+        <section id="view-platform-overview" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Platform Overview</div>
+              <div class="page-subtitle">Tenant, WABA, and subscription status in one row per client</div>
+            </div>
+            <button class="btn-secondary" id="refresh-platform-overview-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="platform-overview-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Tenant Slug</th>
+                    <th>Client Status</th>
+                    <th>WABA Status</th>
+                    <th>Quality Rating</th>
+                    <th>Plan</th>
+                    <th>Subscription Status</th>
+                    <th>Connected</th>
+                  </tr>
+                </thead>
+                <tbody id="platform-overview-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Health Monitor ---------- -->
+        <section id="view-health-monitor" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Health Monitor</div>
+              <div class="page-subtitle">Quality rating, restriction status, and webhook staleness — the daily check</div>
+            </div>
+            <button class="btn-secondary" id="refresh-health-monitor-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="health-monitor-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Tenant Slug</th>
+                    <th>WABA ID</th>
+                    <th>WABA Status</th>
+                    <th>Quality Rating</th>
+                    <th>Restriction Status</th>
+                    <th>Last Successful Webhook</th>
+                    <th>Forwarding Failures</th>
+                  </tr>
+                </thead>
+                <tbody id="health-monitor-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Usage & Volume ---------- -->
+        <section id="view-volume" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Usage &amp; Volume</div>
+              <div class="page-subtitle">Messages sent/received per client, per day</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <select id="volume-days-filter" class="form-input" style="width:auto;">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              <button class="btn-secondary" id="refresh-volume-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+            </div>
+          </div>
+          <div id="volume-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Date</th>
+                    <th>Messages Sent</th>
+                    <th>Messages Received</th>
+                    <th>Conversations Billed</th>
+                  </tr>
+                </thead>
+                <tbody id="volume-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Failures ---------- -->
+        <section id="view-failures" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Failures</div>
+              <div class="page-subtitle">Failed sends and failed webhook deliveries across every client</div>
+            </div>
+            <button class="btn-secondary" id="refresh-failures-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+          </div>
+          <div id="failures-error" class="inline-error" style="display:none;"></div>
+
+          <div class="table-card">
+            <div class="table-header-tools">
+              <div style="font-weight:600; color:var(--color-heading);">Failed Sends</div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Chat</th>
+                    <th>Body</th>
+                    <th>Error Reason</th>
+                    <th>Meta Error Code</th>
+                    <th>Sent At</th>
+                  </tr>
+                </thead>
+                <tbody id="failures-sends-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="table-card" style="margin-top:1.5rem;">
+            <div class="table-header-tools">
+              <div style="font-weight:600; color:var(--color-heading);">Failed Webhook Deliveries</div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Event</th>
+                    <th>Target URL</th>
+                    <th>Attempts</th>
+                    <th>Last Error</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody id="failures-webhooks-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- ---------- Billing ---------- -->
         <section id="view-billing" class="admin-view">
           <div class="page-title-bar">
@@ -282,6 +438,35 @@
                   </tr>
                 </thead>
                 <tbody id="templates-review-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- API Keys ---------- -->
+        <section id="view-api-keys" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">API Keys</div>
+              <div class="page-subtitle">Hub API keys issued to consuming apps, across every client</div>
+            </div>
+            <button class="btn-primary" id="open-create-api-key-btn" style="width:auto; padding:0 16px;"><i data-lucide="plus" style="width:14px;"></i> New Key</button>
+          </div>
+          <div id="api-keys-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>App</th>
+                    <th>Last Used</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="api-keys-table-body"></tbody>
               </table>
             </div>
           </div>
@@ -449,6 +634,29 @@
           </select>
         </div>
         <button type="submit" class="btn-primary" id="invite-admin-submit-btn">Create Admin User</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== CREATE API KEY MODAL ===================== -->
+  <div id="create-api-key-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">New API Key</div>
+        <button class="close-modal-btn" data-close-create-api-key><i data-lucide="x"></i></button>
+      </div>
+      <div id="create-api-key-error" class="inline-error" style="display:none;"></div>
+      <div id="create-api-key-result" style="display:none;"></div>
+      <form id="create-api-key-form">
+        <div class="form-group">
+          <label class="form-label" for="create-api-key-client">Client</label>
+          <select id="create-api-key-client" class="form-input" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="create-api-key-app-name">App Name</label>
+          <input type="text" id="create-api-key-app-name" class="form-input" placeholder="e.g. GV Mart" required />
+        </div>
+        <button type="submit" class="btn-primary" id="create-api-key-submit-btn">Create Key</button>
       </form>
     </div>
   </div>

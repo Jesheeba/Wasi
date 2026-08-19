@@ -23,6 +23,7 @@ const state = {
   templatesReviewRows: [],
   ticketRows: [],
   teamRows: [],
+  apiKeyRows: [],
 };
 
 /* ---------------------------------------------------------------
@@ -266,8 +267,13 @@ const VIEW_TITLES = {
   'client-detail': 'Client Detail',
   onboarding: 'Onboarding Queue',
   'waba-health': 'WABA Health Monitor',
+  'platform-overview': 'Platform Overview',
+  'health-monitor': 'Health Monitor',
+  volume: 'Usage & Volume',
+  failures: 'Failures',
   billing: 'Billing',
   'templates-review': 'Templates Review',
+  'api-keys': 'API Keys',
   tickets: 'Support / Tickets',
   team: 'Team & Roles',
   'audit-log': 'Audit Log',
@@ -289,8 +295,13 @@ function switchView(viewName) {
   else if (viewName === 'clients') loadClients();
   else if (viewName === 'onboarding') loadOnboarding();
   else if (viewName === 'waba-health') loadWabas();
+  else if (viewName === 'platform-overview') loadPlatformOverview();
+  else if (viewName === 'health-monitor') loadHealthMonitor();
+  else if (viewName === 'volume') loadVolume();
+  else if (viewName === 'failures') loadFailures();
   else if (viewName === 'billing') loadBilling();
   else if (viewName === 'templates-review') loadTemplatesReview();
+  else if (viewName === 'api-keys') loadApiKeys();
   else if (viewName === 'tickets') loadTickets();
   else if (viewName === 'team') loadTeam();
   else if (viewName === 'audit-log') loadAuditLog();
@@ -730,6 +741,187 @@ function renderWabasTable(rows) {
 }
 
 /* ---------------------------------------------------------------
+   Platform Overview
+   --------------------------------------------------------------- */
+async function loadPlatformOverview() {
+  setInlineError('platform-overview-error', null);
+  const tbody = document.getElementById('platform-overview-table-body');
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">Loading…</td></tr>';
+
+  try {
+    const rows = await apiFetch('/api/admin/clients-overview');
+    renderPlatformOverview(rows);
+  } catch (err) {
+    if (err.status === 401) return;
+    tbody.innerHTML = '';
+    setInlineError('platform-overview-error', err.message);
+  }
+}
+
+function renderPlatformOverview(rows) {
+  const tbody = document.getElementById('platform-overview-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">No clients yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr class="clickable-row" data-client-id="${escapeHtml(r.id)}">
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.tenant_slug)}</td>
+      <td>${statusBadge(r.client_status)}</td>
+      <td>${r.waba_status ? statusBadge(r.waba_status) : '—'}</td>
+      <td>${escapeHtml(r.quality_rating || '—')}</td>
+      <td>${escapeHtml(r.plan || '—')}</td>
+      <td>${r.subscription_status ? statusBadge(r.subscription_status) : '—'}</td>
+      <td>${formatDate(r.connected_date)}</td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('tr[data-client-id]').forEach((row) => {
+    row.addEventListener('click', () => openClientDetail(row.getAttribute('data-client-id')));
+  });
+}
+
+/* ---------------------------------------------------------------
+   Health Monitor
+   --------------------------------------------------------------- */
+async function loadHealthMonitor() {
+  setInlineError('health-monitor-error', null);
+  const tbody = document.getElementById('health-monitor-table-body');
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">Loading…</td></tr>';
+
+  try {
+    const rows = await apiFetch('/api/admin/health');
+    renderHealthMonitor(rows);
+  } catch (err) {
+    if (err.status === 401) return;
+    tbody.innerHTML = '';
+    setInlineError('health-monitor-error', err.message);
+  }
+}
+
+function renderHealthMonitor(rows) {
+  const tbody = document.getElementById('health-monitor-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">No WhatsApp Business Accounts connected yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr class="clickable-row" data-client-id="${escapeHtml(r.client_id)}">
+      <td>${escapeHtml(r.client_name)}</td>
+      <td>${escapeHtml(r.tenant_slug)}</td>
+      <td>${escapeHtml(r.waba_id || '—')}</td>
+      <td>${statusBadge(r.waba_status)}</td>
+      <td>${escapeHtml(r.quality_rating || '—')}</td>
+      <td>${escapeHtml(r.restriction_status || '—')}</td>
+      <td>${formatDateTime(r.last_successful_webhook_at)}</td>
+      <td>${r.forwarding_failure_count}</td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('tr[data-client-id]').forEach((row) => {
+    row.addEventListener('click', () => openClientDetail(row.getAttribute('data-client-id')));
+  });
+}
+
+/* ---------------------------------------------------------------
+   Usage & Volume
+   --------------------------------------------------------------- */
+async function loadVolume() {
+  setInlineError('volume-error', null);
+  const tbody = document.getElementById('volume-table-body');
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">Loading…</td></tr>';
+
+  const days = document.getElementById('volume-days-filter').value;
+  try {
+    const rows = await apiFetch(`/api/admin/volume?days=${encodeURIComponent(days)}`);
+    renderVolume(rows);
+  } catch (err) {
+    if (err.status === 401) return;
+    tbody.innerHTML = '';
+    setInlineError('volume-error', err.message);
+  }
+}
+
+function renderVolume(rows) {
+  const tbody = document.getElementById('volume-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">No usage recorded in this window.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml(r.client_name)}</td>
+      <td>${formatDate(r.date)}</td>
+      <td>${r.messages_sent}</td>
+      <td>${r.messages_received}</td>
+      <td>${r.conversations_billed}</td>
+    </tr>
+  `).join('');
+}
+
+/* ---------------------------------------------------------------
+   Failures
+   --------------------------------------------------------------- */
+async function loadFailures() {
+  setInlineError('failures-error', null);
+  const sendsBody = document.getElementById('failures-sends-table-body');
+  const webhooksBody = document.getElementById('failures-webhooks-table-body');
+  sendsBody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
+  webhooksBody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
+
+  try {
+    const [sends, webhooks] = await Promise.all([
+      apiFetch('/api/admin/failures/sends'),
+      apiFetch('/api/admin/failures/webhook-deliveries'),
+    ]);
+    renderFailedSends(sends);
+    renderFailedWebhooks(webhooks);
+  } catch (err) {
+    if (err.status === 401) return;
+    sendsBody.innerHTML = '';
+    webhooksBody.innerHTML = '';
+    setInlineError('failures-error', err.message);
+  }
+}
+
+function renderFailedSends(rows) {
+  const tbody = document.getElementById('failures-sends-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">No failed sends.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml(r.client_name)}</td>
+      <td style="font-family:monospace; font-size:0.78rem;">${escapeHtml(r.chat_id || '—')}</td>
+      <td style="max-width:280px; white-space:normal;">${escapeHtml(r.body || '')}</td>
+      <td>${escapeHtml(r.error_reason || '—')}</td>
+      <td>${r.meta_error_code ?? '—'}</td>
+      <td>${formatDateTime(r.sent_at)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderFailedWebhooks(rows) {
+  const tbody = document.getElementById('failures-webhooks-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">No failed webhook deliveries.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml(r.client_name)}</td>
+      <td>${escapeHtml(r.event || '—')}</td>
+      <td style="max-width:240px; white-space:normal; word-break:break-all;">${escapeHtml(r.target_url || '—')}</td>
+      <td>${r.attempt_count}</td>
+      <td style="max-width:280px; white-space:normal;">${escapeHtml(r.last_error || '—')}</td>
+      <td>${formatDateTime(r.created_at)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ---------------------------------------------------------------
    Billing
    --------------------------------------------------------------- */
 async function loadBilling() {
@@ -835,6 +1027,122 @@ async function setTemplateStatus(templateId, status) {
   } catch (err) {
     if (err.status === 401) return;
     showToast('Failed to update template: ' + err.message, 'error');
+  }
+}
+
+/* ---------------------------------------------------------------
+   API Keys
+   --------------------------------------------------------------- */
+async function loadApiKeys() {
+  setInlineError('api-keys-error', null);
+  const tbody = document.getElementById('api-keys-table-body');
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
+
+  try {
+    const rows = await apiFetch('/api/admin/api-keys');
+    state.apiKeyRows = rows;
+    renderApiKeys(rows);
+  } catch (err) {
+    if (err.status === 401) return;
+    tbody.innerHTML = '';
+    setInlineError('api-keys-error', err.message);
+  }
+}
+
+function renderApiKeys(rows) {
+  const tbody = document.getElementById('api-keys-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">No API keys issued yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((k) => `
+    <tr>
+      <td>${escapeHtml(k.client_name)}</td>
+      <td>${escapeHtml(k.app_name)}</td>
+      <td>${formatDateTime(k.last_used_at)}</td>
+      <td>${formatDate(k.created_at)}</td>
+      <td>${k.revoked_at ? statusBadge('revoked') : statusBadge('active')}</td>
+      <td>${!k.revoked_at ? `<button class="btn-secondary btn-sm" data-revoke-key="${escapeHtml(k.id)}" data-revoke-client="${escapeHtml(k.client_id)}">Revoke</button>` : ''}</td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('[data-revoke-key]').forEach((btn) => {
+    btn.addEventListener('click', () => confirmRevokeApiKey(btn.getAttribute('data-revoke-key'), btn.getAttribute('data-revoke-client')));
+  });
+}
+
+function confirmRevokeApiKey(keyId, clientId) {
+  showConfirm({
+    title: 'Revoke this API key?',
+    body: '<p>The consuming app will immediately lose access. This cannot be undone.</p>',
+    confirmLabel: 'Revoke Key',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await apiFetch(`/api/admin/api-keys/${keyId}/revoke`, {
+          method: 'POST',
+          body: JSON.stringify({ client_id: clientId }),
+        });
+        showToast('API key revoked.', 'success');
+        loadApiKeys();
+      } catch (err) {
+        if (err.status === 401) return;
+        showToast('Failed to revoke key: ' + err.message, 'error');
+      }
+    },
+  });
+}
+
+async function openCreateApiKeyModal() {
+  document.getElementById('create-api-key-form').reset();
+  document.getElementById('create-api-key-form').style.display = '';
+  document.getElementById('create-api-key-result').style.display = 'none';
+  document.getElementById('create-api-key-result').innerHTML = '';
+  setInlineError('create-api-key-error', null);
+  document.getElementById('create-api-key-modal').classList.add('open');
+
+  const select = document.getElementById('create-api-key-client');
+  select.innerHTML = '<option value="">Loading clients…</option>';
+  try {
+    const clients = state.clients.length ? state.clients : await apiFetch('/api/clients');
+    state.clients = clients;
+    select.innerHTML = clients.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load clients</option>';
+  }
+}
+
+function closeCreateApiKeyModal() {
+  document.getElementById('create-api-key-modal').classList.remove('open');
+}
+
+async function handleCreateApiKeySubmit(e) {
+  e.preventDefault();
+  setInlineError('create-api-key-error', null);
+  const client_id = document.getElementById('create-api-key-client').value;
+  const app_name = document.getElementById('create-api-key-app-name').value.trim();
+  const btn = document.getElementById('create-api-key-submit-btn');
+  btn.disabled = true;
+
+  try {
+    const created = await apiFetch('/api/admin/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ client_id, app_name }),
+    });
+    document.getElementById('create-api-key-form').style.display = 'none';
+    const resultEl = document.getElementById('create-api-key-result');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div class="inline-success" style="margin-bottom:0.75rem;">Key created — this is shown once, copy it now.</div>
+      <div class="form-input" style="font-family:monospace; font-size:0.8rem; word-break:break-all; user-select:all;">${escapeHtml(created.key)}</div>
+    `;
+    showToast('API key created.', 'success');
+    loadApiKeys();
+  } catch (err) {
+    if (err.status === 401) return;
+    setInlineError('create-api-key-error', err.message);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1091,6 +1399,11 @@ function initEventListeners() {
   document.getElementById('refresh-dashboard-btn').addEventListener('click', loadDashboard);
   document.getElementById('refresh-onboarding-btn').addEventListener('click', loadOnboarding);
   document.getElementById('refresh-wabas-btn').addEventListener('click', loadWabas);
+  document.getElementById('refresh-platform-overview-btn').addEventListener('click', loadPlatformOverview);
+  document.getElementById('refresh-health-monitor-btn').addEventListener('click', loadHealthMonitor);
+  document.getElementById('refresh-volume-btn').addEventListener('click', loadVolume);
+  document.getElementById('volume-days-filter').addEventListener('change', loadVolume);
+  document.getElementById('refresh-failures-btn').addEventListener('click', loadFailures);
   document.getElementById('refresh-audit-btn').addEventListener('click', () => {
     document.getElementById('audit-client-filter').value = '';
     loadAuditLog();
@@ -1103,6 +1416,13 @@ function initEventListeners() {
 
   document.getElementById('refresh-tickets-btn').addEventListener('click', loadTickets);
   document.getElementById('tickets-status-filter').addEventListener('change', loadTickets);
+
+  document.getElementById('open-create-api-key-btn').addEventListener('click', openCreateApiKeyModal);
+  document.querySelectorAll('[data-close-create-api-key]').forEach((btn) => btn.addEventListener('click', closeCreateApiKeyModal));
+  document.getElementById('create-api-key-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'create-api-key-modal') closeCreateApiKeyModal();
+  });
+  document.getElementById('create-api-key-form').addEventListener('submit', handleCreateApiKeySubmit);
 
   document.getElementById('open-invite-admin-btn').addEventListener('click', openInviteAdminModal);
   document.querySelectorAll('[data-close-invite-admin]').forEach((btn) => btn.addEventListener('click', closeInviteAdminModal));

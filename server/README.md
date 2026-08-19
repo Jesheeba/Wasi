@@ -44,7 +44,7 @@ the exact gotcha and fix (`PGSSLMODE=no-verify`, no `?sslmode=` query param).
 
 Real JWT auth for both actor types — no dev header stub. `POST /api/auth/register` /
 `/login` (clients), `POST /api/admin/auth/login` (admins, seeded via `db:seed` or
-`POST /api/admin/admin-users` by a `super_admin`). Forgot/reset password and email
+`POST /api/admin/admin-users`). Forgot/reset password and email
 verification are implemented (`server/src/routes/auth.js`,
 `server/src/utils/emailService.js`) — without `RESEND_API_KEY` configured, reset/verify
 links are logged to the console instead of emailed, so the flow is still testable in dev.

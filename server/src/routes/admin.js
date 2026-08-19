@@ -132,30 +132,22 @@ router.get('/audit-log', asyncHandler(async (req, res) => {
   res.json(await auditLogRepo.list({ clientId, limit: 200 }));
 }));
 
-// --- Admin team management (super_admin only) ---
+// --- Admin team management ---
 router.get('/admin-users', asyncHandler(async (req, res) => {
   res.json(await adminUsersRepo.list());
 }));
 
 router.post('/admin-users', asyncHandler(async (req, res) => {
-  if (req.adminRole !== 'super_admin') return res.status(403).json({ error: 'Only super_admin can create admin users' });
   const schema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
     password: z.string().min(8),
-    // platform_admin (Phase 6) logs in at a separate route
-    // (/api/super-admin/auth/login, routes/superAdminAuth.js) with a
-    // distinct token type — creatable here like any other admin_users role,
-    // but it can never authenticate against the regular /api/admin/* routes
-    // this role check itself gates, or vice versa.
     role: z.enum(['super_admin', 'support', 'billing', 'platform_admin']),
   });
   const { name, email, password, role } = schema.parse(req.body);
   const password_hash = await hashPassword(password);
   const admin = await adminUsersRepo.create({ name, email, role, password_hash });
-  const loginUrl = role === 'platform_admin'
-    ? `${process.env.APP_URL || 'http://localhost:3000'} (log in via POST /api/super-admin/auth/login)`
-    : `<a href="${process.env.APP_URL || 'http://localhost:3000'}/admin/index.html">${process.env.APP_URL || 'http://localhost:3000'}/admin</a>`;
+  const loginUrl = `<a href="${process.env.APP_URL || 'http://localhost:3000'}/admin/index.html">${process.env.APP_URL || 'http://localhost:3000'}/admin</a>`;
   await sendEmail({
     to: email,
     subject: 'You’ve been added to Wasi CRM admin',
@@ -277,6 +269,89 @@ router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'hub_forward_configured', target: id });
   const { access_token_encrypted, ...safe } = updated;
   res.json(safe);
+}));
+
+// --- Platform Overview: tenant, WABA, phone number, connection status, plan,
+// connected date, in one row per client. Formerly the super-admin-only
+// /api/super-admin/clients view — folded in here since there's now a single
+// admin dashboard, not a separate cross-tenant one. Still queries via `pool`
+// (not req.db) like the rest of this router; nothing about that changed. ---
+router.get('/clients-overview', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(`
+    select c.id, c.name, c.email, c.status as client_status, c.tenant_slug, c.created_at as connected_date,
+           w.waba_id, w.phone_number_id, w.status as waba_status, w.quality_rating,
+           s.plan, s.status as subscription_status
+    from clients c
+    left join lateral (select * from wabas where client_id = c.id order by created_at desc limit 1) w on true
+    left join lateral (select * from subscriptions where client_id = c.id order by created_at desc limit 1) s on true
+    order by c.created_at desc
+  `);
+  res.json(rows);
+}));
+
+// --- Health per client: quality rating, restriction status, last successful
+// webhook, forwarding failure count. The daily-check screen. Messaging tier is
+// deliberately absent — Meta's field/shape for it hasn't been confirmed
+// against a live payload (same honesty standard metaWebhook.js's own
+// handleUnmappedWabaEvent already uses), so it ships as "not yet available"
+// rather than a guessed field that might silently never populate. ---
+router.get('/health', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(`
+    select c.id as client_id, c.name as client_name, c.tenant_slug,
+           w.id as waba_row_id, w.waba_id, w.status as waba_status,
+           w.quality_rating, w.restriction_status,
+           (select max(received_at) from meta_webhook_log
+             where success = true and w.id = any(waba_ids_touched)) as last_successful_webhook_at,
+           (select count(*)::int from webhook_deliveries wd
+             where wd.waba_id = w.id and wd.status = 'failed') as forwarding_failure_count
+    from clients c
+    join wabas w on w.client_id = c.id
+    order by c.name asc
+  `);
+  res.json(rows.map((r) => ({ ...r, messaging_tier: null })));
+}));
+
+// --- Volume: sends per client per day ---
+router.get('/volume', asyncHandler(async (req, res) => {
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+  const { rows } = await pool.query(
+    `select u.client_id, c.name as client_name, u.date, u.messages_sent, u.messages_received, u.conversations_billed
+     from usage_logs u
+     join clients c on c.id = u.client_id
+     where u.date >= current_date - $1::int
+     order by u.date desc, c.name asc`,
+    [days]
+  );
+  res.json(rows);
+}));
+
+// --- Failures: failed sends with Meta error codes, webhook_deliveries in
+// terminal failed state ---
+router.get('/failures/sends', asyncHandler(async (req, res) => {
+  const authOnly = req.query.auth_only === 'true';
+  const { rows } = await pool.query(
+    `select m.id, m.client_id, c.name as client_name, m.chat_id, m.body, m.error_reason, m.meta_error_code, m.sent_at
+     from messages m
+     join clients c on c.id = m.client_id
+     where m.status = 'failed' and ($1::boolean = false or m.meta_error_code in (190, 10))
+     order by m.sent_at desc
+     limit 200`,
+    [authOnly]
+  );
+  res.json(rows);
+}));
+
+router.get('/failures/webhook-deliveries', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(`
+    select wd.id, wd.client_id, c.name as client_name, wd.waba_id, wd.event, wd.target_url,
+           wd.attempt_count, wd.last_error, wd.created_at
+    from webhook_deliveries wd
+    join clients c on c.id = wd.client_id
+    where wd.status = 'failed'
+    order by wd.created_at desc
+    limit 200
+  `);
+  res.json(rows);
 }));
 
 // --- Settings (spec §5 "Settings" row) ---

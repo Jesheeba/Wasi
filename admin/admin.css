@@ -95,6 +95,7 @@ body {
 .status-badge.status-pending { background: #FEF3C7; color: #B45309; }
 .status-badge.status-suspended,
 .status-badge.status-failed,
+.status-badge.status-revoked,
 .status-badge.status-rejected { background: #FEE2E2; color: #B91C1C; }
 .status-badge.status-connected,
 .status-badge.status-approved,

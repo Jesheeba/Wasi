@@ -5,13 +5,11 @@ const { authLimiter, webhookLimiter, apiLimiter } = require('./middleware/rateLi
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { requireClientAuth } = require('./middleware/requireClientAuth');
 const { requireAdminAuth } = require('./middleware/requireAdminAuth');
-const { requireSuperAdminAuth } = require('./middleware/requireSuperAdminAuth');
 const { withTenantContext } = require('./middleware/tenantContext');
 
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const adminAuthRouter = require('./routes/adminAuth');
-const superAdminAuthRouter = require('./routes/superAdminAuth');
 const clientsRouter = require('./routes/clients');
 const contactsRouter = require('./routes/contacts');
 const chatsRouter = require('./routes/chats');
@@ -22,7 +20,6 @@ const metaDataDeletionRouter = require('./routes/metaDataDeletion');
 const billingRouter = require('./routes/billing');
 const razorpayWebhookRouter = require('./routes/razorpayWebhook');
 const adminRouter = require('./routes/admin');
-const superAdminRouter = require('./routes/superAdmin');
 const broadcastsRouter = require('./routes/broadcasts');
 const automationRulesRouter = require('./routes/automationRules');
 const templatesRouter = require('./routes/templates');
@@ -77,7 +74,6 @@ function createApp() {
 
   app.use('/api/auth', authLimiter, authRouter);
   app.use('/api/admin/auth', authLimiter, adminAuthRouter);
-  app.use('/api/super-admin/auth', authLimiter, superAdminAuthRouter);
 
   // Tenant-scoped: real client JWT required. withTenantContext runs every
   // request inside its own transaction as the restricted `wasi_app` role
@@ -105,10 +101,9 @@ function createApp() {
   app.use('/webhooks/meta', webhookLimiter, metaWebhookRouter);
   app.use('/webhooks/razorpay', webhookLimiter, razorpayWebhookRouter);
 
-  // Admin-only: internal team, gated by admin JWT + role.
-  app.use('/api/clients', requireAdminAuth(['super_admin', 'support']), clientsRouter);
+  // Admin-only: internal team, gated by admin JWT.
+  app.use('/api/clients', requireAdminAuth(), clientsRouter);
   app.use('/api/admin', requireAdminAuth(), adminRouter);
-  app.use('/api/super-admin', requireSuperAdminAuth(), superAdminRouter);
 
   // Hub API (build plan Phase 5): other Sirah applications, authenticated by
   // a Wasi-issued API key (requireApiKey), not a client JWT — always the
