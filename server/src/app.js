@@ -22,6 +22,7 @@ const razorpayWebhookRouter = require('./routes/razorpayWebhook');
 const adminRouter = require('./routes/admin');
 const broadcastsRouter = require('./routes/broadcasts');
 const automationRulesRouter = require('./routes/automationRules');
+const automationFlowsRouter = require('./routes/automationFlows');
 const templatesRouter = require('./routes/templates');
 const supportTicketsRouter = require('./routes/supportTickets');
 const analyticsRouter = require('./routes/analytics');
@@ -87,6 +88,7 @@ function createApp() {
   app.use('/api/billing', requireClientAuth, withTenantContext, billingRouter);
   app.use('/api/broadcasts', requireClientAuth, withTenantContext, broadcastsRouter);
   app.use('/api/automation-rules', requireClientAuth, withTenantContext, automationRulesRouter);
+  app.use('/api/automation-flows', requireClientAuth, withTenantContext, automationFlowsRouter);
   app.use('/api/templates', requireClientAuth, withTenantContext, templatesRouter);
   app.use('/api/support-tickets', requireClientAuth, withTenantContext, supportTicketsRouter);
   app.use('/api/analytics', requireClientAuth, withTenantContext, analyticsRouter);
