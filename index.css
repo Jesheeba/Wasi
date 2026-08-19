@@ -738,6 +738,29 @@ body {
   color: #B45309;
 }
 
+.template-badge.rejected,
+.template-badge.disabled {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.template-badge.paused,
+.template-badge.pending-deletion {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+.template-badge.in-appeal {
+  background: #E0E7FF;
+  color: #4338CA;
+}
+
+.template-rejection-reason {
+  font-size: 0.8rem;
+  color: #B91C1C;
+  margin-top: 0.5rem;
+}
+
 /* Wallet & Recharge Balance Cards */
 .wallet-card {
   background: linear-gradient(135deg, #0E2916 0%, #173E21 100%);

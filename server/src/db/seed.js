@@ -31,14 +31,6 @@ const MOCK_CHATS = [
   { name: '919123456789', phone: '+91 91234 56789', tag: 'Lead', unread_count: 2 },
 ];
 
-// Named parameters, not numbered — Meta now rejects the numbered {{1}}/{{2}}
-// style for new templates (see server/src/utils/templateParams.js).
-const MOCK_TEMPLATES = [
-  { name: 'welcome_offer_v1', category: 'Marketing', body: 'Hello {{customer_name}}, welcome! Use code SAVE10 for 10% off on your next purchase.' },
-  { name: 'order_status_update', category: 'Utility', body: 'Hi {{customer_name}}, your order #{{order_number}} has been shipped and is on its way!' },
-  { name: 'otp_verification', category: 'Authentication', body: 'Your security verification code is {{otp_code}}. Valid for 10 minutes.' },
-];
-
 const MOCK_BROADCASTS = [
   { title: 'August Product Update', tag: 'All Contacts', status: 'Completed', delivered_count: 1250, read_rate: 92.4, scheduled_date: '2026-08-01' },
   { title: 'July Special Offer', tag: 'VIP', status: 'Completed', delivered_count: 450, read_rate: 96.8, scheduled_date: '2026-07-30' },
@@ -102,13 +94,11 @@ async function seed() {
       tagIdByName[tag.name] = rows[0].id;
     }
 
-    for (const tpl of MOCK_TEMPLATES) {
-      await client.query(
-        `insert into message_templates (client_id, name, category, status, body)
-         values ($1, $2, $3, 'approved', $4)`,
-        [DEMO_CLIENT_ID, tpl.name, tpl.category, tpl.body]
-      );
-    }
+    // No mock message_templates rows: a fake 'approved' status here was
+    // actively misleading (these were never real Meta submissions) and the
+    // real create flow — POST /api/templates — is exactly what the
+    // template form exists to exercise, not something to bypass with
+    // fixtures pretending to already be approved.
 
     const contactIdByPhone = {};
     for (const contact of MOCK_CONTACTS) {

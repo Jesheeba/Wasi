@@ -641,26 +641,49 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Templates Grid ---
+  const TEMPLATE_STATUS_LABELS = {
+    approved: 'Approved',
+    pending: 'Pending',
+    rejected: 'Rejected',
+    paused: 'Paused',
+    disabled: 'Disabled',
+    pending_deletion: 'Pending Deletion',
+    in_appeal: 'In Appeal',
+  };
+
   function renderTemplates() {
     const templatesGrid = document.getElementById('templates-grid');
     if (!templatesGrid) return;
 
-    templatesGrid.innerHTML = '';
-    state.templates.forEach(t => {
-      const card = `
+    templatesGrid.innerHTML = state.templates.map((t) => {
+      const status = t.status || 'pending';
+      const statusClass = status.replace(/_/g, '-');
+      const statusLabel = TEMPLATE_STATUS_LABELS[status] || status;
+      // Authentication templates have no author-written body — Meta
+      // generates that text itself (see metaClient.js's
+      // buildAuthenticationPayload) — so t.body is null for these, not a
+      // display bug to work around with a fallback string.
+      const bodyPreview = t.category === 'Authentication'
+        ? 'Meta-generated verification message (code delivery, expiration notice, security disclaimer).'
+        : escapeHtml(t.body || '');
+      const rejectionNote = status === 'rejected' && t.rejection_reason
+        ? `<p class="template-rejection-reason">${escapeHtml(t.rejection_reason)}</p>`
+        : '';
+
+      return `
         <div class="template-card">
           <div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-              <span style="font-weight: 700;">${t.name}</span>
-              <span class="template-badge approved">Approved</span>
+              <span style="font-weight: 700;">${escapeHtml(t.name)}</span>
+              <span class="template-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
             </div>
-            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${t.body}</p>
+            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${bodyPreview}</p>
+            ${rejectionNote}
           </div>
-          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${t.category}</div>
+          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${escapeHtml(t.category)}</div>
         </div>
       `;
-      templatesGrid.innerHTML += card;
-    });
+    }).join('');
   }
 
   // --- Tag Manager ---
