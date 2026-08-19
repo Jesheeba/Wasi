@@ -1247,14 +1247,14 @@
         <div class="form-group">
           <label class="form-label">Category</label>
           <select id="new-template-category" class="form-input">
+            <option value="Utility" selected>Utility</option>
             <option value="Marketing">Marketing</option>
-            <option value="Utility">Utility</option>
             <option value="Authentication">Authentication</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Message Body</label>
-          <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" placeholder="Hi {{1}}, ..." required></textarea>
+          <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" placeholder="Hi {{customer_name}}, ..." required></textarea>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-template">Cancel</button>
