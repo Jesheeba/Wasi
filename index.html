@@ -1271,11 +1271,13 @@
               <option value="DOCUMENT" disabled>Document (coming soon)</option>
             </select>
             <input type="text" id="new-template-header-text" class="form-input template-conditional-field" maxlength="60" placeholder="e.g. Your order has shipped, {{customer_name}}" style="display:none; margin-top: 8px;" />
+            <div id="template-header-warning" class="template-inline-warning" style="display:none;"></div>
           </div>
 
           <div class="form-group">
             <label class="form-label">Body <span id="template-body-charcount" class="form-hint-inline"></span></label>
             <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" maxlength="1024" placeholder="Hi {{customer_name}}, ..."></textarea>
+            <div id="template-body-warning" class="template-inline-warning" style="display:none;"></div>
           </div>
 
           <div id="template-sample-values" class="form-group" style="display:none;">
@@ -1519,6 +1521,10 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="/embeddedSignup.js"></script>
-  <script src="app.js"></script>
+  <!-- Cache-busting query string — this file has been edited many times in a
+       single session recently; without this, a browser can serve a stale
+       cached copy after a plain (non-hard) refresh, silently running old
+       logic. Bump the value whenever app.js changes. -->
+  <script src="app.js?v=20260819d"></script>
 </body>
 </html>

@@ -37,6 +37,37 @@ function isPurelyNumeric(name) {
   return /^[0-9]+$/.test(name);
 }
 
+// PLACEHOLDER_RE only matches lowercase snake_case — correct, since that's
+// Meta's real named-parameter syntax, but it means anything that LOOKS like
+// an attempted variable and isn't quite valid (wrong case, a space, a
+// symbol) is silently invisible to extractPlaceholders: not matched, not
+// flagged, just treated as inert literal text. An author who types
+// {{Customer}} thinking they created a variable gets zero feedback — no
+// sample-value prompt (correctly, since nothing was recognized), no error
+// (nothing was checked either) — the mistake just ships. This catches that
+// specific trap: any {{...}} span whose inner content isn't a valid name.
+const ANY_BRACE_RE = /\{\{\s*([^{}]*?)\s*\}\}/g;
+const VALID_NAME_RE = /^[a-z0-9_]+$/;
+
+function findMalformedPlaceholders(text) {
+  const found = [];
+  const re = new RegExp(ANY_BRACE_RE);
+  let m;
+  while ((m = re.exec(text || ''))) {
+    if (!VALID_NAME_RE.test(m[1])) {
+      found.push({ raw: m[0], inner: m[1] });
+    }
+  }
+  return found;
+}
+
+function malformedPlaceholderErrors(malformed, label) {
+  return malformed.map((m) =>
+    `${label} contains "${m.raw}", which isn't a valid parameter name — ` +
+    `parameter names must be lowercase letters, numbers, and underscores only (e.g. {{customer_name}}).`
+  );
+}
+
 function uniqueInOrder(items) {
   return [...new Set(items)];
 }
@@ -76,6 +107,11 @@ function minWordsRequired(paramCount) {
 // Validates one piece of template text. Returns
 // { valid, paramFormat: 'named'|'positional'|'none', params, errors }.
 function validateTemplateText(text, { label = 'Body' } = {}) {
+  const malformed = findMalformedPlaceholders(text);
+  if (malformed.length > 0) {
+    return { valid: false, paramFormat: 'named', params: [], errors: malformedPlaceholderErrors(malformed, label) };
+  }
+
   const matches = extractPlaceholders(text);
   if (!matches.length) {
     return { valid: true, paramFormat: 'none', params: [], errors: [] };
@@ -141,6 +177,11 @@ function defaultExampleFor(paramName) {
 // only checks numbered-vs-named and the one-param cap. This is the "small
 // addition" this module's header comment anticipated.
 function validateHeaderText(text) {
+  const malformed = findMalformedPlaceholders(text);
+  if (malformed.length > 0) {
+    return { valid: false, paramFormat: 'named', params: [], errors: malformedPlaceholderErrors(malformed, 'Header') };
+  }
+
   const matches = extractPlaceholders(text);
   if (!matches.length) {
     return { valid: true, paramFormat: 'none', params: [], errors: [] };
@@ -172,6 +213,7 @@ module.exports = {
   isVariableAtStartOrEnd,
   countWords,
   minWordsRequired,
+  findMalformedPlaceholders,
   validateTemplateText,
   validateHeaderText,
   defaultExampleFor,

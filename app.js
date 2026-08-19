@@ -787,6 +787,40 @@ document.addEventListener('DOMContentLoaded', () => {
     return names;
   }
 
+  // Mirrors server/src/utils/templateParams.js's findMalformedPlaceholders —
+  // same duplication reasoning as extractTemplateParams above. Catches the
+  // trap that function alone can't: a {{...}} span whose inner content
+  // ISN'T a valid lowercase snake_case name (wrong case, a space, a symbol)
+  // silently matches nothing in extractTemplateParams, so an author who
+  // types {{Customer}} thinking they made a variable gets no sample-value
+  // prompt and, previously, no warning either — the mistake just sat there.
+  // This surfaces it live, as you type, not only on submit.
+  function findMalformedTemplateParams(text) {
+    const re = /\{\{\s*([^{}]*?)\s*\}\}/g;
+    const validName = /^[a-z0-9_]+$/;
+    const found = [];
+    let m;
+    while ((m = re.exec(text || ''))) {
+      if (!validName.test(m[1])) found.push(m[0]);
+    }
+    return found;
+  }
+
+  function updateTemplateMalformedWarning(fieldId, warningId, label) {
+    const field = document.getElementById(fieldId);
+    const warning = document.getElementById(warningId);
+    if (!field || !warning) return;
+    const malformed = findMalformedTemplateParams(field.value);
+    if (malformed.length === 0) {
+      warning.style.display = 'none';
+      warning.textContent = '';
+      return;
+    }
+    warning.style.display = '';
+    warning.textContent = `${label} contains ${malformed.join(', ')}, which isn't a valid parameter name — ` +
+      `parameter names must be lowercase letters, numbers, and underscores only (e.g. {{customer_name}}).`;
+  }
+
   function substituteTemplateParams(text, samples) {
     return (text || '').replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/g, (full, name) => {
       const val = samples[name];
@@ -965,6 +999,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('template-body-charcount').textContent = body ? `${body.length}/1024` : '';
     const footer = document.getElementById('new-template-footer').value;
     document.getElementById('template-footer-charcount').textContent = footer ? `${footer.length}/60` : '';
+    updateTemplateMalformedWarning('new-template-body', 'template-body-warning', 'Body');
+    updateTemplateMalformedWarning('new-template-header-text', 'template-header-warning', 'Header');
     updateTemplatePreview();
   }
 
@@ -976,7 +1012,10 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTemplateLanguageOptions();
   document.getElementById('new-template-category')?.addEventListener('change', updateTemplateCategoryFields);
   document.getElementById('new-template-header-type')?.addEventListener('change', updateTemplateHeaderField);
-  document.getElementById('new-template-header-text')?.addEventListener('input', updateTemplatePreview);
+  document.getElementById('new-template-header-text')?.addEventListener('input', () => {
+    updateTemplateMalformedWarning('new-template-header-text', 'template-header-warning', 'Header');
+    updateTemplatePreview();
+  });
   document.getElementById('new-template-footer')?.addEventListener('input', () => {
     const footer = document.getElementById('new-template-footer').value;
     document.getElementById('template-footer-charcount').textContent = footer ? `${footer.length}/60` : '';
@@ -987,6 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const body = document.getElementById('new-template-body').value;
     document.getElementById('template-body-charcount').textContent = `${body.length}/1024`;
     renderTemplateSampleInputs();
+    updateTemplateMalformedWarning('new-template-body', 'template-body-warning', 'Body');
     updateTemplatePreview();
   });
   document.querySelectorAll('.template-add-button-btn').forEach((btn) => {

@@ -10,6 +10,7 @@ const {
   isVariableAtStartOrEnd,
   countWords,
   minWordsRequired,
+  findMalformedPlaceholders,
   validateTemplateText,
   validateHeaderText,
   defaultExampleFor,
@@ -179,6 +180,36 @@ test('buildNamedBodyComponents: builds the send-time named-parameter shape', () 
       { type: 'text', parameter_name: 'order_number', text: '860198' },
     ],
   }]);
+});
+
+test('findMalformedPlaceholders: a capitalized name is flagged, not silently ignored', () => {
+  const found = findMalformedPlaceholders('Hi {{Customer}}, thanks for your order.');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].raw, '{{Customer}}');
+});
+
+test('findMalformedPlaceholders: a space inside braces is flagged', () => {
+  const found = findMalformedPlaceholders('Hi {{customer name}}, thanks.');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].raw, '{{customer name}}');
+});
+
+test('findMalformedPlaceholders: a valid named or numbered parameter is not flagged', () => {
+  assert.equal(findMalformedPlaceholders('Hi {{customer_name}}, order shipped.').length, 0);
+  assert.equal(findMalformedPlaceholders('Hi {{1}}, order shipped.').length, 0);
+});
+
+test('validateTemplateText: a capitalized parameter name is rejected with a specific message, not silently accepted as literal text', () => {
+  const result = validateTemplateText('Hi {{Customer}}, your order has been shipped. Delivery tracking will be updated soon.');
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /isn't a valid parameter name/i);
+  assert.match(result.errors.join(' '), /\{\{Customer\}\}/);
+});
+
+test('validateHeaderText: a capitalized parameter name is rejected the same way', () => {
+  const result = validateHeaderText('Order #{{Number}}');
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /isn't a valid parameter name/i);
 });
 
 test('validateHeaderText: plain text with no placeholder is valid', () => {
