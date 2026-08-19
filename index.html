@@ -1234,7 +1234,7 @@
   </div>
 
   <div id="modal-create-template" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box modal-box-wide">
       <div class="modal-header">
         <h3 class="modal-title">Create Template</h3>
         <button class="close-modal-btn" data-close-modal="modal-create-template"><i data-lucide="x"></i></button>
@@ -1242,8 +1242,9 @@
       <form id="create-template-form">
         <div class="form-group">
           <label class="form-label">Template Name</label>
-          <input type="text" id="new-template-name" class="form-input" placeholder="e.g. shipping_update_v2" required />
+          <input type="text" id="new-template-name" class="form-input" placeholder="e.g. shipping_update_v2" pattern="[a-z0-9_]+" title="Lowercase letters, numbers, and underscores only" required />
         </div>
+
         <div class="form-group">
           <label class="form-label">Category</label>
           <select id="new-template-category" class="form-input">
@@ -1251,11 +1252,74 @@
             <option value="Marketing">Marketing</option>
             <option value="Authentication">Authentication</option>
           </select>
+          <div class="form-hint">Utility ₹0.1150/msg &middot; Marketing ₹0.8631/msg (7.5&times; more expensive, and harder to get approved) &middot; Authentication billed separately</div>
         </div>
+
         <div class="form-group">
-          <label class="form-label">Message Body</label>
-          <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" placeholder="Hi {{customer_name}}, ..." required></textarea>
+          <label class="form-label">Language</label>
+          <select id="new-template-language" class="form-input"></select>
         </div>
+
+        <div id="template-fields-standard">
+          <div class="form-group">
+            <label class="form-label">Header <span class="form-hint-inline">(optional)</span></label>
+            <select id="new-template-header-type" class="form-input">
+              <option value="NONE" selected>None</option>
+              <option value="TEXT">Text</option>
+              <option value="IMAGE" disabled>Image (coming soon)</option>
+              <option value="VIDEO" disabled>Video (coming soon)</option>
+              <option value="DOCUMENT" disabled>Document (coming soon)</option>
+            </select>
+            <input type="text" id="new-template-header-text" class="form-input template-conditional-field" maxlength="60" placeholder="e.g. Your order has shipped, {{customer_name}}" style="display:none; margin-top: 8px;" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Body <span id="template-body-charcount" class="form-hint-inline"></span></label>
+            <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" maxlength="1024" placeholder="Hi {{customer_name}}, ..."></textarea>
+          </div>
+
+          <div id="template-sample-values" class="form-group" style="display:none;">
+            <label class="form-label">Sample values <span class="form-hint-inline">(required — Meta rejects templates without one per parameter)</span></label>
+            <div id="template-sample-values-list"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Footer <span class="form-hint-inline">(optional)</span> <span id="template-footer-charcount" class="form-hint-inline"></span></label>
+            <input type="text" id="new-template-footer" class="form-input" maxlength="60" placeholder="e.g. Reply STOP to unsubscribe" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Buttons <span class="form-hint-inline">(optional &mdash; up to 10 quick replies, or up to 2 URL + 1 phone)</span></label>
+            <div id="template-buttons-list"></div>
+            <div class="template-button-add-row">
+              <button type="button" class="btn-secondary template-add-button-btn" data-add-button="QUICK_REPLY">+ Quick Reply</button>
+              <button type="button" class="btn-secondary template-add-button-btn" data-add-button="URL">+ URL</button>
+              <button type="button" class="btn-secondary template-add-button-btn" data-add-button="PHONE_NUMBER">+ Phone</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="template-fields-auth" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Code Expiration <span class="form-hint-inline">(minutes, optional)</span></label>
+            <input type="number" id="new-template-auth-expiration" class="form-input" min="1" max="90" placeholder="e.g. 10" />
+          </div>
+          <div class="form-group template-checkbox-row">
+            <input type="checkbox" id="new-template-auth-disclaimer" />
+            <label class="form-label" for="new-template-auth-disclaimer">Add security disclaimer ("For your security, do not share this code")</label>
+          </div>
+          <div class="form-group form-hint">
+            A single "Copy Code" button is included automatically — Meta requires exactly one. The message body is generated by Meta and can't be edited here.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Preview</label>
+          <div class="template-preview-frame">
+            <div class="msg-bubble msg-out template-preview-bubble" id="template-preview-bubble"></div>
+          </div>
+        </div>
+
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-template">Cancel</button>
           <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Submit for Approval</button>

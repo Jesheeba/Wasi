@@ -50,7 +50,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Request failed (${res.status})`);
+      const err = new Error(body.error || `Request failed (${res.status})`);
+      // The template form's error handler reads err.body.details for the
+      // specific validation reasons (numbered params, missing sample
+      // values, etc.) — this was never actually attached, so that path was
+      // silently dead code; every failure just showed the generic
+      // top-level message. Attaching it here fixes that for every caller,
+      // not just templates.
+      err.body = body;
+      throw err;
     }
     return res.status === 204 ? null : res.json();
   }
@@ -716,31 +724,310 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- Create Template Modal ---
+  // --- Create Template Modal (category-driven) ---
+  // Static reference list of Meta's documented WhatsApp template language
+  // codes — not fetched from anywhere live, this codebase has no such
+  // endpoint. English (US) is first/default, matching what the backend
+  // already defaults to (validate.js's messageTemplateCreateSchema).
+  const TEMPLATE_LANGUAGES = [
+    ['en_US', 'English (US)'], ['en_GB', 'English (UK)'], ['en', 'English'],
+    ['af', 'Afrikaans'], ['sq', 'Albanian'], ['ar', 'Arabic'], ['az', 'Azerbaijani'],
+    ['bn', 'Bengali'], ['bg', 'Bulgarian'], ['ca', 'Catalan'], ['zh_CN', 'Chinese (CHN)'],
+    ['zh_HK', 'Chinese (HKG)'], ['zh_TW', 'Chinese (TAI)'], ['hr', 'Croatian'], ['cs', 'Czech'],
+    ['da', 'Danish'], ['nl', 'Dutch'], ['et', 'Estonian'], ['fil', 'Filipino'], ['fi', 'Finnish'],
+    ['fr', 'French'], ['ka', 'Georgian'], ['de', 'German'], ['el', 'Greek'], ['gu', 'Gujarati'],
+    ['ha', 'Hausa'], ['he', 'Hebrew'], ['hi', 'Hindi'], ['hu', 'Hungarian'], ['id', 'Indonesian'],
+    ['ga', 'Irish'], ['it', 'Italian'], ['ja', 'Japanese'], ['kn', 'Kannada'], ['kk', 'Kazakh'],
+    ['ko', 'Korean'], ['lo', 'Lao'], ['lv', 'Latvian'], ['lt', 'Lithuanian'], ['mk', 'Macedonian'],
+    ['ms', 'Malay'], ['ml', 'Malayalam'], ['mr', 'Marathi'], ['nb', 'Norwegian'], ['fa', 'Persian'],
+    ['pl', 'Polish'], ['pt_BR', 'Portuguese (BR)'], ['pt_PT', 'Portuguese (POR)'], ['pa', 'Punjabi'],
+    ['ro', 'Romanian'], ['ru', 'Russian'], ['sr', 'Serbian'], ['sk', 'Slovak'], ['sl', 'Slovenian'],
+    ['es', 'Spanish'], ['es_AR', 'Spanish (ARG)'], ['es_ES', 'Spanish (SPA)'], ['es_MX', 'Spanish (MEX)'],
+    ['sw', 'Swahili'], ['sv', 'Swedish'], ['ta', 'Tamil'], ['te', 'Telugu'], ['th', 'Thai'],
+    ['tr', 'Turkish'], ['uk', 'Ukrainian'], ['ur', 'Urdu'], ['uz', 'Uzbek'], ['vi', 'Vietnamese'], ['zu', 'Zulu'],
+  ];
+
+  // Mirrors server/src/utils/templateParams.js's extractPlaceholders/regex —
+  // duplicated, not imported, since this is a no-build-step page that can't
+  // require() a Node module. Kept intentionally minimal: this only drives
+  // the sample-value inputs and the live preview, not the actual validation
+  // rules (numbered-vs-named, words ratio, start/end position) — those stay
+  // server-side, single source of truth, surfaced via the existing
+  // err.body.details toast path below.
+  function extractTemplateParams(text) {
+    const re = /\{\{\s*([a-z0-9_]+)\s*\}\}/g;
+    const names = [];
+    let m;
+    while ((m = re.exec(text || ''))) {
+      if (!names.includes(m[1])) names.push(m[1]);
+    }
+    return names;
+  }
+
+  function substituteTemplateParams(text, samples) {
+    return (text || '').replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/g, (full, name) => {
+      const val = samples[name];
+      return val && val.trim() ? val : `[${name}]`;
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function getTemplateSampleValues() {
+    const values = {};
+    document.querySelectorAll('#template-sample-values-list [data-param-name]').forEach((input) => {
+      values[input.dataset.paramName] = input.value;
+    });
+    return values;
+  }
+
+  function renderTemplateLanguageOptions() {
+    const select = document.getElementById('new-template-language');
+    if (!select || select.options.length) return;
+    select.innerHTML = TEMPLATE_LANGUAGES.map(([code, label]) =>
+      `<option value="${code}" ${code === 'en_US' ? 'selected' : ''}>${label} (${code})</option>`
+    ).join('');
+  }
+
+  function renderTemplateSampleInputs() {
+    const body = document.getElementById('new-template-body').value;
+    const params = extractTemplateParams(body);
+    const wrapper = document.getElementById('template-sample-values');
+    const container = document.getElementById('template-sample-values-list');
+    const existing = getTemplateSampleValues();
+
+    if (params.length === 0) {
+      wrapper.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+    wrapper.style.display = '';
+    container.innerHTML = params.map((name) => `
+      <div class="template-sample-row">
+        <span class="template-sample-row-label">{{${escapeHtml(name)}}}</span>
+        <input type="text" class="form-input" data-param-name="${escapeHtml(name)}" placeholder="e.g. Riyaz" value="${escapeHtml(existing[name] || '')}" />
+      </div>
+    `).join('');
+    container.querySelectorAll('[data-param-name]').forEach((input) => {
+      input.addEventListener('input', updateTemplatePreview);
+    });
+  }
+
+  // Button state lives in this array, not read back from the DOM each
+  // time — dynamically added/removed rows make DOM-as-source-of-truth
+  // fiddly, and this mirrors what actually gets submitted directly.
+  let templateButtons = [];
+
+  function templateButtonCounts() {
+    return {
+      url: templateButtons.filter((b) => b.type === 'URL').length,
+      phone: templateButtons.filter((b) => b.type === 'PHONE_NUMBER').length,
+    };
+  }
+
+  function updateTemplateAddButtonState() {
+    const counts = templateButtonCounts();
+    const urlBtn = document.querySelector('[data-add-button="URL"]');
+    const phoneBtn = document.querySelector('[data-add-button="PHONE_NUMBER"]');
+    const quickBtn = document.querySelector('[data-add-button="QUICK_REPLY"]');
+    if (urlBtn) urlBtn.disabled = counts.url >= 2;
+    if (phoneBtn) phoneBtn.disabled = counts.phone >= 1;
+    if (quickBtn) quickBtn.disabled = templateButtons.length >= 10;
+  }
+
+  function renderTemplateButtonsList() {
+    const container = document.getElementById('template-buttons-list');
+    const typeLabel = { URL: 'URL', PHONE_NUMBER: 'Phone', QUICK_REPLY: 'Quick Reply' };
+    container.innerHTML = templateButtons.map((b, i) => `
+      <div class="template-button-row">
+        <span class="template-button-row-type">${typeLabel[b.type]}</span>
+        <input type="text" class="form-input" data-button-field="text" data-index="${i}" placeholder="Button text" maxlength="25" value="${escapeHtml(b.text)}" style="flex:1;" />
+        ${b.type === 'URL' ? `<input type="text" class="form-input" data-button-field="url" data-index="${i}" placeholder="https://..." value="${escapeHtml(b.url || '')}" style="flex:1;" />` : ''}
+        ${b.type === 'PHONE_NUMBER' ? `<input type="text" class="form-input" data-button-field="phone_number" data-index="${i}" placeholder="+919092766740" value="${escapeHtml(b.phone_number || '')}" style="flex:1;" />` : ''}
+        <button type="button" class="template-row-remove-btn" data-remove-button="${i}"><i data-lucide="x"></i></button>
+      </div>
+    `).join('');
+    refreshIcons();
+
+    container.querySelectorAll('[data-button-field]').forEach((input) => {
+      input.addEventListener('input', (e) => {
+        const i = Number(e.target.dataset.index);
+        templateButtons[i][e.target.dataset.buttonField] = e.target.value;
+        updateTemplatePreview();
+      });
+    });
+    container.querySelectorAll('[data-remove-button]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const i = Number(e.currentTarget.dataset.removeButton);
+        templateButtons.splice(i, 1);
+        renderTemplateButtonsList();
+        updateTemplatePreview();
+      });
+    });
+    updateTemplateAddButtonState();
+  }
+
+  function addTemplateButton(type) {
+    const counts = templateButtonCounts();
+    if (type === 'URL' && counts.url >= 2) return;
+    if (type === 'PHONE_NUMBER' && counts.phone >= 1) return;
+    if (type === 'QUICK_REPLY' && templateButtons.length >= 10) return;
+    templateButtons.push({ type, text: '', url: '', phone_number: '' });
+    renderTemplateButtonsList();
+    updateTemplatePreview();
+  }
+
+  function updateTemplateCategoryFields() {
+    const category = document.getElementById('new-template-category').value;
+    const isAuth = category === 'Authentication';
+    document.getElementById('template-fields-standard').style.display = isAuth ? 'none' : '';
+    document.getElementById('template-fields-auth').style.display = isAuth ? '' : 'none';
+    updateTemplatePreview();
+  }
+
+  function updateTemplateHeaderField() {
+    const type = document.getElementById('new-template-header-type').value;
+    document.getElementById('new-template-header-text').style.display = type === 'TEXT' ? '' : 'none';
+    updateTemplatePreview();
+  }
+
+  // Authentication's body isn't author-written — Meta generates it (see
+  // metaClient.js's buildAuthenticationPayload) — so this preview shows
+  // representative wording, not a live substitution of anything editable.
+  function updateTemplatePreview() {
+    const bubble = document.getElementById('template-preview-bubble');
+    if (!bubble) return;
+    const category = document.getElementById('new-template-category').value;
+
+    if (category === 'Authentication') {
+      const disclaimer = document.getElementById('new-template-auth-disclaimer').checked;
+      bubble.innerHTML = `
+        <div>Your verification code is *123456*.${disclaimer ? ' For your security, do not share this code.' : ''}</div>
+        <div class="template-preview-buttons"><div class="template-preview-button">&#128203; Copy Code</div></div>
+      `;
+      return;
+    }
+
+    const samples = getTemplateSampleValues();
+    const headerType = document.getElementById('new-template-header-type').value;
+    const headerText = document.getElementById('new-template-header-text').value;
+    const body = document.getElementById('new-template-body').value;
+    const footer = document.getElementById('new-template-footer').value;
+
+    let html = '';
+    if (headerType === 'TEXT' && headerText.trim()) {
+      html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(headerText, samples))}</div>`;
+    }
+    const bodyPreview = substituteTemplateParams(body, samples).trim();
+    html += `<div>${bodyPreview ? escapeHtml(bodyPreview) : '<span style="color:var(--text-muted)">Body preview appears here</span>'}</div>`;
+    if (footer.trim()) {
+      html += `<div class="template-preview-footer">${escapeHtml(footer)}</div>`;
+    }
+    if (templateButtons.length > 0) {
+      const icon = { URL: '&#128279;', PHONE_NUMBER: '&#128222;', QUICK_REPLY: '&#8617;' };
+      html += `<div class="template-preview-buttons">${templateButtons.map((b) =>
+        `<div class="template-preview-button">${icon[b.type]} ${escapeHtml(b.text || '(button text)')}</div>`
+      ).join('')}</div>`;
+    }
+    bubble.innerHTML = html;
+  }
+
+  function syncTemplateFormUI() {
+    updateTemplateCategoryFields();
+    updateTemplateHeaderField();
+    renderTemplateSampleInputs();
+    const body = document.getElementById('new-template-body').value;
+    document.getElementById('template-body-charcount').textContent = body ? `${body.length}/1024` : '';
+    const footer = document.getElementById('new-template-footer').value;
+    document.getElementById('template-footer-charcount').textContent = footer ? `${footer.length}/60` : '';
+    updateTemplatePreview();
+  }
+
   document.getElementById('open-create-template-modal')?.addEventListener('click', () => {
     document.getElementById('modal-create-template')?.classList.add('open');
+    syncTemplateFormUI();
   });
+
+  renderTemplateLanguageOptions();
+  document.getElementById('new-template-category')?.addEventListener('change', updateTemplateCategoryFields);
+  document.getElementById('new-template-header-type')?.addEventListener('change', updateTemplateHeaderField);
+  document.getElementById('new-template-header-text')?.addEventListener('input', updateTemplatePreview);
+  document.getElementById('new-template-footer')?.addEventListener('input', () => {
+    const footer = document.getElementById('new-template-footer').value;
+    document.getElementById('template-footer-charcount').textContent = footer ? `${footer.length}/60` : '';
+    updateTemplatePreview();
+  });
+  document.getElementById('new-template-auth-disclaimer')?.addEventListener('change', updateTemplatePreview);
+  document.getElementById('new-template-body')?.addEventListener('input', () => {
+    const body = document.getElementById('new-template-body').value;
+    document.getElementById('template-body-charcount').textContent = `${body.length}/1024`;
+    renderTemplateSampleInputs();
+    updateTemplatePreview();
+  });
+  document.querySelectorAll('.template-add-button-btn').forEach((btn) => {
+    btn.addEventListener('click', () => addTemplateButton(btn.dataset.addButton));
+  });
+  syncTemplateFormUI();
 
   document.getElementById('create-template-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('new-template-name').value.trim();
     const category = document.getElementById('new-template-category').value;
-    const body = document.getElementById('new-template-body').value.trim();
-    if (!name || !body) return;
+    const language = document.getElementById('new-template-language').value;
+    if (!name) return;
+
+    const payload = { name, category, language };
+
+    if (category === 'Authentication') {
+      const expiration = document.getElementById('new-template-auth-expiration').value;
+      if (expiration) payload.codeExpirationMinutes = Number(expiration);
+      payload.addSecurityDisclaimer = document.getElementById('new-template-auth-disclaimer').checked;
+      payload.otpButtonType = 'COPY_CODE';
+    } else {
+      const body = document.getElementById('new-template-body').value.trim();
+      if (!body) return;
+      payload.body = body;
+      payload.bodyParamExamples = getTemplateSampleValues();
+
+      const headerType = document.getElementById('new-template-header-type').value;
+      if (headerType !== 'NONE') {
+        payload.header = { type: headerType, text: document.getElementById('new-template-header-text').value.trim() };
+      }
+      const footer = document.getElementById('new-template-footer').value.trim();
+      if (footer) payload.footer = footer;
+      if (templateButtons.length > 0) {
+        // Only the field relevant to each button's type — templateButtonSchema's
+        // url/phone_number are optional but, if present, non-empty (.min(1)),
+        // so sending an empty '' placeholder for the irrelevant field on every
+        // row (every button object here always carries all three properties)
+        // fails validation instead of being harmlessly ignored.
+        payload.buttons = templateButtons.map((b) => {
+          if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url };
+          if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
+          return { type: 'QUICK_REPLY', text: b.text };
+        });
+      }
+    }
 
     try {
       await authFetch('/api/templates', {
         method: 'POST',
-        body: JSON.stringify({ name, category, body })
+        body: JSON.stringify(payload)
       });
       await refreshTemplates();
       renderTemplates();
       e.target.reset();
+      templateButtons = [];
+      renderTemplateButtonsList();
+      syncTemplateFormUI();
       document.getElementById('modal-create-template')?.classList.remove('open');
     } catch (err) {
       // Named-parameter validation failures (server/src/utils/templateParams.js)
-      // come back as { error, details: [string, ...] } — surface the specific
-      // reason (e.g. "numbered parameters not allowed") rather than a generic
+      // and other structured errors come back as { error, details: [string, ...] }
+      // — surface the specific reason (e.g. "numbered parameters not allowed",
+      // "sample value required for: ...") rather than the generic top-level
       // message. (Zod's own 400s also have a `details` array, but of issue
       // objects, not strings — the typeof check below skips those.)
       const details = err.body && Array.isArray(err.body.details) && err.body.details.every((d) => typeof d === 'string')
