@@ -8,7 +8,7 @@
 // tests and one live-DB end-to-end test.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeInboundEvent, resolveInboundEdge } = require('../src/services/flowEngine');
+const { normalizeInboundEvent, resolveInboundEdge, dueEdgeType } = require('../src/services/flowEngine');
 
 // --- normalizeInboundEvent ---
 
@@ -105,4 +105,14 @@ test('resolveInboundEdge: priority order is respected among non-default edges', 
   // flowEdgesRepo.listForNode's job, resolveInboundEdge just walks in order.
   const matched = resolveInboundEdge(edges, { kind: 'text', text: 'x' });
   assert.equal(matched.id, 'e_low');
+});
+
+// --- dueEdgeType (Stage 4) ---
+
+test('dueEdgeType: a delay node fires its always edge when due', () => {
+  assert.equal(dueEdgeType('delay'), 'always');
+});
+
+test('dueEdgeType: a waiting-for-reply node fires its timeout edge when due', () => {
+  assert.equal(dueEdgeType('send_interactive_buttons'), 'timeout');
 });

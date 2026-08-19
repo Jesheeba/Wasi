@@ -31,14 +31,54 @@ const contactFlowStateRepo = require('../repositories/contactFlowStateRepo');
 const flowEventsRepo = require('../repositories/flowEventsRepo');
 const contactsRepo = require('../repositories/contactsRepo');
 const consentRepo = require('../repositories/consentRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const messagingService = require('../services/messagingService');
+const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
 
 // Node types that don't wait for a reply — after executing, the engine
 // follows the node's single 'always' edge automatically, in the same pass
-// (no separate inbound event needed to continue). Anything not in this set
-// (currently just send_interactive_buttons; delay joins it in Stage 4)
-// pauses here and persists that as the contact's resting state.
-const AUTO_ADVANCE_TYPES = new Set(['send_text', 'action']);
+// (no separate inbound event needed to continue). send_template joins
+// send_text/action here rather than waiting: this engine doesn't route on
+// template QUICK_REPLY button clicks (a separate webhook shape from
+// send_interactive_buttons' free-form buttons — scoped out, see the plan's
+// "needs its own spike" note on template button-edge routing), so a
+// send_template node has nothing to wait for. Anything not in this set
+// pauses here and persists that as the contact's resting state — either
+// waiting for a reply (send_interactive_buttons) or waiting for time to
+// pass (delay, handled as its own case in runToRest since it always pauses
+// unconditionally, never advances in the same pass).
+const AUTO_ADVANCE_TYPES = new Set(['send_text', 'send_template', 'action']);
+
+// Which flow_edges.condition_type values make sense on an edge FROM a given
+// node type — the write-time half of the guarantee flowEdgesRepo's ordering
+// is the runtime half of (see its module comment). A 'keyword' edge hanging
+// off a 'delay' node can never evaluate (delay never sees an inbound
+// event), same for 'button_id'/'default' off any auto-advance type; 'end'
+// takes no edges at all since it's terminal. Used by
+// routes/automationFlows.js to reject a bad edge at creation, not by the
+// engine itself (runToRest/resolveInboundEdge already only ever look for
+// the specific edge type that's meaningful for the node they're at).
+const LEGAL_EDGE_TYPES_BY_NODE_TYPE = {
+  send_interactive_buttons: new Set(['button_id', 'keyword', 'default', 'timeout']),
+  delay: new Set(['always']),
+  send_text: new Set(['always']),
+  send_template: new Set(['always']),
+  action: new Set(['always']),
+  end: new Set([]),
+};
+
+function isEdgeTypeLegalForNode(nodeType, conditionType) {
+  return (LEGAL_EDGE_TYPES_BY_NODE_TYPE[nodeType] || new Set()).has(conditionType);
+}
+
+// A node that pauses "is due" for one of two reasons, each following a
+// different edge type — delay always fires its single unconditional edge;
+// a waiting-for-reply node (send_interactive_buttons) fires its 'timeout'
+// edge if the reply never came. Pure, so it's unit-testable
+// (server/test/flowEngine.test.js) without needing a real due contact_flow_state row.
+function dueEdgeType(nodeType) {
+  return nodeType === 'delay' ? 'always' : 'timeout';
+}
 
 // Normalizes a raw Meta inbound message (plus the display body
 // routes/metaWebhook.js already derived from it) into what edge-matching
@@ -102,12 +142,11 @@ async function executeAction(db, clientId, contact, node) {
   }
 }
 
-// Sends/acts for one node. send_template and delay are valid flow_nodes.type
-// values (migration 023) but have no case here yet — Stage 5 adds
-// send_template, Stage 4 adds delay's due_at handling in runToRest below.
-// Until then, a node of either type throws here, which runToRest catches
-// and turns into a 'stalled' state — a safe failure (nothing sent, nothing
-// silently skipped), not a crash, if one is ever created out of sequence.
+// Sends/acts for one node. send_template is a valid flow_nodes.type value
+// (migration 023) but has no case here yet — Stage 5 adds it. Until then, a
+// a node type this engine doesn't know about throws here, which runToRest
+// catches and turns into a 'stalled' state — a safe failure (nothing sent,
+// nothing silently skipped), not a crash.
 async function executeNode(db, clientId, contact, chat, node) {
   if (node.type === 'send_text') {
     await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: node.config.body });
@@ -117,13 +156,38 @@ async function executeNode(db, clientId, contact, chat, node) {
       body: node.config.body,
       buttons: node.config.buttons,
     });
+  } else if (node.type === 'send_template') {
+    await executeSendTemplate(db, clientId, contact, chat, node);
   } else if (node.type === 'action') {
     await executeAction(db, clientId, contact, node);
-  } else if (node.type === 'end') {
-    // no-op — runToRest treats reaching 'end' as completion
+  } else if (node.type === 'delay' || node.type === 'end') {
+    // no-op — delay has nothing to send, it just pauses (runToRest sets
+    // due_at); 'end' is terminal, runToRest treats reaching it as completion
   } else {
     throw new Error(`flowEngine: node type "${node.type}" is not yet supported by the engine`);
   }
+}
+
+// Same param-mapping shape and resolution as broadcasts (build plan
+// priority fix) — node.config.paramMappings is { [paramName]: {source,
+// field, value} }, reusing utils/templateParamMapping.js rather than a
+// second implementation. Unlike broadcasts, there's no dedicated
+// creation-time coverage check yet (Stage 6's editor is what should enforce
+// every {{param}} has a mapping before a flow can go 'active') — an
+// unmapped param here just resolves to '' via resolveParamValues' own
+// fallback and sends with it blank, which Meta will likely reject; that
+// surfaces as a normal 'stalled' state via runToRest's catch, not a crash.
+async function executeSendTemplate(db, clientId, contact, chat, node) {
+  const template = await messageTemplatesRepo.findByNameAndClient(db, clientId, node.config.templateName);
+  const templateComponents = template
+    ? buildTemplateComponents(template, resolveParamValues(node.config.paramMappings, contact))
+    : [];
+  await messagingService.sendChatMessage(db, clientId, chat, {
+    type: 'template',
+    templateName: node.config.templateName,
+    templateLanguage: node.config.templateLanguage || 'en_US',
+    templateComponents,
+  });
 }
 
 // Executes nodes starting at startNodeId, following 'always' edges
@@ -155,10 +219,28 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId) {
     if (node.type === 'end') {
       return { nodeId: node.id, status: 'completed' };
     }
+    if (node.type === 'delay') {
+      // Always pauses unconditionally — never advances in this same pass,
+      // unlike AUTO_ADVANCE_TYPES. flowRunner.js's tick is the only thing
+      // that ever moves a contact off a delay node, once due_at arrives.
+      const minutes = Number(node.config?.duration_minutes);
+      const dueAt = new Date(Date.now() + (Number.isFinite(minutes) ? minutes : 0) * 60_000).toISOString();
+      return { nodeId: node.id, status: 'active', dueAt };
+    }
     if (!AUTO_ADVANCE_TYPES.has(node.type)) {
-      // Waits for a reply (send_interactive_buttons today; delay in Stage 4
-      // will also land here with a due_at instead of waiting_since).
-      return { nodeId: node.id, status: 'active', waitingSince: new Date().toISOString() };
+      // Waits for a reply (send_interactive_buttons). Also sets due_at if
+      // this node defines a 'timeout' edge and a timeout_minutes config —
+      // both are required together; a timeout edge with no duration (or
+      // vice versa) is treated as "no timeout configured" rather than
+      // guessing a default, since Stage 6's editor is what should enforce
+      // they're set together at save time.
+      const edges = await flowEdgesRepo.listForNode(db, clientId, node.id);
+      const timeoutEdge = edges.find((e) => e.condition_type === 'timeout');
+      const timeoutMinutes = Number(node.config?.timeout_minutes);
+      const dueAt = timeoutEdge && Number.isFinite(timeoutMinutes)
+        ? new Date(Date.now() + timeoutMinutes * 60_000).toISOString()
+        : null;
+      return { nodeId: node.id, status: 'active', waitingSince: new Date().toISOString(), dueAt };
     }
 
     const edges = await flowEdgesRepo.listForNode(db, clientId, node.id);
@@ -214,6 +296,41 @@ async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge)
   }
 }
 
+// Called from flowRunner.js's tick for a contact_flow_state row it has
+// already atomically claimed into 'processing' (see contactFlowStateRepo's
+// claimDueBatch) — the row being due means the contact's CURRENT node has
+// timed out (delay's unconditional wait elapsed, or a
+// send_interactive_buttons reply never arrived). dueEdgeType picks which
+// edge type means "time's up" for this node; runToRest then executes
+// forward from there exactly like a webhook-driven advance would. Returns
+// the resting state for flowRunner to finalize via
+// contactFlowStateRepo.finalizeProcessing — this function never writes to
+// contact_flow_state itself, same separation runToRest's own callers use.
+async function advanceDueNode(db, clientId, contact, chat, flowState) {
+  const node = await flowNodesRepo.findById(db, clientId, flowState.current_node_id);
+  const edges = await flowEdgesRepo.listForNode(db, clientId, node.id);
+  const edge = edges.find((e) => e.condition_type === dueEdgeType(node.type));
+
+  if (!edge) {
+    // No edge to advance along — shouldn't happen given Stage 6's
+    // write-time validation (a delay node always needs an 'always' edge; a
+    // node with a timeout_minutes config always needs a 'timeout' edge),
+    // but this row was already claimed into 'processing' and must be
+    // resolved one way or another, not left to be reclaimed forever.
+    await flowEventsRepo.record(db, {
+      clientId, contactId: contact.id, flowId: flowState.flow_id, nodeId: node.id,
+      eventType: 'stalled', detail: { error: `no ${dueEdgeType(node.type)} edge configured on this node` },
+    });
+    return { nodeId: node.id, status: 'stalled' };
+  }
+
+  await flowEventsRepo.record(db, {
+    clientId, contactId: contact.id, flowId: flowState.flow_id, nodeId: node.id,
+    eventType: 'timed_out', detail: { edgeId: edge.id, conditionType: edge.condition_type },
+  });
+  return runToRest(db, clientId, contact, chat, flowState.flow_id, edge.to_node_id);
+}
+
 // Called from routes/metaWebhook.js in place of the previous direct
 // automationEngine.evaluate() call. `contact` and `chat` are the rows
 // metaWebhook.js already resolved for this inbound message; `msg` is the
@@ -243,4 +360,7 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
   await automationEngine.evaluate(db, clientId, chat, inboundBody, contact);
 }
 
-module.exports = { evaluate, startFlow, normalizeInboundEvent, resolveInboundEdge };
+module.exports = {
+  evaluate, startFlow, advanceDueNode,
+  normalizeInboundEvent, resolveInboundEdge, dueEdgeType, isEdgeTypeLegalForNode,
+};

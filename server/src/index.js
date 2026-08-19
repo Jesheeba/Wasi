@@ -3,6 +3,7 @@ const { createApp } = require('./app');
 const broadcastRunner = require('./services/broadcastRunner');
 const forwardRunner = require('./services/forwardRunner');
 const alertRunner = require('./services/alertRunner');
+const flowRunner = require('./services/flowRunner');
 
 // Defense-in-depth, not a replacement for fixing specific gaps (see
 // db/pool.js and broadcastRunner.js's own listeners for the two confirmed
@@ -39,4 +40,5 @@ app.listen(port, () => {
   broadcastRunner.start();
   forwardRunner.start();
   alertRunner.start();
+  flowRunner.start();
 });
