@@ -147,6 +147,16 @@ router.post('/admin-users', asyncHandler(async (req, res) => {
   const { name, email, password, role } = schema.parse(req.body);
   const password_hash = await hashPassword(password);
   const admin = await adminUsersRepo.create({ name, email, role, password_hash });
+  // Creating an admin account grants durable, high-privilege access — this is
+  // exactly the action that must be traceable after the fact (see migration
+  // 021_audit_log_actor_ip.js's module comment for why actor_ip exists at all).
+  await auditLogRepo.record({
+    actor_type: 'admin',
+    actor_id: req.adminId,
+    action: 'admin_user_created',
+    target: `${admin.id}: ${email} (${role})`,
+    actor_ip: req.ip,
+  });
   const loginUrl = `<a href="${process.env.APP_URL || 'http://localhost:3000'}/admin/index.html">${process.env.APP_URL || 'http://localhost:3000'}/admin</a>`;
   await sendEmail({
     to: email,

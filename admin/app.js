@@ -1341,7 +1341,7 @@ function renderSettings(settings) {
 async function loadAuditLog(clientId) {
   setInlineError('audit-error', null);
   const tbody = document.getElementById('audit-table-body');
-  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">Loading…</td></tr>';
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
 
   const path = clientId
     ? `/api/admin/audit-log?client_id=${encodeURIComponent(clientId)}`
@@ -1361,7 +1361,7 @@ async function loadAuditLog(clientId) {
 function renderAuditTable(rows) {
   const tbody = document.getElementById('audit-table-body');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">No audit log entries found.</td></tr>';
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">No audit log entries found.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((a) => `
@@ -1370,6 +1370,7 @@ function renderAuditTable(rows) {
       <td style="font-family:monospace; font-size:0.78rem;">${escapeHtml(a.actor_id || '—')}</td>
       <td>${escapeHtml(a.action)}</td>
       <td>${escapeHtml(a.target || '—')}</td>
+      <td style="font-family:monospace; font-size:0.78rem;">${escapeHtml(a.actor_ip || '—')}</td>
       <td>${formatDateTime(a.created_at)}</td>
     </tr>
   `).join('');

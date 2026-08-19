@@ -1,9 +1,9 @@
 const { pool } = require('../db/pool');
 
-async function record({ actor_type, actor_id, action, target }) {
+async function record({ actor_type, actor_id, action, target, actor_ip }) {
   await pool.query(
-    `insert into audit_log (actor_type, actor_id, action, target) values ($1, $2, $3, $4)`,
-    [actor_type, actor_id || null, action, target || null]
+    `insert into audit_log (actor_type, actor_id, action, target, actor_ip) values ($1, $2, $3, $4, $5)`,
+    [actor_type, actor_id || null, action, target || null, actor_ip || null]
   );
 }
 
