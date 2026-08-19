@@ -123,6 +123,34 @@ async function sendTextMessage(phoneNumberId, accessToken, toPhone, body) {
   return data.messages?.[0]?.id;
 }
 
+// Free-form interactive reply buttons — like sendTextMessage, only
+// deliverable inside the 24h customer service window (no template approval
+// needed, but same window constraint). Meta caps free-form button messages
+// at 3 buttons, 20 chars each — enforced by the caller (flow engine), not
+// here, matching how sendTextMessage doesn't re-validate body length either.
+// `buttons` is [{ id, title }]; `id` is what comes back in the webhook's
+// interactive.button_reply.id on click — this is the value flow branching
+// matches against, never the (editable) title.
+async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bodyText, buttons }) {
+  const data = await graphFetch(`/${phoneNumberId}/messages`, {
+    method: 'POST',
+    accessToken,
+    body: {
+      messaging_product: 'whatsapp',
+      to: toPhone,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: bodyText },
+        action: {
+          buttons: buttons.map((b) => ({ type: 'reply', reply: { id: b.id, title: b.title } })),
+        },
+      },
+    },
+  });
+  return data.messages?.[0]?.id;
+}
+
 // Builds the `components` array for sending a template whose BODY uses
 // named parameters — `paramValues` is { [param_name]: value }. Unlike the
 // old positional shape (an ordered array), each object here carries its own
@@ -378,6 +406,7 @@ module.exports = {
   registerPhoneNumber,
   getPhoneNumberDetails,
   sendTextMessage,
+  sendInteractiveMessage,
   sendTemplateMessage,
   buildNamedBodyComponents,
   buildTemplateCreatePayload,

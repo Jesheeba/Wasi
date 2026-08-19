@@ -105,7 +105,29 @@ async function handleInboundMessages(waba, value) {
   for (const msg of value.messages || []) {
     const phone = msg.from;
     const name = contactInfo?.profile?.name || phone;
-    const body = msg.text?.body || `[${msg.type}]`; // MVP: non-text types render as a type tag, not fetched/decoded
+    // Free-form interactive button replies (see metaClient.sendInteractiveMessage)
+    // come back as msg.interactive.button_reply.{id,title} — title is what a
+    // human reads in the chat; id is the stable value the flow engine
+    // branches on (routes/flowEngine.js), never re-derived from title here.
+    const buttonReply = msg.interactive?.button_reply;
+    const body = msg.text?.body || buttonReply?.title || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+
+    // Capture-and-verify: interactive.button_reply's exact shape (id/title
+    // field names, whether other fields are present) was inferred from
+    // Meta's docs, not confirmed against a live payload the way
+    // messages/statuses now have been (see this file's other
+    // "not doc-confirmed" comments for the established pattern). Recorded
+    // unconditionally so the real shape can be checked via audit_log
+    // without VPS log access, same reasoning as handleAccountUpdate's
+    // restriction_info capture below.
+    if (msg.type === 'interactive') {
+      await auditLogRepo.record({
+        actor_type: 'meta_webhook',
+        actor_id: null,
+        action: 'interactive_message_received',
+        target: `${phone}: ${JSON.stringify(msg.interactive).slice(0, 500)}`,
+      });
+    }
 
     const contact = await contactsRepo.upsertByPhone(pool, clientId, { phone, name, wa_id: phone });
     const chat = await chatsRepo.findOrCreateByContact(pool, clientId, contact);
