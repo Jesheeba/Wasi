@@ -6,11 +6,28 @@ const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { messageTemplateCreateSchema } = require('../utils/validate');
 const { validateTemplateText, validateHeaderText } = require('../utils/templateParams');
+const templateSyncService = require('../services/templateSyncService');
 
 const router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
+}));
+
+// Manual "Sync" button on the templates page — reconciles against Meta's
+// real template list on demand, not just automatically once after
+// Embedded Signup (onboarding.js). Returns counts rather than the app
+// silently re-fetching, so the UI can show what actually changed.
+router.post('/sync', asyncHandler(async (req, res) => {
+  try {
+    const result = await templateSyncService.syncTemplates(req.db, req.clientId);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof templateSyncService.TemplateSyncError) {
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
+    return res.status(502).json({ error: 'Template sync failed', detail: err.message });
+  }
 }));
 
 // Submits to Meta for real approval when a WABA is connected — approval
@@ -57,6 +74,7 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 
   const waba = await wabasRepo.findByClientId(req.clientId);
+  let metaTemplateId = null;
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
     // Decryption failure is a distinct error class from Meta rejecting the
@@ -76,7 +94,11 @@ router.post('/', asyncHandler(async (req, res) => {
     }
 
     try {
-      await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
+      // { id, status, category } — capture the id now (templateSyncService.js's
+      // reconcile matches by it going forward) rather than leaving it to the
+      // next sync to backfill by name.
+      const metaResponse = await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
+      metaTemplateId = metaResponse.id;
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
         return res.status(400).json({ error: 'Invalid template', details: err.errors });
@@ -85,7 +107,12 @@ router.post('/', asyncHandler(async (req, res) => {
     }
   }
 
-  const template = await messageTemplatesRepo.create(req.db, { client_id: req.clientId, ...data, status: 'pending' });
+  const template = await messageTemplatesRepo.create(req.db, {
+    client_id: req.clientId,
+    ...data,
+    status: 'pending',
+    meta_template_id: metaTemplateId,
+  });
   res.status(201).json(template);
 }));
 

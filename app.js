@@ -669,6 +669,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const rejectionNote = status === 'rejected' && t.rejection_reason
         ? `<p class="template-rejection-reason">${escapeHtml(t.rejection_reason)}</p>`
         : '';
+      // orphaned_at: this row was previously confirmed to exist on Meta
+      // (has a meta_template_id) but the last sync didn't find it there
+      // anymore — most likely deleted directly in Business Manager. Never
+      // deleted locally (see templateSyncService.js) — surfaced instead,
+      // so it doesn't just silently vanish from view with no explanation.
+      const orphanedNote = t.orphaned_at
+        ? `<p class="template-rejection-reason">Not found on Meta as of the last sync — may have been deleted in WhatsApp Manager.</p>`
+        : '';
 
       return `
         <div class="template-card">
@@ -679,6 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${bodyPreview}</p>
             ${rejectionNote}
+            ${orphanedNote}
           </div>
           <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${escapeHtml(t.category)}</div>
         </div>
@@ -744,6 +753,36 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       showToast(err.message);
+    }
+  });
+
+  // --- Sync from Meta ---
+  // Manual counterpart to the automatic sync that runs once right after
+  // Embedded Signup (server/src/routes/onboarding.js) — for templates
+  // approved/created on Meta's side after that point, or if the automatic
+  // one failed silently (it's best-effort there so a Meta hiccup doesn't
+  // fail the whole connect flow). Returns counts rather than a silent
+  // refresh, so a client can actually see that something happened.
+  document.getElementById('sync-templates-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Syncing…';
+    try {
+      const result = await authFetch('/api/templates/sync', { method: 'POST' });
+      await refreshTemplates();
+      renderTemplates();
+      const parts = [];
+      if (result.inserted) parts.push(`${result.inserted} new`);
+      if (result.updated) parts.push(`${result.updated} updated`);
+      if (result.orphaned) parts.push(`${result.orphaned} no longer on Meta`);
+      showToast(parts.length ? `Synced: ${parts.join(', ')}.` : 'Synced — no changes.');
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+      refreshIcons();
     }
   });
 

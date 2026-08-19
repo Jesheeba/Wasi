@@ -274,6 +274,103 @@ async function createMessageTemplate(wabaId, accessToken, templateData) {
   return data; // { id, status, category }
 }
 
+// Fetches every template on a WABA, not just the first page — Meta
+// paginates this endpoint, and a client with 30+ templates would silently
+// lose the tail on a naive single fetch (see services/templateSyncService.js).
+// paging.next is a full URL but, confirmed against a real response, does
+// NOT carry access_token — re-appended on every page, not just the first.
+// MAX_TEMPLATE_PAGES is a safety backstop against a malformed/looping
+// paging.next, not a real-world cap (50 pages is thousands of templates).
+const LIST_TEMPLATES_FIELDS = 'id,name,status,category,language,components,rejected_reason';
+const MAX_TEMPLATE_PAGES = 50;
+
+async function listTemplates(wabaId, accessToken) {
+  const all = [];
+  let url = new URL(`${GRAPH_BASE}/${wabaId}/message_templates`);
+  url.searchParams.set('fields', LIST_TEMPLATES_FIELDS);
+  url.searchParams.set('access_token', accessToken);
+
+  for (let page = 0; page < MAX_TEMPLATE_PAGES; page++) {
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = data?.error?.message || `Meta Graph API error (${res.status})`;
+      const error = new Error(message);
+      error.metaError = data?.error || null;
+      throw error;
+    }
+    all.push(...(data.data || []));
+    if (!data.paging?.next) return all;
+    url = new URL(data.paging.next);
+    if (!url.searchParams.get('access_token')) url.searchParams.set('access_token', accessToken);
+  }
+  console.error(
+    `metaClient.listTemplates: hit the ${MAX_TEMPLATE_PAGES}-page safety cap for WABA ${wabaId} — ` +
+    `paging.next kept returning more pages than expected; returning what was fetched so far, not looping forever.`
+  );
+  return all;
+}
+
+// Inverse of buildUtilityMarketingPayload's component construction — turns
+// Meta's real `components` array (as returned by listTemplates) into this
+// app's local column shape. Deliberately permissive, unlike the authoring
+// path: a template synced FROM Meta was already accepted by Meta, so this
+// must never throw or reject it — not on numbered {{1}} parameters (older
+// templates on a client's WABA will have them; stored as-is, never
+// converted or rejected the way authoring through this app's own form
+// would be), and not on a component with no `example` at all (a template
+// with no variables legitimately has none).
+function parseTemplateComponents(components) {
+  const list = Array.isArray(components) ? components : [];
+  const bodyComponent = list.find((c) => c.type === 'BODY');
+  const headerComponent = list.find((c) => c.type === 'HEADER');
+  const footerComponent = list.find((c) => c.type === 'FOOTER');
+  const buttonsComponent = list.find((c) => c.type === 'BUTTONS');
+
+  const bodyParamExamples = {};
+  const namedParams = bodyComponent?.example?.body_text_named_params;
+  const positionalParams = bodyComponent?.example?.body_text;
+  if (Array.isArray(namedParams)) {
+    for (const p of namedParams) {
+      if (p?.param_name) bodyParamExamples[p.param_name] = p.example;
+    }
+  } else if (Array.isArray(positionalParams) && Array.isArray(positionalParams[0])) {
+    // Positional/numbered-style example ({{1}}, {{2}}, ...): Meta returns
+    // example.body_text as [["value1", "value2"]], lined up with body
+    // order, not param names — keyed by position (matching the {{N}}
+    // numbering in the body text itself) since there's no name to key by.
+    positionalParams[0].forEach((example, i) => {
+      bodyParamExamples[String(i + 1)] = example;
+    });
+  }
+
+  let headerType = 'NONE';
+  let headerContent = null;
+  if (headerComponent) {
+    headerType = headerComponent.format || 'TEXT';
+    headerContent = headerType === 'TEXT' ? (headerComponent.text || null) : null;
+  }
+
+  let buttons = null;
+  if (buttonsComponent?.buttons?.length) {
+    buttons = buttonsComponent.buttons.map((b) => ({
+      type: b.type,
+      text: b.text || null,
+      url: b.url || null,
+      phone_number: b.phone_number || null,
+    }));
+  }
+
+  return {
+    body: bodyComponent?.text || null,
+    bodyParamExamples: Object.keys(bodyParamExamples).length > 0 ? bodyParamExamples : null,
+    headerType,
+    headerContent,
+    footerText: footerComponent?.text || null,
+    buttons,
+  };
+}
+
 module.exports = {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
@@ -285,5 +382,7 @@ module.exports = {
   buildNamedBodyComponents,
   buildTemplateCreatePayload,
   createMessageTemplate,
+  listTemplates,
+  parseTemplateComponents,
   TemplateValidationError,
 };

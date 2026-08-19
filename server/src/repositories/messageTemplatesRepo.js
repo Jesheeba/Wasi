@@ -26,6 +26,7 @@ async function create(db, {
   client_id, name, category, status, body,
   language, header, footer, buttons, bodyParamExamples,
   codeExpirationMinutes, addSecurityDisclaimer, otpButtonType,
+  meta_template_id,
 }) {
   const authOptions = category === 'Authentication'
     ? { codeExpirationMinutes, addSecurityDisclaimer, otpButtonType }
@@ -33,9 +34,10 @@ async function create(db, {
   const { rows } = await db.query(
     `insert into message_templates (
        client_id, name, category, status, body, language,
-       header_type, header_content, footer_text, buttons, body_param_examples, auth_options
+       header_type, header_content, footer_text, buttons, body_param_examples, auth_options,
+       meta_template_id
      )
-     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12)
+     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12, $13)
      returning *`,
     [
       client_id, name, category, status, body || null, language,
@@ -43,6 +45,7 @@ async function create(db, {
       buttons ? JSON.stringify(buttons) : null,
       bodyParamExamples ? JSON.stringify(bodyParamExamples) : null,
       authOptions ? JSON.stringify(authOptions) : null,
+      meta_template_id || null,
     ]
   );
   return rows[0];
@@ -74,4 +77,73 @@ async function updateStatus(db, id, status) {
   return rows[0] || null;
 }
 
-module.exports = { listByClientId, create, listAll, updateStatus, findByNameAndClient };
+// --- Template sync (services/templateSyncService.js) ---
+
+// A template found on Meta with no local row at all — full reconstruction
+// from Meta's own data, since there's nothing local to preserve.
+async function createFromMetaSync(db, {
+  client_id, meta_template_id, name, category, status, language, rejection_reason,
+  body, bodyParamExamples, headerType, headerContent, footerText, buttons,
+}) {
+  const { rows } = await db.query(
+    `insert into message_templates (
+       client_id, meta_template_id, name, category, status, language, rejection_reason,
+       body, body_param_examples, header_type, header_content, footer_text, buttons
+     )
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     returning *`,
+    [
+      client_id, meta_template_id, name, category, status, language || 'en_US', rejection_reason || null,
+      body || null,
+      bodyParamExamples ? JSON.stringify(bodyParamExamples) : null,
+      headerType && headerType !== 'NONE' ? headerType : null,
+      headerContent || null,
+      footerText || null,
+      buttons ? JSON.stringify(buttons) : null,
+    ]
+  );
+  return rows[0];
+}
+
+// A template matched to an existing local row (by meta_template_id or,
+// for legacy/backfill rows, by name) — only the fields that can drift on
+// Meta's side get refreshed; content fields (body/header/footer/buttons)
+// are left as this app already has them. meta_template_id backfills via
+// COALESCE rather than overwriting, so it's a no-op once already set.
+// Clears orphaned_at unconditionally: reappearing in this sync's Meta
+// listing means it isn't missing anymore, however it got marked before.
+async function updateFromMetaSync(db, id, { status, category, rejection_reason, meta_template_id }) {
+  const { rows } = await db.query(
+    `update message_templates
+     set status = $2, category = $3, rejection_reason = $4,
+         meta_template_id = coalesce(meta_template_id, $5),
+         orphaned_at = null,
+         updated_at = now()
+     where id = $1
+     returning *`,
+    [id, status, category, rejection_reason || null, meta_template_id]
+  );
+  return rows[0] || null;
+}
+
+// Marks a local row as no longer found on Meta — never a delete. A local
+// draft never submitted (no meta_template_id) is never passed here; see
+// templateSyncService.js's reconcileTemplates for that guard.
+async function markOrphaned(db, id) {
+  const { rows } = await db.query(
+    `update message_templates set orphaned_at = now(), updated_at = now() where id = $1 returning *`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+module.exports = {
+  listByClientId,
+  create,
+  listAll,
+  updateStatus,
+  findByNameAndClient,
+  createFromMetaSync,
+  updateFromMetaSync,
+  markOrphaned,
+};

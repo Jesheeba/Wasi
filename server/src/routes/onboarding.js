@@ -2,9 +2,9 @@ const { Router } = require('express');
 const crypto = require('crypto');
 const clientsRepo = require('../repositories/clientsRepo');
 const wabasRepo = require('../repositories/wabasRepo');
-const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const metaClient = require('../utils/metaClient');
+const templateSyncService = require('../services/templateSyncService');
 const { encrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { wabaConnectSchema } = require('../utils/validate');
@@ -61,15 +61,22 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       status: 'connected',
     });
 
-    const existingTemplates = await messageTemplatesRepo.listByClientId(req.db, clientId);
-    if (existingTemplates.length === 0) {
-      await messageTemplatesRepo.create(req.db, {
-        client_id: clientId,
-        name: 'welcome_message',
-        category: 'Utility',
-        status: 'pending',
-        body: 'Hi {{1}}, thanks for connecting with us on WhatsApp! How can we help today?',
-      });
+    // Pulls in any templates that already exist on this WABA — Embedded
+    // Signup connects an EXISTING number, it doesn't provision a fresh
+    // one, so a client can easily already have approved templates on
+    // Meta the moment they connect. Best-effort: a sync failure here
+    // shouldn't fail the whole connect flow, since the WABA connection
+    // itself already succeeded — see templateSyncService.js.
+    //
+    // This replaces the old auto-created "welcome_message" stub, which
+    // used {{1}} (numbered params — this app's own validator rejects that
+    // format) and was never actually submitted to Meta at all, so every
+    // new client got a permanently pending template that went nowhere.
+    let templateSync = { inserted: 0, updated: 0, orphaned: 0 };
+    try {
+      templateSync = await templateSyncService.syncTemplates(req.db, clientId);
+    } catch (err) {
+      console.error('onboarding: template sync after connect failed (non-fatal):', err.message);
     }
 
     const client = await clientsRepo.findById(req.db, clientId);
@@ -85,7 +92,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     });
 
     const { access_token_encrypted, ...safeWaba } = waba;
-    res.json({ connected: true, waba: safeWaba });
+    res.json({ connected: true, waba: safeWaba, templateSync });
   } catch (err) {
     await wabasRepo.upsertForClient(clientId, { status: 'failed' });
     await auditLogRepo.record({

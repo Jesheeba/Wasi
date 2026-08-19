@@ -327,7 +327,10 @@
               <h1 class="page-title">WhatsApp Templates</h1>
               <p class="page-subtitle">Your Meta WhatsApp message templates and their approval status</p>
             </div>
-            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-template-modal"><i data-lucide="plus"></i> Create Template</button>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn-secondary" style="width: auto; padding: 0 18px;" id="sync-templates-btn"><i data-lucide="refresh-cw"></i> Sync from Meta</button>
+              <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-template-modal"><i data-lucide="plus"></i> Create Template</button>
+            </div>
           </div>
           <div class="table-card" style="padding: 1.5rem;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="templates-grid"></div>
@@ -1525,6 +1528,6 @@
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260819d"></script>
+  <script src="app.js?v=20260819e"></script>
 </body>
 </html>
