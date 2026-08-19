@@ -169,6 +169,24 @@ function buildNamedBodyComponents(paramValues) {
   }];
 }
 
+// Same shape as buildNamedBodyComponents, for a template's HEADER — Meta
+// caps a text header at one named parameter (see templateParams.js's
+// validateHeaderText), but this doesn't re-enforce that; it just builds
+// whatever's passed. Pass {} (or omit) for a template with no header
+// variable.
+function buildNamedHeaderComponents(paramValues) {
+  const names = Object.keys(paramValues || {});
+  if (names.length === 0) return [];
+  return [{
+    type: 'header',
+    parameters: names.map((parameter_name) => ({
+      type: 'text',
+      parameter_name,
+      text: String(paramValues[parameter_name]),
+    })),
+  }];
+}
+
 // Template messages — deliverable any time (business-initiated), required
 // outside the 24h window and for all broadcast/campaign sends. `components`
 // follows Meta's template component array shape — build it with
@@ -408,6 +426,7 @@ module.exports = {
   sendTextMessage,
   sendInteractiveMessage,
   sendTemplateMessage,
+  buildNamedHeaderComponents,
   buildNamedBodyComponents,
   buildTemplateCreatePayload,
   createMessageTemplate,

@@ -138,12 +138,18 @@ test('3. broadcastRunner\'s cross-client listing still sees broadcasts from mult
   const broadcastA = await fetch(`${baseUrl}/api/broadcasts`, {
     method: 'POST',
     headers: authed(clientA.token),
-    body: JSON.stringify({ title: `${SUITE_PREFIX}broadcast_a`, templateName: templateA.name }),
+    body: JSON.stringify({
+      title: `${SUITE_PREFIX}broadcast_a`, templateName: templateA.name,
+      paramMappings: { customer_name: { source: 'contact_field', field: 'name' } },
+    }),
   }).then((r) => r.json());
   const broadcastB = await fetch(`${baseUrl}/api/broadcasts`, {
     method: 'POST',
     headers: authed(clientB.token),
-    body: JSON.stringify({ title: `${SUITE_PREFIX}broadcast_b`, templateName: templateB.name }),
+    body: JSON.stringify({
+      title: `${SUITE_PREFIX}broadcast_b`, templateName: templateB.name,
+      paramMappings: { customer_name: { source: 'contact_field', field: 'name' } },
+    }),
   }).then((r) => r.json());
 
   // listActive/listDueScheduled are the queries broadcastRunner.tick() uses

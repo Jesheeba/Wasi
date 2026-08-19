@@ -6,8 +6,10 @@
 const { pool } = require('../db/pool');
 const broadcastsRepo = require('../repositories/broadcastsRepo');
 const broadcastRecipientsRepo = require('../repositories/broadcastRecipientsRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const messagingService = require('../services/messagingService');
+const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
 const { MessagingError } = messagingService;
 
 const TICK_MS = 5000;
@@ -25,7 +27,7 @@ async function runWithConcurrency(items, limit, worker) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
 }
 
-async function sendOneRecipient(broadcast, recipient) {
+async function sendOneRecipient(broadcast, recipient, template) {
   const contact = {
     id: recipient.contact_id,
     name: recipient.contact_name,
@@ -34,18 +36,19 @@ async function sendOneRecipient(broadcast, recipient) {
   };
   try {
     const chat = await chatsRepo.findOrCreateByContact(pool, broadcast.client_id, contact);
-    // templateComponents is always [] here — there's no per-recipient named-
-    // parameter mapping yet (which contact field fills {{customer_name}},
-    // etc.), so a broadcast template with body variables sends with them
-    // unresolved. When that mapping is built, use
-    // metaClient.buildNamedBodyComponents({ param_name: value, ... }) rather
-    // than a positional array — Meta's send API expects named parameter
-    // objects now (see server/src/utils/templateParams.js).
+    // template is null when this template has no local row (see
+    // routes/broadcasts.js's requiredParamNames comment — param validation
+    // is skipped in that case, same reasoning applies here: nothing to
+    // resolve components against, so send with none, same as before this
+    // fix for that one edge case).
+    const templateComponents = template
+      ? buildTemplateComponents(template, resolveParamValues(broadcast.param_mappings, contact))
+      : [];
     const message = await messagingService.sendChatMessage(pool, broadcast.client_id, chat, {
       type: 'template',
       templateName: broadcast.template_name,
       templateLanguage: 'en_US',
-      templateComponents: [],
+      templateComponents,
     });
     await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {
@@ -85,7 +88,11 @@ async function processBroadcast(broadcast) {
   }
 
   if (batch.length > 0) {
-    await runWithConcurrency(batch, SEND_CONCURRENCY, (recipient) => sendOneRecipient(broadcast, recipient));
+    // Fetched once per batch, not per recipient — the template row doesn't
+    // change mid-broadcast, and every recipient in this batch needs the
+    // same body/header parameter-name split (buildTemplateComponents).
+    const template = await messageTemplatesRepo.findByNameAndClient(pool, broadcast.client_id, broadcast.template_name);
+    await runWithConcurrency(batch, SEND_CONCURRENCY, (recipient) => sendOneRecipient(broadcast, recipient, template));
   }
 
   const stillPending = await broadcastRecipientsRepo.hasPending(pool, broadcast.id);

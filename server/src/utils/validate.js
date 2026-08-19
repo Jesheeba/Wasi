@@ -82,17 +82,90 @@ const wabaConnectSchema = z.object({
   phone_number_id: z.string().min(1),
 });
 
+// Where one template parameter's value comes from — 'contact_field' reads a
+// per-recipient value at send time (routes/broadcasts.js and
+// broadcastRunner.js are the two places that need to agree on the field
+// set; kept narrow to the two fields actually useful as message text,
+// rather than exposing every contacts column), 'static' is fixed once at
+// broadcast creation and used unchanged for every recipient.
+const broadcastParamMappingSchema = z.object({
+  source: z.enum(['contact_field', 'static']),
+  field: z.enum(['name', 'phone']).optional(),
+  value: z.string().optional(),
+}).superRefine((val, ctx) => {
+  if (val.source === 'contact_field' && !val.field) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "source 'contact_field' requires a field ('name' or 'phone')" });
+  }
+  if (val.source === 'static' && !val.value) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "source 'static' requires a non-empty value" });
+  }
+});
+
 const broadcastCreateSchema = z.object({
   title: z.string().min(1),
   tag_id: uuid.optional(),
   templateName: z.string().min(1),
   scheduled_date: z.string().optional(),
+  // Keyed by parameter name (e.g. "customer_name"). Coverage against the
+  // chosen template's actual {{params}} is checked in routes/broadcasts.js,
+  // not here — this schema only validates the shape of whatever mappings
+  // were supplied, since it doesn't have the template's text to check
+  // against.
+  paramMappings: z.record(z.string(), broadcastParamMappingSchema).optional(),
 });
 
+// A rule either sends free text (action) or starts a flow (flow_id) — never
+// both, never neither. Mirrors migration 023's
+// automation_rules_action_xor_flow CHECK constraint at the validation
+// layer, so a bad request 400s with a clear message instead of reaching
+// Postgres and surfacing a raw constraint-violation error.
 const automationRuleCreateSchema = z.object({
   title: z.string().min(1),
   trigger: z.string().min(1),
-  action: z.string().min(1),
+  action: z.string().min(1).optional(),
+  flow_id: uuid.optional(),
+}).superRefine((val, ctx) => {
+  if (Boolean(val.action) === Boolean(val.flow_id)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide exactly one of "action" (send free text) or "flow_id" (start a flow), not both or neither.',
+    });
+  }
+});
+
+const automationFlowCreateSchema = z.object({
+  name: z.string().min(1),
+});
+
+const automationFlowUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  entry_node_id: uuid.optional(),
+});
+
+const flowNodeCreateSchema = z.object({
+  type: z.enum(['send_text', 'send_interactive_buttons', 'send_template', 'delay', 'action', 'end']),
+  // Shape depends on `type` — validated loosely here (any object) and left
+  // to flowEngine.js's executeNode to interpret at send time (same
+  // "loosely typed, interpreted by the engine" approach automation_rules'
+  // action/trigger free-text fields already use, rather than a union
+  // schema per node type this early — Stage 6 is the first UI ever built
+  // for this, so the config shape is still likely to shift).
+  config: z.record(z.string(), z.any()).optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+});
+
+const flowNodeUpdateSchema = z.object({
+  config: z.record(z.string(), z.any()).optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+});
+
+const flowEdgeCreateSchema = z.object({
+  from_node_id: uuid,
+  to_node_id: uuid,
+  condition_type: z.enum(['always', 'button_id', 'keyword', 'default', 'timeout']),
+  condition_value: z.string().optional(),
+  priority: z.number().int().optional(),
 });
 
 const templateButtonSchema = z.object({

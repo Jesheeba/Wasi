@@ -37,15 +37,15 @@ async function findById(db, clientId, id) {
   return rows[0] || null;
 }
 
-async function create(db, clientId, { title, tag_id, template_name, scheduled_date }) {
+async function create(db, clientId, { title, tag_id, template_name, scheduled_date, param_mappings }) {
   // No scheduled_date (or one that's today/past) -> ready to send now.
   const isFuture = scheduled_date && new Date(scheduled_date) > new Date(new Date().toDateString());
   const status = isFuture ? 'Scheduled' : 'Sending';
   const { rows } = await db.query(
-    `insert into broadcasts (client_id, title, tag_id, template_name, scheduled_date, status)
-     values ($1, $2, $3, $4, $5, $6)
+    `insert into broadcasts (client_id, title, tag_id, template_name, scheduled_date, status, param_mappings)
+     values ($1, $2, $3, $4, $5, $6, $7)
      returning *`,
-    [clientId, title, tag_id || null, template_name, scheduled_date || null, status]
+    [clientId, title, tag_id || null, template_name, scheduled_date || null, status, JSON.stringify(param_mappings || {})]
   );
   return rows[0];
 }

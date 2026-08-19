@@ -218,7 +218,10 @@ test('6. broadcast skips non-opted-in recipients and reports the skipped count',
   const created = await fetch(`${baseUrl}/api/broadcasts`, {
     method: 'POST',
     headers: authed(clientToken),
-    body: JSON.stringify({ title: `${SUITE_PREFIX}broadcast_${Date.now()}`, templateName: template.name, tag_id: tag.id }),
+    body: JSON.stringify({
+      title: `${SUITE_PREFIX}broadcast_${Date.now()}`, templateName: template.name, tag_id: tag.id,
+      paramMappings: { customer_name: { source: 'contact_field', field: 'name' } },
+    }),
   }).then((r) => r.json());
 
   assert.equal(created.recipient_count, 3);
@@ -250,6 +253,25 @@ test('6. broadcast skips non-opted-in recipients and reports the skipped count',
     .then((r) => r.json())
     .then((list) => list.filter((b) => b.id === created.id));
   assert.equal(listed.skipped_consent_count, 2);
+});
+
+test('6b. creating a broadcast against a template with an unmapped parameter fails at creation, not at send', async () => {
+  const tag = await fetch(`${baseUrl}/api/tags`, {
+    method: 'POST',
+    headers: authed(clientToken),
+    body: JSON.stringify({ name: `${SUITE_PREFIX}tag_${Date.now()}`, bg: '#EEEEEE', color: '#111111' }),
+  }).then((r) => r.json());
+
+  const template = await createTemplate('Marketing');
+  const res = await fetch(`${baseUrl}/api/broadcasts`, {
+    method: 'POST',
+    headers: authed(clientToken),
+    // No paramMappings at all — template.body has {{customer_name}}.
+    body: JSON.stringify({ title: `${SUITE_PREFIX}broadcast_${Date.now()}`, templateName: template.name, tag_id: tag.id }),
+  });
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.ok(body.details.some((d) => d.includes('customer_name')), 'error must name the specific unmapped parameter');
 });
 
 test('7. creating a contact never defaults opt_in_status to opted_in', async () => {
