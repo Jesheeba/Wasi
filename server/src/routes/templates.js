@@ -59,8 +59,23 @@ router.post('/', asyncHandler(async (req, res) => {
   const waba = await wabasRepo.findByClientId(req.clientId);
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
+    // Decryption failure is a distinct error class from Meta rejecting the
+    // template — it means the request never reached Meta at all (wrong
+    // SERVER_SECRET for this row's ciphertext, or a corrupted value).
+    // Lumping it into "Meta rejected this template" is actively
+    // misleading — it sends someone hunting for a content problem that
+    // doesn't exist, when the real fix is a key/env mismatch.
+    let accessToken;
     try {
-      const accessToken = decrypt(waba.access_token_encrypted);
+      accessToken = decrypt(waba.access_token_encrypted);
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Could not decrypt this WABA\'s access token — the request never reached Meta',
+        detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token (a secret rotation, or a mismatch between local and production config).',
+      });
+    }
+
+    try {
       await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
