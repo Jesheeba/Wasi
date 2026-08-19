@@ -10,6 +10,7 @@ const { withTenantContext } = require('./middleware/tenantContext');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const adminAuthRouter = require('./routes/adminAuth');
+const superAdminAuthRouter = require('./routes/superAdminAuth');
 const clientsRouter = require('./routes/clients');
 const contactsRouter = require('./routes/contacts');
 const chatsRouter = require('./routes/chats');
@@ -74,6 +75,7 @@ function createApp() {
 
   app.use('/api/auth', authLimiter, authRouter);
   app.use('/api/admin/auth', authLimiter, adminAuthRouter);
+  app.use('/api/super-admin/auth', authLimiter, superAdminAuthRouter);
 
   // Tenant-scoped: real client JWT required. withTenantContext runs every
   // request inside its own transaction as the restricted `wasi_app` role

@@ -143,15 +143,23 @@ router.post('/admin-users', asyncHandler(async (req, res) => {
     name: z.string().min(1),
     email: z.string().email(),
     password: z.string().min(8),
-    role: z.enum(['super_admin', 'support', 'billing']),
+    // platform_admin (Phase 6) logs in at a separate route
+    // (/api/super-admin/auth/login, routes/superAdminAuth.js) with a
+    // distinct token type — creatable here like any other admin_users role,
+    // but it can never authenticate against the regular /api/admin/* routes
+    // this role check itself gates, or vice versa.
+    role: z.enum(['super_admin', 'support', 'billing', 'platform_admin']),
   });
   const { name, email, password, role } = schema.parse(req.body);
   const password_hash = await hashPassword(password);
   const admin = await adminUsersRepo.create({ name, email, role, password_hash });
+  const loginUrl = role === 'platform_admin'
+    ? `${process.env.APP_URL || 'http://localhost:3000'} (log in via POST /api/super-admin/auth/login)`
+    : `<a href="${process.env.APP_URL || 'http://localhost:3000'}/admin/index.html">${process.env.APP_URL || 'http://localhost:3000'}/admin</a>`;
   await sendEmail({
     to: email,
     subject: 'You’ve been added to Wasi CRM admin',
-    html: `<p>${name}, you now have <strong>${role}</strong> access to the Wasi CRM admin panel.</p><p>Log in at <a href="${process.env.APP_URL || 'http://localhost:3000'}/admin/index.html">${process.env.APP_URL || 'http://localhost:3000'}/admin</a> with the email/password your admin gave you.</p>`,
+    html: `<p>${name}, you now have <strong>${role}</strong> access to the Wasi CRM admin panel.</p><p>Log in at ${loginUrl} with the email/password your admin gave you.</p>`,
   });
   res.status(201).json(admin);
 }));
