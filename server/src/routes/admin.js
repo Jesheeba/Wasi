@@ -185,8 +185,10 @@ router.get('/billing/overview', asyncHandler(async (req, res) => {
 }));
 
 // --- Templates Review (spec §5 "Templates Review" row) ---
+const TEMPLATE_STATUSES = ['approved', 'pending', 'rejected', 'paused', 'disabled', 'pending_deletion', 'in_appeal'];
+
 router.get('/templates', asyncHandler(async (req, res) => {
-  const status = ['approved', 'pending', 'rejected'].includes(req.query.status) ? req.query.status : null;
+  const status = TEMPLATE_STATUSES.includes(req.query.status) ? req.query.status : null;
   res.json(await messageTemplatesRepo.listAll(pool, status));
 }));
 

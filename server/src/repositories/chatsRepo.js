@@ -120,11 +120,16 @@ async function markSent(db, clientId, messageId, metaMessageId) {
   return rows[0] || null;
 }
 
-async function markFailed(db, clientId, messageId, errorReason) {
+// metaErrorCode is Meta's numeric error code (err.metaError?.code from
+// metaClient.js's graphFetch, e.g. 190/10 for auth-class errors) — optional
+// since not every failure reaches Meta at all (a plan-limit or consent
+// rejection never makes the API call), same reasoning messagingService.js's
+// sendError.metaError already documents.
+async function markFailed(db, clientId, messageId, errorReason, metaErrorCode) {
   const { rows } = await db.query(
-    `update messages set status = 'failed', error_reason = $3
+    `update messages set status = 'failed', error_reason = $3, meta_error_code = $4
      where client_id = $1 and id = $2 returning *`,
-    [clientId, messageId, errorReason]
+    [clientId, messageId, errorReason, metaErrorCode || null]
   );
   return rows[0] || null;
 }
@@ -154,11 +159,11 @@ async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt
 // (send raced ahead of the webhook, or it's an inbound-message receipt we
 // don't track) — a no-op update is expected, not an error. Only ever called
 // from metaWebhook.js, on the privileged connection.
-async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorReason) {
+async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorReason, metaErrorCode) {
   const { rows } = await db.query(
-    `update messages set status = $3, error_reason = coalesce($4, error_reason)
+    `update messages set status = $3, error_reason = coalesce($4, error_reason), meta_error_code = coalesce($5, meta_error_code)
      where client_id = $1 and meta_message_id = $2 returning *`,
-    [clientId, metaMessageId, status, errorReason || null]
+    [clientId, metaMessageId, status, errorReason || null, metaErrorCode || null]
   );
   return rows[0] || null;
 }

@@ -113,7 +113,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, templateName, t
     await usageRepo.incrementSent(db, clientId);
     return sent;
   } catch (err) {
-    await chatsRepo.markFailed(db, clientId, message.id, err.message);
+    await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code);
     const sendError = new MessagingError(err.message, 'send_failed');
     // Carries Meta's raw error object through, if this failure came from a
     // real Graph API rejection (see metaClient.js's graphFetch) — the hub
@@ -146,7 +146,7 @@ async function retryMessage(db, clientId, chat, message) {
     const metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
     return chatsRepo.markSent(db, clientId, message.id, metaMessageId);
   } catch (err) {
-    await chatsRepo.markFailed(db, clientId, message.id, err.message);
+    await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code);
     throw new MessagingError(err.message, 'send_failed');
   }
 }

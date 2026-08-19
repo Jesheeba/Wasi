@@ -143,8 +143,8 @@ async function handleInboundMessages(waba, value) {
 // Delivery lifecycle for messages we sent: sent -> delivered -> read, or failed.
 async function handleStatuses(clientId, value) {
   for (const status of value.statuses || []) {
-    const errorReason = status.errors?.[0]?.title || null;
-    await chatsRepo.updateStatusByMetaId(pool, clientId, status.id, status.status, errorReason);
+    const error = status.errors?.[0];
+    await chatsRepo.updateStatusByMetaId(pool, clientId, status.id, status.status, error?.title || null, error?.code || null);
   }
 }
 
@@ -156,10 +156,13 @@ async function handleStatuses(clientId, value) {
 // reasoning as handleInboundMessages above.
 async function handleTemplateStatusUpdate(waba, value) {
   if (!value?.message_template_name) return false;
+  // value.reason is only present on a rejection; on any other transition
+  // (e.g. a later approval of a since-corrected template) this correctly
+  // clears a stale rejection_reason from a previous cycle.
   await pool.query(
-    `update message_templates set status = $1, updated_at = now()
-     where name = $2 and client_id = $3`,
-    [String(value.event || '').toLowerCase() || 'pending', value.message_template_name, waba.client_id]
+    `update message_templates set status = $1, rejection_reason = $2, updated_at = now()
+     where name = $3 and client_id = $4`,
+    [String(value.event || '').toLowerCase() || 'pending', value.reason || null, value.message_template_name, waba.client_id]
   );
   // A consuming app needs to know when its own template is paused/rejected
   // — it can't poll Meta itself, it only ever talks to Wasi.
@@ -169,10 +172,28 @@ async function handleTemplateStatusUpdate(waba, value) {
 
 async function handleAccountUpdate(waba, value) {
   if (!value?.phone_number) return false;
+  // restriction_info/ban_info are Meta's documented field names for this
+  // payload, but — like the phone_number_quality_update etc. fields below —
+  // haven't been confirmed against a live example the way messages/statuses
+  // have. Captured defensively (present -> stored as-is, absent -> cleared)
+  // rather than guessed at more granularly; the full raw payload also
+  // always goes to the audit log so nothing is lost if the real shape turns
+  // out to differ once a live restriction event is actually seen.
+  const restriction = value.restriction_info?.length
+    ? JSON.stringify(value.restriction_info)
+    : value.ban_info
+      ? JSON.stringify(value.ban_info)
+      : null;
   await pool.query(
-    `update wabas set quality_rating = coalesce($1, quality_rating) where id = $2`,
-    [value.quality_rating || null, waba.id]
+    `update wabas set quality_rating = coalesce($1, quality_rating), restriction_status = $2 where id = $3`,
+    [value.quality_rating || null, restriction, waba.id]
   );
+  await auditLogRepo.record({
+    actor_type: 'meta_webhook',
+    actor_id: null,
+    action: 'account_update',
+    target: `${waba.waba_id}: ${JSON.stringify(value).slice(0, 500)}`,
+  });
   // A consuming app needs to know when its own WABA is restricted — same
   // reasoning as the template-status forward above.
   await enqueueForwards(waba, 'account_update', value);
@@ -229,11 +250,17 @@ router.post('/', asyncHandler(async (req, res) => {
   // cause a non-200 response, since retrying a field we'll never process
   // just wastes Meta's retry budget for no benefit.
   let anyChangeFailed = false;
+  // Feeds meta_webhook_log below — Phase 6's "last successful webhook
+  // received per WABA" health check and the alerting engine's "sustained
+  // non-200" check both read this table, not application logs.
+  const wabaIdsTouched = new Set();
+  const failedFields = [];
 
   for (const entry of entries) {
     let waba = null;
     try {
       waba = await wabasRepo.findByWabaId(entry.id);
+      if (waba) wabaIdsTouched.add(waba.id);
     } catch (err) {
       console.error('metaWebhook: failed to resolve waba for entry', entry.id, err.message);
     }
@@ -288,6 +315,7 @@ router.post('/', asyncHandler(async (req, res) => {
         // failure shape (failed write, swallowed error, 200 returned) that
         // caused the Sirah CRM incident referenced in wasi-build-plan.md.
         anyChangeFailed = true;
+        failedFields.push(`${field}: ${err.message}`);
         // Loud and structured on purpose — grep-able as "metaWebhook FAILURE"
         // distinctly from the "unhandled payload" warning below, so this is
         // alertable later (see Phase 6 §6.1) rather than scrolling past in
@@ -315,6 +343,26 @@ router.post('/', asyncHandler(async (req, res) => {
     `metaWebhook: processed [${fieldsSeen.join(', ') || 'no changes'}] in ${durationMs.toFixed(1)}ms${budgetFlag}` +
     (anyChangeFailed ? ' — FAILED, returning 500 for Meta to retry' : '')
   );
+
+  // Persisted, not just logged — see migration 018's module comment. A
+  // failure here would be ironic (an unmonitorable monitoring write) but
+  // shouldn't fail the whole delivery, so it's caught and logged, not awaited
+  // into the main failure path.
+  try {
+    await pool.query(
+      `insert into meta_webhook_log (success, duration_ms, entries_processed, waba_ids_touched, error_summary)
+       values ($1, $2, $3, $4, $5)`,
+      [
+        !anyChangeFailed,
+        durationMs,
+        entries.length,
+        Array.from(wabaIdsTouched),
+        failedFields.length > 0 ? failedFields.join('; ').slice(0, 1000) : null,
+      ]
+    );
+  } catch (err) {
+    console.error('metaWebhook: failed to persist meta_webhook_log row (non-fatal):', err.message);
+  }
 
   res.sendStatus(anyChangeFailed ? 500 : 200);
 }));
