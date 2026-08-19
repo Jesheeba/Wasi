@@ -7,7 +7,18 @@ function notFoundHandler(req, res) {
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
   if (err instanceof ZodError) {
-    return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    // Readable strings, not raw ZodIssue objects — every other validation
+    // failure in this app returns {error, details: [string, ...]} (e.g.
+    // templateParams.js's errors), and the frontend's toast only surfaces
+    // details when every entry is a string (app.js's create-template submit
+    // handler, in particular) — issue objects silently fell back to the
+    // generic "Validation failed" with no indication of what actually
+    // failed or where.
+    const details = err.issues.map((issue) => {
+      const path = issue.path.join('.');
+      return path ? `${path}: ${issue.message}` : issue.message;
+    });
+    return res.status(400).json({ error: 'Validation failed', details });
   }
 
   if (err && err.code === '23505') {

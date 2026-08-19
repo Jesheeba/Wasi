@@ -1005,6 +1005,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.getElementById('open-create-template-modal')?.addEventListener('click', () => {
+    // Reset unconditionally on open, not just after a successful submit.
+    // templateButtons/header-type/etc. previously only got cleared by
+    // e.target.reset() in the submit success path — so Cancel, closing the
+    // modal, or a FAILED submission all left stale state (a half-added
+    // button, a header type with no text) sitting there for next time.
+    // A later, otherwise-clean attempt would then fail against fields the
+    // user never even looked at, with no way to tell why — exactly what
+    // "trying to submit and it just says Validation failed" looks like
+    // from the outside.
+    document.getElementById('create-template-form')?.reset();
+    templateButtons = [];
+    renderTemplateButtonsList();
     document.getElementById('modal-create-template')?.classList.add('open');
     syncTemplateFormUI();
   });
