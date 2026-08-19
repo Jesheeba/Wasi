@@ -11,9 +11,11 @@ const {
   countWords,
   minWordsRequired,
   validateTemplateText,
+  validateHeaderText,
   defaultExampleFor,
 } = require('../src/utils/templateParams');
 const { buildTemplateCreatePayload, buildNamedBodyComponents, TemplateValidationError } = require('../src/utils/metaClient');
+const { messageTemplateCreateSchema } = require('../src/utils/validate');
 
 test('extractPlaceholders finds every {{name}} with position info', () => {
   const matches = extractPlaceholders('Hi {{customer_name}}, order {{order_number}} shipped.');
@@ -177,6 +179,150 @@ test('buildNamedBodyComponents: builds the send-time named-parameter shape', () 
       { type: 'text', parameter_name: 'order_number', text: '860198' },
     ],
   }]);
+});
+
+test('validateHeaderText: plain text with no placeholder is valid', () => {
+  const result = validateHeaderText('Your Order Update');
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.params, []);
+});
+
+test('validateHeaderText: one named parameter is valid', () => {
+  const result = validateHeaderText('Order #{{order_number}}');
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.params, ['order_number']);
+});
+
+test('validateHeaderText: rejects more than one variable', () => {
+  const result = validateHeaderText('{{customer_name}} — order {{order_number}}');
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /at most one variable/i);
+});
+
+test('validateHeaderText: rejects numbered parameters, same as body', () => {
+  const result = validateHeaderText('Order #{{1}}');
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /numbered parameter/i);
+});
+
+test('buildTemplateCreatePayload: author-supplied bodyParamExamples wins over defaultExampleFor', () => {
+  const payload = buildTemplateCreatePayload({
+    name: 'order_status_update',
+    category: 'Utility',
+    body: 'Hi {{customer_name}}, your order has shipped.',
+    bodyParamExamples: { customer_name: 'Riyaz' },
+  });
+  assert.deepEqual(payload.components[0].example.body_text_named_params, [
+    { param_name: 'customer_name', example: 'Riyaz' },
+  ]);
+});
+
+test('buildTemplateCreatePayload: TEXT header adds a HEADER component ahead of BODY', () => {
+  const payload = buildTemplateCreatePayload({
+    name: 'order_status_update',
+    category: 'Utility',
+    body: 'Hi {{customer_name}}, your order has shipped.',
+    bodyParamExamples: { customer_name: 'Riyaz' },
+    header: { type: 'TEXT', text: 'Shipping Update' },
+  });
+  assert.equal(payload.components[0].type, 'HEADER');
+  assert.equal(payload.components[0].format, 'TEXT');
+  assert.equal(payload.components[0].text, 'Shipping Update');
+  assert.equal(payload.components[1].type, 'BODY');
+});
+
+test('buildTemplateCreatePayload: throws for a media header type — not implemented', () => {
+  assert.throws(
+    () => buildTemplateCreatePayload({
+      name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks for your order.',
+      bodyParamExamples: { customer_name: 'Riyaz' },
+      header: { type: 'IMAGE' },
+    }),
+    TemplateValidationError
+  );
+});
+
+test('buildTemplateCreatePayload: footer and buttons are appended after BODY', () => {
+  const payload = buildTemplateCreatePayload({
+    name: 'order_status_update',
+    category: 'Utility',
+    body: 'Hi {{customer_name}}, your order has shipped.',
+    bodyParamExamples: { customer_name: 'Riyaz' },
+    footer: 'Reply STOP to unsubscribe',
+    buttons: [{ type: 'URL', text: 'Track order', url: 'https://example.com/track' }],
+  });
+  const footerComponent = payload.components.find((c) => c.type === 'FOOTER');
+  const buttonsComponent = payload.components.find((c) => c.type === 'BUTTONS');
+  assert.equal(footerComponent.text, 'Reply STOP to unsubscribe');
+  assert.deepEqual(buttonsComponent.buttons, [{ type: 'URL', text: 'Track order', url: 'https://example.com/track' }]);
+});
+
+test('buildTemplateCreatePayload: Authentication category builds the fixed Meta structure, ignoring any body', () => {
+  const payload = buildTemplateCreatePayload({
+    name: 'otp_login',
+    category: 'Authentication',
+    codeExpirationMinutes: 10,
+    addSecurityDisclaimer: true,
+  });
+  assert.equal(payload.category, 'AUTHENTICATION');
+  assert.deepEqual(payload.components, [
+    { type: 'BODY', add_security_recommendation: true },
+    { type: 'FOOTER', code_expiration_minutes: 10 },
+    { type: 'BUTTONS', buttons: [{ type: 'OTP', otp_type: 'COPY_CODE' }] },
+  ]);
+});
+
+test('messageTemplateCreateSchema: Authentication rejects a supplied body/header/footer/buttons', () => {
+  const result = messageTemplateCreateSchema.safeParse({
+    name: 'otp_login',
+    category: 'Authentication',
+    body: 'Your code is {{otp_code}}.',
+  });
+  assert.equal(result.success, false);
+});
+
+test('messageTemplateCreateSchema: Utility with no body is rejected', () => {
+  const result = messageTemplateCreateSchema.safeParse({ name: 'x', category: 'Utility' });
+  assert.equal(result.success, false);
+});
+
+test('messageTemplateCreateSchema: header type is restricted to NONE/TEXT — media types rejected', () => {
+  const result = messageTemplateCreateSchema.safeParse({
+    name: 'x',
+    category: 'Utility',
+    body: 'Hi {{customer_name}}, your order has shipped.',
+    bodyParamExamples: { customer_name: 'Riyaz' },
+    header: { type: 'IMAGE' },
+  });
+  assert.equal(result.success, false);
+});
+
+test('messageTemplateCreateSchema: more than 2 URL buttons is rejected', () => {
+  const result = messageTemplateCreateSchema.safeParse({
+    name: 'x',
+    category: 'Utility',
+    body: 'Hi {{customer_name}}, your order has shipped.',
+    bodyParamExamples: { customer_name: 'Riyaz' },
+    buttons: [
+      { type: 'URL', text: 'a', url: 'https://example.com/1' },
+      { type: 'URL', text: 'b', url: 'https://example.com/2' },
+      { type: 'URL', text: 'c', url: 'https://example.com/3' },
+    ],
+  });
+  assert.equal(result.success, false);
+});
+
+test('messageTemplateCreateSchema: a numbered-param body still parses at the schema layer (rejected later by validateTemplateText, not here — see routes/templates.js)', () => {
+  // Regression guard for the bug this exact test file's PR fixed: the
+  // schema must NOT try to judge param validity itself (it can't yet tell
+  // {{1}} from a real name) or reject with a confusing "sample value
+  // required for: 1" instead of the correct "numbered parameters" error.
+  const result = messageTemplateCreateSchema.safeParse({
+    name: 'x',
+    category: 'Utility',
+    body: 'Hi {{1}}, your order has shipped.',
+  });
+  assert.equal(result.success, true);
 });
 
 test('buildNamedBodyComponents: empty/no values -> empty array, matches sendTemplateMessage default', () => {

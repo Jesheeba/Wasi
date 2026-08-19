@@ -124,10 +124,46 @@ function validateTemplateText(text, { label = 'Body' } = {}) {
 // Meta requires an example value per named parameter for template review.
 // There's no UI yet for an author to supply real examples, so this derives
 // a readable placeholder from the parameter name itself (e.g.
-// "customer_name" -> "Customer Name").
+// "customer_name" -> "Customer Name"). Used as a frontend preview
+// suggestion / fallback only — the actual submitted example now comes from
+// the author-supplied sample values (routes/templates.js), which Meta
+// requires, not just recommends.
 function defaultExampleFor(paramName) {
   const words = paramName.split('_').filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1));
   return words.length ? words.join(' ') : paramName;
+}
+
+// Header text differs from body: Meta allows at most ONE {{variable}}, not
+// several. Deliberately narrower than validateTemplateText, not a
+// header-specific superset of it — the start/end-variable rule and the
+// words-ratio rule above were both reverse-engineered specifically against
+// BODY rejections; neither has been confirmed to apply to headers, so this
+// only checks numbered-vs-named and the one-param cap. This is the "small
+// addition" this module's header comment anticipated.
+function validateHeaderText(text) {
+  const matches = extractPlaceholders(text);
+  if (!matches.length) {
+    return { valid: true, paramFormat: 'none', params: [], errors: [] };
+  }
+
+  const numericMatches = matches.filter((m) => isPurelyNumeric(m.name));
+  const namedMatches = matches.filter((m) => !isPurelyNumeric(m.name));
+  const errors = [];
+
+  if (numericMatches.length > 0) {
+    errors.push(
+      `Header uses a numbered parameter (${uniqueInOrder(numericMatches.map((m) => m.raw)).join(', ')}) — ` +
+      `Meta no longer accepts these. Use a named parameter instead, e.g. {{customer_name}}.`
+    );
+  }
+  if (matches.length > 1) {
+    errors.push(`Header can have at most one variable — found ${matches.length}.`);
+  }
+  if (errors.length > 0) {
+    return { valid: false, paramFormat: numericMatches.length ? 'positional' : 'named', params: [], errors };
+  }
+
+  return { valid: true, paramFormat: 'named', params: uniqueInOrder(namedMatches.map((m) => m.name)), errors: [] };
 }
 
 module.exports = {
@@ -137,5 +173,6 @@ module.exports = {
   countWords,
   minWordsRequired,
   validateTemplateText,
+  validateHeaderText,
   defaultExampleFor,
 };

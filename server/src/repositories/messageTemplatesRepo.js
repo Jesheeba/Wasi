@@ -17,12 +17,33 @@ async function findByNameAndClient(db, clientId, name) {
   return rows[0] || null;
 }
 
-async function create(db, { client_id, name, category, status, body }) {
+// language/header/footer/buttons/bodyParamExamples/auth fields added for
+// the template form rebuild (migration 020_template_rich_fields.js) — all
+// previously silently dropped here even when present upstream (language in
+// particular has had a DB column with a default since 006_messaging.js,
+// but nothing ever wrote a caller-chosen value into it until now).
+async function create(db, {
+  client_id, name, category, status, body,
+  language, header, footer, buttons, bodyParamExamples,
+  codeExpirationMinutes, addSecurityDisclaimer, otpButtonType,
+}) {
+  const authOptions = category === 'Authentication'
+    ? { codeExpirationMinutes, addSecurityDisclaimer, otpButtonType }
+    : null;
   const { rows } = await db.query(
-    `insert into message_templates (client_id, name, category, status, body)
-     values ($1, $2, $3, coalesce($4, 'pending'), $5)
+    `insert into message_templates (
+       client_id, name, category, status, body, language,
+       header_type, header_content, footer_text, buttons, body_param_examples, auth_options
+     )
+     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12)
      returning *`,
-    [client_id, name, category, status, body]
+    [
+      client_id, name, category, status, body || null, language,
+      header?.type || null, header?.text || null, footer || null,
+      buttons ? JSON.stringify(buttons) : null,
+      bodyParamExamples ? JSON.stringify(bodyParamExamples) : null,
+      authOptions ? JSON.stringify(authOptions) : null,
+    ]
   );
   return rows[0];
 }

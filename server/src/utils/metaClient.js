@@ -2,7 +2,7 @@
 // provisioning (spec §3). Requires a real Meta App (META_APP_ID/META_APP_SECRET) and
 // a WhatsApp product config (META_CONFIG_ID) — none of that exists in dev by default,
 // so every call here will fail with a clear error until real credentials are set.
-const { validateTemplateText, defaultExampleFor } = require('./templateParams');
+const { validateTemplateText, validateHeaderText, defaultExampleFor } = require('./templateParams');
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -163,32 +163,102 @@ async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, 
 // Builds the Meta Graph API request body for template creation — separated
 // from the actual fetch call so it's unit-testable without a real Meta App
 // (see server/test/templateParams.test.js). Throws TemplateValidationError
-// if the body fails named-parameter validation (numbered params, mixed
-// numbered/named, or a variable at the very start/end).
-function buildTemplateCreatePayload({ name, category, language = 'en_US', body }) {
-  const validation = validateTemplateText(body, { label: 'Body' });
-  if (!validation.valid) throw new TemplateValidationError(validation.errors);
+// if any piece fails validation. Category-branched: Authentication's shape
+// is fundamentally different (Meta generates the body, not the author), so
+// it's a genuinely separate builder, not a variant of the same one.
+function buildTemplateCreatePayload(templateData) {
+  if (templateData.category.toUpperCase() === 'AUTHENTICATION') {
+    return buildAuthenticationPayload(templateData);
+  }
+  return buildUtilityMarketingPayload(templateData);
+}
+
+function buildUtilityMarketingPayload({ name, category, language = 'en_US', body, bodyParamExamples, header, footer, buttons }) {
+  const bodyValidation = validateTemplateText(body, { label: 'Body' });
+  if (!bodyValidation.valid) throw new TemplateValidationError(bodyValidation.errors);
+
+  const components = [];
+
+  if (header && header.type && header.type !== 'NONE') {
+    if (header.type !== 'TEXT') {
+      // Defensive backstop — validate.js's messageTemplateCreateSchema
+      // already rejects IMAGE/VIDEO/DOCUMENT before this is ever reached;
+      // media headers need Meta's separate resumable-upload-session flow,
+      // not built (see migration 020_template_rich_fields.js's comment).
+      throw new TemplateValidationError([`Header type "${header.type}" isn't supported yet — only TEXT headers are.`]);
+    }
+    const headerValidation = validateHeaderText(header.text || '');
+    if (!headerValidation.valid) throw new TemplateValidationError(headerValidation.errors);
+    const headerComponent = { type: 'HEADER', format: 'TEXT', text: header.text };
+    if (headerValidation.params.length > 0) {
+      const paramName = headerValidation.params[0];
+      headerComponent.example = {
+        header_text_named_params: [{
+          param_name: paramName,
+          example: (bodyParamExamples && bodyParamExamples[paramName]) || defaultExampleFor(paramName),
+        }],
+      };
+    }
+    components.push(headerComponent);
+  }
 
   const bodyComponent = { type: 'BODY', text: body };
-  if (validation.params.length > 0) {
+  if (bodyValidation.params.length > 0) {
     bodyComponent.example = {
-      body_text_named_params: validation.params.map((param_name) => ({
+      body_text_named_params: bodyValidation.params.map((param_name) => ({
         param_name,
-        example: defaultExampleFor(param_name),
+        // Author-supplied sample value is now the source of truth — Meta
+        // requires a real example, not just any placeholder (validate.js's
+        // messageTemplateCreateSchema enforces one exists per parameter
+        // before this is ever reached). defaultExampleFor is only a
+        // fallback here in case that guard is ever bypassed.
+        example: (bodyParamExamples && bodyParamExamples[param_name]) || defaultExampleFor(param_name),
       })),
     };
   }
+  components.push(bodyComponent);
 
-  const payload = {
-    name,
-    category: category.toUpperCase(),
-    language,
-    components: [bodyComponent],
-  };
+  if (footer) components.push({ type: 'FOOTER', text: footer });
+
+  if (buttons && buttons.length > 0) {
+    components.push({
+      type: 'BUTTONS',
+      buttons: buttons.map((b) => {
+        if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url };
+        if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
+        return { type: 'QUICK_REPLY', text: b.text };
+      }),
+    });
+  }
+
+  const payload = { name, category: category.toUpperCase(), language, components };
   // Omitted entirely for a template with no variables — Meta defaults to
   // "positional" when absent, which is irrelevant with zero parameters.
-  if (validation.paramFormat === 'named') payload.parameter_format = 'named';
+  if (bodyValidation.paramFormat === 'named') payload.parameter_format = 'named';
   return payload;
+}
+
+// Authentication templates don't take an author-written body/header/footer
+// at all — Meta generates that text itself from these fixed options. Shape
+// per Meta's Authentication Templates docs (not doc-confirmed live the way
+// BODY's named-parameter format was — flag same as header/button shapes
+// below if Meta rejects this): BODY carries add_security_recommendation,
+// FOOTER carries code_expiration_minutes, and exactly one OTP button is
+// required. Only COPY_CODE is implemented — Meta also has ONE_TAP, not
+// built, wasn't asked for.
+function buildAuthenticationPayload({ name, language = 'en_US', codeExpirationMinutes, addSecurityDisclaimer, otpButtonType }) {
+  const components = [
+    { type: 'BODY', add_security_recommendation: Boolean(addSecurityDisclaimer) },
+  ];
+  if (codeExpirationMinutes) {
+    components.push({ type: 'FOOTER', code_expiration_minutes: codeExpirationMinutes });
+  }
+  components.push({
+    type: 'BUTTONS',
+    buttons: [{ type: 'OTP', otp_type: otpButtonType || 'COPY_CODE' }],
+  });
+
+  return { name, category: 'AUTHENTICATION', language, components };
 }
 
 // Submits a message template to Meta for approval. Approval status arrives

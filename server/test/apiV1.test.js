@@ -46,6 +46,7 @@ async function createTemplate(category, name = `${SUITE_PREFIX}template_${Date.n
       name,
       category,
       body: 'Hello {{customer_name}}, thank you so much for reaching out to us today — we truly appreciate it!',
+      bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
 }

@@ -5,7 +5,7 @@ const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { messageTemplateCreateSchema } = require('../utils/validate');
-const { validateTemplateText } = require('../utils/templateParams');
+const { validateTemplateText, validateHeaderText } = require('../utils/templateParams');
 
 const router = Router();
 
@@ -22,12 +22,38 @@ router.get('/', asyncHandler(async (req, res) => {
 router.post('/', asyncHandler(async (req, res) => {
   const data = messageTemplateCreateSchema.parse(req.body);
 
-  // Validated up front, regardless of WABA connection state, so a template
-  // using numbered {{1}}/{{2}} parameters (which Meta now rejects) never
-  // gets silently saved as 'pending' without telling the author it's broken.
-  const validation = validateTemplateText(data.body, { label: 'Body' });
-  if (!validation.valid) {
-    return res.status(400).json({ error: 'Invalid template body', details: validation.errors });
+  // Validated up front, regardless of WABA connection state, so a bad body
+  // or header never gets silently saved as 'pending' without telling the
+  // author why. Category-aware: Authentication has no author-supplied
+  // body/header (messageTemplateCreateSchema's superRefine already rejects
+  // one being present), so there's nothing here to check for it.
+  if (data.category !== 'Authentication') {
+    const bodyValidation = validateTemplateText(data.body, { label: 'Body' });
+    if (!bodyValidation.valid) {
+      return res.status(400).json({ error: 'Invalid template body', details: bodyValidation.errors });
+    }
+
+    // Sample-value coverage is checked here, not in the schema — by this
+    // point bodyValidation.params is confirmed to be well-formed named
+    // parameters (not numbered, not mixed), so "missing" can only mean an
+    // actually-missing sample, not a numbered-param body producing a
+    // confusing "sample required for: 1". See validate.js's comment on why
+    // this moved out of messageTemplateCreateSchema's superRefine.
+    const examples = data.bodyParamExamples || {};
+    const missingSamples = bodyValidation.params.filter((p) => !String(examples[p] || '').trim());
+    if (missingSamples.length > 0) {
+      return res.status(400).json({
+        error: 'Missing sample values',
+        details: [`Sample value required for: ${missingSamples.join(', ')} — Meta rejects templates without one.`],
+      });
+    }
+
+    if (data.header?.type === 'TEXT') {
+      const headerValidation = validateHeaderText(data.header.text || '');
+      if (!headerValidation.valid) {
+        return res.status(400).json({ error: 'Invalid template header', details: headerValidation.errors });
+      }
+    }
   }
 
   const waba = await wabasRepo.findByClientId(req.clientId);
@@ -38,7 +64,7 @@ router.post('/', asyncHandler(async (req, res) => {
       await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
-        return res.status(400).json({ error: 'Invalid template body', details: err.errors });
+        return res.status(400).json({ error: 'Invalid template', details: err.errors });
       }
       return res.status(502).json({ error: 'Meta rejected this template', detail: err.message });
     }

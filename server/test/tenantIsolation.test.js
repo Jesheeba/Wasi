@@ -127,12 +127,12 @@ test('3. broadcastRunner\'s cross-client listing still sees broadcasts from mult
   const templateA = await fetch(`${baseUrl}/api/templates`, {
     method: 'POST',
     headers: authed(clientA.token),
-    body: JSON.stringify({ name: `${SUITE_PREFIX}template_a_${Date.now()}`, category: 'Utility', body: 'Hi {{customer_name}}, this is a dedicated tenant isolation test template.' }),
+    body: JSON.stringify({ name: `${SUITE_PREFIX}template_a_${Date.now()}`, category: 'Utility', body: 'Hi {{customer_name}}, this is a dedicated tenant isolation test template.', bodyParamExamples: { customer_name: 'Riyaz' } }),
   }).then((r) => r.json());
   const templateB = await fetch(`${baseUrl}/api/templates`, {
     method: 'POST',
     headers: authed(clientB.token),
-    body: JSON.stringify({ name: `${SUITE_PREFIX}template_b_${Date.now()}`, category: 'Utility', body: 'Hi {{customer_name}}, this is a dedicated tenant isolation test template.' }),
+    body: JSON.stringify({ name: `${SUITE_PREFIX}template_b_${Date.now()}`, category: 'Utility', body: 'Hi {{customer_name}}, this is a dedicated tenant isolation test template.', bodyParamExamples: { customer_name: 'Riyaz' } }),
   }).then((r) => r.json());
 
   const broadcastA = await fetch(`${baseUrl}/api/broadcasts`, {

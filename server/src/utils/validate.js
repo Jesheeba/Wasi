@@ -87,10 +87,87 @@ const automationRuleCreateSchema = z.object({
   action: z.string().min(1),
 });
 
+const templateButtonSchema = z.object({
+  type: z.enum(['QUICK_REPLY', 'URL', 'PHONE_NUMBER']),
+  text: z.string().min(1).max(25),
+  url: z.string().url().optional(),
+  phone_number: z.string().min(1).optional(),
+});
+
+// Category-driven: Authentication's shape is fundamentally different from
+// Utility/Marketing's (Meta generates that body text, not the author — see
+// metaClient.js's buildTemplateCreatePayload), so this can't be one flat
+// object with everything optional; the superRefine below enforces which
+// fields actually apply to which category, not just presence/type.
+//
+// header.type intentionally only accepts NONE/TEXT — IMAGE/VIDEO/DOCUMENT
+// need Meta's separate resumable-upload-session flow, which doesn't exist
+// in this codebase yet and isn't being half-built here (see migration
+// 020_template_rich_fields.js's comment). Rejected here, not just hidden in
+// the UI, since this is the real authoritative boundary.
 const messageTemplateCreateSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).regex(/^[a-z0-9_]+$/, 'Template name must be lowercase letters, numbers, and underscores only'),
   category: z.enum(['Marketing', 'Utility', 'Authentication']),
-  body: z.string().min(1),
+  language: z.string().min(1).default('en_US'),
+
+  // Utility/Marketing only.
+  body: z.string().min(1).max(1024).optional(),
+  // Meta requires a real example per named parameter, not just recommends
+  // one — see templateParams.js's defaultExampleFor comment for what this
+  // replaced (an auto-derived-from-the-name guess, never author-supplied).
+  bodyParamExamples: z.record(z.string()).optional(),
+  header: z.object({
+    type: z.enum(['NONE', 'TEXT']),
+    text: z.string().max(60).optional(),
+  }).optional(),
+  footer: z.string().max(60).optional(),
+  buttons: z.array(templateButtonSchema).max(10).optional(),
+
+  // Authentication only.
+  codeExpirationMinutes: z.number().int().positive().max(90).optional(),
+  addSecurityDisclaimer: z.boolean().optional(),
+  otpButtonType: z.enum(['COPY_CODE']).optional(),
+}).superRefine((data, ctx) => {
+  if (data.category === 'Authentication') {
+    if (data.body || data.header || data.footer || data.buttons) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Authentication templates cannot have a custom body, header, footer, or buttons — Meta generates that text automatically.',
+      });
+    }
+    return;
+  }
+
+  if (!data.body) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['body'], message: 'Body is required.' });
+    return;
+  }
+
+  // Deliberately NOT checking bodyParamExamples coverage here: extracting
+  // "every {{...}} in the body" at the schema layer can't yet tell a
+  // numbered {{1}} from a real named parameter (that distinction is
+  // validateTemplateText's job), so doing the coverage check here produced
+  // a confusing "sample value required for: 1" instead of the correct
+  // "numbered parameters aren't allowed" — and did it via a raw ZodError,
+  // bypassing the route's friendly {error, details: [string,...]} shape
+  // entirely. routes/templates.js checks sample-value coverage itself,
+  // after validateTemplateText has already confirmed the body's params are
+  // well-formed named ones.
+
+  if (data.header?.type === 'TEXT' && !data.header.text) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['header'], message: 'Header text is required when header type is TEXT.' });
+  }
+
+  if (data.buttons?.length) {
+    const urlCount = data.buttons.filter((b) => b.type === 'URL').length;
+    const phoneCount = data.buttons.filter((b) => b.type === 'PHONE_NUMBER').length;
+    if (urlCount > 2) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'At most 2 URL buttons allowed.' });
+    if (phoneCount > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'At most 1 phone number button allowed.' });
+    for (const b of data.buttons) {
+      if (b.type === 'URL' && !b.url) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'A URL button requires a url.' });
+      if (b.type === 'PHONE_NUMBER' && !b.phone_number) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'A phone number button requires a phone_number.' });
+    }
+  }
 });
 
 const templateStatusUpdateSchema = z.object({

@@ -158,6 +158,7 @@ test('broadcasts, automation rules, templates: create + list round trip', async 
       name: `${SUITE_PREFIX}template_${Date.now()}`,
       category: 'Utility',
       body: 'Hello {{customer_name}}, thank you so much for reaching out to us today — we truly appreciate your business and support!',
+      bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
   assert.equal(template.category, 'Utility');
@@ -216,6 +217,7 @@ test('admin: template status can be flipped and reverted', async () => {
       name: `${SUITE_PREFIX}flip_target_${Date.now()}`,
       category: 'Utility',
       body: 'Hi {{customer_name}}, this is a dedicated test template just for the status-flip test.',
+      bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
   assert.ok(target?.id, 'template creation for this test must succeed');
