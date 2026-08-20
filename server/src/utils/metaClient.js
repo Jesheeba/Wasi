@@ -104,6 +104,69 @@ async function getPhoneNumberDetails(phoneNumberId, accessToken) {
   return graphFetch(`/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`, { accessToken });
 }
 
+// profile_picture_url here is a Meta-hosted CDN link for DISPLAY only —
+// setting a new picture is a different field (profile_picture_handle,
+// write-only, obtained via the Resumable Upload API), not interchangeable.
+async function getBusinessProfile(phoneNumberId, accessToken) {
+  return graphFetch(
+    `/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,vertical,websites`,
+    { accessToken }
+  );
+}
+
+// `fields` is forwarded as-is — routes/onboarding.js is responsible for it
+// containing only the keys the caller actually wants changed (see
+// businessProfileUpdateSchema, an all-optional partial schema, and the
+// route's own trim-and-drop-blank pass). This function does no filtering of
+// its own; sending a field here sets it on the live profile, full stop.
+async function updateBusinessProfile(phoneNumberId, accessToken, fields) {
+  return graphFetch(`/${phoneNumberId}/whatsapp_business_profile`, {
+    method: 'POST',
+    accessToken,
+    body: { messaging_product: 'whatsapp', ...fields },
+  });
+}
+
+// Resumable Upload API (https://developers.facebook.com/docs/graph-api/guides/upload/)
+// — the mechanism for both a business profile picture (profile_picture_handle)
+// and a template media header (example.header_handle). Two steps:
+// 1) open a session against the APP (not the WABA/phone number) scoped to
+//    one file's size+type, 2) upload the bytes to that session and get back
+//    a handle. The session step uses the same Bearer-token convention as
+//    every other call in this file (graphFetch handles that); the upload
+//    step does NOT — Meta requires the literal "OAuth" scheme there, a
+//    real, confirmed inconsistency in their own API, not a typo here.
+async function createUploadSession(appId, accessToken, { fileName, fileLength, fileType }) {
+  const url = new URL(`${GRAPH_BASE}/${appId}/uploads`);
+  url.searchParams.set('file_name', fileName);
+  url.searchParams.set('file_length', String(fileLength));
+  url.searchParams.set('file_type', fileType);
+  url.searchParams.set('access_token', accessToken);
+
+  const res = await fetch(url, { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Meta upload-session creation failed (${res.status})`);
+  }
+  return data; // { id: "upload:<session id>" }
+}
+
+async function uploadFileBytes(uploadSessionId, accessToken, buffer) {
+  const res = await fetch(`${GRAPH_BASE}/${uploadSessionId}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      file_offset: '0',
+    },
+    body: buffer,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Meta file upload failed (${res.status})`);
+  }
+  return data; // { h: "<handle>" }
+}
+
 // Free-form text — only deliverable inside the 24h customer service window
 // (i.e. the contact messaged in within the last 24h). Meta rejects it
 // outside that window with a real API error; callers should check
@@ -423,6 +486,10 @@ module.exports = {
   subscribeAppToWaba,
   registerPhoneNumber,
   getPhoneNumberDetails,
+  getBusinessProfile,
+  updateBusinessProfile,
+  createUploadSession,
+  uploadFileBytes,
   sendTextMessage,
   sendInteractiveMessage,
   sendTemplateMessage,

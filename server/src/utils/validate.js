@@ -88,6 +88,27 @@ const wabaConnectSchema = z.object({
   via_coexistence: z.boolean().optional().default(false),
 });
 
+// Partial update, deliberately — every field is optional and the route
+// forwards only whatever keys are actually present to Meta's POST
+// (messaging_product + whatever's here). Sending the full object on every
+// save would let an unset field (absent from a previous GET) overwrite real
+// data on the live profile with nothing. profile_picture_handle is NOT a
+// field here on purpose — the picture has its own endpoint/flow
+// (routes/onboarding.js), so this schema can never carry it even by
+// accident. Limits are Meta's real documented ones, not placeholders.
+const businessProfileUpdateSchema = z.object({
+  about: z.string().trim().max(139).optional(),
+  address: z.string().trim().max(256).optional(),
+  description: z.string().trim().max(512).optional(),
+  email: z.string().trim().max(128).email().optional(),
+  vertical: z.enum([
+    'UNDEFINED', 'OTHER', 'AUTO', 'BEAUTY', 'APPAREL', 'EDU', 'ENTERTAIN',
+    'EVENT_PLAN', 'FINANCE', 'GROCERY', 'GOVT', 'HOTEL', 'HEALTH',
+    'NONPROFIT', 'PROF_SERVICES', 'RETAIL', 'TRAVEL', 'RESTAURANT', 'NOT_A_BIZ',
+  ]).optional(),
+  websites: z.array(z.string().trim().url().max(256)).max(2).optional(),
+}).strict();
+
 // Where one template parameter's value comes from — 'contact_field' reads a
 // per-recipient value at send time (routes/broadcasts.js and
 // broadcastRunner.js are the two places that need to agree on the field
@@ -351,6 +372,7 @@ module.exports = {
   resetPasswordSchema,
   checkoutSchema,
   wabaConnectSchema,
+  businessProfileUpdateSchema,
   broadcastCreateSchema,
   automationRuleCreateSchema,
   automationFlowCreateSchema,

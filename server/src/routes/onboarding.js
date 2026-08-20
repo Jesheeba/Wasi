@@ -1,15 +1,27 @@
 const { Router } = require('express');
 const crypto = require('crypto');
+const multer = require('multer');
 const clientsRepo = require('../repositories/clientsRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const metaClient = require('../utils/metaClient');
 const templateSyncService = require('../services/templateSyncService');
-const { encrypt } = require('../utils/encryption');
+const { encrypt, decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { wabaConnectSchema } = require('../utils/validate');
+const { wabaConnectSchema, businessProfileUpdateSchema } = require('../utils/validate');
 
 const router = Router();
+
+// Memory storage, not disk — a profile picture is small (5MB cap enforced
+// below, well under Node's default heap headroom) and this is a one-shot
+// forward-to-Meta, not something that needs to persist on our own disk
+// afterward.
+const PROFILE_PICTURE_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_PICTURE_MIME_TYPES = { 'image/jpeg': 'image/jpeg', 'image/jpg': 'image/jpeg', 'image/png': 'image/png' };
+const uploadProfilePicture = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: PROFILE_PICTURE_MAX_BYTES },
+});
 
 // Public-ish IDs the frontend needs to call FB.login() for Embedded Signup.
 // Not secrets — safe to expose to an authenticated client.
@@ -26,6 +38,117 @@ router.get('/whatsapp/status', asyncHandler(async (req, res) => {
   if (!waba) return res.json({ connected: false });
   const { access_token_encrypted, ...safe } = waba;
   res.json({ connected: safe.status === 'connected', waba: safe });
+}));
+
+// Fetched live from Meta on every call, not cached in wabas, since this is
+// data Meta already owns and a client edits directly in WhatsApp Manager as
+// well as here; caching it would just be another way to show stale state
+// (same bug class as the Templates/Contacts staleness fix earlier).
+router.get('/whatsapp/business-profile', asyncHandler(async (req, res) => {
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
+    return res.json({ connected: false });
+  }
+  try {
+    const accessToken = decrypt(waba.access_token_encrypted);
+    const data = await metaClient.getBusinessProfile(waba.phone_number_id, accessToken);
+    // Meta wraps the single profile object in a "data" array (one element,
+    // always — a WABA phone number has exactly one business profile).
+    const profile = data?.data?.[0] || null;
+    res.json({ connected: true, profile });
+  } catch (err) {
+    res.status(502).json({ error: 'Could not fetch business profile', detail: err.message });
+  }
+}));
+
+// Partial update. businessProfileUpdateSchema makes every field optional and
+// has no profile_picture_handle field at all (that's the separate endpoint
+// below) — so whatever survives req.body validation is exactly, and only,
+// what the caller wants changed. Trimmed again + blank keys dropped here as
+// a server-side backstop even though the frontend is expected to have
+// already computed this same diff — this route is the last thing standing
+// between a stray empty string and overwriting real data on a live profile.
+router.post('/whatsapp/business-profile', asyncHandler(async (req, res) => {
+  const parsed = businessProfileUpdateSchema.parse(req.body);
+  const fields = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (Array.isArray(value)) {
+      if (value.length) fields[key] = value;
+    } else if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) fields[key] = trimmed;
+    } else if (value !== undefined) {
+      fields[key] = value;
+    }
+  }
+
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
+    return res.status(400).json({ error: 'No connected WhatsApp number for this client' });
+  }
+  if (!Object.keys(fields).length) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  try {
+    const accessToken = decrypt(waba.access_token_encrypted);
+    await metaClient.updateBusinessProfile(waba.phone_number_id, accessToken, fields);
+    await auditLogRepo.record({
+      actor_type: 'client',
+      actor_id: req.clientId,
+      action: 'business_profile_updated',
+      target: `${req.clientId}: ${Object.keys(fields).join(', ')}`,
+    });
+    res.json({ updated: true, fields: Object.keys(fields) });
+  } catch (err) {
+    res.status(502).json({ error: 'Could not update business profile', detail: err.message });
+  }
+}));
+
+// Replace the profile picture — a single action from the caller's
+// perspective (pick a file, it's live), but internally: upload the bytes
+// via Meta's Resumable Upload API to get a handle, then immediately set
+// that handle as the profile's picture. Deliberately its own endpoint, not
+// a field on the POST above — that's what makes "never send
+// profile_picture_handle unless a new file was actually chosen" true by
+// construction rather than by convention.
+router.post('/whatsapp/business-profile/picture', uploadProfilePicture.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const mimeType = PROFILE_PICTURE_MIME_TYPES[req.file.mimetype];
+  if (!mimeType) {
+    return res.status(400).json({ error: 'Unsupported file type', detail: 'Only JPEG or PNG images are accepted.' });
+  }
+
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
+    return res.status(400).json({ error: 'No connected WhatsApp number for this client' });
+  }
+  if (!process.env.META_APP_ID) {
+    return res.status(502).json({ error: 'META_APP_ID is not configured for this environment' });
+  }
+
+  try {
+    const accessToken = decrypt(waba.access_token_encrypted);
+    const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
+      fileName: req.file.originalname || 'profile-picture',
+      fileLength: req.file.size,
+      fileType: mimeType,
+    });
+    const uploaded = await metaClient.uploadFileBytes(session.id, accessToken, req.file.buffer);
+    if (!uploaded.h) {
+      throw new Error('Meta did not return an upload handle');
+    }
+    await metaClient.updateBusinessProfile(waba.phone_number_id, accessToken, { profile_picture_handle: uploaded.h });
+    await auditLogRepo.record({
+      actor_type: 'client',
+      actor_id: req.clientId,
+      action: 'business_profile_picture_updated',
+      target: req.clientId,
+    });
+    res.json({ updated: true });
+  } catch (err) {
+    res.status(502).json({ error: 'Could not update profile picture', detail: err.message });
+  }
 }));
 
 // Runs spec §3 steps 3-5: token exchange, webhook subscription, phone number

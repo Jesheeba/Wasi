@@ -36,10 +36,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- API helpers ---
   async function authFetch(path, options = {}) {
     const token = localStorage.getItem('client_token');
+    // A FormData body (the business-profile picture upload) needs the
+    // browser to set its own multipart Content-Type with a boundary — an
+    // explicit 'application/json' here would break that, and every existing
+    // caller already sends a JSON string body, so this only changes
+    // behavior for the one new caller that passes FormData.
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {})
       }
@@ -2654,22 +2660,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const phoneLabel = phone || `Phone ID ${waba.phone_number_id} (dialable number not available — reconnect to fetch it)`;
 
     if (profileEl) {
-      profileEl.innerHTML = `
-        <div class="profile-workspace-grid">
-          <div class="profile-form-card">
-            <p style="font-size:0.875rem;color:#6B7280;line-height:1.5;">
-              Business profile details — description, address, email, category, website links —
-              aren't synced from Meta yet. Set these directly in WhatsApp Manager; they'll appear
-              here once that sync is built.
-            </p>
-          </div>
-          <div class="whatsapp-preview-card">
-            <div class="preview-avatar">${escapeHtml(initialsFor(name))}</div>
-            <div style="font-weight:700;font-size:1.05rem;color:#1F2937;">${escapeHtml(name)}</div>
-            <div style="font-size:0.85rem;font-weight:600;color:#4B5563;margin-top:2px;">${escapeHtml(phoneLabel)}</div>
-          </div>
-        </div>
-      `;
+      profileEl.innerHTML = '<div style="padding:1rem;color:#6B7280;">Loading business profile…</div>';
+      renderBusinessProfileForm(waba);
     }
 
     if (linkEl) {
@@ -2691,6 +2683,215 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
     }
+  }
+
+  const BUSINESS_PROFILE_VERTICALS = [
+    ['UNDEFINED', 'Not specified'], ['OTHER', 'Other'], ['AUTO', 'Automotive'],
+    ['BEAUTY', 'Beauty, Spa and Salon'], ['APPAREL', 'Clothing and Apparel'],
+    ['EDU', 'Education'], ['ENTERTAIN', 'Entertainment'],
+    ['EVENT_PLAN', 'Event Planning and Service'], ['FINANCE', 'Finance and Banking'],
+    ['GROCERY', 'Food and Grocery'], ['GOVT', 'Public Service'],
+    ['HOTEL', 'Hotel and Lodging'], ['HEALTH', 'Medical and Health'],
+    ['NONPROFIT', 'Non-profit'], ['PROF_SERVICES', 'Professional Services'],
+    ['RETAIL', 'Shopping and Retail'], ['TRAVEL', 'Travel and Transportation'],
+    ['RESTAURANT', 'Restaurant'], ['NOT_A_BIZ', "I'm not a business"],
+  ];
+  const BUSINESS_PROFILE_TEXT_FIELDS = ['about', 'description', 'address', 'email', 'vertical'];
+  const PROFILE_PICTURE_ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+  const PROFILE_PICTURE_MAX_BYTES = 5 * 1024 * 1024;
+
+  // Meta's GET returns "about" even when it's just whitespace (seen live:
+  // a single space) and omits address/description/email entirely — not as
+  // "" — when they're unset. Both collapse to the same thing here: trim,
+  // then treat a falsy/blank result as not-set.
+  function trimField(value) {
+    return (value || '').trim();
+  }
+
+  async function renderBusinessProfileForm(waba) {
+    const container = document.getElementById('whatsapp-profile-content');
+    if (!container) return;
+
+    let result;
+    try {
+      result = await authFetch('/api/onboarding/whatsapp/business-profile');
+    } catch (err) {
+      container.innerHTML = `<div style="padding:1rem;color:#EF4444;">${escapeHtml(err.message)}</div>`;
+      return;
+    }
+    if (!result.connected) {
+      container.innerHTML = '<div style="color:#6B7280;">Connect a WhatsApp number above to see its profile here.</div>';
+      return;
+    }
+
+    const profile = result.profile || {};
+    const original = {
+      about: trimField(profile.about),
+      address: trimField(profile.address),
+      description: trimField(profile.description),
+      email: trimField(profile.email),
+      vertical: profile.vertical || 'UNDEFINED',
+      websites: Array.isArray(profile.websites) ? profile.websites.slice(0, 2) : [],
+    };
+    const pictureUrl = profile.profile_picture_url || null;
+    const name = waba.display_name || 'WhatsApp Business';
+    const phoneLabel = waba.display_phone_number || `Phone ID ${waba.phone_number_id}`;
+
+    container.innerHTML = `
+      <div class="profile-workspace-grid">
+        <div class="profile-form-card">
+          <div class="form-group">
+            <label class="form-label">About</label>
+            <input type="text" class="form-input" id="bp-about" placeholder="Not set" maxlength="139" value="${attrEscape(original.about)}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Business Description</label>
+            <textarea class="form-input" id="bp-description" style="height: 100px; padding: 10px; line-height: 1.4;" placeholder="Not set" maxlength="512">${escapeHtml(original.description)}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Business address</label>
+            <input type="text" class="form-input" id="bp-address" placeholder="Not set" maxlength="256" value="${attrEscape(original.address)}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="bp-email" placeholder="Not set" maxlength="128" value="${attrEscape(original.email)}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Business Category</label>
+            <select class="form-input" id="bp-vertical">
+              ${BUSINESS_PROFILE_VERTICALS.map(([val, label]) => `<option value="${val}" ${val === original.vertical ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Websites (up to 2)</label>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input type="text" class="form-input" id="bp-website-0" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[0] || '')}" />
+              <input type="text" class="form-input" id="bp-website-1" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[1] || '')}" />
+            </div>
+          </div>
+          <button type="button" class="btn-primary" id="bp-save-btn" style="width: auto; padding: 0 20px;" disabled>Save Changes</button>
+          <span id="bp-save-status" style="margin-left: 10px; font-size: 0.8rem; color: #6B7280;"></span>
+        </div>
+
+        <div class="whatsapp-preview-card">
+          <div id="bp-picture-wrap" style="width: 64px; height: 64px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--color-primary-100);">
+            ${pictureUrl
+              ? `<img src="${attrEscape(pictureUrl)}" alt="Profile picture" style="width:100%;height:100%;object-fit:cover;" />`
+              : `<span style="font-weight:700;color:var(--color-primary-900);">${escapeHtml(initialsFor(name))}</span>`}
+          </div>
+          <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">${escapeHtml(name)}</div>
+          <div style="font-size: 0.85rem; font-weight: 600; color: #4B5563; margin-top: 2px;">${escapeHtml(phoneLabel)}</div>
+          <div style="font-size: 0.75rem; color: #9CA3AF; margin-top: 6px;">${pictureUrl ? 'A profile picture is already set.' : 'No profile picture set.'}</div>
+          <button type="button" class="btn-secondary" id="bp-replace-picture-btn" style="margin-top: 10px; width: auto; padding: 0 14px;">Replace picture</button>
+          <input type="file" id="bp-picture-file-input" accept="image/jpeg,image/png" style="display:none;" />
+          <div id="bp-picture-status" style="font-size: 0.75rem; color: #6B7280; margin-top: 6px;"></div>
+        </div>
+      </div>
+    `;
+    refreshIcons();
+
+    const saveBtn = document.getElementById('bp-save-btn');
+    const saveStatus = document.getElementById('bp-save-status');
+
+    function currentValue(field) {
+      const el = document.getElementById(`bp-${field}`);
+      return field === 'vertical' ? el.value : el.value.trim();
+    }
+    function currentWebsites() {
+      return [document.getElementById('bp-website-0').value.trim(), document.getElementById('bp-website-1').value.trim()].filter(Boolean);
+    }
+    function websitesEqual(a, b) {
+      return a.length === b.length && a.every((v, i) => v === b[i]);
+    }
+    function isDirty() {
+      return BUSINESS_PROFILE_TEXT_FIELDS.some((f) => currentValue(f) !== original[f])
+        || !websitesEqual(currentWebsites(), original.websites);
+    }
+    function checkDirty() {
+      saveBtn.disabled = !isDirty();
+      saveStatus.textContent = '';
+    }
+    [...BUSINESS_PROFILE_TEXT_FIELDS.map((f) => `bp-${f}`), 'bp-website-0', 'bp-website-1'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', checkDirty);
+      el.addEventListener('change', checkDirty);
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      // Only ever include a field that actually changed AND is non-blank —
+      // this is what makes "send only what changed, never wipe with blank"
+      // true. Clearing a field to blank is deliberately not supported yet
+      // (see the toast below) rather than silently sent as "" to Meta,
+      // which would clear it on the live profile for real.
+      const payload = {};
+      let clearedSomething = false;
+      BUSINESS_PROFILE_TEXT_FIELDS.forEach((f) => {
+        const val = currentValue(f);
+        if (val === original[f]) return;
+        if (val) payload[f] = val; else clearedSomething = true;
+      });
+      const newWebsites = currentWebsites();
+      if (!websitesEqual(newWebsites, original.websites)) {
+        if (newWebsites.length) payload.websites = newWebsites; else clearedSomething = true;
+      }
+
+      if (!Object.keys(payload).length) {
+        if (clearedSomething) showToast("Clearing a field isn't supported yet — only changed or added values are saved.");
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveStatus.textContent = 'Saving…';
+      try {
+        await authFetch('/api/onboarding/whatsapp/business-profile', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        showToast('Business profile updated.');
+        await renderBusinessProfileForm(waba);
+      } catch (err) {
+        saveStatus.textContent = '';
+        saveBtn.disabled = false;
+        showToast(err.message);
+      }
+    });
+
+    // Replace picture — file input stays hidden, the visible button just
+    // triggers it. profile_picture_handle is never part of the Save-Changes
+    // payload above; this is the only path that can ever set it, and only
+    // once a real file has actually been chosen.
+    const pictureInput = document.getElementById('bp-picture-file-input');
+    const pictureStatus = document.getElementById('bp-picture-status');
+    document.getElementById('bp-replace-picture-btn').addEventListener('click', () => pictureInput.click());
+    pictureInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+
+      if (!PROFILE_PICTURE_ACCEPTED_TYPES.includes(file.type)) {
+        showToast('Only JPEG or PNG images are accepted.');
+        return;
+      }
+      if (file.size > PROFILE_PICTURE_MAX_BYTES) {
+        showToast('Image is too large — max 5MB.');
+        return;
+      }
+
+      pictureStatus.textContent = 'Uploading…';
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        await authFetch('/api/onboarding/whatsapp/business-profile/picture', {
+          method: 'POST',
+          body: formData,
+        });
+        showToast('Profile picture updated.');
+        await renderBusinessProfileForm(waba);
+      } catch (err) {
+        pictureStatus.textContent = '';
+        showToast(err.message);
+      }
+    });
   }
 
   // --- Modals ---
