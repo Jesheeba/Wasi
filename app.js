@@ -1830,11 +1830,20 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (addEdgeBtn) {
         const nodeId = addEdgeBtn.dataset.nodeId;
         const node = findNode(nodeId);
+        const otherNodes = state.currentFlowGraph.nodes.filter(n => n.id !== nodeId);
+        // A branch always needs a target — with only this one node in the
+        // flow so far, "Go to node" would render as an empty <select> with
+        // nothing to pick (reported live as a "checklist not showing up"
+        // UI error). Catch it here with a clear message instead of opening
+        // a modal with a broken-looking empty dropdown.
+        if (otherNodes.length === 0) {
+          showToast('Add another node first — a branch needs somewhere to go.');
+          return;
+        }
         const legalTypes = FLOW_EDGE_TYPES_BY_NODE_TYPE[node.type] || [];
         document.getElementById('add-bot-flow-edge-form').dataset.fromNodeId = nodeId;
         document.getElementById('new-bot-flow-edge-condition-type').innerHTML = legalTypes.map(t => `<option value="${t}">${FLOW_EDGE_TYPE_LABELS[t]}</option>`).join('');
-        document.getElementById('new-bot-flow-edge-to-node').innerHTML = state.currentFlowGraph.nodes
-          .filter(n => n.id !== nodeId)
+        document.getElementById('new-bot-flow-edge-to-node').innerHTML = otherNodes
           .map(n => `<option value="${n.id}">${FLOW_NODE_TYPE_LABELS[n.type]}: ${nodeConfigSummary(n).slice(0, 40)}</option>`).join('');
         toggleEdgeValueField();
         document.getElementById('modal-add-bot-flow-edge')?.classList.add('open');
