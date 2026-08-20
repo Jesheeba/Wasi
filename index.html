@@ -99,21 +99,16 @@
           <i data-lucide="bot"></i>
           <span class="nav-text">Automation</span>
         </a>
-        <a class="nav-item" data-view="ecommerce">
-          <i data-lucide="shopping-cart"></i>
-          <span class="nav-text">Ecommerce</span>
-        </a>
-        <a class="nav-item" data-view="whatsapp-flows">
-          <i data-lucide="workflow"></i>
-          <span class="nav-text">Whatsapp Flows</span>
-        </a>
+        <!-- Ecommerce, Whatsapp Flows, CTWA nav items removed — no backend
+             exists for any of them (no OAuth, no API routes, no repo; the
+             "Whatsapp Flows" here is a different, unrelated static mock
+             from the real flow-builder under Automation). A missing menu
+             item is honest; these were fake dashboards with hardcoded
+             numbers behind a working-looking nav link. Restore only once
+             each is a real, backed feature. -->
         <a class="nav-item" data-view="instagram">
           <i data-lucide="camera"></i>
           <span class="nav-text">Instagram</span>
-        </a>
-        <a class="nav-item" data-view="ctwa">
-          <i data-lucide="target"></i>
-          <span class="nav-text">CTWA</span>
         </a>
         <a class="nav-item" data-view="integrations">
           <i data-lucide="puzzle"></i>
@@ -250,8 +245,8 @@
               <div class="contact-details-sidebar">
                 <div class="details-card-header">
                   <div class="avatar" id="drawer-contact-avatar" style="width: 56px; height: 56px; font-size: 1.25rem; background: var(--color-primary-100); color: var(--color-primary-900); margin-bottom: 8px;"></div>
-                  <div style="font-weight: 700; font-size: 1rem; color: #1F2937;" id="drawer-contact-name">Alex Kumar</div>
-                  <div style="font-size: 0.8rem; color: #6B7280;" id="drawer-contact-phone">+91 98765 43210</div>
+                  <div style="font-weight: 700; font-size: 1rem; color: #1F2937;" id="drawer-contact-name"></div>
+                  <div style="font-size: 0.8rem; color: #6B7280;" id="drawer-contact-phone"></div>
                 </div>
 
                 <div>
@@ -625,18 +620,9 @@
                 <a class="sec-nav-item" data-rep-view="campaign">
                   <span>Campaign</span>
                 </a>
-                <a class="sec-nav-item" data-rep-view="flow">
-                  <span>Flow</span>
-                </a>
-                <a class="sec-nav-item" data-rep-view="api">
-                  <span>API</span>
-                </a>
-                <a class="sec-nav-item" data-rep-view="live-chat">
-                  <span>Live Chat</span>
-                </a>
-                <a class="sec-nav-item" data-rep-view="operator-stats">
-                  <span>Operator Stats</span>
-                </a>
+                <!-- Flow / API / Live Chat / Operator Stats sub-tabs removed
+                     — no backend behind any of them, just hardcoded stat
+                     cards presented as real reporting data. -->
               </div>
             </div>
 
@@ -852,11 +838,10 @@
                     <i data-lucide="message-circle" style="color: #25D366;"></i>
                     <span>Whatsapp</span>
                   </a>
-                  <a class="sec-nav-item" data-sec-view="live-chat">
-                    <i data-lucide="message-square" style="color: #4AC959;"></i>
-                    <span>Live Chat</span>
-                    <span class="beta-badge">Beta</span>
-                  </a>
+                  <!-- Live Chat settings removed — the widget customizer
+                       (color pickers, welcome message) has no backend to
+                       save to and nothing renders it anywhere a visitor
+                       would see. -->
                   <a class="sec-nav-item" data-sec-view="instagram">
                     <i data-lucide="camera" style="color: #E1306C;"></i>
                     <span>Instagram</span>
@@ -879,10 +864,9 @@
                     <i data-lucide="dollar-sign"></i>
                     <span>My Subscription</span>
                   </a>
-                  <a class="sec-nav-item" data-sec-view="developer">
-                    <i data-lucide="code"></i>
-                    <span>Developer</span>
-                  </a>
+                  <!-- Developer (API key) removed — "crm_live_sample..."
+                       was a hardcoded fake key with no real API auth system
+                       behind it. -->
                   <a class="sec-nav-item" data-sec-view="tags">
                     <i data-lucide="tag"></i>
                     <span>Tag Manager</span>
