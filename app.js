@@ -471,14 +471,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // First letter of the first two words of a name — used to replace what
+  // was a hardcoded "AK" (Alex Kumar's initials) shown for every contact
+  // regardless of their actual name.
+  function initialsFor(name) {
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
   async function openActiveChat(chat) {
     state.activeChatId = chat.id;
     if (chatEmptyPlaceholder) chatEmptyPlaceholder.style.display = 'none';
     if (chatActiveWorkspace) chatActiveWorkspace.style.display = 'flex';
 
+    const initials = initialsFor(chat.name);
+    document.getElementById('active-chat-avatar').innerText = initials;
     document.getElementById('active-chat-name').innerText = chat.name;
+    document.getElementById('drawer-contact-avatar').innerText = initials;
     document.getElementById('drawer-contact-name').innerText = chat.name;
     document.getElementById('drawer-contact-phone').innerText = chat.phone;
+
+    // chat.tag is already resolved to the contact's real (single) tag name,
+    // or the '—' placeholder for untagged (see adaptChat) — a contact has
+    // exactly one tag_id, never the two-badge "Lead" + "High Intent" pair
+    // this used to hardcode for every contact regardless of reality.
+    const headerTag = document.getElementById('active-chat-tag');
+    const hasTag = chat.tag && chat.tag !== '—';
+    headerTag.style.display = hasTag ? '' : 'none';
+    headerTag.innerText = hasTag ? chat.tag : '';
+    document.getElementById('drawer-contact-tags').innerHTML = hasTag
+      ? `<span class="tag-badge">${escapeHtml(chat.tag)}</span>`
+      : '<span style="font-size:0.8rem;color:#9CA3AF;">No tag assigned</span>';
 
     try {
       await refreshActiveChatMessages();
@@ -1959,6 +1984,85 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Real GET /api/billing/subscription — was hardcoded fake "Pro Business
+  // Plan" / Active regardless of whether the client had ever subscribed.
+  const SUBSCRIPTION_STATUS_STYLE = {
+    active: { bg: '#DCFCE7', color: '#15803D', label: 'Active' },
+    pending_payment: { bg: '#FEF3C7', color: '#B45309', label: 'Pending Payment' },
+    cancelled: { bg: '#F1F5F9', color: '#64748B', label: 'Cancelled' },
+    failed: { bg: '#FEE2E2', color: '#B91C1C', label: 'Failed' },
+  };
+
+  async function renderSubscriptionTab() {
+    const container = document.getElementById('subscription-content');
+    if (!container) return;
+    container.innerHTML = '<div style="color:#6B7280;">Loading…</div>';
+    try {
+      const [subscription, plans] = await Promise.all([
+        authFetch('/api/billing/subscription'),
+        authFetch('/api/billing/plans'),
+      ]);
+
+      if (!subscription) {
+        container.innerHTML = `
+          <div style="color:#6B7280; margin-bottom:1rem;">No active subscription yet.</div>
+          <button class="btn-primary" style="width: auto; padding: 0 20px;" id="upgrade-subscription-btn">Choose a Plan</button>
+        `;
+      } else {
+        const plan = plans.find(p => p.id === subscription.plan);
+        const style = SUBSCRIPTION_STATUS_STYLE[subscription.status] || { bg: '#F1F5F9', color: '#64748B', label: subscription.status };
+        const limitText = plan?.conversation_limit == null ? 'Unlimited conversations/month' : `${Number(plan.conversation_limit).toLocaleString('en-IN')} conversations/month`;
+        container.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937;">${escapeHtml(subscription.plan)} Plan</div>
+              <div style="font-size: 0.85rem; color: #6B7280;">${plan ? `₹${plan.price_inr}/month · ${limitText}` : ''}</div>
+            </div>
+            <span class="status-badge" style="font-weight: 700; padding: 6px 14px; background:${style.bg}; color:${style.color};">${escapeHtml(style.label)}</span>
+          </div>
+          <button class="btn-primary" style="width: auto; padding: 0 20px; margin-top: 1rem;" id="upgrade-subscription-btn">Change Plan</button>
+        `;
+      }
+      document.getElementById('upgrade-subscription-btn')?.addEventListener('click', () => {
+        showToast('Redirecting to plan upgrade...');
+      });
+    } catch (err) {
+      container.innerHTML = `<div style="color:#EF4444;">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  // Real GET /api/billing/invoices — was a single hardcoded fake "Paid"
+  // invoice with a dead PDF link regardless of real billing history.
+  const INVOICE_STATUS_STYLE = {
+    paid: { bg: '#DCFCE7', color: '#15803D', label: 'Paid' },
+    created: { bg: '#FEF3C7', color: '#B45309', label: 'Pending' },
+    failed: { bg: '#FEE2E2', color: '#B91C1C', label: 'Failed' },
+    refunded: { bg: '#F1F5F9', color: '#64748B', label: 'Refunded' },
+  };
+
+  async function renderBillingTab() {
+    const tbody = document.getElementById('billing-invoices-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>';
+    try {
+      const invoices = await authFetch('/api/billing/invoices');
+      tbody.innerHTML = invoices.length ? invoices.map(inv => {
+        const style = INVOICE_STATUS_STYLE[inv.status] || { bg: '#F1F5F9', color: '#64748B', label: inv.status };
+        return `
+          <tr>
+            <td style="font-weight:600;">${escapeHtml(inv.id.slice(0, 8))}</td>
+            <td>${(inv.created_at || '').slice(0, 10)}</td>
+            <td>${escapeHtml(inv.plan)}</td>
+            <td>₹ ${Number(inv.amount_inr).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            <td><span class="status-badge" style="background:${style.bg}; color:${style.color};">${escapeHtml(style.label)}</span></td>
+          </tr>
+        `;
+      }).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No invoices yet</td></tr>';
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#EF4444;">${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
   document.getElementById('open-recharge-modal')?.addEventListener('click', () => {
     document.getElementById('modal-recharge-wallet')?.classList.add('open');
   });
@@ -2283,10 +2387,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('upgrade-subscription-btn')?.addEventListener('click', () => {
-    showToast('Redirecting to plan upgrade...');
-  });
-
   // --- Contacts Search Filter ---
   document.getElementById('contact-search')?.addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
@@ -2398,6 +2498,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'attributes') renderAttributesTable();
       if (secKey === 'wallet') renderWallet();
       if (secKey === 'webhook') renderClientWebhook();
+      if (secKey === 'subscription') renderSubscriptionTab();
+      if (secKey === 'billing') renderBillingTab();
       refreshIcons();
     });
   });

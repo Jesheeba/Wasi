@@ -204,13 +204,13 @@
               <div style="flex: 1; display: flex; flex-direction: column; background: #FAFDFB;">
                 <div class="chat-header">
                   <div style="display: flex; align-items: center; gap: 12px;">
-                    <div class="chat-avatar" id="active-chat-avatar">AK</div>
+                    <div class="chat-avatar" id="active-chat-avatar"></div>
                     <div>
-                      <div style="font-size: 0.875rem; font-weight: 600;" id="active-chat-name">Alex Kumar</div>
+                      <div style="font-size: 0.875rem; font-weight: 600;" id="active-chat-name"></div>
                       <div style="font-size: 0.75rem; color: #22C55E; font-weight: 500;">WhatsApp Business</div>
                     </div>
                   </div>
-                  <span class="tag-badge" id="active-chat-tag">Lead</span>
+                  <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
                 </div>
 
                 <div class="chat-messages" id="chat-messages-container"></div>
@@ -233,29 +233,35 @@
                 </div>
               </div>
 
-              <!-- Right Contact Details Drawer -->
+              <!-- Right Contact Details Drawer — avatar initials, tag, and
+                   header pill are now set from the real contact (see
+                   openActiveChat, app.js). A contact has exactly one tag
+                   (contacts.tag_id, a single FK), so this never showed two
+                   real tags — the "Lead" + "High Intent" pair here was
+                   always fake, for every contact. The Attributes section
+                   below was the same: fabricated City/Lead Score/Source
+                   values with no backing per-contact storage anywhere in
+                   the schema (contact_attributes defines attribute TYPES
+                   for the account, e.g. via Settings > Attributes, not
+                   per-contact VALUES) — left as an honest static note
+                   instead of inventing fake specifics; wiring real
+                   per-contact attribute values is a real feature, not part
+                   of this cleanup. -->
               <div class="contact-details-sidebar">
                 <div class="details-card-header">
-                  <div class="avatar" style="width: 56px; height: 56px; font-size: 1.25rem; background: var(--color-primary-100); color: var(--color-primary-900); margin-bottom: 8px;">AK</div>
+                  <div class="avatar" id="drawer-contact-avatar" style="width: 56px; height: 56px; font-size: 1.25rem; background: var(--color-primary-100); color: var(--color-primary-900); margin-bottom: 8px;"></div>
                   <div style="font-weight: 700; font-size: 1rem; color: #1F2937;" id="drawer-contact-name">Alex Kumar</div>
                   <div style="font-size: 0.8rem; color: #6B7280;" id="drawer-contact-phone">+91 98765 43210</div>
                 </div>
 
                 <div>
                   <div class="details-section-title">Tags</div>
-                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <span class="tag-badge">Lead</span>
-                    <span class="tag-badge" style="background: #E0F2FE; color: #0369A1;">High Intent</span>
-                  </div>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="drawer-contact-tags"></div>
                 </div>
 
                 <div>
                   <div class="details-section-title">Attributes</div>
-                  <div style="font-size: 0.825rem; color: #4B5563; display: flex; flex-direction: column; gap: 6px;">
-                    <div><strong>City:</strong> Mumbai</div>
-                    <div><strong>Lead Score:</strong> 85</div>
-                    <div><strong>Source:</strong> WhatsApp Web</div>
-                  </div>
+                  <div style="font-size: 0.825rem; color: #9CA3AF;">Per-contact attributes aren't tracked yet.</div>
                 </div>
               </div>
             </div>
@@ -461,26 +467,25 @@
             </div>
           </div>
 
+          <!-- No Instagram integration exists anywhere in this codebase
+               (no OAuth flow, no API routes, no repo) — this used to claim
+               "@wasi_official ... Connected" plus two fake "Active"
+               automation rules regardless. Left honest until the feature is
+               actually built: not connected, no rules possible yet. -->
           <div class="channel-status-card">
             <div class="channel-info-left">
               <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
               <div>
-                <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">@wasi_official</div>
-                <div style="font-size: 0.8rem; color: #6B7280;">Instagram Business Account</div>
+                <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">No Instagram account connected</div>
+                <div style="font-size: 0.8rem; color: #6B7280;">This feature isn't available yet</div>
               </div>
             </div>
-            <span class="status-badge active" style="padding: 4px 14px; font-weight: 700;">Connected</span>
+            <span class="status-badge" style="padding: 4px 14px; font-weight: 700; background: #F1F5F9; color: #64748B;">Not Connected</span>
           </div>
 
           <div class="table-card" style="padding: 1.5rem;">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Active Instagram Rules</h3>
-            <table class="data-table">
-              <thead><tr><th>Trigger Type</th><th>Keyword</th><th>Action</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td style="font-weight:600;">Story Mention</td><td>Any Mention</td><td>Send Discount Link via DM</td><td><span class="status-badge active">Active</span></td></tr>
-                <tr><td style="font-weight:600;">Post Comment</td><td>"price", "info"</td><td>Reply Comment & Send DM Catalog</td><td><span class="status-badge active">Active</span></td></tr>
-              </tbody>
-            </table>
+            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Instagram Rules</h3>
+            <div style="text-align:center;color:#9CA3AF;padding:1rem 0;">Connect an Instagram account to create automation rules.</div>
           </div>
         </div>
 
@@ -526,31 +531,38 @@
               <p class="page-subtitle">Connect Shopify, CRM, Webhooks, and Zapier</p>
             </div>
           </div>
+          <!-- None of these 5 cards check any real connection state — no
+               OAuth flow or API integration exists for any of them in this
+               codebase (Razorpay is genuinely used elsewhere, for Wallet
+               top-ups and Billing checkout, but that's a platform-level
+               payment gateway, not a per-client "connection" this card
+               actually reflects). Every card claimed "Connected"
+               unconditionally; left honest until each is real. -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
             <div class="table-card" style="padding: 1.25rem;">
               <h4 style="font-weight: 700;">Shopify</h4>
               <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Sync orders & abandoned carts</p>
-              <span class="status-badge active">Connected</span>
+              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
             </div>
             <div class="table-card" style="padding: 1.25rem;">
               <h4 style="font-weight: 700;">HubSpot CRM</h4>
               <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Sync contacts & deals</p>
-              <span class="status-badge active">Connected</span>
+              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
             </div>
             <div class="table-card" style="padding: 1.25rem;">
               <h4 style="font-weight: 700;">Razorpay</h4>
               <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">In-chat payment links</p>
-              <span class="status-badge active">Connected</span>
+              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
             </div>
             <div class="table-card" style="padding: 1.25rem;">
               <h4 style="font-weight: 700;">Zapier</h4>
               <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Automate 5000+ app workflows</p>
-              <span class="status-badge active">Connected</span>
+              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
             </div>
             <div class="table-card" style="padding: 1.25rem;">
               <h4 style="font-weight: 700;">Google Sheets</h4>
               <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Export leads automatically</p>
-              <span class="status-badge active">Connected</span>
+              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
             </div>
           </div>
         </div>
@@ -1052,15 +1064,17 @@
               <!-- Sub-page 3: INSTAGRAM CHANNEL -->
               <div id="sec-view-instagram" class="sec-content-view" style="display: none;">
                 <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Instagram Settings</h2>
+                <!-- Same "no real integration exists" honesty fix as the
+                     main-nav Instagram view. -->
                 <div class="channel-status-card">
                   <div class="channel-info-left">
                     <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
                     <div>
-                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">@wasi_official</div>
-                      <div style="font-size: 0.8rem; color: #6B7280;">Connected Instagram Business Account</div>
+                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">No Instagram account connected</div>
+                      <div style="font-size: 0.8rem; color: #6B7280;">This feature isn't available yet</div>
                     </div>
                   </div>
-                  <span class="status-badge active" style="padding: 4px 14px; font-weight: 700;">Connected</span>
+                  <span class="status-badge" style="padding: 4px 14px; font-weight: 700; background: #F1F5F9; color: #64748B;">Not Connected</span>
                 </div>
               </div>
 
@@ -1096,15 +1110,12 @@
               <!-- Sub-page 6: SUBSCRIPTION -->
               <div id="sec-view-subscription" class="sec-content-view" style="display: none;">
                 <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">My Subscription Plan</h2>
-                <div class="profile-form-card" style="max-width: 600px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                      <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937;">Pro Business Plan</div>
-                      <div style="font-size: 0.85rem; color: #6B7280;">Includes 100,000 Messages/month, Unlimited Agents</div>
-                    </div>
-                    <span class="status-badge active" style="font-weight: 700; padding: 6px 14px;">Active</span>
-                  </div>
-                  <button class="btn-primary" style="width: auto; padding: 0 20px; margin-top: 1rem;" id="upgrade-subscription-btn">Upgrade Subscription</button>
+                <!-- renderSubscriptionTab() (app.js) replaces this — was
+                     hardcoded fake "Pro Business Plan" / Active regardless
+                     of whether GET /api/billing/subscription (real, already
+                     existed) returned anything at all. -->
+                <div class="profile-form-card" style="max-width: 600px;" id="subscription-content">
+                  <div style="color: #6B7280;">Loading…</div>
                 </div>
               </div>
 
@@ -1166,11 +1177,17 @@
               <!-- Sub-page 11: BILLING -->
               <div id="sec-view-billing" class="sec-content-view" style="display: none;">
                 <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Billing & Invoices</h2>
+                <!-- renderBillingTab() (app.js) replaces this from real
+                     GET /api/billing/invoices — was a single hardcoded fake
+                     "Paid" invoice with a dead PDF link, shown regardless of
+                     whether the client had ever actually been billed. No
+                     real PDF export exists, so the Download column and
+                     dead link are dropped rather than faked again. -->
                 <div class="table-card">
                   <table class="data-table">
-                    <thead><tr><th>Invoice #</th><th>Date</th><th>Amount</th><th>Status</th><th>Download</th></tr></thead>
-                    <tbody>
-                      <tr><td style="font-weight:600;">#INV-2026-001</td><td>2026-07-01</td><td>₹ 2,999.00</td><td><span class="status-badge active">Paid</span></td><td><a href="#" style="color:#0284C7;">PDF</a></td></tr>
+                    <thead><tr><th>Invoice</th><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead>
+                    <tbody id="billing-invoices-body">
+                      <tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -1687,6 +1704,6 @@
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260820d"></script>
+  <script src="app.js?v=20260820e"></script>
 </body>
 </html>
