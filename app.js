@@ -345,6 +345,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
     if (targetView === 'payments') renderPaymentsTable();
+    // The Whatsapp sub-tab ships marked active by default (index.html) but
+    // previously only rendered real data on an explicit sub-nav click —
+    // landing here from the main nav showed static placeholder markup
+    // indefinitely. renderWhatsAppSettings itself no-ops safely if the
+    // client hasn't clicked into a different sub-tab (its target selector
+    // only matches inside #sec-view-whatsapp).
+    if (targetView === 'settings') renderWhatsAppSettings();
 
     refreshIcons();
   };
