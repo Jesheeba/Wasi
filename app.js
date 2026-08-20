@@ -338,10 +338,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.currentView === 'chat') renderChatList(state.chatTagFilter);
       }).catch(() => {});
     }
-    if (targetView === 'contacts') renderContacts();
+    if (targetView === 'contacts') {
+      // Same staleness fix as the chat view above: state.contacts is only
+      // otherwise updated by loadInitialData() at login, so a contact
+      // created since then (e.g. by an inbound message, or by connecting a
+      // WhatsApp number that syncs new data) never shows up here without
+      // this explicit refetch.
+      renderContacts();
+      authFetch('/api/contacts').then(contacts => {
+        state.contacts = contacts.map(adaptContact);
+        if (state.currentView === 'contacts') renderContacts();
+      }).catch(() => {});
+    }
     if (targetView === 'campaigns') renderBroadcasts();
     if (targetView === 'automation') { renderAutomation(); renderFlowsList(); }
-    if (targetView === 'template') renderTemplates();
+    if (targetView === 'template') {
+      // Same staleness fix — a template synced after login (e.g. right
+      // after connecting a WhatsApp number, which pulls in existing
+      // approved templates from Meta) never appeared here until a full page
+      // reload, since state.templates was never refetched on view switch.
+      renderTemplates();
+      authFetch('/api/templates').then(templates => {
+        state.templates = templates;
+        if (state.currentView === 'template') renderTemplates();
+      }).catch(() => {});
+    }
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
     if (targetView === 'payments') renderPaymentsTable();
@@ -529,12 +550,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  document.getElementById('new-conversation-trigger')?.addEventListener('click', () => {
+  // There is no "start a conversation with an arbitrary new number" flow —
+  // WhatsApp's 24h-session rule means we can only open a chat a contact has
+  // already messaged into, or reach a new number with a template send (see
+  // the Templates view). These buttons just jump into the most recent
+  // existing chat; with zero chats yet (a brand-new WABA connection, no
+  // inbound messages), state.chats[0] is undefined and this used to throw
+  // uncaught, so the click silently did nothing with no explanation.
+  function openMostRecentChatOrExplain() {
+    if (!state.chats.length) {
+      showToast('No conversations yet — a chat opens here once a contact messages your WhatsApp number, or you send them a template from Templates.');
+      return;
+    }
     openActiveChat(state.chats[0]);
-  });
-  document.getElementById('start-new-chat-btn')?.addEventListener('click', () => {
-    openActiveChat(state.chats[0]);
-  });
+  }
+  document.getElementById('new-conversation-trigger')?.addEventListener('click', openMostRecentChatOrExplain);
+  document.getElementById('start-new-chat-btn')?.addEventListener('click', openMostRecentChatOrExplain);
 
   const chatMessageInput = document.getElementById('chat-message-input');
   const sendMsgBtn = document.getElementById('send-msg-btn');
@@ -894,6 +925,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderContacts() {
     const contactsTableBody = document.getElementById('contacts-table-body');
     if (!contactsTableBody) return;
+
+    if (!state.contacts.length) {
+      contactsTableBody.innerHTML = '<tr><td colspan="6" style="padding:1rem;color:#6B7280;text-align:center;">No contacts yet. Contacts appear here once someone messages your connected WhatsApp number.</td></tr>';
+      return;
+    }
 
     contactsTableBody.innerHTML = '';
     state.contacts.forEach(c => {
@@ -1278,6 +1314,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderTemplates() {
     const templatesGrid = document.getElementById('templates-grid');
     if (!templatesGrid) return;
+
+    if (!state.templates.length) {
+      templatesGrid.innerHTML = '<p style="padding:1rem;color:#6B7280;">No templates yet. Connect a WhatsApp number to sync approved templates, or create one from Meta Business Manager.</p>';
+      return;
+    }
 
     templatesGrid.innerHTML = state.templates.map((t) => {
       const status = t.status || 'pending';
@@ -2519,8 +2560,11 @@ document.addEventListener('DOMContentLoaded', () => {
       status = await authFetch('/api/onboarding/whatsapp/status');
     } catch (err) {
       card.innerHTML = `<div style="padding:1rem;color:#EF4444;">${err.message}</div>`;
+      renderWhatsAppProfileTabs(null);
       return;
     }
+
+    renderWhatsAppProfileTabs(status);
 
     if (status.connected && status.waba) {
       card.innerHTML = `
@@ -2574,6 +2618,79 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = 'Connect WhatsApp';
       }
     });
+  }
+
+  // Fills the Profile / Message Link / Channel Settings inner tabs (Settings
+  // > WhatsApp) with the real connected number's identity, or an honest
+  // "not connected" state — see renderWhatsAppSettings's header comment for
+  // the bug this replaced (a permanently fake business name, phone number,
+  // address, and email shown to every client regardless of what, if
+  // anything, they'd actually connected). Meta's WhatsApp Business Profile
+  // API (description/address/email/category/website links) isn't
+  // integrated — there's no backend for those fields, so they get an honest
+  // note instead of a fake pre-filled form with no save handler behind it.
+  function attrEscape(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;');
+  }
+
+  function renderWhatsAppProfileTabs(status) {
+    const profileEl = document.getElementById('whatsapp-profile-content');
+    const linkEl = document.getElementById('whatsapp-message-link-content');
+    const settingsEl = document.getElementById('whatsapp-channel-settings-content');
+    if (!profileEl && !linkEl && !settingsEl) return;
+
+    const waba = status && status.connected ? status.waba : null;
+
+    if (!waba) {
+      const notConnected = '<div style="color:#6B7280;">Connect a WhatsApp number above to see its profile here.</div>';
+      if (profileEl) profileEl.innerHTML = notConnected;
+      if (linkEl) linkEl.innerHTML = notConnected;
+      if (settingsEl) settingsEl.innerHTML = notConnected;
+      return;
+    }
+
+    const name = waba.display_name || 'WhatsApp Business';
+    const phone = waba.display_phone_number || null;
+    const phoneLabel = phone || `Phone ID ${waba.phone_number_id} (dialable number not available — reconnect to fetch it)`;
+
+    if (profileEl) {
+      profileEl.innerHTML = `
+        <div class="profile-workspace-grid">
+          <div class="profile-form-card">
+            <p style="font-size:0.875rem;color:#6B7280;line-height:1.5;">
+              Business profile details — description, address, email, category, website links —
+              aren't synced from Meta yet. Set these directly in WhatsApp Manager; they'll appear
+              here once that sync is built.
+            </p>
+          </div>
+          <div class="whatsapp-preview-card">
+            <div class="preview-avatar">${escapeHtml(initialsFor(name))}</div>
+            <div style="font-weight:700;font-size:1.05rem;color:#1F2937;">${escapeHtml(name)}</div>
+            <div style="font-size:0.85rem;font-weight:600;color:#4B5563;margin-top:2px;">${escapeHtml(phoneLabel)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (linkEl) {
+      linkEl.innerHTML = phone
+        ? `
+          <div class="form-group">
+            <label class="form-label">Click-to-Chat Link</label>
+            <input type="text" class="form-input" readonly value="https://wa.me/${attrEscape(phone.replace(/[^\d]/g, ''))}" />
+          </div>
+        `
+        : '<div style="color:#6B7280;">Dialable phone number not available yet — reconnect this WhatsApp number to fetch it.</div>';
+    }
+
+    if (settingsEl) {
+      settingsEl.innerHTML = `
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input type="text" class="form-input" readonly value="${attrEscape(name)}" />
+        </div>
+      `;
+    }
   }
 
   // --- Modals ---

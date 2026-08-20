@@ -64,6 +64,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       waba_id,
       phone_number_id,
       display_name: details.verified_name || null,
+      display_phone_number: details.display_phone_number || null,
       quality_rating: details.quality_rating || null,
       access_token_encrypted: encrypt(accessToken),
       verified_at: new Date().toISOString(),
