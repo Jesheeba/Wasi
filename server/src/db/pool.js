@@ -1,4 +1,10 @@
 const { Pool } = require('pg');
+const { assertNotProductionDatabase } = require('../utils/dbSafety');
+
+// Throws immediately (before any query, before any test even starts) if
+// DATABASE_URL points at a known-production database and this isn't the
+// real production process. See dbSafety.js.
+assertNotProductionDatabase();
 
 // Local dev Postgres (docker-compose / embedded-postgres) has no TLS listener;
 // every hosted Postgres we deploy against (Supabase, Render, etc.) requires it.
