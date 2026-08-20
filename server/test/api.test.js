@@ -254,6 +254,53 @@ test('onboarding: whatsapp connect fails cleanly with a bogus code', async () =>
   assert.equal(res.status, 502);
 });
 
+test('onboarding: whatsapp connect skips phone registration for coexistence, still registers for plain migration', async () => {
+  // Coexistence-onboarded numbers are already registered on the WhatsApp
+  // Business app; calling register-with-PIN again would touch a number
+  // that's actively in use on someone's phone. Stubs metaClient the same
+  // way templateSync.test.js does, so this proves the route's branch logic
+  // without a real Meta app or a real number.
+  const metaClient = require('../src/utils/metaClient');
+  const original = {
+    exchangeCodeForToken: metaClient.exchangeCodeForToken,
+    exchangeForLongLivedToken: metaClient.exchangeForLongLivedToken,
+    subscribeAppToWaba: metaClient.subscribeAppToWaba,
+    registerPhoneNumber: metaClient.registerPhoneNumber,
+    getPhoneNumberDetails: metaClient.getPhoneNumberDetails,
+    listTemplates: metaClient.listTemplates,
+  };
+  const registerCalls = [];
+  metaClient.exchangeCodeForToken = async () => 'short-lived-token';
+  metaClient.exchangeForLongLivedToken = async () => 'long-lived-token';
+  metaClient.subscribeAppToWaba = async () => ({ success: true });
+  metaClient.registerPhoneNumber = async (phoneNumberId) => {
+    registerCalls.push(phoneNumberId);
+    return { success: true };
+  };
+  metaClient.getPhoneNumberDetails = async () => ({ verified_name: 'Test Business', quality_rating: 'GREEN' });
+  metaClient.listTemplates = async () => [];
+
+  try {
+    const coexRes = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
+      method: 'POST',
+      headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'fake', waba_id: 'fake-waba-coex', phone_number_id: 'fake-phone-coex', via_coexistence: true }),
+    });
+    assert.equal(coexRes.status, 200);
+    assert.deepEqual(registerCalls, [], 'coexistence connect must not call registerPhoneNumber');
+
+    const migRes = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
+      method: 'POST',
+      headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'fake', waba_id: 'fake-waba-mig', phone_number_id: 'fake-phone-mig' }),
+    });
+    assert.equal(migRes.status, 200);
+    assert.deepEqual(registerCalls, ['fake-phone-mig'], 'plain migration connect (via_coexistence omitted) must still call registerPhoneNumber');
+  } finally {
+    Object.assign(metaClient, original);
+  }
+});
+
 test('meta webhook: rejects an unsigned payload', async () => {
   const res = await fetch(`${baseUrl}/webhooks/meta`, {
     method: 'POST',

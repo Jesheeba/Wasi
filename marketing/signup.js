@@ -392,20 +392,20 @@
     const statusEl = document.getElementById('step3-status');
     statusEl.innerHTML = '<div class="status-pill pending">Waiting for Facebook popup…</div>';
     try {
-      const { code, waba_id, phone_number_id } = await window.WasiEmbeddedSignup.connect({ appId, configId });
-      await completeWhatsAppConnect(code, { waba_id, phone_number_id });
+      const { code, waba_id, phone_number_id, via_coexistence } = await window.WasiEmbeddedSignup.connect({ appId, configId });
+      await completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence });
     } catch (err) {
       statusEl.innerHTML = `<div class="status-pill error">${err.message}</div>`;
     }
   }
 
-  async function completeWhatsAppConnect(code, { waba_id, phone_number_id }) {
+  async function completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence }) {
     const statusEl = document.getElementById('step3-status');
     statusEl.innerHTML = '<div class="status-pill pending">Finishing setup on our side…</div>';
     try {
       const data = await api('/api/onboarding/whatsapp/connect', {
         method: 'POST',
-        body: { code, waba_id, phone_number_id },
+        body: { code, waba_id, phone_number_id, via_coexistence },
       });
       state.wabaConnected = true;
       statusEl.innerHTML = `<div class="status-pill success">Connected: ${(data.waba && data.waba.display_name) || phone_number_id}</div>`;

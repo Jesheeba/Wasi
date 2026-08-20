@@ -32,7 +32,7 @@ router.get('/whatsapp/status', asyncHandler(async (req, res) => {
 // registration, default template creation. All of it degrades to a clear error
 // (not a crash) when META_APP_ID/SECRET aren't configured for this environment.
 router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
-  const { code, waba_id, phone_number_id } = wabaConnectSchema.parse(req.body);
+  const { code, waba_id, phone_number_id, via_coexistence } = wabaConnectSchema.parse(req.body);
   const clientId = req.clientId;
 
   await wabasRepo.upsertForClient(clientId, {
@@ -46,8 +46,17 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     const accessToken = await metaClient.exchangeForLongLivedToken(shortLivedToken);
     await metaClient.subscribeAppToWaba(waba_id, accessToken);
 
-    const pin = String(crypto.randomInt(100000, 999999));
-    await metaClient.registerPhoneNumber(phone_number_id, accessToken, pin);
+    // Coexistence-onboarded numbers are already registered on the WhatsApp
+    // Business app on the owner's phone — calling register-with-PIN again
+    // would re-register a number that's actively in use there. Plain
+    // migration connects still need it: that's how an unregistered number
+    // gets activated on the Cloud API in the first place. Same config_id
+    // serves both flows now, so this must branch per-request, not be
+    // skipped globally.
+    if (!via_coexistence) {
+      const pin = String(crypto.randomInt(100000, 999999));
+      await metaClient.registerPhoneNumber(phone_number_id, accessToken, pin);
+    }
 
     const details = await metaClient.getPhoneNumberDetails(phone_number_id, accessToken);
 

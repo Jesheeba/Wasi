@@ -80,6 +80,12 @@ const wabaConnectSchema = z.object({
   code: z.string().min(1),
   waba_id: z.string().min(1),
   phone_number_id: z.string().min(1),
+  // Set by embeddedSignup.js from which FINISH_* event Meta actually fired —
+  // the one reliable signal for whether the business took the Coexistence
+  // path (keeps their WhatsApp Business app) vs plain migration. Trusted as
+  // sent, not re-derived here, since nothing else in this payload
+  // distinguishes the two paths.
+  via_coexistence: z.boolean().optional().default(false),
 });
 
 // Where one template parameter's value comes from — 'contact_field' reads a

@@ -51,14 +51,36 @@
         config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
-        extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+        // featureType enables the Coexistence sub-flow (business keeps using
+        // the WhatsApp Business app on their phone; Meta syncs history to the
+        // Cloud API connection instead of migrating the number off the app).
+        // An empty string here forces the plain migration flow for everyone,
+        // even businesses who need to keep their app — see FINISH_* handling
+        // below for why the two paths can't be told apart after the fact.
+        extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
       });
     });
 
+    // Coexistence completions fire a distinct event name, not plain FINISH —
+    // per Meta's "Onboard WhatsApp Business app users" doc. Which one fired
+    // is the only reliable signal for which path the business took, so it's
+    // captured explicitly here and threaded through as via_coexistence
+    // rather than left for the backend to infer from waba_id/phone_number_id
+    // shape (nothing in that data reliably distinguishes the two paths).
+    const FINISH_EVENTS = {
+      FINISH: false,
+      FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
+    };
+
     for (let attemptsLeft = 10; attemptsLeft > 0; attemptsLeft--) {
       if (lastMessage?.type === 'WA_EMBEDDED_SIGNUP') {
-        if (lastMessage.event === 'FINISH' && lastMessage.data) {
-          return { code, waba_id: lastMessage.data.waba_id, phone_number_id: lastMessage.data.phone_number_id };
+        if (Object.prototype.hasOwnProperty.call(FINISH_EVENTS, lastMessage.event) && lastMessage.data) {
+          return {
+            code,
+            waba_id: lastMessage.data.waba_id,
+            phone_number_id: lastMessage.data.phone_number_id,
+            via_coexistence: FINISH_EVENTS[lastMessage.event],
+          };
         }
         if (lastMessage.event === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
         if (lastMessage.event === 'ERROR') throw new Error(`Facebook reported an error: ${lastMessage.data?.error_message || 'unknown error'}`);

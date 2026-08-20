@@ -2557,13 +2557,13 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('WhatsApp connection is not configured on this platform yet — contact your admin.');
           return;
         }
-        const { code, waba_id, phone_number_id } = await window.WasiEmbeddedSignup.connect({
+        const { code, waba_id, phone_number_id, via_coexistence } = await window.WasiEmbeddedSignup.connect({
           appId: config.appId,
           configId: config.configId,
         });
         await authFetch('/api/onboarding/whatsapp/connect', {
           method: 'POST',
-          body: JSON.stringify({ code, waba_id, phone_number_id }),
+          body: JSON.stringify({ code, waba_id, phone_number_id, via_coexistence }),
         });
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();
