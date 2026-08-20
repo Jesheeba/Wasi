@@ -322,7 +322,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    if (targetView === 'chat') renderChatList();
+    if (targetView === 'chat') {
+      // Render whatever's cached immediately (no blank flash), then refresh
+      // from the server — state.chats is only otherwise updated by the
+      // poller (startPolling), which is a no-op while any other view is
+      // active, so a chat that arrived while the user was elsewhere never
+      // shows up here until this explicit refetch.
+      renderChatList(state.chatTagFilter);
+      authFetch('/api/chats').then(chats => {
+        state.chats = chats.map(adaptChat);
+        if (state.currentView === 'chat') renderChatList(state.chatTagFilter);
+      }).catch(() => {});
+    }
     if (targetView === 'contacts') renderContacts();
     if (targetView === 'campaigns') renderBroadcasts();
     if (targetView === 'automation') { renderAutomation(); renderFlowsList(); }
@@ -405,6 +416,23 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatMessages();
     } catch (err) {
       showToast(err.message);
+    }
+
+    // chats.unread_count only ever increments server-side (an inbound
+    // message bumps it — chatsRepo.insertInbound) — nothing previously
+    // cleared it back to 0 on view, anywhere in this codebase. Update the
+    // local badge immediately (chat.count is a live reference into
+    // state.chats, see adaptChat), then persist so it stays cleared across
+    // a reload/poll refresh instead of a stale count reappearing.
+    if (chat.count) {
+      chat.count = 0;
+      renderChatList(state.chatTagFilter);
+      try {
+        await authFetch(`/api/chats/${chat.id}`, { method: 'PATCH', body: JSON.stringify({ unread_count: 0 }) });
+      } catch (_err) {
+        // Non-fatal — the badge already cleared locally; next poll will
+        // just re-show the count if this write didn't stick.
+      }
     }
   }
 
