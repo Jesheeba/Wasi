@@ -209,6 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastMessageAt = state.activeChatMessages[state.activeChatMessages.length - 1].sent_at;
             renderMessages(state.activeChatMessages);
           }
+          // Unconditional, not just on new messages — the window's
+          // remaining-time countdown (and whether it just closed) changes
+          // with the clock even when nothing new arrived.
+          renderChatWindowStatus();
         }
         const chats = await authFetch('/api/chats');
         state.chats = chats.map(adaptChat);
@@ -401,6 +405,63 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeChatMessages = messages;
     state.lastMessageAt = messages.length ? messages[messages.length - 1].sent_at : null;
     renderMessages(messages);
+    renderChatWindowStatus();
+  }
+
+  // Mirrors messagingService.js's SESSION_WINDOW_MS / canSendFreeform exactly
+  // (24h since the last INBOUND message) — same client-side-mirror reasoning
+  // as extractTemplateParams: no server module to require() from a
+  // no-build-step page. GET /api/chats/:id/messages returns full history, no
+  // limit (chatsRepo.listMessages), so this is safe to compute from
+  // state.activeChatMessages rather than needing a dedicated endpoint.
+  const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  function computeSessionWindow(messages) {
+    const inboundTimes = (messages || [])
+      .filter(m => m.direction === 'in')
+      .map(m => new Date(m.sent_at).getTime());
+    if (!inboundTimes.length) return { open: false, lastInboundAt: null, closesAt: null };
+    const lastInboundMs = Math.max(...inboundTimes);
+    const closesAtMs = lastInboundMs + SESSION_WINDOW_MS;
+    return { open: Date.now() < closesAtMs, lastInboundAt: new Date(lastInboundMs).toISOString(), closesAt: new Date(closesAtMs).toISOString() };
+  }
+
+  function formatDuration(ms) {
+    const totalMinutes = Math.max(0, Math.round(ms / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
+  // Drives both the visible banner and whether plain text is even
+  // attemptable — the whole point being asked for here: an agent should
+  // never be able to type into a dead composer and think it sent. Nothing
+  // previously surfaced this at all (README-level gap, not a bug fix).
+  function renderChatWindowStatus() {
+    const banner = document.getElementById('chat-window-status');
+    if (!banner || !state.activeChatId) return;
+    const window_ = computeSessionWindow(state.activeChatMessages);
+    state.sessionWindowOpen = window_.open;
+
+    if (window_.open) {
+      const remaining = new Date(window_.closesAt).getTime() - Date.now();
+      banner.style.display = '';
+      banner.style.background = '#F0FDF4';
+      banner.style.color = '#15803D';
+      banner.textContent = `Session window open — closes in ${formatDuration(remaining)}. Free-form text and templates both work.`;
+      if (chatMessageInput) { chatMessageInput.disabled = false; chatMessageInput.placeholder = "Type a message or '/' for templates..."; }
+      if (sendMsgBtn) sendMsgBtn.disabled = false;
+    } else {
+      banner.style.display = '';
+      banner.style.background = '#FEF2F2';
+      banner.style.color = '#B91C1C';
+      banner.textContent = window_.lastInboundAt
+        ? 'Session window closed — free-form text will fail. Type / to send a template instead.'
+        : 'No inbound message yet from this contact — only a template can start the conversation.';
+      if (chatMessageInput) chatMessageInput.placeholder = "Window closed — type '/' to send a template";
+      if (sendMsgBtn) sendMsgBtn.disabled = true;
+    }
   }
 
   async function openActiveChat(chat) {
@@ -449,6 +510,15 @@ document.addEventListener('DOMContentLoaded', () => {
   async function sendCurrentMessage() {
     const text = chatMessageInput?.value.trim();
     if (!text || !state.activeChatId) return;
+    // Proactive, not just reactive — sendMsgBtn is already disabled when the
+    // window is closed (renderChatWindowStatus), but Enter-to-send bypasses
+    // a disabled button, and this is exactly the failure mode reported live:
+    // a message that looked sent (input cleared optimistically below) but
+    // never left, with only a toast that's easy to miss as the only sign.
+    if (state.sessionWindowOpen === false) {
+      showToast('Session window is closed — use / to send a template instead.');
+      return;
+    }
     chatMessageInput.value = '';
 
     try {
@@ -470,7 +540,229 @@ document.addEventListener('DOMContentLoaded', () => {
   chatMessageInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      if (isSlashPickerOpen()) { selectHighlightedSlashItem(); return; }
       sendCurrentMessage();
+    }
+    if (e.key === 'Escape' && isSlashPickerOpen()) closeSlashPicker();
+  });
+
+  /* ---------------------------------------------------------------
+     Slash-command template picker
+     --------------------------------------------------------------- */
+  const slashPicker = document.getElementById('template-slash-picker');
+  let slashHighlightIndex = 0;
+
+  function isSlashPickerOpen() {
+    return slashPicker && slashPicker.style.display !== 'none';
+  }
+
+  function closeSlashPicker() {
+    if (slashPicker) slashPicker.style.display = 'none';
+  }
+
+  function renderSlashPicker(filterText) {
+    if (!slashPicker) return;
+    const approved = (state.templates || []).filter(t => t.status === 'approved');
+    const matches = approved.filter(t => t.name.toLowerCase().includes(filterText.toLowerCase()));
+
+    if (!matches.length) {
+      slashPicker.innerHTML = approved.length
+        ? '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No approved templates match.</div>'
+        : '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No approved templates on this account yet.</div>';
+      slashPicker.style.display = '';
+      return;
+    }
+
+    slashHighlightIndex = 0;
+    slashPicker.innerHTML = matches.map((t, i) => `
+      <div class="slash-picker-item" data-template-name="${escapeHtml(t.name)}" data-index="${i}"
+           style="padding:10px 16px; cursor:pointer; ${i === 0 ? 'background:var(--color-primary-50, #F0FDF4);' : ''}">
+        <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t.name)}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(t.category)} &middot; ${escapeHtml((t.body || '').slice(0, 60))}</div>
+      </div>
+    `).join('');
+    slashPicker.style.display = '';
+
+    slashPicker.querySelectorAll('.slash-picker-item').forEach(item => {
+      item.addEventListener('click', () => selectSlashTemplate(item.dataset.templateName));
+    });
+  }
+
+  function selectHighlightedSlashItem() {
+    const highlighted = slashPicker?.querySelector(`.slash-picker-item[data-index="${slashHighlightIndex}"]`);
+    if (highlighted) selectSlashTemplate(highlighted.dataset.templateName);
+  }
+
+  function selectSlashTemplate(templateName) {
+    const template = (state.templates || []).find(t => t.name === templateName);
+    closeSlashPicker();
+    chatMessageInput.value = '';
+    if (template) openSendTemplateModal(template);
+  }
+
+  chatMessageInput?.addEventListener('input', () => {
+    const val = chatMessageInput.value;
+    if (val.startsWith('/')) {
+      renderSlashPicker(val.slice(1));
+    } else {
+      closeSlashPicker();
+    }
+  });
+
+  // Outside-click closes the picker without needing a blur-timing race
+  // against the item click handlers above.
+  document.addEventListener('click', (e) => {
+    if (!isSlashPickerOpen()) return;
+    if (e.target === chatMessageInput || slashPicker?.contains(e.target)) return;
+    closeSlashPicker();
+  });
+
+  /* ---------------------------------------------------------------
+     Send Template modal — the actual send, reusing the exact backend
+     path (POST /api/chats/:id/messages, type: 'template') broadcasts
+     and flow send_template nodes already use, so opt-in enforcement
+     (assertConsentForTemplate in messagingService.sendChatMessage)
+     applies automatically — nothing here bypasses it, it can't be
+     bypassed from this layer since the check lives server-side.
+     --------------------------------------------------------------- */
+  let sendTemplateTarget = null; // the template object while this modal is open
+
+  // Body params + (if TEXT) header params, deduped — mirrors
+  // routes/broadcasts.js's requiredParamNames on the server for the same
+  // template shape, but this is a one-off ad hoc send with values typed
+  // directly, not a contact-field/static mapping like broadcasts use.
+  function requiredParamsFor(template) {
+    const names = extractTemplateParams(template.body || '');
+    if (template.header_type === 'TEXT' && template.header_content) {
+      extractTemplateParams(template.header_content).forEach(p => { if (!names.includes(p)) names.push(p); });
+    }
+    return names;
+  }
+
+  function setSendTemplateError(message) {
+    const el = document.getElementById('send-chat-template-error');
+    if (!el) return;
+    el.textContent = message || '';
+    el.style.display = message ? '' : 'none';
+  }
+
+  function openSendTemplateModal(template) {
+    sendTemplateTarget = template;
+    setSendTemplateError(null);
+    document.getElementById('send-chat-template-name').textContent = template.name;
+
+    const params = requiredParamsFor(template);
+    const paramsContainer = document.getElementById('send-chat-template-params');
+    paramsContainer.innerHTML = params.length
+      ? params.map(p => `
+          <div class="form-group">
+            <label class="form-label">${escapeHtml(p)}</label>
+            <input type="text" class="form-input send-chat-template-param-input" data-param="${escapeHtml(p)}" />
+          </div>
+        `).join('')
+      : '<div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">This template has no parameters.</div>';
+
+    paramsContainer.querySelectorAll('.send-chat-template-param-input').forEach(input => {
+      input.addEventListener('input', updateSendTemplatePreview);
+    });
+
+    updateSendTemplatePreview();
+    document.getElementById('modal-send-chat-template')?.classList.add('open');
+  }
+
+  function collectSendTemplateParamValues() {
+    const values = {};
+    document.querySelectorAll('.send-chat-template-param-input').forEach(input => {
+      values[input.dataset.param] = input.value.trim();
+    });
+    return values;
+  }
+
+  function updateSendTemplatePreview() {
+    const bubble = document.getElementById('send-chat-template-preview');
+    if (!bubble || !sendTemplateTarget) return;
+    const t = sendTemplateTarget;
+    const values = collectSendTemplateParamValues();
+
+    let html = '';
+    if (t.header_type === 'TEXT' && t.header_content) {
+      html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(t.header_content, values))}</div>`;
+    }
+    html += `<div>${escapeHtml(substituteTemplateParams(t.body || '', values))}</div>`;
+    if (t.footer_text) {
+      html += `<div class="template-preview-footer">${escapeHtml(t.footer_text)}</div>`;
+    }
+    if (Array.isArray(t.buttons) && t.buttons.length > 0) {
+      const icon = { URL: '&#128279;', PHONE_NUMBER: '&#128222;', QUICK_REPLY: '&#8617;' };
+      html += `<div class="template-preview-buttons">${t.buttons.map(b =>
+        `<div class="template-preview-button">${icon[b.type] || ''} ${escapeHtml(b.text || '')}</div>`
+      ).join('')}</div>`;
+    }
+    bubble.innerHTML = html;
+  }
+
+  // Same split-by-component-type logic as
+  // server/src/utils/templateParamMapping.js's buildTemplateComponents,
+  // duplicated client-side for the same no-build-step reason as
+  // extractTemplateParams — a template's body and header params share the
+  // same {{name}} syntax but Meta sends them as separate component types.
+  function buildSendTemplateComponents(template, values) {
+    const bodyNames = extractTemplateParams(template.body || '');
+    const headerNames = template.header_type === 'TEXT' && template.header_content
+      ? extractTemplateParams(template.header_content)
+      : [];
+
+    const components = [];
+    if (headerNames.length) {
+      components.push({
+        type: 'header',
+        parameters: headerNames.map(name => ({ type: 'text', parameter_name: name, text: values[name] || '' })),
+      });
+    }
+    if (bodyNames.length) {
+      components.push({
+        type: 'body',
+        parameters: bodyNames.map(name => ({ type: 'text', parameter_name: name, text: values[name] || '' })),
+      });
+    }
+    return components;
+  }
+
+  document.getElementById('send-chat-template-submit-btn')?.addEventListener('click', async () => {
+    if (!sendTemplateTarget || !state.activeChatId) return;
+    setSendTemplateError(null);
+
+    const values = collectSendTemplateParamValues();
+    const missing = requiredParamsFor(sendTemplateTarget).filter(p => !values[p]);
+    if (missing.length) {
+      setSendTemplateError(`Fill in every parameter before sending — missing: ${missing.join(', ')}.`);
+      return;
+    }
+
+    const btn = document.getElementById('send-chat-template-submit-btn');
+    btn.disabled = true;
+    try {
+      await authFetch(`/api/chats/${state.activeChatId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'template',
+          templateName: sendTemplateTarget.name,
+          templateLanguage: sendTemplateTarget.language,
+          templateComponents: buildSendTemplateComponents(sendTemplateTarget, values),
+        }),
+      });
+      document.getElementById('modal-send-chat-template')?.classList.remove('open');
+      await refreshActiveChatMessages();
+      showToast('Template sent.');
+    } catch (err) {
+      // Left open on failure, on purpose — assertConsentForTemplate's
+      // "not opted in" message, a session/plan-limit error, or a real Meta
+      // rejection all need to be seen and acted on, not flashed in a toast
+      // and lost. This is the exact class of failure the window-status
+      // banner and this whole picker exist to make visible instead of silent.
+      setSendTemplateError(err.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 
