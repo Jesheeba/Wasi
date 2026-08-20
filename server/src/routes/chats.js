@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const chatsRepo = require('../repositories/chatsRepo');
+const contactsRepo = require('../repositories/contactsRepo');
 const messagingService = require('../services/messagingService');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, chatCreateSchema, chatUpdateSchema, messageSendSchema } = require('../utils/validate');
@@ -17,8 +18,20 @@ router.get('/:id', asyncHandler(async (req, res) => {
   res.json(chat);
 }));
 
+// contact_id routes through findOrCreateByContact — a blind create() here
+// would insert a second chat row for a contact who already has one (the
+// "New Conversation" flow in app.js calls this every time a contact is
+// picked, not just once, so this dedup is load-bearing, not defensive).
+// The contact is re-fetched server-side rather than trusting the client's
+// copy of name/phone/tag_id, which could be stale.
 router.post('/', asyncHandler(async (req, res) => {
   const data = chatCreateSchema.parse(req.body);
+  if (data.contact_id) {
+    const contact = await contactsRepo.findById(req.db, req.clientId, data.contact_id);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    const chat = await chatsRepo.findOrCreateByContact(req.db, req.clientId, contact);
+    return res.status(201).json(chat);
+  }
   const chat = await chatsRepo.create(req.db, req.clientId, data);
   res.status(201).json(chat);
 }));

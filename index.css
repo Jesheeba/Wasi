@@ -196,6 +196,11 @@ body {
   gap: 6px;
 }
 
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .btn-secondary:hover {
   background: #F8FAFC;
   border-color: #CBD5E1;

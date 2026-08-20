@@ -220,8 +220,11 @@
                 <div style="position: relative;">
                   <div id="template-slash-picker" style="display: none; position: absolute; bottom: 100%; left: 1.25rem; right: 1.25rem; margin-bottom: 6px; background: white; border: 1px solid var(--border-light); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 260px; overflow-y: auto; z-index: 30;"></div>
                   <div class="chat-input-bar">
-                    <input type="file" id="chat-attachment-input" style="display: none;" />
-                    <button class="btn-secondary" style="border: none; padding: 6px;" id="chat-attachment-btn"><i data-lucide="paperclip"></i></button>
+                    <!-- Disabled, not removed — used to insert a fake sent-message
+                         bubble for whatever file was picked, with no upload and
+                         no backend support at all (no media message type exists
+                         server-side). Re-enable once real media send is built. -->
+                    <button class="btn-secondary" style="border: none; padding: 6px;" id="chat-attachment-btn" disabled title="Media messages — coming soon"><i data-lucide="paperclip"></i></button>
                     <input type="text" id="chat-message-input" class="chat-input" placeholder="Type a message or '/' for templates..." autocomplete="off" />
                     <button class="btn-primary" style="width: 40px; padding: 0;" id="send-msg-btn"><i data-lucide="send"></i></button>
                   </div>
@@ -282,8 +285,11 @@
                 <input type="text" id="contact-search" placeholder="Search contacts..." />
               </div>
               <div style="display: flex; gap: 8px;">
-                <button class="btn-secondary"><i data-lucide="upload"></i> Import CSV</button>
-                <button class="btn-secondary"><i data-lucide="download"></i> Export CSV</button>
+                <!-- Disabled, not removed — bulk import needs a parser/mapping UI
+                     and a new backend bulk-create endpoint, neither of which
+                     exists yet. Export (real, below) needed neither. -->
+                <button class="btn-secondary" disabled title="Bulk import — coming soon"><i data-lucide="upload"></i> Import CSV</button>
+                <button class="btn-secondary" id="export-contacts-csv-btn"><i data-lucide="download"></i> Export CSV</button>
               </div>
             </div>
             <table class="data-table">
@@ -1604,6 +1610,54 @@
     </div>
   </div>
 
+  <!-- ===================== NEW CONVERSATION MODAL ===================== -->
+  <!-- The only way to originate a chat with a contact who's never messaged
+       in — picking a contact or entering a new number, then (if the 24h
+       session window isn't already open) an approved template, handed off
+       to the existing Send Chat Template modal below for the actual
+       params/preview/send. -->
+  <div id="modal-new-conversation" class="modal-overlay">
+    <div class="modal-box modal-box-wide">
+      <div class="modal-header">
+        <h3 class="modal-title">Start a New Conversation</h3>
+        <button class="close-modal-btn" data-close-modal="modal-new-conversation"><i data-lucide="x"></i></button>
+      </div>
+
+      <div id="new-conversation-step-who">
+        <div class="form-group">
+          <label class="form-label">Search contacts</label>
+          <input type="text" class="form-input" id="new-conversation-contact-search" placeholder="Search by name or phone…" autocomplete="off" />
+        </div>
+        <div id="new-conversation-contact-results" style="display:none; max-height:220px; overflow-y:auto; border:1px solid var(--border-light); border-radius:8px; margin-bottom:1rem;"></div>
+
+        <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); margin:0.75rem 0;">or</div>
+
+        <button type="button" class="btn-secondary" id="new-conversation-toggle-new-number" style="width:100%; justify-content:center;">
+          <i data-lucide="plus"></i> Enter a new number
+        </button>
+        <div id="new-conversation-new-number-fields" style="display:none; margin-top:1rem;">
+          <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-input" id="new-conversation-new-name" placeholder="e.g. Rahul Sharma" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number</label>
+            <input type="text" class="form-input" id="new-conversation-new-phone" placeholder="+91 9876543210" />
+          </div>
+          <button type="button" class="btn-primary" id="new-conversation-new-number-continue" style="width:auto; padding:0 20px;">Continue</button>
+        </div>
+      </div>
+
+      <div id="new-conversation-step-template" style="display:none;">
+        <div id="new-conversation-template-intro" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;"></div>
+        <div id="new-conversation-template-list" style="max-height:280px; overflow-y:auto; border:1px solid var(--border-light); border-radius:8px;"></div>
+        <div style="margin-top:1rem;">
+          <button type="button" class="btn-secondary" id="new-conversation-back-btn">Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== SEND CHAT TEMPLATE MODAL ===================== -->
   <div id="modal-send-chat-template" class="modal-overlay">
     <div class="modal-box modal-box-wide">
@@ -1633,6 +1687,6 @@
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260820f"></script>
+  <script src="app.js?v=20260820g"></script>
 </body>
 </html>

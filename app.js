@@ -556,22 +556,162 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // There is no "start a conversation with an arbitrary new number" flow —
-  // WhatsApp's 24h-session rule means we can only open a chat a contact has
-  // already messaged into, or reach a new number with a template send (see
-  // the Templates view). These buttons just jump into the most recent
-  // existing chat; with zero chats yet (a brand-new WABA connection, no
-  // inbound messages), state.chats[0] is undefined and this used to throw
-  // uncaught, so the click silently did nothing with no explanation.
-  function openMostRecentChatOrExplain() {
-    if (!state.chats.length) {
-      showToast('No conversations yet — a chat opens here once a contact messages your WhatsApp number, or you send them a template from Templates.');
+  /* ---------------------------------------------------------------
+     New Conversation — the only way to originate a chat with a contact
+     who's never messaged in. Two steps: pick a contact (or enter a new
+     number), then — only if the 24h session window isn't already open —
+     an approved template, handed off to the existing Send Chat Template
+     modal for the actual params/preview/send. WhatsApp's Cloud API can't
+     originate or re-open a conversation with free text, so the template
+     step isn't optional whenever the window is closed, whether this is a
+     brand-new chat (never opened) or an existing one that's gone quiet.
+     --------------------------------------------------------------- */
+  function openNewConversationModal() {
+    document.getElementById('new-conversation-contact-search').value = '';
+    document.getElementById('new-conversation-contact-results').innerHTML = '';
+    document.getElementById('new-conversation-contact-results').style.display = 'none';
+    document.getElementById('new-conversation-new-number-fields').style.display = 'none';
+    document.getElementById('new-conversation-new-name').value = '';
+    document.getElementById('new-conversation-new-phone').value = '';
+    document.getElementById('new-conversation-step-who').style.display = '';
+    document.getElementById('new-conversation-step-template').style.display = 'none';
+    document.getElementById('modal-new-conversation')?.classList.add('open');
+  }
+  function closeNewConversationModal() {
+    document.getElementById('modal-new-conversation')?.classList.remove('open');
+  }
+  document.getElementById('new-conversation-trigger')?.addEventListener('click', openNewConversationModal);
+  document.getElementById('start-new-chat-btn')?.addEventListener('click', openNewConversationModal);
+
+  document.getElementById('new-conversation-contact-search')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const resultsEl = document.getElementById('new-conversation-contact-results');
+    if (!q) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; return; }
+
+    const matches = state.contacts.filter(c =>
+      c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q)
+    ).slice(0, 20);
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = matches.length
+      ? matches.map(c => `
+          <div class="new-conversation-contact-item" data-contact-id="${c.id}" style="padding:10px 16px; cursor:pointer; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; gap:10px;">
+            <span style="font-weight:600; font-size:0.85rem;">${escapeHtml(c.name)}</span>
+            <span style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(c.phone)}</span>
+          </div>
+        `).join('')
+      : '<div style="padding:10px 16px; font-size:0.85rem; color:var(--text-muted);">No contacts match.</div>';
+    resultsEl.querySelectorAll('.new-conversation-contact-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const contact = state.contacts.find(c => c.id === item.dataset.contactId);
+        if (contact) proceedWithContact(contact);
+      });
+    });
+  });
+
+  document.getElementById('new-conversation-toggle-new-number')?.addEventListener('click', () => {
+    document.getElementById('new-conversation-new-number-fields').style.display = '';
+  });
+
+  document.getElementById('new-conversation-new-number-continue')?.addEventListener('click', async () => {
+    const name = document.getElementById('new-conversation-new-name').value.trim();
+    const phone = document.getElementById('new-conversation-new-phone').value.trim();
+    if (!name || !phone) { showToast('Enter a name and phone number.'); return; }
+
+    const btn = document.getElementById('new-conversation-new-number-continue');
+    btn.disabled = true;
+    try {
+      // opt_in_status is never set here — it defaults to 'unknown' at the
+      // DB level (contacts table, migration 012_consent_tracking.js), the
+      // same as every contact added via the Contacts view's Add Contact
+      // form. That's what makes assertConsentForTemplate correctly refuse
+      // a Marketing-category template to a number nobody has actually
+      // opted in yet, even though this flow makes it easy to reach one.
+      const contact = await authFetch('/api/contacts', {
+        method: 'POST',
+        body: JSON.stringify({ name, phone }),
+      });
+      const adapted = adaptContact(contact);
+      state.contacts.unshift(adapted);
+      await proceedWithContact(adapted);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Always goes through POST /api/chats with contact_id set — the backend
+  // dedupes via findOrCreateByContact (server/src/routes/chats.js), so this
+  // is safe to call for a contact who already has a chat: it returns that
+  // same chat rather than creating a duplicate. Real message history is
+  // then fetched to compute the actual session-window state — never
+  // inferred from "is this chat new or old", since an existing chat can be
+  // just as cold as a brand-new one.
+  async function proceedWithContact(contact) {
+    try {
+      const chatRaw = await authFetch('/api/chats', {
+        method: 'POST',
+        body: JSON.stringify({ name: contact.name, phone: contact.phone, contact_id: contact.id }),
+      });
+      const messages = await authFetch(`/api/chats/${chatRaw.id}/messages`);
+      const windowOpen = computeSessionWindow(messages).open;
+
+      let chat = state.chats.find(c => c.id === chatRaw.id);
+      if (!chat) {
+        chat = adaptChat(chatRaw);
+        state.chats.unshift(chat);
+      }
+
+      if (state.currentView !== 'chat') switchView('chat');
+      await openActiveChat(chat);
+      renderChatList(state.chatTagFilter);
+
+      if (windowOpen) {
+        closeNewConversationModal();
+        return;
+      }
+
+      // Window closed (or never opened) — a template is required. The chat
+      // is already open underneath (state.activeChatId is set), so once a
+      // template is picked, the existing Send Chat Template modal sends
+      // straight into it and refreshes this same view.
+      document.getElementById('new-conversation-step-who').style.display = 'none';
+      document.getElementById('new-conversation-step-template').style.display = '';
+      renderNewConversationTemplateList();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  function renderNewConversationTemplateList() {
+    const listEl = document.getElementById('new-conversation-template-list');
+    const introEl = document.getElementById('new-conversation-template-intro');
+    introEl.textContent = "This contact hasn't messaged in the last 24 hours, so the conversation has to start with an approved template.";
+
+    const approved = (state.templates || []).filter(t => t.status === 'approved');
+    if (!approved.length) {
+      listEl.innerHTML = '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No approved templates on this account yet.</div>';
       return;
     }
-    openActiveChat(state.chats[0]);
+    listEl.innerHTML = approved.map(t => `
+      <div class="new-conversation-template-item" data-template-name="${escapeHtml(t.name)}" style="padding:10px 16px; cursor:pointer; border-bottom:1px solid var(--border-light);">
+        <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t.name)}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(t.category)} &middot; ${escapeHtml((t.body || '').slice(0, 60))}</div>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.new-conversation-template-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const template = approved.find(t => t.name === item.dataset.templateName);
+        closeNewConversationModal();
+        if (template) openSendTemplateModal(template);
+      });
+    });
   }
-  document.getElementById('new-conversation-trigger')?.addEventListener('click', openMostRecentChatOrExplain);
-  document.getElementById('start-new-chat-btn')?.addEventListener('click', openMostRecentChatOrExplain);
+
+  document.getElementById('new-conversation-back-btn')?.addEventListener('click', () => {
+    document.getElementById('new-conversation-step-template').style.display = 'none';
+    document.getElementById('new-conversation-step-who').style.display = '';
+  });
 
   const chatMessageInput = document.getElementById('chat-message-input');
   const sendMsgBtn = document.getElementById('send-msg-btn');
@@ -859,27 +999,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- Chat Attachment Picker ---
-  const chatAttachmentBtn = document.getElementById('chat-attachment-btn');
-  const chatAttachmentInput = document.getElementById('chat-attachment-input');
-
-  chatAttachmentBtn?.addEventListener('click', () => chatAttachmentInput?.click());
-  chatAttachmentInput?.addEventListener('change', () => {
-    const file = chatAttachmentInput.files?.[0];
-    if (!file || !state.activeChatId) return;
-
-    const msgContainer = document.getElementById('chat-messages-container');
-    if (msgContainer) {
-      msgContainer.insertAdjacentHTML('beforeend', `
-        <div class="msg-bubble msg-out">
-          <div>📎 ${file.name}</div>
-          <div class="msg-time">Just now</div>
-        </div>
-      `);
-      msgContainer.scrollTop = msgContainer.scrollHeight;
-    }
-    chatAttachmentInput.value = '';
-  });
+  // Chat attachment button is disabled in index.html (no upload backend
+  // exists) — used to insert a fake sent-message bubble here with no
+  // network call at all. Removed along with it, not left as dead code.
 
   function renderChatList(tagFilter) {
     const inboxChatList = document.getElementById('inbox-chat-list');
@@ -989,6 +1111,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAutomation() {
     const automationRulesGrid = document.getElementById('automation-rules-grid');
     if (!automationRulesGrid) return;
+
+    if (!state.automationRules.length) {
+      automationRulesGrid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">No rules yet.</div>';
+      return;
+    }
 
     automationRulesGrid.innerHTML = '';
     state.automationRules.forEach(rule => {
@@ -2440,6 +2567,34 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('#contacts-table-body tr').forEach(row => {
       row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
+  });
+
+  // --- Contacts Export CSV ---
+  // Real, not disabled — state.contacts is already loaded client-side, so
+  // this needed no backend work, unlike Import (a parser/mapping UI and a
+  // bulk-create endpoint neither of which exist yet).
+  function csvField(value) {
+    const s = String(value ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById('export-contacts-csv-btn')?.addEventListener('click', () => {
+    if (!state.contacts.length) { showToast('No contacts to export.'); return; }
+
+    const header = ['Name', 'Phone', 'Tag', 'Status', 'Opt-In', 'Created'];
+    const rows = state.contacts.map(c => [
+      c.name, c.phone, c.tag === '—' ? '' : c.tag, c.status, c.optInStatus, c.created,
+    ].map(csvField).join(','));
+    const csv = [header.join(','), ...rows].join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `wasi-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   });
 
   // --- Secondary Sidebar Navigation inside Reports ---
