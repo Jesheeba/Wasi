@@ -567,7 +567,10 @@
           <div class="page-title-bar">
             <div>
               <h1 class="page-title">Payments & UPI</h1>
-              <p class="page-subtitle">WhatsApp Pay & Razorpay in-chat payment links</p>
+              <!-- "WhatsApp Pay" dropped — only Razorpay is actually
+                   integrated (razorpayClient.js); the Gateway column below
+                   never showed anything but "Razorpay" for real. -->
+              <p class="page-subtitle">Razorpay in-chat payment links</p>
             </div>
             <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-payment-modal"><i data-lucide="plus"></i> Create Payment Link</button>
           </div>
@@ -583,21 +586,15 @@
                   <th>Status</th>
                 </tr>
               </thead>
+              <!-- renderPaymentsTable() (app.js) already fetches real data
+                   from GET /api/payment-links (real Razorpay-backed) — this
+                   was a fake "loading" state, not a missing feature: two
+                   hardcoded fake "Paid" transactions shown until that async
+                   fetch resolved and overwrote them, same bug class as the
+                   WhatsApp channel card and Billing/Subscription tabs
+                   before their fix. -->
               <tbody id="payments-table-body">
-                <tr>
-                  <td>#TXN-98401</td>
-                  <td>Alex Kumar</td>
-                  <td>₹1,499.00</td>
-                  <td>Razorpay UPI</td>
-                  <td><span class="status-badge active">Paid</span></td>
-                </tr>
-                <tr>
-                  <td>#TXN-98402</td>
-                  <td>Priya Sharma</td>
-                  <td>₹2,999.00</td>
-                  <td>WhatsApp Pay</td>
-                  <td><span class="status-badge active">Paid</span></td>
-                </tr>
+                <tr><td colspan="5" style="text-align:center;color:#6B7280;">Loading…</td></tr>
               </tbody>
             </table>
           </div>
