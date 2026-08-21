@@ -10,9 +10,10 @@ const flowEdgesRepo = require('../repositories/flowEdgesRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const {
   uuid, automationFlowCreateSchema, automationFlowUpdateSchema,
-  flowNodeCreateSchema, flowNodeUpdateSchema, flowEdgeCreateSchema,
+  flowNodeCreateSchema, flowNodeUpdateSchema, flowEdgeCreateSchema, flowEdgeUpdateSchema,
 } = require('../utils/validate');
 const { isEdgeTypeLegalForNode } = require('../services/flowEngine');
+const { validateFlow } = require('../services/flowValidation');
 
 const router = Router();
 
@@ -29,18 +30,42 @@ router.post('/', asyncHandler(async (req, res) => {
 // Full graph in one call — the editor needs the flow, every node, and
 // every edge to render the step list; fetching them as three separate
 // round trips from the client would just be slower for no benefit.
+// `issues` (server/src/services/flowValidation.js) rides along on every
+// fetch, not just at activation time, so the editor can show problems live
+// while a flow is still being built, not just when someone tries to
+// activate it.
 router.get('/:id', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const flow = await automationFlowsRepo.findById(req.db, req.clientId, req.params.id);
   if (!flow) return res.status(404).json({ error: 'Not found' });
   const nodes = await flowNodesRepo.listByFlowId(req.db, req.clientId, flow.id);
   const edges = await flowEdgesRepo.listByFlowId(req.db, req.clientId, flow.id);
-  res.json({ ...flow, nodes, edges });
+  const issues = await validateFlow(req.db, req.clientId, nodes, edges);
+  res.json({ ...flow, nodes, edges, issues });
 }));
 
 router.patch('/:id', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const data = automationFlowUpdateSchema.parse(req.body);
+
+  // Activation is the one transition that must not be allowed to save
+  // something that's confirmed broken — draft edits and archiving are
+  // unrestricted (a flow under construction is expected to be transiently
+  // incomplete). Re-validates against the CURRENT nodes/edges rather than
+  // trusting the client's last-fetched copy, since node/edge state could
+  // have changed since this modal was opened.
+  if (data.status === 'active') {
+    const nodes = await flowNodesRepo.listByFlowId(req.db, req.clientId, req.params.id);
+    const edges = await flowEdgesRepo.listByFlowId(req.db, req.clientId, req.params.id);
+    const issues = await validateFlow(req.db, req.clientId, nodes, edges);
+    if (issues.length > 0) {
+      return res.status(400).json({
+        error: 'This flow has unresolved issues and cannot be activated.',
+        issues,
+      });
+    }
+  }
+
   const flow = await automationFlowsRepo.update(req.db, req.clientId, req.params.id, data);
   if (!flow) return res.status(404).json({ error: 'Not found' });
   res.json(flow);
@@ -116,6 +141,18 @@ router.post('/:id/edges', asyncHandler(async (req, res) => {
 
   const edge = await flowEdgesRepo.create(req.db, req.clientId, req.params.id, data);
   res.status(201).json(edge);
+}));
+
+// Reordering only (priority) — see flowEdgesRepo.update's comment. The
+// step editor's move-up/move-down controls call this twice per swap (once
+// per edge).
+router.patch('/:id/edges/:edgeId', asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  uuid.parse(req.params.edgeId);
+  const data = flowEdgeUpdateSchema.parse(req.body);
+  const edge = await flowEdgesRepo.update(req.db, req.clientId, req.params.edgeId, data);
+  if (!edge) return res.status(404).json({ error: 'Not found' });
+  res.json(edge);
 }));
 
 router.delete('/:id/edges/:edgeId', asyncHandler(async (req, res) => {

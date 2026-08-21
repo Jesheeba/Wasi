@@ -25,14 +25,35 @@ async function listByFlowId(db, clientId, flowId) {
   return rows;
 }
 
+// When priority isn't explicitly given, this appends the new edge after
+// every existing sibling from the same node (max existing priority + 1)
+// rather than defaulting to 0 — the editor never used to send priority at
+// all, which meant every edge tied at 0 and the real order was silently
+// whatever created_at happened to be. Explicit priority is now the actual
+// source of truth from the moment an edge is created, not an accident of
+// insertion order.
 async function create(db, clientId, flowId, { from_node_id, to_node_id, condition_type, condition_value, priority }) {
   const { rows } = await db.query(
     `insert into flow_edges (flow_id, client_id, from_node_id, to_node_id, condition_type, condition_value, priority)
-     values ($1, $2, $3, $4, $5, $6, coalesce($7, 0))
+     values ($1, $2, $3, $4, $5, $6,
+       coalesce($7, (select coalesce(max(priority), -1) + 1 from flow_edges where from_node_id = $3 and client_id = $2))
+     )
      returning *`,
     [flowId, clientId, from_node_id, to_node_id, condition_type, condition_value || null, priority]
   );
   return rows[0];
+}
+
+// Reordering sibling branches — the step editor's move-up/move-down
+// controls swap two edges' priority via two calls to this. Only priority is
+// updatable here; changing condition_type/condition_value/target is a
+// delete-and-recreate, same as today (this doesn't change that).
+async function update(db, clientId, id, { priority }) {
+  const { rows } = await db.query(
+    `update flow_edges set priority = $3 where client_id = $1 and id = $2 returning *`,
+    [clientId, id, priority]
+  );
+  return rows[0] || null;
 }
 
 async function remove(db, clientId, id) {
@@ -43,4 +64,4 @@ async function remove(db, clientId, id) {
   return rowCount > 0;
 }
 
-module.exports = { listForNode, listByFlowId, create, remove };
+module.exports = { listForNode, listByFlowId, create, update, remove };

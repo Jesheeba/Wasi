@@ -195,6 +195,12 @@ const flowEdgeCreateSchema = z.object({
   priority: z.number().int().optional(),
 });
 
+// Reordering only — see flowEdgesRepo.update's comment for why this is the
+// one field editable in place rather than delete-and-recreate.
+const flowEdgeUpdateSchema = z.object({
+  priority: z.number().int(),
+});
+
 const templateButtonSchema = z.object({
   type: z.enum(['QUICK_REPLY', 'URL', 'PHONE_NUMBER']),
   text: z.string().min(1).max(25),
@@ -379,6 +385,7 @@ module.exports = {
   flowNodeCreateSchema,
   flowNodeUpdateSchema,
   flowEdgeCreateSchema,
+  flowEdgeUpdateSchema,
   messageTemplateCreateSchema,
   templateStatusUpdateSchema,
   supportTicketCreateSchema,

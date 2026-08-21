@@ -1219,14 +1219,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const graph = state.currentFlowGraph;
     if (!graph) return;
 
+    const issues = graph.issues || [];
+    const issuesByNode = {};
+    issues.forEach(issue => {
+      if (!issue.nodeId) return;
+      (issuesByNode[issue.nodeId] = issuesByNode[issue.nodeId] || []).push(issue);
+    });
+
     const statusBadge = document.getElementById('bot-flow-editor-status-badge');
     statusBadge.textContent = graph.status;
     statusBadge.className = `status-badge ${graph.status === 'active' ? 'active' : ''}`;
     const toggleBtn = document.getElementById('bot-flow-editor-toggle-status-btn');
     toggleBtn.textContent = graph.status === 'active' ? 'Archive Flow' : 'Activate Flow';
+    // Only gate the draft/archived -> active direction — archiving an
+    // already-active flow never fails validation, so it's never blocked
+    // here. The server re-checks regardless (routes/automationFlows.js's
+    // PATCH /:id) since this is a convenience, not the real enforcement.
+    const blocksActivation = graph.status !== 'active' && issues.length > 0;
+    toggleBtn.disabled = blocksActivation;
+    toggleBtn.title = blocksActivation ? `Fix ${issues.length} issue${issues.length === 1 ? '' : 's'} before activating this flow.` : '';
     document.getElementById('bot-flow-editor-entry-label').textContent = graph.entry_node_id
       ? `Entry node: ${findNode(graph.entry_node_id)?.type ? FLOW_NODE_TYPE_LABELS[findNode(graph.entry_node_id).type] : '—'}`
       : 'No entry node yet — the first node you add becomes the entry point.';
+
+    const banner = document.getElementById('bot-flow-editor-issues-banner');
+    if (banner) {
+      banner.innerHTML = issues.length
+        ? `<div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: #991B1B;">
+            <strong>${issues.length} issue${issues.length === 1 ? '' : 's'} found</strong> — these would fail or misbehave at runtime and block activating this flow.
+            <ul style="margin: 0.4rem 0 0; padding-left: 1.2rem;">
+              ${issues.map(i => `<li>${escapeHtml(i.message)}</li>`).join('')}
+            </ul>
+          </div>`
+        : '';
+    }
 
     const container = document.getElementById('bot-flow-editor-nodes');
     if (!graph.nodes.length) {
@@ -1237,15 +1263,37 @@ document.addEventListener('DOMContentLoaded', () => {
     container.innerHTML = graph.nodes.map(node => {
       const edges = graph.edges.filter(e => e.from_node_id === node.id);
       const isEntry = node.id === graph.entry_node_id;
-      const edgeRows = edges.map(e => `
+      const nodeIssues = issuesByNode[node.id] || [];
+      // Reordering only makes sense among non-'default' siblings — a
+      // default edge always sorts last regardless of priority
+      // (flowEdgesRepo.listForNode), so moving it up/down would be a no-op
+      // control that does nothing, which is worse than not offering it.
+      const reorderableEdges = edges.filter(e => e.condition_type !== 'default');
+      const edgeRows = edges.map(e => {
+        const idxInReorderable = reorderableEdges.findIndex(r => r.id === e.id);
+        const canReorder = idxInReorderable !== -1;
+        const moveButtons = canReorder ? `
+          <button type="button" class="move-flow-edge-btn" data-edge-id="${e.id}" data-direction="up" ${idxInReorderable === 0 ? 'disabled' : ''} title="Move up" style="border: none; background: none; color: ${idxInReorderable === 0 ? '#CBD5E1' : '#475569'}; cursor: ${idxInReorderable === 0 ? 'default' : 'pointer'}; font-size: 0.75rem; padding: 0 2px;">&uarr;</button>
+          <button type="button" class="move-flow-edge-btn" data-edge-id="${e.id}" data-direction="down" ${idxInReorderable === reorderableEdges.length - 1 ? 'disabled' : ''} title="Move down" style="border: none; background: none; color: ${idxInReorderable === reorderableEdges.length - 1 ? '#CBD5E1' : '#475569'}; cursor: ${idxInReorderable === reorderableEdges.length - 1 ? 'default' : 'pointer'}; font-size: 0.75rem; padding: 0 2px;">&darr;</button>
+        ` : '';
+        return `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: #F8FAFC; border-radius: 6px; margin-top: 0.4rem; font-size: 0.8rem;">
           <span>${FLOW_EDGE_TYPE_LABELS[e.condition_type] || e.condition_type}${e.condition_value ? ` "${escapeHtml(e.condition_value)}"` : ''} &rarr; ${escapeHtml(findNode(e.to_node_id) ? FLOW_NODE_TYPE_LABELS[findNode(e.to_node_id).type] : '—')}</span>
-          <button type="button" class="delete-flow-edge-btn" data-edge-id="${e.id}" style="border: none; background: none; color: #DC2626; cursor: pointer; font-size: 0.75rem;">Remove</button>
+          <span style="display: flex; align-items: center; gap: 4px;">
+            ${moveButtons}
+            <button type="button" class="delete-flow-edge-btn" data-edge-id="${e.id}" style="border: none; background: none; color: #DC2626; cursor: pointer; font-size: 0.75rem;">Remove</button>
+          </span>
         </div>
-      `).join('');
+      `;
+      }).join('');
       const canAddEdge = (FLOW_EDGE_TYPES_BY_NODE_TYPE[node.type] || []).length > 0;
+      const issueRows = nodeIssues.length ? `
+        <div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 6px; padding: 0.5rem 0.7rem; margin: 0.5rem 0; font-size: 0.78rem; color: #991B1B;">
+          ${nodeIssues.map(i => `<div>${escapeHtml(i.message)}</div>`).join('')}
+        </div>
+      ` : '';
       return `
-        <div style="border: 1px solid var(--border-light); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem;" data-node-id="${node.id}">
+        <div style="border: 1px solid ${nodeIssues.length ? '#FCA5A5' : 'var(--border-light)'}; border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem;" data-node-id="${node.id}">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
               <span style="font-weight: 700;">${FLOW_NODE_TYPE_LABELS[node.type] || node.type}</span>
@@ -1257,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div style="font-size: 0.85rem; color: var(--text-muted); margin: 0.5rem 0;">${nodeConfigSummary(node)}</div>
+          ${issueRows}
           ${edgeRows}
           ${canAddEdge ? `<button type="button" class="add-flow-edge-btn btn-secondary" data-node-id="${node.id}" style="width: auto; padding: 2px 10px; font-size: 0.75rem; margin-top: 0.5rem;"><i data-lucide="plus" style="width: 12px;"></i> Add Branch</button>` : ''}
         </div>
@@ -2434,9 +2483,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const setEntryBtn = e.target.closest('.set-entry-node-btn');
     const addEdgeBtn = e.target.closest('.add-flow-edge-btn');
     const deleteEdgeBtn = e.target.closest('.delete-flow-edge-btn');
+    const moveEdgeBtn = e.target.closest('.move-flow-edge-btn:not([disabled])');
 
     try {
-      if (deleteNodeBtn) {
+      if (moveEdgeBtn) {
+        const edge = state.currentFlowGraph.edges.find(x => x.id === moveEdgeBtn.dataset.edgeId);
+        // Same filter as renderFlowEditor's reorderableEdges — the array is
+        // already in display/priority order (the API returns edges
+        // pre-sorted per flowEdgesRepo's default-last/priority/created_at
+        // ordering), so no client-side re-sort is needed here.
+        const siblings = state.currentFlowGraph.edges.filter(x => x.from_node_id === edge.from_node_id && x.condition_type !== 'default');
+        const idx = siblings.findIndex(x => x.id === edge.id);
+        const swapIdx = moveEdgeBtn.dataset.direction === 'up' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= siblings.length) return;
+        const other = siblings[swapIdx];
+        await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges/${edge.id}`, { method: 'PATCH', body: JSON.stringify({ priority: other.priority }) });
+        await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges/${other.id}`, { method: 'PATCH', body: JSON.stringify({ priority: edge.priority }) });
+        await openFlowEditor(state.currentFlowGraph.id);
+      } else if (deleteNodeBtn) {
         await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/nodes/${deleteNodeBtn.dataset.nodeId}`, { method: 'DELETE' });
         await openFlowEditor(state.currentFlowGraph.id);
       } else if (setEntryBtn) {
