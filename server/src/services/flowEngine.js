@@ -197,10 +197,35 @@ async function executeSendTemplate(db, clientId, contact, chat, node) {
 // does NOT touch contact_flow_state itself, so the caller can distinguish
 // "starting a new flow" (INSERT) from "continuing one" (CAS UPDATE) without
 // this function needing to know which.
-async function runToRest(db, clientId, contact, chat, flowId, startNodeId) {
+//
+// fallbackNodeId is the contact's own current_node_id at the moment this
+// call started (defaults to startNodeId, correct for startFlow's brand-new
+// row — see its comment on why that specific race is already prevented
+// elsewhere). It exists because startNodeId — or a later node reached by
+// following an 'always' edge — can legitimately not exist: only a
+// contact's CURRENT node is FK-protected against deletion (migration
+// 023_automation_flows.js's current_node_id has no onDelete, so Postgres
+// blocks that one specific delete); a node one hop further along a chain
+// has no such protection and can be deleted out from under an in-flight
+// advance. flowNodesRepo.findById returns null, not a throw, for a missing
+// row — without this fallback, that null would either be dereferenced
+// directly (a crash) or get written into contact_flow_state.current_node_id
+// (NOT NULL, so that's a second, different crash) instead of leaving the
+// contact at the real node they're still safely on.
+async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallbackNodeId = startNodeId) {
   let node = await flowNodesRepo.findById(db, clientId, startNodeId);
+  let lastRealNodeId = fallbackNodeId;
 
   while (true) {
+    if (!node) {
+      await flowEventsRepo.record(db, {
+        clientId, contactId: contact.id, flowId, nodeId: lastRealNodeId,
+        eventType: 'stalled',
+        detail: { error: 'The next node in this flow no longer exists — it was likely deleted while this contact was mid-flow.' },
+      });
+      return { nodeId: lastRealNodeId, status: 'stalled' };
+    }
+
     try {
       await executeNode(db, clientId, contact, chat, node);
     } catch (err) {
@@ -215,6 +240,7 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId) {
       clientId, contactId: contact.id, flowId, nodeId: node.id,
       eventType: node.type === 'end' ? 'completed' : 'entered',
     });
+    lastRealNodeId = node.id;
 
     if (node.type === 'end') {
       return { nodeId: node.id, status: 'completed' };
@@ -282,7 +308,11 @@ async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge)
     detail: { edgeId: matchedEdge.id, conditionType: matchedEdge.condition_type, conditionValue: matchedEdge.condition_value },
   });
 
-  const rest = await runToRest(db, clientId, contact, chat, flowState.flow_id, matchedEdge.to_node_id);
+  // fallbackNodeId = flowState.current_node_id, not the default (matchedEdge.to_node_id)
+  // — if that target (or a node further along an 'always' chain from it)
+  // doesn't exist, the contact must stay reported at the real node they're
+  // still on, never at the nonexistent one (see runToRest's comment).
+  const rest = await runToRest(db, clientId, contact, chat, flowState.flow_id, matchedEdge.to_node_id, flowState.current_node_id);
   const updated = await contactFlowStateRepo.advance(db, {
     clientId, contactId: contact.id,
     expectedNodeId: flowState.current_node_id, expectedVersion: flowState.version,
@@ -328,7 +358,10 @@ async function advanceDueNode(db, clientId, contact, chat, flowState) {
     clientId, contactId: contact.id, flowId: flowState.flow_id, nodeId: node.id,
     eventType: 'timed_out', detail: { edgeId: edge.id, conditionType: edge.condition_type },
   });
-  return runToRest(db, clientId, contact, chat, flowState.flow_id, edge.to_node_id);
+  // fallbackNodeId = flowState.current_node_id — same reasoning as
+  // continueFlow's call: if edge.to_node_id (or a node further along an
+  // 'always' chain from it) doesn't exist, stay reported at the real node.
+  return runToRest(db, clientId, contact, chat, flowState.flow_id, edge.to_node_id, flowState.current_node_id);
 }
 
 // Called from routes/metaWebhook.js in place of the previous direct
