@@ -1,7 +1,10 @@
 const { Router } = require('express');
+const multer = require('multer');
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
+const templateMediaCacheRepo = require('../repositories/templateMediaCacheRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
+const mediaHeaderService = require('../services/mediaHeaderService');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { messageTemplateCreateSchema } = require('../utils/validate');
@@ -9,6 +12,24 @@ const { validateTemplateText, validateHeaderText } = require('../utils/templateP
 const templateSyncService = require('../services/templateSyncService');
 
 const router = Router();
+
+// Meta's own documented limits per header media type (confirmed against
+// Meta's template media docs, not guessed) — a document HEADER specifically
+// only accepts PDF, distinct from a general document MESSAGE's wider
+// mime-type support. Enforced here as a fast, clear 400 rather than letting
+// a mismatched file reach Meta's upload APIs and fail there.
+const MEDIA_HEADER_LIMITS = {
+  IMAGE: { maxBytes: 5 * 1024 * 1024, mimeTypes: { 'image/jpeg': 'image/jpeg', 'image/jpg': 'image/jpeg', 'image/png': 'image/png' } },
+  VIDEO: { maxBytes: 16 * 1024 * 1024, mimeTypes: { 'video/mp4': 'video/mp4' } },
+  DOCUMENT: { maxBytes: 100 * 1024 * 1024, mimeTypes: { 'application/pdf': 'application/pdf' } },
+};
+// Multer's own limit is set to the largest of the three (DOCUMENT) — the
+// per-type check above is what actually enforces the tighter IMAGE/VIDEO
+// caps with a specific error message; this is just a hard backstop.
+const uploadHeaderMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MEDIA_HEADER_LIMITS.DOCUMENT.maxBytes },
+});
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
@@ -35,9 +56,33 @@ router.post('/sync', asyncHandler(async (req, res) => {
 // webhook (server/src/routes/metaWebhook.js), same as it does for templates
 // created directly in Meta Business Manager. Without a connected WABA yet,
 // still saves locally as 'pending' so template drafting isn't blocked on
-// onboarding order (spec allows connecting WhatsApp after initial signup).
-router.post('/', asyncHandler(async (req, res) => {
-  const data = messageTemplateCreateSchema.parse(req.body);
+// onboarding order (spec allows connecting WhatsApp after initial signup)
+// — EXCEPT for a media header (IMAGE/VIDEO/DOCUMENT), which requires a
+// connected WABA up front: the header's file has to be uploaded to Meta
+// immediately (both for the template's creation-time example handle and
+// for this app's own send-time media-id cache — see mediaHeaderService.js),
+// and there's nowhere to hold the file for later since this isn't a media
+// library (see migration 028_template_media_cache.js's comment). A media
+// template just can't be meaningfully drafted before WhatsApp is connected.
+//
+// multer.single('headerFile') is a no-op for a plain JSON request (no
+// multipart body) — req.file stays undefined and req.body is whatever
+// express.json() already parsed, so the TEXT/NONE-header path below is
+// completely unchanged. A media-header request instead sends the JSON
+// payload as a 'data' form field (JSON.stringify'd, since a template's
+// buttons/bodyParamExamples don't fit as flat multipart fields) alongside
+// the file — see app.js's createTemplate submit handler.
+router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req, res) => {
+  let rawBody = req.body;
+  if (req.file) {
+    try {
+      rawBody = JSON.parse(req.body.data || '{}');
+    } catch (err) {
+      return res.status(400).json({ error: 'Malformed request', detail: 'The "data" field must be valid JSON.' });
+    }
+  }
+  const data = messageTemplateCreateSchema.parse(rawBody);
+  const isMediaHeader = mediaHeaderService.isMediaHeaderType(data.header?.type);
 
   // Validated up front, regardless of WABA connection state, so a bad body
   // or header never gets silently saved as 'pending' without telling the
@@ -71,10 +116,39 @@ router.post('/', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Invalid template header', details: headerValidation.errors });
       }
     }
+
+    if (isMediaHeader) {
+      const limits = MEDIA_HEADER_LIMITS[data.header.type];
+      if (!req.file) {
+        return res.status(400).json({ error: 'Missing header media', detail: `An ${data.header.type.toLowerCase()} file is required for this header type.` });
+      }
+      const mimeType = limits.mimeTypes[req.file.mimetype];
+      if (!mimeType) {
+        return res.status(400).json({
+          error: 'Unsupported file type',
+          detail: `${data.header.type} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
+        });
+      }
+      if (req.file.size > limits.maxBytes) {
+        return res.status(400).json({
+          error: 'File too large',
+          detail: `${data.header.type} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
+        });
+      }
+    }
   }
 
   const waba = await wabasRepo.findByClientId(req.clientId);
+
+  if (isMediaHeader && (!waba || waba.status !== 'connected' || !waba.access_token_encrypted)) {
+    return res.status(400).json({
+      error: 'Connect WhatsApp first',
+      detail: 'An image, video, or document header needs to be uploaded to your connected WhatsApp number — connect WhatsApp before creating this template.',
+    });
+  }
+
   let metaTemplateId = null;
+  let seededMedia = null; // { mediaId, filename } — set once the standard Media API upload succeeds
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
     // Decryption failure is a distinct error class from Meta rejecting the
@@ -91,6 +165,35 @@ router.post('/', asyncHandler(async (req, res) => {
         error: 'Could not decrypt this WABA\'s access token — the request never reached Meta',
         detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token (a secret rotation, or a mismatch between local and production config).',
       });
+    }
+
+    if (isMediaHeader) {
+      if (!process.env.META_APP_ID) {
+        return res.status(502).json({ error: 'META_APP_ID is not configured for this environment' });
+      }
+      const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[req.file.mimetype];
+      try {
+        // Two separate Meta uploads from the same bytes, both required, both
+        // done now — never deferred (handle lifetime is undocumented, see
+        // the media-header investigation). 1) the Resumable Upload API
+        // handle Meta requires as the template's creation-time example.
+        // 2) the standard Media API id this app will actually send with —
+        // resolved and cached now so day-one sending works without a second
+        // round of uploads.
+        const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
+          fileName: req.file.originalname || data.header.type.toLowerCase(),
+          fileLength: req.file.size,
+          fileType: mimeType,
+        });
+        const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, req.file.buffer);
+        if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
+        data.header.handle = uploadedHandle.h;
+
+        const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, req.file.buffer, mimeType, req.file.originalname);
+        seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (req.file.originalname || null) : null };
+      } catch (err) {
+        return res.status(502).json({ error: 'Could not upload header media to Meta', detail: err.message });
+      }
     }
 
     try {
@@ -113,6 +216,11 @@ router.post('/', asyncHandler(async (req, res) => {
     status: 'pending',
     meta_template_id: metaTemplateId,
   });
+
+  if (seededMedia) {
+    await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, seededMedia);
+  }
+
   res.status(201).json(template);
 }));
 

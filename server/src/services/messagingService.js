@@ -20,6 +20,7 @@ const subscriptionsRepo = require('../repositories/subscriptionsRepo');
 const plansRepo = require('../repositories/plansRepo');
 const usageRepo = require('../repositories/usageRepo');
 const metaClient = require('../utils/metaClient');
+const mediaHeaderService = require('./mediaHeaderService');
 const { decrypt } = require('../utils/encryption');
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -51,8 +52,10 @@ async function canSendFreeform(db, clientId, chatId) {
 // future) the way a UI-only check could be. Utility and authentication
 // templates are exempt; a template whose category can't be determined
 // locally is treated as marketing — fail closed, not open.
-async function assertConsentForTemplate(db, clientId, chat, templateName) {
-  const template = await messageTemplatesRepo.findByNameAndClient(db, clientId, templateName);
+// Takes the template row directly, not a name — sendChatMessage now looks
+// it up once (also needed for the media-header resolution below) rather
+// than this function re-fetching it a second time.
+async function assertConsentForTemplate(db, clientId, chat, template) {
   const requiresConsent = !template || template.category === 'Marketing';
   if (!requiresConsent) return;
 
@@ -93,8 +96,10 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
       'session_window_closed'
     );
   }
+  let template = null;
   if (type === 'template') {
-    await assertConsentForTemplate(db, clientId, chat, templateName);
+    template = await messageTemplatesRepo.findByNameAndClient(db, clientId, templateName);
+    await assertConsentForTemplate(db, clientId, chat, template);
   }
   await assertWithinPlanLimit(db, clientId);
 
@@ -102,6 +107,25 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
   const accessToken = decrypt(waba.access_token_encrypted);
   const toPhone = chat.phone;
   const displayBody = type === 'template' ? `[template: ${templateName}]` : body;
+
+  // Resolved before the pending message row exists — same treatment as
+  // consent_required/session_window_closed above: a media id that can't be
+  // resolved is a pre-flight rejection (nothing was ever attempted with
+  // Meta), not a "sent then failed" message bubble.
+  let finalComponents = templateComponents || [];
+  if (type === 'template' && template && mediaHeaderService.isMediaHeaderType(template.header_type)) {
+    let resolved;
+    try {
+      resolved = await mediaHeaderService.resolveMediaId(db, clientId, waba, accessToken, template);
+    } catch (err) {
+      if (err instanceof mediaHeaderService.MediaResolutionError) {
+        throw new MessagingError(err.message, 'media_resolution_failed');
+      }
+      throw err;
+    }
+    const headerComponent = mediaHeaderService.buildMediaHeaderComponent(template.header_type, resolved.mediaId, resolved.filename);
+    finalComponents = [headerComponent, ...finalComponents.filter((c) => c.type !== 'header')];
+  }
 
   const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody);
 
@@ -115,7 +139,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
       metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
         name: templateName,
         language: templateLanguage,
-        components: templateComponents || [],
+        components: finalComponents,
       });
     }
     const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId);

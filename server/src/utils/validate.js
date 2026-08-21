@@ -208,11 +208,10 @@ const templateButtonSchema = z.object({
 // object with everything optional; the superRefine below enforces which
 // fields actually apply to which category, not just presence/type.
 //
-// header.type intentionally only accepts NONE/TEXT — IMAGE/VIDEO/DOCUMENT
-// need Meta's separate resumable-upload-session flow, which doesn't exist
-// in this codebase yet and isn't being half-built here (see migration
-// 020_template_rich_fields.js's comment). Rejected here, not just hidden in
-// the UI, since this is the real authoritative boundary.
+// header.type accepts IMAGE/VIDEO/DOCUMENT as of the media-header feature —
+// routes/templates.js is the real authoritative boundary for the actual
+// upload requirement (a file is required for these three, checked there
+// since multer populates req.file outside this JSON-only schema).
 const messageTemplateCreateSchema = z.object({
   name: z.string().min(1).regex(/^[a-z0-9_]+$/, 'Template name must be lowercase letters, numbers, and underscores only'),
   category: z.enum(['Marketing', 'Utility', 'Authentication']),
@@ -225,7 +224,7 @@ const messageTemplateCreateSchema = z.object({
   // replaced (an auto-derived-from-the-name guess, never author-supplied).
   bodyParamExamples: z.record(z.string()).optional(),
   header: z.object({
-    type: z.enum(['NONE', 'TEXT']),
+    type: z.enum(['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT']),
     text: z.string().max(60).optional(),
   }).optional(),
   footer: z.string().max(60).optional(),

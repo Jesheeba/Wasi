@@ -896,6 +896,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let html = '';
     if (t.header_type === 'TEXT' && t.header_content) {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(t.header_content, values))}</div>`;
+    } else if (MEDIA_HEADER_TYPES.includes(t.header_type)) {
+      html += `<div class="template-preview-header">${t.header_type.charAt(0)}${t.header_type.slice(1).toLowerCase()} header — attached automatically when sent</div>`;
     }
     html += `<div>${escapeHtml(substituteTemplateParams(t.body || '', values))}</div>`;
     if (t.footer_text) {
@@ -1781,9 +1783,20 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
+  const MEDIA_HEADER_TYPES = ['IMAGE', 'VIDEO', 'DOCUMENT'];
+  const MEDIA_HEADER_ACCEPT = { IMAGE: '.jpg,.jpeg,.png', VIDEO: '.mp4', DOCUMENT: '.pdf' };
+  const MEDIA_HEADER_HINT = { IMAGE: 'Max 5MB — JPEG or PNG.', VIDEO: 'Max 16MB — MP4.', DOCUMENT: 'Max 100MB — PDF.' };
+
   function updateTemplateHeaderField() {
     const type = document.getElementById('new-template-header-type').value;
+    const isMedia = MEDIA_HEADER_TYPES.includes(type);
     document.getElementById('new-template-header-text').style.display = type === 'TEXT' ? '' : 'none';
+    const fileInput = document.getElementById('new-template-header-file');
+    fileInput.style.display = isMedia ? '' : 'none';
+    if (isMedia) fileInput.setAttribute('accept', MEDIA_HEADER_ACCEPT[type]);
+    const hint = document.getElementById('template-header-media-hint');
+    hint.textContent = isMedia ? MEDIA_HEADER_HINT[type] : '';
+    hint.style.display = isMedia ? '' : 'none';
     updateTemplatePreview();
   }
 
@@ -1813,6 +1826,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let html = '';
     if (headerType === 'TEXT' && headerText.trim()) {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(headerText, samples))}</div>`;
+    } else if (MEDIA_HEADER_TYPES.includes(headerType)) {
+      const file = document.getElementById('new-template-header-file').files[0];
+      const label = file ? file.name : `${headerType.charAt(0)}${headerType.slice(1).toLowerCase()} header — no file chosen yet`;
+      html += `<div class="template-preview-header">${escapeHtml(label)}</div>`;
     }
     const bodyPreview = substituteTemplateParams(body, samples).trim();
     html += `<div>${bodyPreview ? escapeHtml(bodyPreview) : '<span style="color:var(--text-muted)">Body preview appears here</span>'}</div>`;
@@ -1861,6 +1878,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTemplateLanguageOptions();
   document.getElementById('new-template-category')?.addEventListener('change', updateTemplateCategoryFields);
   document.getElementById('new-template-header-type')?.addEventListener('change', updateTemplateHeaderField);
+  document.getElementById('new-template-header-file')?.addEventListener('change', updateTemplatePreview);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
     updateTemplateMalformedWarning('new-template-header-text', 'template-header-warning', 'Header');
     updateTemplatePreview();
@@ -1891,6 +1909,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name) return;
 
     const payload = { name, category, language };
+    let headerFile = null;
 
     if (category === 'Authentication') {
       const expiration = document.getElementById('new-template-auth-expiration').value;
@@ -1904,8 +1923,15 @@ document.addEventListener('DOMContentLoaded', () => {
       payload.bodyParamExamples = getTemplateSampleValues();
 
       const headerType = document.getElementById('new-template-header-type').value;
-      if (headerType !== 'NONE') {
+      if (headerType === 'TEXT') {
         payload.header = { type: headerType, text: document.getElementById('new-template-header-text').value.trim() };
+      } else if (MEDIA_HEADER_TYPES.includes(headerType)) {
+        headerFile = document.getElementById('new-template-header-file').files[0] || null;
+        if (!headerFile) {
+          showToast(`Choose a file for the ${headerType.toLowerCase()} header.`);
+          return;
+        }
+        payload.header = { type: headerType };
       }
       const footer = document.getElementById('new-template-footer').value.trim();
       if (footer) payload.footer = footer;
@@ -1924,9 +1950,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
+      // A media header sends the file as multipart, with the rest of the
+      // payload as a 'data' field (JSON-stringified — buttons/samples don't
+      // fit as flat form fields) — see routes/templates.js. authFetch skips
+      // its default JSON Content-Type for a FormData body so the browser
+      // can set its own multipart boundary, same as the profile-picture
+      // upload already relies on.
+      const requestBody = headerFile
+        ? (() => {
+            const form = new FormData();
+            form.append('data', JSON.stringify(payload));
+            form.append('headerFile', headerFile);
+            return form;
+          })()
+        : JSON.stringify(payload);
       await authFetch('/api/templates', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: requestBody
       });
       await refreshTemplates();
       renderTemplates();

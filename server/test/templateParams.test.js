@@ -262,7 +262,7 @@ test('buildTemplateCreatePayload: TEXT header adds a HEADER component ahead of B
   assert.equal(payload.components[1].type, 'BODY');
 });
 
-test('buildTemplateCreatePayload: throws for a media header type — not implemented', () => {
+test('buildTemplateCreatePayload: throws for a media header type with no uploaded handle', () => {
   assert.throws(
     () => buildTemplateCreatePayload({
       name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks for your order.',
@@ -271,6 +271,18 @@ test('buildTemplateCreatePayload: throws for a media header type — not impleme
     }),
     TemplateValidationError
   );
+});
+
+test('buildTemplateCreatePayload: a media header with a handle builds header_handle example, ahead of BODY', () => {
+  const payload = buildTemplateCreatePayload({
+    name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks for your order.',
+    bodyParamExamples: { customer_name: 'Riyaz' },
+    header: { type: 'IMAGE', handle: 'upload:abc123' },
+  });
+  assert.deepEqual(payload.components[0], {
+    type: 'HEADER', format: 'IMAGE', example: { header_handle: ['upload:abc123'] },
+  });
+  assert.equal(payload.components[1].type, 'BODY');
 });
 
 test('buildTemplateCreatePayload: footer and buttons are appended after BODY', () => {
@@ -317,13 +329,26 @@ test('messageTemplateCreateSchema: Utility with no body is rejected', () => {
   assert.equal(result.success, false);
 });
 
-test('messageTemplateCreateSchema: header type is restricted to NONE/TEXT — media types rejected', () => {
+test('messageTemplateCreateSchema: IMAGE/VIDEO/DOCUMENT header types are accepted — the file requirement is enforced in routes/templates.js, not this schema', () => {
+  for (const type of ['IMAGE', 'VIDEO', 'DOCUMENT']) {
+    const result = messageTemplateCreateSchema.safeParse({
+      name: 'x',
+      category: 'Utility',
+      body: 'Hi {{customer_name}}, your order has shipped.',
+      bodyParamExamples: { customer_name: 'Riyaz' },
+      header: { type },
+    });
+    assert.equal(result.success, true, `expected ${type} header to parse`);
+  }
+});
+
+test('messageTemplateCreateSchema: an unrecognized header type is still rejected', () => {
   const result = messageTemplateCreateSchema.safeParse({
     name: 'x',
     category: 'Utility',
     body: 'Hi {{customer_name}}, your order has shipped.',
     bodyParamExamples: { customer_name: 'Riyaz' },
-    header: { type: 'IMAGE' },
+    header: { type: 'STICKER' },
   });
   assert.equal(result.success, false);
 });

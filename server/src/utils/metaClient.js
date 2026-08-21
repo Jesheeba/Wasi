@@ -167,6 +167,54 @@ async function uploadFileBytes(uploadSessionId, accessToken, buffer) {
   return data; // { h: "<handle>" }
 }
 
+// Standard Media API (https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media)
+// — NOT the Resumable Upload API above. This is the one that mints a
+// `media id` usable in an outbound message's header parameter (image/video/
+// document). Meta requires this specific upload mechanism for a media
+// header's `header_handle` example (createUploadSession/uploadFileBytes),
+// but rejects that handle if reused at send time — sending needs a media id
+// from here instead. The id is reusable across many messages (confirmed:
+// no "consumed on first use" behavior) and expires 30 days after upload —
+// see services/mediaHeaderService.js for the cache/refresh built around
+// that lifetime.
+async function uploadMedia(phoneNumberId, accessToken, buffer, mimeType, filename) {
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mimeType);
+  form.append('file', new Blob([buffer], { type: mimeType }), filename || 'file');
+
+  const res = await fetch(`${GRAPH_BASE}/${phoneNumberId}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(data?.error?.message || `Meta media upload failed (${res.status})`);
+    error.metaError = data?.error || null;
+    throw error;
+  }
+  return data; // { id: "<media id>" }
+}
+
+// Returns a short-lived (5 minute) download URL for a media id this app
+// already holds — used by mediaHeaderService's refresh cycle to pull the
+// bytes back from Meta before a cached id's 30-day window closes, rather
+// than this app persisting the file itself (see migration
+// 028_template_media_cache.js's module comment).
+async function getMediaUrl(mediaId, accessToken) {
+  return graphFetch(`/${mediaId}`, { accessToken }); // { url, mime_type, sha256, file_size, id }
+}
+
+async function downloadMediaBytes(url, accessToken) {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    throw new Error(`Meta media download failed (${res.status}) — the media id it was resolved from may have expired.`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return { buffer: Buffer.from(arrayBuffer), mimeType: res.headers.get('content-type') || null };
+}
+
 // Free-form text — only deliverable inside the 24h customer service window
 // (i.e. the contact messaged in within the last 24h). Meta rejects it
 // outside that window with a real API error; callers should check
@@ -289,26 +337,38 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
   const components = [];
 
   if (header && header.type && header.type !== 'NONE') {
-    if (header.type !== 'TEXT') {
-      // Defensive backstop — validate.js's messageTemplateCreateSchema
-      // already rejects IMAGE/VIDEO/DOCUMENT before this is ever reached;
-      // media headers need Meta's separate resumable-upload-session flow,
-      // not built (see migration 020_template_rich_fields.js's comment).
-      throw new TemplateValidationError([`Header type "${header.type}" isn't supported yet — only TEXT headers are.`]);
+    if (header.type === 'TEXT') {
+      const headerValidation = validateHeaderText(header.text || '');
+      if (!headerValidation.valid) throw new TemplateValidationError(headerValidation.errors);
+      const headerComponent = { type: 'HEADER', format: 'TEXT', text: header.text };
+      if (headerValidation.params.length > 0) {
+        const paramName = headerValidation.params[0];
+        headerComponent.example = {
+          header_text_named_params: [{
+            param_name: paramName,
+            example: (bodyParamExamples && bodyParamExamples[paramName]) || defaultExampleFor(paramName),
+          }],
+        };
+      }
+      components.push(headerComponent);
+    } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.type)) {
+      // `handle` is resolved by routes/templates.js via
+      // metaClient.createUploadSession/uploadFileBytes BEFORE this is ever
+      // called — Meta requires the Resumable Upload API's one-time handle
+      // here, not the reusable media id services/mediaHeaderService.js
+      // resolves separately for sending. Defensive, not reachable through
+      // the normal route: that route always resolves a handle first.
+      if (!header.handle) {
+        throw new TemplateValidationError([`Header type "${header.type}" requires an uploaded media handle.`]);
+      }
+      components.push({
+        type: 'HEADER',
+        format: header.type,
+        example: { header_handle: [header.handle] },
+      });
+    } else {
+      throw new TemplateValidationError([`Header type "${header.type}" isn't supported.`]);
     }
-    const headerValidation = validateHeaderText(header.text || '');
-    if (!headerValidation.valid) throw new TemplateValidationError(headerValidation.errors);
-    const headerComponent = { type: 'HEADER', format: 'TEXT', text: header.text };
-    if (headerValidation.params.length > 0) {
-      const paramName = headerValidation.params[0];
-      headerComponent.example = {
-        header_text_named_params: [{
-          param_name: paramName,
-          example: (bodyParamExamples && bodyParamExamples[paramName]) || defaultExampleFor(paramName),
-        }],
-      };
-    }
-    components.push(headerComponent);
   }
 
   const bodyComponent = { type: 'BODY', text: body };
@@ -490,6 +550,9 @@ module.exports = {
   updateBusinessProfile,
   createUploadSession,
   uploadFileBytes,
+  uploadMedia,
+  getMediaUrl,
+  downloadMediaBytes,
   sendTextMessage,
   sendInteractiveMessage,
   sendTemplateMessage,
