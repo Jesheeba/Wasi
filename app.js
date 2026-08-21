@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentFlowGraph: null,
     flowView: 'list',
     flowCanvasEditor: null,
+    wabaConnected: false,
     templates: [],
     tickets: []
   };
@@ -2066,6 +2067,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const MEDIA_HEADER_ACCEPT = { IMAGE: '.jpg,.jpeg,.png', VIDEO: '.mp4', DOCUMENT: '.pdf' };
   const MEDIA_HEADER_HINT = { IMAGE: 'Max 5MB — JPEG or PNG.', VIDEO: 'Max 16MB — MP4.', DOCUMENT: 'Max 100MB — PDF.' };
 
+  // Mirrors routes/templates.js's own gate ("Connect WhatsApp first" — a
+  // media header has to upload to Meta immediately, both for the
+  // creation-time example handle and the send-time media-id cache, so
+  // there's nowhere to hold the file for later without a WABA). Previously
+  // the dropdown offered IMAGE/VIDEO/DOCUMENT unconditionally and only the
+  // server enforced this, at actual submit time — a client without
+  // WhatsApp connected could fill out the whole form, pick a file, and
+  // only then discover it was never going to work.
+  function applyMediaHeaderGating() {
+    const select = document.getElementById('new-template-header-type');
+    const hint = document.getElementById('template-header-connect-hint');
+    if (!select) return;
+    MEDIA_HEADER_TYPES.forEach(type => {
+      const option = select.querySelector(`option[value="${type}"]`);
+      if (option) option.disabled = !state.wabaConnected;
+    });
+    if (hint) hint.style.display = state.wabaConnected ? 'none' : '';
+  }
+
   function updateTemplateHeaderField() {
     const type = document.getElementById('new-template-header-type').value;
     const isMedia = MEDIA_HEADER_TYPES.includes(type);
@@ -2137,7 +2157,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
-  document.getElementById('open-create-template-modal')?.addEventListener('click', () => {
+  document.getElementById('open-create-template-modal')?.addEventListener('click', async () => {
     // Reset unconditionally on open, not just after a successful submit.
     // templateButtons/header-type/etc. previously only got cleared by
     // e.target.reset() in the submit success path — so Cancel, closing the
@@ -2150,6 +2170,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('create-template-form')?.reset();
     templateButtons = [];
     renderTemplateButtonsList();
+
+    // Checked fresh on every open rather than cached in state long-term —
+    // connecting/disconnecting WhatsApp is rare, but this keeps the gate
+    // honest against whatever the client's actual current status is
+    // instead of whatever it was the last time any part of the app asked.
+    try {
+      const status = await authFetch('/api/onboarding/whatsapp/status');
+      state.wabaConnected = Boolean(status.connected);
+    } catch (err) {
+      state.wabaConnected = false;
+    }
+    applyMediaHeaderGating();
+
     document.getElementById('modal-create-template')?.classList.add('open');
     syncTemplateFormUI();
   });
