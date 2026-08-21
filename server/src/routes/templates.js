@@ -151,6 +151,23 @@ router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req
   let seededMedia = null; // { mediaId, filename } — set once the standard Media API upload succeeds
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
+    // Checked first, before touching the access token at all — a pure
+    // local-DB read, no Meta call needed (see messageTemplatesRepo.
+    // findActiveByNameAndLanguage's comment). Meta scopes template
+    // uniqueness to (name, language) per WABA, not name alone; a second
+    // submission under a combination Meta already has something for
+    // doesn't get cleanly rejected there — it queues for review and can
+    // sit unresolved far longer than normal (confirmed live: 20+ hours
+    // pending against an already-approved same-name-and-language
+    // template). Caught here instead of discovered a day later.
+    const collisions = await messageTemplatesRepo.findActiveByNameAndLanguage(req.db, req.clientId, data.name, data.language);
+    if (collisions.length > 0) {
+      const existing = collisions[0];
+      return res.status(409).json({
+        error: `A template named "${data.name}" in ${data.language} already exists on this WhatsApp number (currently ${existing.status}) — WhatsApp treats name+language as one slot, so a second submission under the same combination won't be cleanly rejected, it'll sit in review indefinitely instead. Use a different name, or remove the existing one first.`,
+      });
+    }
+
     // Decryption failure is a distinct error class from Meta rejecting the
     // template — it means the request never reached Meta at all (wrong
     // SERVER_SECRET for this row's ciphertext, or a corrupted value).

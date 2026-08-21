@@ -17,6 +17,29 @@ async function findByNameAndClient(db, clientId, name) {
   return rows[0] || null;
 }
 
+// Meta scopes template uniqueness to (name, language) per WABA, not name
+// alone — a second submission under a (name, language) Meta already has
+// something for doesn't get cleanly rejected, it queues for review and can
+// sit unresolved far longer than normal (confirmed live: 20+ hours pending
+// against an already-approved same-name-and-language template). Used by
+// routes/templates.js to reject that case before ever calling Meta.
+// orphaned_at is null on purpose — an orphaned row is confirmed gone from
+// Meta (templateSyncService.js's reconcile no longer finds it there), so
+// its (name, language) slot is presumed free again. A rejected-but-not-
+// orphaned row still blocks: Meta's exact reuse behavior after a rejection
+// (does the slot free up immediately, or only after the template is
+// explicitly deleted on Meta?) isn't confirmed, so this fails closed
+// rather than risk letting another submission queue indefinitely.
+async function findActiveByNameAndLanguage(db, clientId, name, language) {
+  const { rows } = await db.query(
+    `select * from message_templates
+     where client_id = $1 and name = $2 and language = $3 and orphaned_at is null
+     order by created_at desc`,
+    [clientId, name, language]
+  );
+  return rows;
+}
+
 // language/header/footer/buttons/bodyParamExamples/auth fields added for
 // the template form rebuild (migration 020_template_rich_fields.js) — all
 // previously silently dropped here even when present upstream (language in
@@ -143,6 +166,7 @@ module.exports = {
   listAll,
   updateStatus,
   findByNameAndClient,
+  findActiveByNameAndLanguage,
   createFromMetaSync,
   updateFromMetaSync,
   markOrphaned,
