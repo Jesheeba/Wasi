@@ -8,6 +8,13 @@
   <link rel="stylesheet" href="index.css" />
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Drawflow (read-only flow canvas — Bot Flows editor). Version pinned,
+       unlike lucide's @latest, since app.js's canvas code is written
+       against this exact API surface (addNode/addConnection/editor_mode)
+       and an unannounced breaking release upstream would silently break
+       it rather than just look different. -->
+  <link rel="stylesheet" href="https://unpkg.com/drawflow@0.0.60/dist/drawflow.min.css" />
+  <script src="https://unpkg.com/drawflow@0.0.60/dist/drawflow.min.js"></script>
 </head>
 <body>
 
@@ -1549,9 +1556,25 @@
         <span id="bot-flow-editor-status-badge" class="status-badge"></span>
         <button type="button" class="btn-secondary" id="bot-flow-editor-toggle-status-btn" style="width: auto; padding: 0 14px; font-size: 0.8rem;"></button>
         <span style="font-size: 0.8rem; color: var(--text-muted);" id="bot-flow-editor-entry-label"></span>
+        <span style="display: flex; margin-left: auto; border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden;">
+          <button type="button" class="flow-view-btn" data-flow-view="list" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer;">List</button>
+          <button type="button" class="flow-view-btn" data-flow-view="canvas" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; border-left: 1px solid var(--border-light);">Canvas</button>
+        </span>
       </div>
       <div id="bot-flow-editor-issues-banner"></div>
       <div id="bot-flow-editor-nodes"></div>
+      <div id="bot-flow-editor-canvas-wrap" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <span style="font-size: 0.78rem; color: var(--text-muted);">Read-only — click a node to edit it in the list. Scroll to zoom, drag the background to pan.</span>
+          <span style="display: flex; gap: 6px;">
+            <button type="button" class="btn-secondary" id="bot-flow-canvas-zoom-out-btn" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">&minus;</button>
+            <button type="button" class="btn-secondary" id="bot-flow-canvas-zoom-reset-btn" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">Reset</button>
+            <button type="button" class="btn-secondary" id="bot-flow-canvas-zoom-in-btn" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">+</button>
+          </span>
+        </div>
+        <div id="bot-flow-editor-canvas-legend" style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;"></div>
+        <div id="bot-flow-editor-canvas" style="height: 480px; border: 1px solid var(--border-light); border-radius: 10px; background: #FBFAF7; position: relative; overflow: hidden;"></div>
+      </div>
       <div style="margin-top: 1rem;">
         <button type="button" class="btn-secondary" id="bot-flow-editor-add-node-btn" style="width: auto; padding: 0 16px;"><i data-lucide="plus"></i> Add Node</button>
       </div>

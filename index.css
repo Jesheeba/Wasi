@@ -1407,3 +1407,65 @@ body {
 .inner-tab-panel.active {
   display: block;
 }
+
+/* Flow canvas (Bot Flows editor, read-only view) — overrides Drawflow's
+   own base stylesheet, which is loaded after this one and would otherwise
+   win on equal selector specificity for .drawflow-node's background/border. */
+.flow-view-btn.active {
+  background: var(--color-primary-100, #E8F5E9);
+  color: var(--color-primary-900, #14532D);
+  font-weight: 600;
+}
+.drawflow .drawflow-node {
+  background: #fff !important;
+  border: 1.5px solid #333 !important;
+  border-radius: 8px;
+  min-width: 190px;
+  padding: 0;
+  color: #1F2937;
+}
+.drawflow .drawflow-node.flow-node-issue {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 0 1px #FCA5A5;
+}
+.drawflow .drawflow-node.flow-node-entry {
+  border-color: #15803D !important;
+}
+.flow-canvas-node-inner {
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+.flow-canvas-node-type {
+  font-family: monospace;
+  font-size: 0.65rem;
+  color: #888;
+  text-transform: uppercase;
+}
+.flow-canvas-node-body {
+  font-size: 0.8rem;
+  margin-top: 0.2rem;
+  line-height: 1.3;
+  color: #1F2937;
+}
+.flow-canvas-node-issue {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: #991B1B;
+  background: #FEF2F2;
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+}
+.flow-canvas-entry-badge {
+  display: inline-block;
+  background: #15803D;
+  color: #fff;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-bottom: 0.25rem;
+}
+.drawflow .connection.flow-edge-button_id .main-path { stroke: #1E6E5A !important; stroke-width: 3px !important; }
+.drawflow .connection.flow-edge-keyword .main-path { stroke: #2E5F8A !important; stroke-width: 3px !important; }
+.drawflow .connection.flow-edge-default .main-path { stroke: #9A6A1F !important; stroke-width: 3px !important; }
+.drawflow .connection.flow-edge-timeout .main-path { stroke: #A4402F !important; stroke-width: 3px !important; stroke-dasharray: 6,4; }
+.drawflow .connection.flow-edge-always .main-path { stroke: #888 !important; stroke-width: 2px !important; }

@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     automationRules: [],
     flows: [],
     currentFlowGraph: null,
+    flowView: 'list',
+    flowCanvasEditor: null,
     templates: [],
     tickets: []
   };
@@ -1212,7 +1214,23 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentFlowGraph = await authFetch(`/api/automation-flows/${flowId}`);
     document.getElementById('bot-flow-editor-title').textContent = state.currentFlowGraph.name;
     document.getElementById('modal-bot-flow-editor')?.classList.add('open');
+    state.flowView = 'list';
     renderFlowEditor();
+    applyFlowView();
+  }
+
+  // Shared by both the list and the canvas — a node's issues need to look
+  // identical (same text, same nodes flagged) in both places. The whole
+  // point of putting issues on the canvas at all is that a graph which
+  // hides the one real bug the spike found (an unrouted button) is worse
+  // than the list, not better — see the spike report.
+  function issuesByNodeMap(graph) {
+    const map = {};
+    (graph.issues || []).forEach(issue => {
+      if (!issue.nodeId) return;
+      (map[issue.nodeId] = map[issue.nodeId] || []).push(issue);
+    });
+    return map;
   }
 
   function renderFlowEditor() {
@@ -1220,11 +1238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!graph) return;
 
     const issues = graph.issues || [];
-    const issuesByNode = {};
-    issues.forEach(issue => {
-      if (!issue.nodeId) return;
-      (issuesByNode[issue.nodeId] = issuesByNode[issue.nodeId] || []).push(issue);
-    });
+    const issuesByNode = issuesByNodeMap(graph);
 
     const statusBadge = document.getElementById('bot-flow-editor-status-badge');
     statusBadge.textContent = graph.status;
@@ -1313,6 +1327,222 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
     refreshIcons();
   }
+
+  // BFS depth from the entry node (or, absent one, from every node with no
+  // incoming edge) picks each node's column; nodes at the same depth stack
+  // in a column. Cycle-safe via the depth-already-set check — flowEngine.js
+  // explicitly supports a self-loop edge (e.g. "didn't understand, repeat"),
+  // which would infinite-loop a naive BFS without one. Anything never
+  // reached (a disconnected node, or a flow with zero edges at all) gets
+  // appended as its own trailing column rather than silently vanishing.
+  // Only used as a FALLBACK for a node whose real flow_nodes.position is
+  // null — which is every node today, since nothing has ever written to
+  // that column (see migration 023's comment) — but a node WITH a real
+  // stored position always wins over this.
+  function computeFlowLayout(graph) {
+    const incoming = {};
+    graph.edges.forEach(e => { incoming[e.to_node_id] = true; });
+    const roots = graph.entry_node_id
+      ? [graph.entry_node_id]
+      : graph.nodes.filter(n => !incoming[n.id]).map(n => n.id);
+
+    const edgesByFrom = {};
+    graph.edges.forEach(e => { (edgesByFrom[e.from_node_id] = edgesByFrom[e.from_node_id] || []).push(e); });
+
+    const depth = {};
+    roots.forEach(id => { depth[id] = 0; });
+    const queue = [...roots];
+    while (queue.length) {
+      const id = queue.shift();
+      (edgesByFrom[id] || []).forEach(e => {
+        if (depth[e.to_node_id] === undefined) {
+          depth[e.to_node_id] = depth[id] + 1;
+          queue.push(e.to_node_id);
+        }
+      });
+    }
+
+    let nextCol = Math.max(-1, ...Object.values(depth)) + 1;
+    graph.nodes.forEach(n => { if (depth[n.id] === undefined) depth[n.id] = nextCol++; });
+
+    const colCounts = {};
+    const positions = {};
+    graph.nodes.forEach(n => {
+      const col = depth[n.id];
+      positions[n.id] = { x: 60 + col * 320, y: 40 + (colCounts[col] || 0) * 190 };
+      colCounts[col] = (colCounts[col] || 0) + 1;
+    });
+    return positions;
+  }
+
+  function flowCanvasEdgeLabel(fromNode, edge) {
+    if (edge.condition_type === 'button_id') {
+      const button = (fromNode.config?.buttons || []).find(b => b.id === edge.condition_value);
+      return button ? `"${button.title}"` : `button "${edge.condition_value}"`;
+    }
+    if (edge.condition_type === 'keyword') return `"${edge.condition_value}"`;
+    return FLOW_EDGE_TYPE_LABELS[edge.condition_type] || edge.condition_type;
+  }
+
+  function jumpToListNode(nodeId) {
+    state.flowView = 'list';
+    applyFlowView();
+    requestAnimationFrame(() => {
+      const card = document.querySelector(`#bot-flow-editor-nodes [data-node-id="${nodeId}"]`);
+      if (!card) return;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.style.transition = 'background-color 0.3s';
+      card.style.backgroundColor = '#FEF9C3';
+      setTimeout(() => { card.style.backgroundColor = ''; }, 1200);
+    });
+  }
+
+  // Read-only render — editor.editor_mode = 'view' below, no drag, no
+  // add/remove. Every issue the step list shows is shown here too (same
+  // issuesByNodeMap), on the node itself: the spike found a plain graph
+  // hides an unrouted button completely, and a pretty picture that hides
+  // the one real bug in the only real flow tested is worse than the list.
+  function renderFlowCanvas() {
+    const graph = state.currentFlowGraph;
+    const container = document.getElementById('bot-flow-editor-canvas');
+    if (!graph || !container) return;
+
+    if (typeof Drawflow === 'undefined') {
+      container.innerHTML = '<div style="padding:1rem; color:var(--text-muted); font-size:0.85rem;">Canvas library failed to load — check your connection and reopen this flow. The list above still works.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    const editor = new Drawflow(container);
+    editor.reroute = true;
+    editor.start();
+    state.flowCanvasEditor = editor;
+
+    if (!graph.nodes.length) {
+      container.innerHTML = '<div style="padding:1rem; color:var(--text-muted); font-size:0.85rem;">No nodes yet.</div>';
+      return;
+    }
+
+    const issuesByNode = issuesByNodeMap(graph);
+    const layout = computeFlowLayout(graph);
+    const incoming = {};
+    graph.edges.forEach(e => { incoming[e.to_node_id] = true; });
+    const edgesByFrom = {};
+    graph.edges.forEach(e => { (edgesByFrom[e.from_node_id] = edgesByFrom[e.from_node_id] || []).push(e); });
+
+    const nodeIdToDfId = {};
+    const usedConditionTypes = new Set();
+
+    graph.nodes.forEach(node => {
+      // Real, persisted position wins whenever one exists — this reads
+      // flow_nodes.position, it doesn't only ever compute its own layout.
+      // It's always the fallback today only because nothing has ever
+      // written to that column yet (no editor does).
+      const pos = node.position || layout[node.id] || { x: 0, y: 0 };
+      const isEntry = node.id === graph.entry_node_id;
+      const nodeIssues = issuesByNode[node.id] || [];
+      const outEdges = edgesByFrom[node.id] || [];
+
+      const outputRows = outEdges.map(e => {
+        usedConditionTypes.add(e.condition_type);
+        return `<div style="font-size:0.68rem; color:#666; padding:2px 0; border-top:1px dashed #E5E7EB;">&rarr; ${escapeHtml(flowCanvasEdgeLabel(node, e))}</div>`;
+      }).join('');
+
+      const html = `<div class="flow-canvas-node-inner">
+        ${isEntry ? '<span class="flow-canvas-entry-badge">ENTRY</span><br>' : ''}
+        <div class="flow-canvas-node-type">${escapeHtml(FLOW_NODE_TYPE_LABELS[node.type] || node.type)}</div>
+        <div class="flow-canvas-node-body">${nodeConfigSummary(node) || '&nbsp;'}</div>
+        ${outputRows ? `<div style="margin-top:4px;">${outputRows}</div>` : ''}
+        ${nodeIssues.length ? `<div class="flow-canvas-node-issue">${nodeIssues.map(i => escapeHtml(i.message)).join('<br>')}</div>` : ''}
+      </div>`;
+
+      const dfId = editor.addNode(node.type, incoming[node.id] ? 1 : 0, outEdges.length, pos.x, pos.y, node.type, {}, html, false);
+      nodeIdToDfId[node.id] = dfId;
+
+      const nodeEl = container.querySelector(`#node-${dfId}`);
+      if (nodeEl) {
+        if (nodeIssues.length) nodeEl.classList.add('flow-node-issue');
+        if (isEntry) nodeEl.classList.add('flow-node-entry');
+      }
+    });
+
+    const outputCounters = {};
+    graph.edges.forEach(e => {
+      outputCounters[e.from_node_id] = (outputCounters[e.from_node_id] || 0) + 1;
+      const fromDfId = nodeIdToDfId[e.from_node_id];
+      const toDfId = nodeIdToDfId[e.to_node_id];
+      if (fromDfId == null || toDfId == null) return; // dangling edge — flowValidation already flags this on the node; nothing to draw
+      editor.addConnection(fromDfId, toDfId, `output_${outputCounters[e.from_node_id]}`, 'input_1');
+    });
+
+    // Color each connection by condition_type — Drawflow's addConnection
+    // takes no per-connection class, so this is a direct DOM pass matching
+    // its own node_in_node-X/node_out_node-Y class pair (confirmed against
+    // the real library in the earlier spike).
+    graph.edges.forEach(e => {
+      const fromDfId = nodeIdToDfId[e.from_node_id];
+      const toDfId = nodeIdToDfId[e.to_node_id];
+      if (fromDfId == null || toDfId == null) return;
+      container.querySelectorAll(`.connection.node_in_node-${toDfId}.node_out_node-${fromDfId}`)
+        .forEach(el => el.classList.add(`flow-edge-${e.condition_type}`));
+    });
+
+    editor.editor_mode = 'view';
+
+    const legend = document.getElementById('bot-flow-editor-canvas-legend');
+    if (legend) {
+      const swatchColor = { button_id: '#1E6E5A', keyword: '#2E5F8A', default: '#9A6A1F', timeout: '#A4402F', always: '#888' };
+      legend.innerHTML = [...usedConditionTypes].map(ct => `
+        <span style="display:flex; align-items:center; gap:4px;">
+          <span style="width:10px; height:10px; border-radius:50%; background:${swatchColor[ct] || '#888'}; display:inline-block;"></span>
+          ${escapeHtml(FLOW_EDGE_TYPE_LABELS[ct] || ct)}
+        </span>
+      `).join('');
+    }
+
+    // The canvas's one interaction — click a node, land on the same node
+    // in the list, where editing actually happens. It never edits anything
+    // itself. A direct delegated DOM click, not Drawflow's own
+    // 'nodeSelected' event — confirmed live that event doesn't fire once
+    // editor_mode is 'view' (selection is part of what view mode disables,
+    // not just dragging), so this reads the clicked node's own
+    // Drawflow-assigned id="node-<n>" instead, which view mode does not
+    // remove.
+    container.addEventListener('click', (e) => {
+      const nodeEl = e.target.closest('[id^="node-"]');
+      if (!nodeEl) return;
+      const dfId = Number(nodeEl.id.replace('node-', ''));
+      const nodeId = Object.keys(nodeIdToDfId).find((id) => nodeIdToDfId[id] === dfId);
+      if (nodeId) jumpToListNode(nodeId);
+    });
+  }
+
+  function applyFlowView() {
+    const listEl = document.getElementById('bot-flow-editor-nodes');
+    const canvasWrapEl = document.getElementById('bot-flow-editor-canvas-wrap');
+    if (!listEl || !canvasWrapEl) return;
+    document.querySelectorAll('.flow-view-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.flowView === state.flowView);
+    });
+    if (state.flowView === 'canvas') {
+      listEl.style.display = 'none';
+      canvasWrapEl.style.display = '';
+      renderFlowCanvas();
+    } else {
+      listEl.style.display = '';
+      canvasWrapEl.style.display = 'none';
+    }
+  }
+
+  document.querySelectorAll('.flow-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.flowView = btn.dataset.flowView;
+      applyFlowView();
+    });
+  });
+  document.getElementById('bot-flow-canvas-zoom-in-btn')?.addEventListener('click', () => state.flowCanvasEditor?.zoom_in());
+  document.getElementById('bot-flow-canvas-zoom-out-btn')?.addEventListener('click', () => state.flowCanvasEditor?.zoom_out());
+  document.getElementById('bot-flow-canvas-zoom-reset-btn')?.addEventListener('click', () => state.flowCanvasEditor?.zoom_reset());
 
   function renderNewNodeConfigFields(type) {
     const container = document.getElementById('new-bot-flow-node-config-fields');
