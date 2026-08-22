@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -6,196 +6,294 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
 } from '@xyflow/react';
+import { api } from './api.js';
+import { PALETTE_ITEMS } from './constants.js';
+import FlowNodeCard from './FlowNodeCard.jsx';
+import ConditionEdge from './ConditionEdge.jsx';
+import AddNodeMenu from './AddNodeMenu.jsx';
 
-// Stage 1 spike only — proves the chosen stack (React + React Flow, built
-// via the new flow-editor-build Dockerfile stage) can do the three things
-// the staged plan named as the gate: create a node, connect two, save
-// positions, against the REAL existing REST API (server/src/routes/
-// automationFlows.js), not a mock. Deliberately not the real palette,
-// node-type config forms, validator-on-nodes, or six-edge fan-out design —
-// those are Stages 2-4, on top of whatever this proves out.
-//
-// Served same-origin as the main app (server/src/app.js's /flow-editor
-// static mount) — client_token in localStorage is already there once
-// logged into the main CRM in the same browser, no separate auth needed.
+const nodeTypes = { flowCard: FlowNodeCard };
+const edgeTypes = { condition: ConditionEdge };
 
-function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('client_token');
-  return fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  }).then(async (res) => {
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Request failed (${res.status})`);
-    }
-    return res.status === 204 ? null : res.json();
-  });
-}
-
-// Same fallback used by the read-only canvas (app.js's computeFlowLayout)
-// isn't imported here on purpose — this spike doesn't need a real layout
-// algorithm, just SOMETHING so nodes with no stored position aren't all
-// stacked at (0,0). A flat grid is enough to prove drag+save works.
 function fallbackPosition(index) {
-  return { x: 80 + (index % 4) * 220, y: 80 + Math.floor(index / 4) * 140 };
+  return { x: 80 + (index % 4) * 280, y: 80 + Math.floor(index / 4) * 260 };
 }
 
-function graphToNodes(graph) {
-  return graph.nodes.map((n, i) => ({
-    id: n.id,
-    position: n.position || fallbackPosition(i),
-    data: { label: `${n.type}${n.config?.body ? `\n${String(n.config.body).slice(0, 40)}` : ''}` },
-    style: { whiteSpace: 'pre-line', fontSize: 12, padding: 8, border: '1px solid #333', borderRadius: 8 },
-  }));
+function IssuesBanner({ issues }) {
+  if (!issues.length) return null;
+  return (
+    <div className="wf-issues-banner">
+      <b>{issues.length} issue{issues.length === 1 ? '' : 's'} found</b> — these would fail or misbehave at
+      runtime and block activating this flow.
+    </div>
+  );
 }
 
-function graphToEdges(graph) {
-  return graph.edges.map((e) => ({
-    id: e.id,
-    source: e.from_node_id,
-    target: e.to_node_id,
-    label: e.condition_type,
-  }));
-}
-
-export default function App() {
+function FlowEditor() {
   const params = new URLSearchParams(window.location.search);
   const flowId = params.get('flow');
+  const { screenToFlowPosition } = useReactFlow();
 
+  const [graph, setGraph] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [status, setStatus] = useState('loading'); // loading | ready | error
-  const [error, setError] = useState(null);
-  const [flowName, setFlowName] = useState('');
+  const [pendingConnection, setPendingConnection] = useState(null); // {fromNodeId, fromHandle, screenX, screenY}
+  const connectingRef = useRef(null);
 
   const load = useCallback(() => {
-    if (!flowId) {
-      setStatus('error');
-      setError('No ?flow=<id> in the URL.');
-      return;
-    }
+    if (!flowId) { setStatus('error'); setError('No ?flow=<id> in the URL.'); return; }
     setStatus('loading');
-    apiFetch(`/automation-flows/${flowId}`)
-      .then((graph) => {
-        setFlowName(graph.name);
-        setNodes(graphToNodes(graph));
-        setEdges(graphToEdges(graph));
+    Promise.all([api.getFlow(flowId), api.listTemplates(), api.listTags()])
+      .then(([g, t, tg]) => {
+        setGraph(g);
+        setTemplates(t);
+        setTags(tg);
         setStatus('ready');
       })
-      .catch((err) => {
-        setError(err.message);
-        setStatus('error');
-      });
-  }, [flowId, setNodes, setEdges]);
+      .catch((err) => { setError(err.message); setStatus('error'); });
+  }, [flowId]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Create: reuses the existing POST .../nodes endpoint exactly like the
-  // step-list editor's "Add Node" does (app.js) — a plain send_text node,
-  // minimal config, since node-type/config authoring is Stage 4, not this
-  // spike. Refetches afterward rather than optimistically patching local
-  // state, same "one action, one round trip" shape every mutation in this
-  // codebase already uses.
-  const addNode = useCallback(async () => {
-    try {
-      await apiFetch(`/automation-flows/${flowId}/nodes`, {
-        method: 'POST',
-        body: JSON.stringify({ type: 'send_text', config: { body: 'New node (spike)' } }),
-      });
-      load();
-    } catch (err) {
-      setError(err.message);
+  // --- Mutations — every one reloads the whole graph afterward, same
+  // "one action, one round trip" shape the step-list editor already uses,
+  // so canvas and list never drift (both read the same REST endpoints). ---
+
+  const handleConfigChange = useCallback(async (nodeId, config) => {
+    try { await api.patchNode(flowId, nodeId, { config }); load(); }
+    catch (err) { setError(err.message); }
+  }, [flowId, load]);
+
+  const handleDeleteNode = useCallback(async (nodeId) => {
+    try { await api.deleteNode(flowId, nodeId); load(); }
+    catch (err) {
+      // The server's real FK guard (contact_flow_state.current_node_id) —
+      // surfaced plainly rather than the raw "Invalid reference" text, per
+      // the crash-fix work: a contact is genuinely standing on this node.
+      setError(err.status === 400 ? 'Cannot delete — a contact is currently on this node.' : err.message);
     }
   }, [flowId, load]);
 
-  // Connect: React Flow's onConnect fires with {source, target}. Posts a
-  // real edge via the existing POST .../edges endpoint — condition_type
-  // 'always' is the only legal type for a send_text source node
-  // (flowEngine.js's LEGAL_EDGE_TYPES_BY_NODE_TYPE); picking any other type
-  // here is Stage 3's problem (condition-type selection UI), not this
-  // spike's.
-  const onConnect = useCallback(
-    async (connection) => {
-      try {
-        await apiFetch(`/automation-flows/${flowId}/edges`, {
-          method: 'POST',
-          body: JSON.stringify({
-            from_node_id: connection.source,
-            to_node_id: connection.target,
-            condition_type: 'always',
-          }),
-        });
-        load();
-      } catch (err) {
-        setError(err.message);
-      }
-    },
-    [flowId, load]
-  );
+  const handleSetEntry = useCallback(async (nodeId) => {
+    try { await api.setEntry(flowId, nodeId); load(); }
+    catch (err) { setError(err.message); }
+  }, [flowId, load]);
 
-  // Save position: commit on drag-END only, one PATCH per node, never
-  // mid-drag — matches the migration/coexistence investigation's explicit
-  // recommendation (position is cosmetic, flowEngine.js never reads it,
-  // but last-write-wins is fine and streaming it would just be noise).
-  const onNodeDragStop = useCallback(
-    async (_event, node) => {
-      try {
-        await apiFetch(`/automation-flows/${flowId}/nodes/${node.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ position: { x: node.position.x, y: node.position.y } }),
-        });
-      } catch (err) {
-        setError(err.message);
-      }
-    },
-    [flowId]
-  );
+  const handleDeleteEdge = useCallback(async (edgeId) => {
+    try { await api.deleteEdge(flowId, edgeId); load(); }
+    catch (err) { setError(err.message); }
+  }, [flowId, load]);
 
-  if (status === 'loading') {
-    return <div style={{ padding: 20, fontFamily: 'sans-serif' }}>Loading…</div>;
-  }
+  const handleAddBranch = useCallback(async (fromNodeId, conditionType, toNodeId, conditionValue) => {
+    try {
+      await api.createEdge(flowId, { from_node_id: fromNodeId, to_node_id: toNodeId, condition_type: conditionType, ...(conditionValue ? { condition_value: conditionValue } : {}) });
+      load();
+    } catch (err) { setError(err.message); }
+  }, [flowId, load]);
+
+  const toggleActive = useCallback(async () => {
+    if (!graph) return;
+    try {
+      await api.patchFlow(flowId, { status: graph.status === 'active' ? 'archived' : 'active' });
+      load();
+    } catch (err) {
+      // 409 here is the validator's own block (routes/automationFlows.js)
+      // — its message is already specific per-issue text, safe to show raw.
+      setError(err.body?.error || err.message);
+    }
+  }, [flowId, graph, load]);
+
+  // --- Derive React Flow nodes/edges from the loaded graph. ---
+  useEffect(() => {
+    if (!graph) return;
+    const issuesByNode = {};
+    (graph.issues || []).forEach((iss) => { if (iss.nodeId) (issuesByNode[iss.nodeId] = issuesByNode[iss.nodeId] || []).push(iss); });
+    const edgesByFrom = {};
+    graph.edges.forEach((e) => { (edgesByFrom[e.from_node_id] = edgesByFrom[e.from_node_id] || []).push(e); });
+
+    setNodes(graph.nodes.map((n, i) => ({
+      id: n.id,
+      type: 'flowCard',
+      position: n.position || fallbackPosition(i),
+      data: {
+        node: n,
+        isEntry: n.id === graph.entry_node_id,
+        issues: issuesByNode[n.id] || [],
+        outgoingEdges: edgesByFrom[n.id] || [],
+        otherNodes: graph.nodes.filter((x) => x.id !== n.id),
+        templates,
+        tags,
+        onConfigChange: (config) => handleConfigChange(n.id, config),
+        onDelete: () => handleDeleteNode(n.id),
+        onSetEntry: () => handleSetEntry(n.id),
+        onAddBranch: (conditionType, toNodeId, conditionValue) => handleAddBranch(n.id, conditionType, toNodeId, conditionValue),
+        onDeleteEdge: handleDeleteEdge,
+      },
+    })));
+
+    setEdges(graph.edges.map((e) => ({
+      id: e.id,
+      source: e.from_node_id,
+      target: e.to_node_id,
+      sourceHandle: e.condition_type === 'button_id' ? `button-${e.condition_value}` : 'always',
+      targetHandle: 'target',
+      type: 'condition',
+      data: { conditionType: e.condition_type, conditionValue: e.condition_value, onDelete: handleDeleteEdge },
+    })));
+  }, [graph, templates, tags, setNodes, setEdges, handleConfigChange, handleDeleteNode, handleSetEntry, handleAddBranch, handleDeleteEdge]);
+
+  // --- Connect: drag from a handle to another node's target. ---
+  const onConnect = useCallback(async (connection) => {
+    const fromNode = graph.nodes.find((n) => n.id === connection.source);
+    const isButtonHandle = (connection.sourceHandle || '').startsWith('button-');
+    const conditionType = isButtonHandle ? 'button_id' : 'always';
+    const conditionValue = isButtonHandle ? connection.sourceHandle.replace('button-', '') : undefined;
+
+    if (conditionType === 'always') {
+      const existing = graph.edges.find((e) => e.from_node_id === fromNode.id && e.condition_type === 'always');
+      if (existing) { setError('This node already has an outgoing branch — delete it before adding a new one.'); return; }
+    }
+    try {
+      await api.createEdge(flowId, { from_node_id: connection.source, to_node_id: connection.target, condition_type: conditionType, ...(conditionValue ? { condition_value: conditionValue } : {}) });
+      load();
+    } catch (err) { setError(err.message); }
+  }, [flowId, graph, load]);
+
+  // --- Drag a connection to empty canvas -> prompt for a new node type
+  // (n8n/AiSensy's "stretch a thread" pattern, confirmed in this session's
+  // own research). onConnectStart records where the drag began; onConnectEnd
+  // checks whether it ended on a real target (a .react-flow__handle under
+  // the pointer) — if not, opens the type picker at that screen position. ---
+  const onConnectStart = useCallback((_event, params) => { connectingRef.current = params; }, []);
+  const onConnectEnd = useCallback((event) => {
+    const target = event.target;
+    const droppedOnPane = target?.classList?.contains('react-flow__pane');
+    if (droppedOnPane && connectingRef.current?.nodeId) {
+      const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+      setPendingConnection({ fromNodeId: connectingRef.current.nodeId, fromHandle: connectingRef.current.handleId, screenX: point.clientX, screenY: point.clientY });
+    }
+    connectingRef.current = null;
+  }, []);
+
+  const pickNodeForConnection = useCallback(async (paletteItem) => {
+    if (!pendingConnection) return;
+    const flowPos = screenToFlowPosition({ x: pendingConnection.screenX, y: pendingConnection.screenY });
+    try {
+      const newNode = await api.createNode(flowId, { type: paletteItem.type, config: paletteItem.defaultConfig, position: flowPos });
+      const isButtonHandle = (pendingConnection.fromHandle || '').startsWith('button-');
+      await api.createEdge(flowId, {
+        from_node_id: pendingConnection.fromNodeId,
+        to_node_id: newNode.id,
+        condition_type: isButtonHandle ? 'button_id' : 'always',
+        ...(isButtonHandle ? { condition_value: pendingConnection.fromHandle.replace('button-', '') } : {}),
+      });
+      setPendingConnection(null);
+      load();
+    } catch (err) { setError(err.message); setPendingConnection(null); }
+  }, [pendingConnection, flowId, screenToFlowPosition, load]);
+
+  // --- Palette drag-and-drop onto the canvas. ---
+  const onDragOver = useCallback((event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }, []);
+  const onDrop = useCallback(async (event) => {
+    event.preventDefault();
+    const paletteId = event.dataTransfer.getData('application/wasi-node-type');
+    const item = PALETTE_ITEMS.find((p) => p.paletteId === paletteId);
+    if (!item) return;
+    const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    try { await api.createNode(flowId, { type: item.type, config: item.defaultConfig, position }); load(); }
+    catch (err) { setError(err.message); }
+  }, [flowId, screenToFlowPosition, load]);
+
+  const onNodeDragStop = useCallback(async (_event, node) => {
+    try { await api.patchNode(flowId, node.id, { position: { x: node.position.x, y: node.position.y } }); }
+    catch (err) { setError(err.message); }
+  }, [flowId]);
+
+  const onEdgesDelete = useCallback((deleted) => {
+    deleted.forEach((e) => handleDeleteEdge(e.id));
+  }, [handleDeleteEdge]);
+
+  if (status === 'loading') return <div className="wf-loading">Loading…</div>;
   if (status === 'error') {
     return (
-      <div style={{ padding: 20, fontFamily: 'sans-serif', color: '#a4402f' }}>
+      <div className="wf-loading wf-error">
         <b>Error:</b> {error}
-        {!flowId && (
-          <div style={{ marginTop: 8, color: '#333' }}>
-            Open this page as <code>/flow-editor/?flow=&lt;a real automation_flows.id&gt;</code> while logged
-            into the main app in the same browser (this page reads its auth token from localStorage).
-          </div>
-        )}
+        {!flowId && <div style={{ marginTop: 8 }}>Open as <code>/flow-editor/?flow=&lt;id&gt;</code> while logged into the main app.</div>}
       </div>
     );
   }
 
+  const blocksActivation = graph.status !== 'active' && (graph.issues || []).length > 0;
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif' }}>
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <b>Flow editor spike — {flowName}</b>
-        {error && <span style={{ color: '#a4402f', fontSize: 13 }}>{error}</span>}
-        <button onClick={addNode} style={{ marginLeft: 'auto' }}>+ Add node</button>
+    <div className="wf-shell">
+      <div className="wf-topbar">
+        <b>{graph.name}</b>
+        <span className={`wf-status-badge ${graph.status === 'active' ? 'active' : ''}`}>{graph.status}</span>
+        <button type="button" className="wf-btn-primary" disabled={blocksActivation} onClick={toggleActive} title={blocksActivation ? 'Fix all issues before activating' : ''}>
+          {graph.status === 'active' ? 'Archive Flow' : 'Activate Flow'}
+        </button>
+        {error && <span className="wf-error-toast">{error} <button onClick={() => setError(null)}>&times;</button></span>}
       </div>
-      <div style={{ flex: 1 }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDragStop={onNodeDragStop}
-          fitView
-        >
-          <Background />
-          <Controls />
-          <MiniMap />
-        </ReactFlow>
+      <IssuesBanner issues={graph.issues || []} />
+      <div className="wf-body">
+        <aside className="wf-palette">
+          <div className="wf-palette-title">Add a node</div>
+          {PALETTE_ITEMS.map((item) => (
+            <div
+              key={item.paletteId}
+              className="wf-palette-item"
+              draggable
+              onDragStart={(e) => e.dataTransfer.setData('application/wasi-node-type', item.paletteId)}
+            >
+              {item.label}
+            </div>
+          ))}
+        </aside>
+        <div className="wf-canvas" onDragOver={onDragOver} onDrop={onDrop}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
+            onNodeDragStop={onNodeDragStop}
+            onEdgesDelete={onEdgesDelete}
+            fitView
+          >
+            <Background />
+            <Controls />
+            <MiniMap />
+          </ReactFlow>
+          {pendingConnection && (
+            <AddNodeMenu
+              x={pendingConnection.screenX}
+              y={pendingConnection.screenY}
+              onPick={pickNodeForConnection}
+              onClose={() => setPendingConnection(null)}
+            />
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <FlowEditor />
+    </ReactFlowProvider>
   );
 }

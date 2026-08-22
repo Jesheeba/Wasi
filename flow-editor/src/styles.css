@@ -1,0 +1,123 @@
+/* AiSensy-referenced visual language (see the flow-builder-aisensy-reference
+   memory for the source screenshot this is modeled on): white cards, thin
+   borders, a single accent color, section labels with live char counts,
+   fields edited directly on the card. Uses Wasi's own established accent
+   (#1e6e5a, already the color language of the read-only canvas/index.css)
+   rather than literally copying AiSensy's brand color — same visual
+   *pattern*, not a re-skin of their palette. */
+
+:root {
+  --wf-accent: #1e6e5a;
+  --wf-accent-dark: #14503f;
+  --wf-border: #e2ded3;
+  --wf-text: #262320;
+  --wf-text-muted: #6b6255;
+  --wf-bg: #fbfaf7;
+  --wf-red: #a4402f;
+  --wf-red-soft: #f6e4de;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; color: var(--wf-text); }
+
+.wf-loading { padding: 24px; font-size: 14px; }
+.wf-error { color: var(--wf-red); }
+
+.wf-shell { height: 100vh; display: flex; flex-direction: column; }
+
+.wf-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px; border-bottom: 1px solid var(--wf-border); background: #fff;
+}
+.wf-status-badge { font-size: 11px; padding: 2px 10px; border-radius: 100px; background: #eee; color: #666; text-transform: capitalize; }
+.wf-status-badge.active { background: #e3ede9; color: var(--wf-accent-dark); }
+.wf-btn-primary {
+  background: var(--wf-accent); color: #fff; border: none; border-radius: 8px;
+  padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.wf-btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+.wf-error-toast { margin-left: auto; background: var(--wf-red-soft); color: var(--wf-red); font-size: 12px; padding: 4px 10px; border-radius: 6px; }
+.wf-error-toast button { border: none; background: none; color: inherit; cursor: pointer; margin-left: 6px; font-weight: 700; }
+
+.wf-issues-banner {
+  background: #fef2f2; color: #991b1b; font-size: 12px; padding: 8px 18px; border-bottom: 1px solid #fca5a5;
+}
+
+.wf-body { flex: 1; display: flex; min-height: 0; }
+
+.wf-palette {
+  width: 200px; border-right: 1px solid var(--wf-border); background: #fff;
+  padding: 14px 10px; overflow-y: auto;
+}
+.wf-palette-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wf-text-muted); margin-bottom: 8px; padding: 0 6px; }
+.wf-palette-item {
+  border: 1px solid var(--wf-border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+  font-size: 13px; cursor: grab; background: var(--wf-bg); user-select: none;
+}
+.wf-palette-item:hover { border-color: var(--wf-accent); }
+
+.wf-canvas { flex: 1; position: relative; }
+
+/* --- Node cards --- */
+.wf-card {
+  background: #fff; border: 1.5px solid #333; border-radius: 10px; min-width: 220px;
+  padding: 10px 12px; font-size: 12.5px;
+}
+.wf-card-issue { border-color: var(--wf-red) !important; box-shadow: 0 0 0 1px #fca5a5; }
+.wf-card-entry { border-color: var(--wf-accent) !important; }
+.wf-card-selected { box-shadow: 0 0 0 2px #93c5fd; }
+
+.wf-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.wf-entry-badge { background: var(--wf-accent); color: #fff; font-size: 9px; padding: 1px 6px; border-radius: 4px; }
+.wf-card-type { font-weight: 700; font-size: 12px; flex: 1; }
+.wf-card-actions button { border: none; background: none; cursor: pointer; font-size: 12px; padding: 2px 4px; }
+
+.wf-issue-box { background: #fef2f2; color: #991b1b; border-radius: 6px; padding: 5px 7px; margin-bottom: 6px; font-size: 11px; }
+
+.wf-field { margin-bottom: 8px; }
+.wf-field-label { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--wf-text-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.02em; }
+.wf-charcount { font-family: monospace; text-transform: none; }
+.wf-field-static { font-size: 11.5px; color: var(--wf-text-muted); font-style: italic; margin-bottom: 6px; }
+
+.wf-textarea, .wf-input, .wf-select {
+  width: 100%; border: 1px solid var(--wf-border); border-radius: 6px; padding: 5px 7px;
+  font-size: 12px; font-family: inherit; resize: vertical;
+}
+.wf-textarea:focus, .wf-input:focus, .wf-select:focus { outline: none; border-color: var(--wf-accent); }
+
+.wf-input-sm, .wf-select-sm { border: 1px solid var(--wf-border); border-radius: 5px; padding: 3px 5px; font-size: 11px; }
+.wf-btn-sm {
+  border: 1px solid var(--wf-border); background: var(--wf-bg); border-radius: 5px;
+  padding: 3px 8px; font-size: 11px; cursor: pointer;
+}
+.wf-btn-danger { color: var(--wf-red); }
+
+.wf-button-row { position: relative; display: flex; align-items: center; gap: 4px; margin-bottom: 4px; padding-right: 14px; }
+.wf-branch-target { font-size: 10px; color: var(--wf-text-muted); white-space: nowrap; }
+.wf-branch-unrouted { color: var(--wf-red); }
+
+.wf-branches { margin-top: 4px; }
+.wf-branch-row { display: flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 0; border-top: 1px dashed var(--wf-border); }
+.wf-branch-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.wf-branch-label { flex: 1; }
+.wf-branch-delete { border: none; background: none; color: var(--wf-red); cursor: pointer; font-size: 12px; }
+
+.wf-add-branch { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
+
+/* --- Edges --- */
+.wf-edge-label {
+  position: absolute; background: #fff; border: 1px solid; border-radius: 100px;
+  padding: 2px 8px; font-size: 10px; font-weight: 600; white-space: nowrap; pointer-events: all;
+}
+.wf-edge-delete { border: none; background: none; cursor: pointer; margin-left: 4px; font-weight: 700; color: var(--wf-red); }
+
+/* --- Add-node-on-empty-drop menu --- */
+.wf-menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.wf-add-node-menu {
+  position: fixed; z-index: 41; background: #fff; border: 1px solid var(--wf-border); border-radius: 8px;
+  box-shadow: 0 8px 24px -8px rgba(0,0,0,0.25); padding: 6px; display: flex; flex-direction: column; min-width: 160px;
+}
+.wf-add-node-menu button {
+  border: none; background: none; text-align: left; padding: 6px 8px; font-size: 12.5px; cursor: pointer; border-radius: 5px;
+}
+.wf-add-node-menu button:hover { background: var(--wf-bg); }
