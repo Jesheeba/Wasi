@@ -5,6 +5,25 @@
 # above server/src (REPO_ROOT = path.join(__dirname, '..', '..') in app.js),
 # so both server/ and the root-level static files have to land in the image
 # at the same relative layout they have in the repo.
+#
+# flow-editor-build is the one exception to this app's no-build-step
+# convention (Stage 1 of the flow-builder rebuild — React + @xyflow/react,
+# see flow-editor/package.json's comment) — a genuinely separate build
+# stage, not folded into the main stage below, specifically so the final
+# image never carries React/Vite/the flow-editor's node_modules, only the
+# static dist/ output it produces. The main app (index.html/app.js/
+# index.css) and server/ are completely untouched by this stage — it reads
+# only flow-editor/ and writes only flow-editor/dist, copied into the final
+# image the same way index.html/index.css/app.js already are, served from
+# its own path (server/src/app.js's /flow-editor static mount) rather than
+# being injected into the existing pages' load path.
+FROM node:20-alpine AS flow-editor-build
+WORKDIR /build
+COPY flow-editor/package.json flow-editor/package-lock.json* ./
+RUN npm install
+COPY flow-editor/ ./
+RUN npm run build
+
 FROM node:20-alpine
 
 WORKDIR /app
@@ -20,6 +39,7 @@ COPY server ./server
 COPY index.html index.css app.js embeddedSignup.js ./
 COPY marketing ./marketing
 COPY admin ./admin
+COPY --from=flow-editor-build /build/dist ./flow-editor/dist
 
 WORKDIR /app/server
 

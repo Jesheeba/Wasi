@@ -1,5 +1,7 @@
 node_modules/
 server/node_modules/
+flow-editor/node_modules/
+flow-editor/dist/
 server/.env
 server/.env.production
 server/.pgdata/

@@ -1,5 +1,7 @@
 node_modules
 server/node_modules
+flow-editor/node_modules
+flow-editor/dist
 .git
 .claude
 scraped_pages

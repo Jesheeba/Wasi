@@ -123,6 +123,13 @@ function createApp() {
   app.get('/embeddedSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'embeddedSignup.js')));
   app.use('/marketing', express.static(path.join(REPO_ROOT, 'marketing')));
   app.use('/admin', express.static(path.join(REPO_ROOT, 'admin')));
+  // Stage 1 spike (flow-editor/) — the one build-step exception in this
+  // repo, served from its own path exactly like marketing/admin above, not
+  // injected into index.html/app.js's existing load path. Built by the
+  // Dockerfile's separate flow-editor-build stage; this directory won't
+  // exist until that runs (`npm run build` inside flow-editor/), so it's
+  // absent in a plain `git clone` — expected, not a bug.
+  app.use('/flow-editor', express.static(path.join(REPO_ROOT, 'flow-editor/dist')));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
