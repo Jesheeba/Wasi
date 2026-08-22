@@ -1215,6 +1215,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentFlowGraph = await authFetch(`/api/automation-flows/${flowId}`);
     document.getElementById('bot-flow-editor-title').textContent = state.currentFlowGraph.name;
     document.getElementById('modal-bot-flow-editor')?.classList.add('open');
+    const visualLink = document.getElementById('bot-flow-editor-open-visual-link');
+    if (visualLink) visualLink.href = `/flow-editor/?flow=${flowId}`;
     state.flowView = 'list';
     renderFlowEditor();
     applyFlowView();
