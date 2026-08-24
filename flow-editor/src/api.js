@@ -37,4 +37,7 @@ export const api = {
   deleteEdge: (flowId, edgeId) => request(`/automation-flows/${flowId}/edges/${edgeId}`, { method: 'DELETE' }),
   listTemplates: () => request('/templates'),
   listTags: () => request('/tags'),
+  listRulesForFlow: (flowId) => request(`/automation-rules?flow_id=${flowId}`),
+  createRule: (data) => request('/automation-rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateRule: (ruleId, data) => request(`/automation-rules/${ruleId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };

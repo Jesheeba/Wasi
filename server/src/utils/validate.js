@@ -160,6 +160,11 @@ const automationRuleCreateSchema = z.object({
   }
 });
 
+const automationRuleUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  trigger: z.string().min(1).optional(),
+});
+
 const automationFlowCreateSchema = z.object({
   name: z.string().min(1),
 });
@@ -380,6 +385,7 @@ module.exports = {
   businessProfileUpdateSchema,
   broadcastCreateSchema,
   automationRuleCreateSchema,
+  automationRuleUpdateSchema,
   automationFlowCreateSchema,
   automationFlowUpdateSchema,
   flowNodeCreateSchema,

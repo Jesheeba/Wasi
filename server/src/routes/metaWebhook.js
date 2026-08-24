@@ -110,7 +110,12 @@ async function handleInboundMessages(waba, value) {
     // human reads in the chat; id is the stable value the flow engine
     // branches on (routes/flowEngine.js), never re-derived from title here.
     const buttonReply = msg.interactive?.button_reply;
-    const body = msg.text?.body || buttonReply?.title || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+    // Template quick-reply clicks (type: "button") are a separate shape —
+    // msg.button.{text,payload} — from the flow-builder's own interactive
+    // buttons above. Reading .text here is what lets an automation rule's
+    // trigger keyword match the button's label (e.g. "Received").
+    const templateButtonText = msg.button?.text;
+    const body = msg.text?.body || buttonReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
 
     // Capture-and-verify: interactive.button_reply's exact shape (id/title
     // field names, whether other fields are present) was inferred from
@@ -126,6 +131,14 @@ async function handleInboundMessages(waba, value) {
         actor_id: null,
         action: 'interactive_message_received',
         target: `${phone}: ${JSON.stringify(msg.interactive).slice(0, 500)}`,
+      });
+    }
+    if (msg.type === 'button') {
+      await auditLogRepo.record({
+        actor_type: 'meta_webhook',
+        actor_id: null,
+        action: 'template_button_received',
+        target: `${phone}: ${JSON.stringify(msg.button).slice(0, 500)}`,
       });
     }
 

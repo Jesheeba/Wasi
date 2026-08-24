@@ -39,6 +39,21 @@ body { margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; color: var
 .wf-error-toast { margin-left: auto; background: var(--wf-red-soft); color: var(--wf-red); font-size: 12px; padding: 4px 10px; border-radius: 6px; }
 .wf-error-toast button { border: none; background: none; color: inherit; cursor: pointer; margin-left: 6px; font-weight: 700; }
 
+.wf-trigger-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px; border-bottom: 1px solid var(--wf-border); background: var(--wf-bg);
+}
+.wf-trigger-bar label { font-size: 12px; font-weight: 600; color: var(--wf-text-muted); }
+.wf-trigger-bar input {
+  border: 1px solid var(--wf-border); border-radius: 6px; padding: 5px 10px; font-size: 13px; width: 200px;
+}
+.wf-btn-secondary {
+  background: #fff; color: var(--wf-accent-dark); border: 1px solid var(--wf-accent); border-radius: 8px;
+  padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.wf-btn-secondary:disabled { border-color: #ccc; color: #999; cursor: not-allowed; }
+.wf-trigger-hint { font-size: 12px; color: var(--wf-text-muted); }
+
 .wf-issues-banner {
   background: #fef2f2; color: #991b1b; font-size: 12px; padding: 8px 18px; border-bottom: 1px solid #fca5a5;
 }

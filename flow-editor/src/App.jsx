@@ -40,6 +40,8 @@ function FlowEditor() {
   const [graph, setGraph] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [tags, setTags] = useState([]);
+  const [rule, setRule] = useState(null);
+  const [triggerInput, setTriggerInput] = useState('');
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -50,11 +52,14 @@ function FlowEditor() {
   const load = useCallback(() => {
     if (!flowId) { setStatus('error'); setError('No ?flow=<id> in the URL.'); return; }
     setStatus('loading');
-    Promise.all([api.getFlow(flowId), api.listTemplates(), api.listTags()])
-      .then(([g, t, tg]) => {
+    Promise.all([api.getFlow(flowId), api.listTemplates(), api.listTags(), api.listRulesForFlow(flowId)])
+      .then(([g, t, tg, rules]) => {
         setGraph(g);
         setTemplates(t);
         setTags(tg);
+        const linkedRule = rules[0] || null;
+        setRule(linkedRule);
+        setTriggerInput(linkedRule?.trigger || '');
         setStatus('ready');
       })
       .catch((err) => { setError(err.message); setStatus('error'); });
@@ -97,6 +102,18 @@ function FlowEditor() {
       load();
     } catch (err) { setError(err.message); }
   }, [flowId, load]);
+
+  const handleSaveTrigger = useCallback(async () => {
+    const value = triggerInput.trim();
+    if (!value) return;
+    try {
+      const saved = rule
+        ? await api.updateRule(rule.id, { trigger: value })
+        : await api.createRule({ title: graph.name, trigger: value, flow_id: flowId });
+      setRule(saved);
+      setError(null);
+    } catch (err) { setError(err.message); }
+  }, [rule, graph, flowId, triggerInput]);
 
   const toggleActive = useCallback(async () => {
     if (!graph) return;
@@ -241,6 +258,25 @@ function FlowEditor() {
           {graph.status === 'active' ? 'Archive Flow' : 'Activate Flow'}
         </button>
         {error && <span className="wf-error-toast">{error} <button onClick={() => setError(null)}>&times;</button></span>}
+      </div>
+      <div className="wf-trigger-bar">
+        <label htmlFor="wf-trigger-input">Trigger keyword</label>
+        <input
+          id="wf-trigger-input"
+          type="text"
+          value={triggerInput}
+          onChange={(e) => setTriggerInput(e.target.value)}
+          placeholder="e.g. hours"
+        />
+        <button
+          type="button"
+          className="wf-btn-secondary"
+          disabled={!triggerInput.trim() || triggerInput.trim() === (rule?.trigger || '')}
+          onClick={handleSaveTrigger}
+        >
+          {rule ? 'Update Trigger' : 'Set Trigger'}
+        </button>
+        {rule && <span className="wf-trigger-hint">Starts this flow when a message contains "{rule.trigger}"</span>}
       </div>
       <IssuesBanner issues={graph.issues || []} />
       <div className="wf-body">
