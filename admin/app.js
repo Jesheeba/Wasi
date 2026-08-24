@@ -1244,6 +1244,48 @@ function confirmRevokeApiKey(keyId, clientId) {
   });
 }
 
+async function handleBackfillApiKeys() {
+  const btn = document.getElementById('backfill-api-keys-btn');
+  const resultEl = document.getElementById('backfill-api-keys-result');
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:14px;"></i> Issuing…';
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const res = await apiFetch('/api/admin/api-keys/backfill', { method: 'POST' });
+    resultEl.style.display = 'block';
+    if (!res.issued.length) {
+      resultEl.innerHTML = `<div class="inline-success" style="margin-bottom:0;">Every client already has an active key — nothing to issue (${res.alreadyHadKey} already covered).</div>`;
+    } else {
+      resultEl.innerHTML = `
+        <div class="inline-success" style="margin-bottom:0.75rem;">
+          Issued ${res.issued.length} new key(s) — ${res.alreadyHadKey} client(s) already had one and were skipped. Each key is shown once, copy them now.
+        </div>
+        <div class="table-card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Client</th><th>Key</th></tr></thead><tbody>
+          ${res.issued.map((r) => `
+            <tr>
+              <td>${escapeHtml(r.client_name)}</td>
+              <td style="font-family:monospace; font-size:0.78rem; word-break:break-all; user-select:all;">${escapeHtml(r.key)}</td>
+            </tr>
+          `).join('')}
+        </tbody></table></div></div>
+      `;
+    }
+    showToast(`Backfill complete — ${res.issued.length} key(s) issued.`, 'success');
+    loadApiKeys();
+  } catch (err) {
+    if (err.status === 401) return;
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div class="inline-error" style="margin-bottom:0;">${escapeHtml(err.message)}</div>`;
+    showToast('Failed to backfill API keys: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
 async function openCreateApiKeyModal() {
   document.getElementById('create-api-key-form').reset();
   document.getElementById('create-api-key-form').style.display = '';
@@ -1578,6 +1620,7 @@ function initEventListeners() {
   document.getElementById('tickets-status-filter').addEventListener('change', loadTickets);
 
   document.getElementById('open-create-api-key-btn').addEventListener('click', openCreateApiKeyModal);
+  document.getElementById('backfill-api-keys-btn').addEventListener('click', handleBackfillApiKeys);
   document.querySelectorAll('[data-close-create-api-key]').forEach((btn) => btn.addEventListener('click', closeCreateApiKeyModal));
   document.getElementById('create-api-key-modal').addEventListener('click', (e) => {
     if (e.target.id === 'create-api-key-modal') closeCreateApiKeyModal();

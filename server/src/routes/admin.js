@@ -248,6 +248,29 @@ router.post('/api-keys', asyncHandler(async (req, res) => {
   res.status(201).json({ ...record, key: rawKey });
 }));
 
+// Bulk-issue a Hub API key for every client that doesn't already have an
+// active one — the admin-panel button for onboarding the whole existing
+// client base onto the CRM integration at once, not just new clients
+// (the /api/clients auto-issue only covers clients created from here on).
+// Idempotent by construction: a client with any non-revoked key is skipped,
+// so clicking this twice (or after some clients already got one manually)
+// never creates a second live key for someone who's already covered.
+router.post('/api-keys/backfill', asyncHandler(async (req, res) => {
+  const { rows: allClients } = await pool.query(`select id, name from clients order by created_at asc`);
+  const { rows: withActiveKey } = await pool.query(`select distinct client_id from api_keys where revoked_at is null`);
+  const haveKey = new Set(withActiveKey.map((r) => r.client_id));
+  const missing = allClients.filter((c) => !haveKey.has(c.id));
+
+  const issued = [];
+  for (const client of missing) {
+    const { record, rawKey } = await apiKeysRepo.create(pool, client.id, 'CRM Integration');
+    await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_created', target: `${client.id}: ${record.app_name} (backfill)` });
+    issued.push({ client_id: client.id, client_name: client.name, app_name: record.app_name, key: rawKey });
+  }
+
+  res.json({ issued, alreadyHadKey: allClients.length - missing.length });
+}));
+
 router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const schema = z.object({ client_id: z.string().uuid() });

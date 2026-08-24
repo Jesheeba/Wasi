@@ -472,9 +472,13 @@
               <div class="page-title">API Keys</div>
               <div class="page-subtitle">Hub API keys issued to consuming apps, across every client</div>
             </div>
-            <button class="btn-primary" id="open-create-api-key-btn" style="width:auto; padding:0 16px;"><i data-lucide="plus" style="width:14px;"></i> New Key</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-secondary" id="backfill-api-keys-btn" style="width:auto; padding:0 16px;"><i data-lucide="key-round" style="width:14px;"></i> Issue Missing Keys (All Clients)</button>
+              <button class="btn-primary" id="open-create-api-key-btn" style="width:auto; padding:0 16px;"><i data-lucide="plus" style="width:14px;"></i> New Key</button>
+            </div>
           </div>
           <div id="api-keys-error" class="inline-error" style="display:none;"></div>
+          <div id="backfill-api-keys-result" style="display:none; margin-bottom:1rem;"></div>
           <div class="table-card">
             <div style="overflow-x:auto;">
               <table class="data-table">
