@@ -88,8 +88,11 @@ async function assertWithinPlanLimit(db, clientId) {
 // title}] } (flowEngine.js's send_interactive_buttons node — see
 // metaClient.sendInteractiveMessage; same session-window rule as 'text',
 // no template approval). type: 'template' -> { templateName,
-// templateLanguage, templateComponents }.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents }) {
+// templateLanguage, templateComponents, headerMediaAssetId }.
+// headerMediaAssetId (optional, media-header templates only): a specific
+// uploaded asset (see templateMediaCacheRepo.insertAsset / migration 030) to
+// send instead of the template's approval-time default sample.
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents, headerMediaAssetId }) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
@@ -116,7 +119,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
   if (type === 'template' && template && mediaHeaderService.isMediaHeaderType(template.header_type)) {
     let resolved;
     try {
-      resolved = await mediaHeaderService.resolveMediaId(db, clientId, waba, accessToken, template);
+      resolved = await mediaHeaderService.resolveMediaId(db, clientId, waba, accessToken, template, headerMediaAssetId);
     } catch (err) {
       if (err instanceof mediaHeaderService.MediaResolutionError) {
         throw new MessagingError(err.message, 'media_resolution_failed');

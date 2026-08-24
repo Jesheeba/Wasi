@@ -1210,6 +1210,11 @@
           <label class="form-label">Message Template</label>
           <select id="new-campaign-template" class="form-input"></select>
         </div>
+        <div id="new-campaign-media" style="display: none;" class="form-group">
+          <label class="form-label">Header file</label>
+          <input type="file" class="form-input" id="new-campaign-media-file" />
+          <div id="new-campaign-media-status" style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;"></div>
+        </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-campaign">Cancel</button>
           <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Launch Campaign</button>
@@ -1694,6 +1699,11 @@
         <button class="close-modal-btn" data-close-modal="modal-send-chat-template"><i data-lucide="x"></i></button>
       </div>
       <div id="send-chat-template-error" style="display: none; background:#FEF2F2; color:#B91C1C; border:1px solid #FCA5A5; border-radius:8px; padding:10px 14px; font-size:0.85rem; margin-bottom:1rem;"></div>
+      <div id="send-chat-template-media" style="display: none;" class="form-group">
+        <label class="form-label">Header file</label>
+        <input type="file" class="form-input" id="send-chat-template-media-file" />
+        <div id="send-chat-template-media-status" style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;"></div>
+      </div>
       <div id="send-chat-template-params"></div>
       <div class="form-group">
         <label class="form-label">Preview</label>

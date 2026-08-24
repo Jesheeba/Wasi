@@ -1,6 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { CONDITION_COLORS, FLOW_EDGE_TYPE_LABELS, NODE_TYPE_LABELS } from './constants.js';
+import { api } from './api.js';
+
+const MEDIA_HEADER_TYPES = ['IMAGE', 'VIDEO', 'DOCUMENT'];
+
+// Lets this node point at a specific uploaded media asset (see
+// routes/templates.js's POST /:id/header-media) instead of always sending
+// the template's approval-time default sample — uploaded immediately on
+// choice so a bad file surfaces here, not at the next flow run.
+function TemplateMediaField({ cfg, onConfigChange, template }) {
+  const [status, setStatus] = useState('');
+  if (!template || !MEDIA_HEADER_TYPES.includes(template.header_type)) return null;
+
+  const onFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setStatus('Uploading…');
+    try {
+      const asset = await api.uploadHeaderMedia(template.id, file);
+      onConfigChange({ ...cfg, headerMediaAssetId: asset.id, headerMediaFilename: asset.filename || file.name });
+      setStatus(`Ready — will send with "${file.name}".`);
+    } catch (err) {
+      setStatus(`Upload failed: ${err.message}`);
+    }
+  };
+
+  return (
+    <div className="wf-field nodrag">
+      <div className="wf-field-label">Header file</div>
+      <input className="wf-input" type="file" onChange={onFileChange} />
+      <div className="wf-field-static">
+        {status || (cfg.headerMediaAssetId
+          ? `Using "${cfg.headerMediaFilename || 'the uploaded file'}".`
+          : "Uses the template's approval sample unless you choose a file.")}
+      </div>
+    </div>
+  );
+}
 
 // Debounces text-field edits before PATCHing — AiSensy's cards save as you
 // type (visible via the live char counts), but firing one PATCH per
@@ -142,6 +179,14 @@ export default function FlowNodeCard({ id, data, selected }) {
             ))}
           </select>
         </div>
+      )}
+
+      {node.type === 'send_template' && (
+        <TemplateMediaField
+          cfg={cfg}
+          onConfigChange={onConfigChange}
+          template={templates.find((t) => t.name === cfg.templateName)}
+        />
       )}
 
       {node.type === 'delay' && (

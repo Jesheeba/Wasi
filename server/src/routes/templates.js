@@ -7,7 +7,7 @@ const metaClient = require('../utils/metaClient');
 const mediaHeaderService = require('../services/mediaHeaderService');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { messageTemplateCreateSchema } = require('../utils/validate');
+const { uuid, messageTemplateCreateSchema } = require('../utils/validate');
 const { validateTemplateText, validateHeaderText } = require('../utils/templateParams');
 const templateSyncService = require('../services/templateSyncService');
 
@@ -239,6 +239,72 @@ router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req
   }
 
   res.status(201).json(template);
+}));
+
+// Uploads a new media asset for a media-header template, for one send to
+// point at instead of the template's approval-time default sample (see
+// templateMediaCacheRepo.insertAsset / migration 030_template_media_assets.js).
+// Reused by the chat send-template modal, the broadcast-creation modal, and
+// the flow editor's Send Template node — all three just need { id, filename }
+// back to attach to their own send/create call as headerMediaAssetId.
+router.post('/:id/header-media', uploadHeaderMedia.single('file'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
+  if (!template) return res.status(404).json({ error: 'Not found' });
+  if (!mediaHeaderService.isMediaHeaderType(template.header_type)) {
+    return res.status(400).json({
+      error: `"${template.name}" does not have a media header — only IMAGE/VIDEO/DOCUMENT header templates accept uploaded media.`,
+    });
+  }
+
+  const limits = MEDIA_HEADER_LIMITS[template.header_type];
+  if (!req.file) {
+    return res.status(400).json({ error: 'Missing file', detail: `A ${template.header_type.toLowerCase()} file is required.` });
+  }
+  const mimeType = limits.mimeTypes[req.file.mimetype];
+  if (!mimeType) {
+    return res.status(400).json({
+      error: 'Unsupported file type',
+      detail: `${template.header_type} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
+    });
+  }
+  if (req.file.size > limits.maxBytes) {
+    return res.status(400).json({
+      error: 'File too large',
+      detail: `${template.header_type} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
+    });
+  }
+
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
+    return res.status(400).json({
+      error: 'Connect WhatsApp first',
+      detail: 'Uploading header media needs a connected WhatsApp number.',
+    });
+  }
+
+  let accessToken;
+  try {
+    accessToken = decrypt(waba.access_token_encrypted);
+  } catch (err) {
+    return res.status(500).json({
+      error: 'Could not decrypt this WABA\'s access token',
+      detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token.',
+    });
+  }
+
+  let uploaded;
+  try {
+    uploaded = await metaClient.uploadMedia(waba.phone_number_id, accessToken, req.file.buffer, mimeType, req.file.originalname);
+  } catch (err) {
+    return res.status(502).json({ error: 'Could not upload media to Meta', detail: err.message });
+  }
+
+  // Recommended (not required) by Meta for a document header send, same as
+  // the approval-time seed in the POST / handler above — null for IMAGE/VIDEO.
+  const filename = template.header_type === 'DOCUMENT' ? (req.file.originalname || null) : null;
+  const asset = await templateMediaCacheRepo.insertAsset(req.db, req.clientId, template.id, { mediaId: uploaded.id, filename });
+  res.status(201).json({ id: asset.id, filename: asset.filename });
 }));
 
 module.exports = router;

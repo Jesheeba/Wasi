@@ -187,6 +187,7 @@ async function executeSendTemplate(db, clientId, contact, chat, node) {
     templateName: node.config.templateName,
     templateLanguage: node.config.templateLanguage || 'en_US',
     templateComponents,
+    headerMediaAssetId: node.config.headerMediaAssetId,
   });
 }
 

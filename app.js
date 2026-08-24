@@ -838,6 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
      bypassed from this layer since the check lives server-side.
      --------------------------------------------------------------- */
   let sendTemplateTarget = null; // the template object while this modal is open
+  let sendTemplateHeaderMediaAssetId = null; // set once a new header file has been uploaded for this send
 
   // Body params + (if TEXT) header params, deduped — mirrors
   // routes/broadcasts.js's requiredParamNames on the server for the same
@@ -860,8 +861,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function openSendTemplateModal(template) {
     sendTemplateTarget = template;
+    sendTemplateHeaderMediaAssetId = null;
     setSendTemplateError(null);
     document.getElementById('send-chat-template-name').textContent = template.name;
+
+    const mediaField = document.getElementById('send-chat-template-media');
+    const mediaFileInput = document.getElementById('send-chat-template-media-file');
+    const mediaStatus = document.getElementById('send-chat-template-media-status');
+    mediaFileInput.value = '';
+    mediaStatus.textContent = '';
+    mediaField.style.display = MEDIA_HEADER_TYPES.includes(template.header_type) ? '' : 'none';
 
     const params = requiredParamsFor(template);
     const paramsContainer = document.getElementById('send-chat-template-params');
@@ -900,7 +909,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (t.header_type === 'TEXT' && t.header_content) {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(t.header_content, values))}</div>`;
     } else if (MEDIA_HEADER_TYPES.includes(t.header_type)) {
-      html += `<div class="template-preview-header">${t.header_type.charAt(0)}${t.header_type.slice(1).toLowerCase()} header — attached automatically when sent</div>`;
+      const headerNote = sendTemplateHeaderMediaAssetId
+        ? 'the file you chose above'
+        : 'the approval sample — choose a file above to send something else';
+      html += `<div class="template-preview-header">${t.header_type.charAt(0)}${t.header_type.slice(1).toLowerCase()} header — will send with ${headerNote}</div>`;
     }
     html += `<div>${escapeHtml(substituteTemplateParams(t.body || '', values))}</div>`;
     if (t.footer_text) {
@@ -942,6 +954,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return components;
   }
 
+  // Uploaded immediately on choice (not deferred to submit) so a failed
+  // upload — bad file type, WhatsApp not connected — surfaces right away,
+  // not after the recipient/params are already filled in. Not picking a
+  // file at all leaves sendTemplateHeaderMediaAssetId null, which sends
+  // headerMediaAssetId as undefined — the backend's existing fallback to
+  // the template's approval-time sample (see mediaHeaderService.js).
+  document.getElementById('send-chat-template-media-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    const status = document.getElementById('send-chat-template-media-status');
+    sendTemplateHeaderMediaAssetId = null;
+    if (!file || !sendTemplateTarget) { status.textContent = ''; updateSendTemplatePreview(); return; }
+    status.textContent = 'Uploading…';
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const asset = await authFetch(`/api/templates/${sendTemplateTarget.id}/header-media`, { method: 'POST', body: form });
+      sendTemplateHeaderMediaAssetId = asset.id;
+      status.textContent = `Ready — will send with "${file.name}".`;
+    } catch (err) {
+      status.textContent = `Upload failed: ${err.message}`;
+    }
+    updateSendTemplatePreview();
+  });
+
   document.getElementById('send-chat-template-submit-btn')?.addEventListener('click', async () => {
     if (!sendTemplateTarget || !state.activeChatId) return;
     setSendTemplateError(null);
@@ -963,6 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
           templateName: sendTemplateTarget.name,
           templateLanguage: sendTemplateTarget.language,
           templateComponents: buildSendTemplateComponents(sendTemplateTarget, values),
+          headerMediaAssetId: sendTemplateHeaderMediaAssetId || undefined,
         }),
       });
       document.getElementById('modal-send-chat-template')?.classList.remove('open');
@@ -1804,10 +1841,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- New Campaign Modal ---
+  let newCampaignHeaderMediaAssetId = null; // set once a new header file has been uploaded for this campaign
+
+  function updateNewCampaignMediaField() {
+    const templateName = document.getElementById('new-campaign-template').value;
+    const template = state.templates.find(t => t.name === templateName);
+    const mediaField = document.getElementById('new-campaign-media');
+    mediaField.style.display = template && MEDIA_HEADER_TYPES.includes(template.header_type) ? '' : 'none';
+  }
+
   document.getElementById('open-create-broadcast-modal')?.addEventListener('click', () => {
     populateTagSelect(document.getElementById('new-campaign-tag'));
     populateTemplateSelect(document.getElementById('new-campaign-template'));
+    newCampaignHeaderMediaAssetId = null;
+    document.getElementById('new-campaign-media-file').value = '';
+    document.getElementById('new-campaign-media-status').textContent = '';
+    updateNewCampaignMediaField();
     document.getElementById('modal-create-campaign')?.classList.add('open');
+  });
+
+  document.getElementById('new-campaign-template')?.addEventListener('change', () => {
+    newCampaignHeaderMediaAssetId = null;
+    document.getElementById('new-campaign-media-file').value = '';
+    document.getElementById('new-campaign-media-status').textContent = '';
+    updateNewCampaignMediaField();
+  });
+
+  // Same immediate-upload-on-choice pattern as the chat send-template modal
+  // — a bad file surfaces before the campaign is launched, not after.
+  document.getElementById('new-campaign-media-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    const status = document.getElementById('new-campaign-media-status');
+    const templateName = document.getElementById('new-campaign-template').value;
+    const template = state.templates.find(t => t.name === templateName);
+    newCampaignHeaderMediaAssetId = null;
+    if (!file || !template) { status.textContent = ''; return; }
+    status.textContent = 'Uploading…';
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const asset = await authFetch(`/api/templates/${template.id}/header-media`, { method: 'POST', body: form });
+      newCampaignHeaderMediaAssetId = asset.id;
+      status.textContent = `Ready — will send with "${file.name}" instead of the approval sample.`;
+    } catch (err) {
+      status.textContent = `Upload failed: ${err.message}`;
+    }
   });
 
   document.getElementById('create-campaign-form')?.addEventListener('submit', async (e) => {
@@ -1824,11 +1902,16 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const created = await authFetch('/api/broadcasts', {
         method: 'POST',
-        body: JSON.stringify({ title, tag_id: tagId || undefined, templateName })
+        body: JSON.stringify({
+          title, tag_id: tagId || undefined, templateName,
+          headerMediaAssetId: newCampaignHeaderMediaAssetId || undefined,
+        })
       });
       await refreshBroadcasts();
       renderBroadcasts();
       e.target.reset();
+      newCampaignHeaderMediaAssetId = null;
+      document.getElementById('new-campaign-media-status').textContent = '';
       document.getElementById('modal-create-campaign')?.classList.remove('open');
       if (created?.consentWarning) {
         showToast(created.consentWarning);

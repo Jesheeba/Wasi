@@ -47,6 +47,10 @@ const messageSendSchema = z.object({
   templateName: z.string().optional(),
   templateLanguage: z.string().optional(),
   templateComponents: z.array(z.any()).optional(),
+  // A specific uploaded media asset (see routes/templates.js's POST
+  // /:id/header-media) to send instead of a media-header template's
+  // approval-time default sample. Omitted -> falls back to that default.
+  headerMediaAssetId: uuid.optional(),
 }).refine(
   (data) => (data.type === 'text' ? Boolean(data.body) : Boolean(data.templateName)),
   { message: "body is required for type 'text'; templateName is required for type 'template'" }
@@ -139,6 +143,10 @@ const broadcastCreateSchema = z.object({
   // were supplied, since it doesn't have the template's text to check
   // against.
   paramMappings: z.record(z.string(), broadcastParamMappingSchema).optional(),
+  // A specific uploaded media asset (see routes/templates.js's POST
+  // /:id/header-media) this campaign sends instead of a media-header
+  // template's approval-time default sample. Omitted -> that default.
+  headerMediaAssetId: uuid.optional(),
 });
 
 // A rule either sends free text (action) or starts a flow (flow_id) — never

@@ -7,10 +7,14 @@
 // where relative /api/... paths are always correct.
 function request(path, options = {}) {
   const token = localStorage.getItem('client_token');
+  // A FormData body (uploadHeaderMedia) needs the browser to set its own
+  // multipart Content-Type with a boundary — same isFormData guard as
+  // app.js's authFetch.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   return fetch(`/api${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
@@ -36,6 +40,11 @@ export const api = {
   createEdge: (flowId, data) => request(`/automation-flows/${flowId}/edges`, { method: 'POST', body: JSON.stringify(data) }),
   deleteEdge: (flowId, edgeId) => request(`/automation-flows/${flowId}/edges/${edgeId}`, { method: 'DELETE' }),
   listTemplates: () => request('/templates'),
+  uploadHeaderMedia: (templateId, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request(`/templates/${templateId}/header-media`, { method: 'POST', body: form });
+  },
   listTags: () => request('/tags'),
   listRulesForFlow: (flowId) => request(`/automation-rules?flow_id=${flowId}`),
   createRule: (data) => request('/automation-rules', { method: 'POST', body: JSON.stringify(data) }),

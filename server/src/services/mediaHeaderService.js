@@ -42,11 +42,21 @@ class MediaResolutionError extends Error {}
 // local template row (the cache write needs its id), in a specific order;
 // there's no clean single call this module could offer that fits that
 // sequence, so it isn't duplicated here as a thin wrapper.
-async function resolveMediaId(db, clientId, waba, accessToken, template) {
-  const cached = await templateMediaCacheRepo.findByTemplateId(db, clientId, template.id);
+//
+// assetId (optional): points at a specific non-default asset row (see
+// templateMediaCacheRepo.insertAsset / migration 030) uploaded just for one
+// send — a chat message, a broadcast, a flow node — instead of the
+// template's approval-time default. Omitted, this resolves the default
+// exactly as before.
+async function resolveMediaId(db, clientId, waba, accessToken, template, assetId) {
+  const cached = assetId
+    ? await templateMediaCacheRepo.findAssetById(db, clientId, assetId)
+    : await templateMediaCacheRepo.findByTemplateId(db, clientId, template.id);
   if (!cached) {
     throw new MediaResolutionError(
-      `"${template.name}"'s header media was never uploaded through this app (or that record was lost) — re-upload the header media for this template before it can be sent.`
+      assetId
+        ? `The selected media for "${template.name}" could not be found (it may have been removed) — choose a file again before sending.`
+        : `"${template.name}"'s header media was never uploaded through this app (or that record was lost) — re-upload the header media for this template before it can be sent.`
     );
   }
 
@@ -61,9 +71,9 @@ async function resolveMediaId(db, clientId, waba, accessToken, template) {
     const uploaded = await metaClient.uploadMedia(
       waba.phone_number_id, accessToken, buffer, mimeType, cached.filename || undefined
     );
-    const updated = await templateMediaCacheRepo.upsert(db, clientId, template.id, {
-      mediaId: uploaded.id, filename: cached.filename,
-    });
+    const updated = assetId
+      ? await templateMediaCacheRepo.updateAsset(db, clientId, assetId, { mediaId: uploaded.id, filename: cached.filename })
+      : await templateMediaCacheRepo.upsert(db, clientId, template.id, { mediaId: uploaded.id, filename: cached.filename });
     return { mediaId: updated.media_id, filename: updated.filename };
   } catch (err) {
     // Refresh failing means the cached id itself is at or past 30 days and

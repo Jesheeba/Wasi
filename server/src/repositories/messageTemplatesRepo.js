@@ -6,6 +6,16 @@ async function listByClientId(db, clientId) {
   return rows;
 }
 
+// routes/templates.js's POST /:id/header-media (send-time media upload)
+// looks up the target template by id, scoped to the caller's tenant.
+async function findById(db, clientId, id) {
+  const { rows } = await db.query(
+    'select * from message_templates where client_id = $1 and id = $2',
+    [clientId, id]
+  );
+  return rows[0] || null;
+}
+
 // Consent enforcement (messagingService.sendChatMessage) looks up a
 // template's category by name to decide whether it's subject to the
 // opt-in gate — a template name is only unique per client, not globally.
@@ -165,6 +175,7 @@ module.exports = {
   create,
   listAll,
   updateStatus,
+  findById,
   findByNameAndClient,
   findActiveByNameAndLanguage,
   createFromMetaSync,

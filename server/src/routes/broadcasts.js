@@ -26,7 +26,7 @@ function requiredParamNames(template) {
 }
 
 router.post('/', asyncHandler(async (req, res) => {
-  const { templateName, paramMappings, ...data } = broadcastCreateSchema.parse(req.body);
+  const { templateName, paramMappings, headerMediaAssetId, ...data } = broadcastCreateSchema.parse(req.body);
 
   // Fetched once, up front — needed for both the param-coverage check below
   // and the consent-category check further down, and (build plan Phase 4)
@@ -49,7 +49,7 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 
   const broadcast = await broadcastsRepo.create(req.db, req.clientId, {
-    ...data, template_name: templateName, param_mappings: paramMappings,
+    ...data, template_name: templateName, param_mappings: paramMappings, header_media_asset_id: headerMediaAssetId,
   });
   const recipients = await broadcastRecipientsRepo.createFromAudience(req.db, broadcast.id, req.clientId, data.tag_id);
   if (recipients.length === 0) {

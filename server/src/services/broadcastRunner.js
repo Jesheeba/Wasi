@@ -49,6 +49,7 @@ async function sendOneRecipient(broadcast, recipient, template) {
       templateName: broadcast.template_name,
       templateLanguage: 'en_US',
       templateComponents,
+      headerMediaAssetId: broadcast.header_media_asset_id,
     });
     await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {
