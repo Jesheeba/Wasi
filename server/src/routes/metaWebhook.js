@@ -9,6 +9,7 @@ const consentRepo = require('../repositories/consentRepo');
 const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
 const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
+const messageStatusForwardsRepo = require('../repositories/messageStatusForwardsRepo');
 const flowEngine = require('../services/flowEngine');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -64,12 +65,22 @@ function verifySignature(rawBody, signatureHeader) {
 // how a receiving app verifies a delivery changes based on which target
 // or which events it's configured for.
 async function enqueueForwards(waba, event, payload) {
+  // waba_id/enqueued_at added here, once, so every event type (message.received,
+  // message.status, message_template_status_update, account_update) and every
+  // target (hub forward_to_url, client_webhooks) gets them uniformly without
+  // each handler assembling its own envelope fields. enqueued_at is when this
+  // event was received/enqueued, not when a delivery attempt fires — stable
+  // across forwardRunner.js's retries, not re-stamped per attempt. Named
+  // enqueued_at rather than timestamp so it can't be confused with
+  // message.received's own message.sent_at in the same payload.
+  const envelopeData = { ...payload, waba_id: waba.waba_id, enqueued_at: new Date().toISOString() };
+
   if (waba.forward_to_url && waba.forward_events?.includes(event)) {
     await webhookDeliveriesRepo.enqueue(pool, {
       clientId: waba.client_id,
       wabaId: waba.id,
       event,
-      payload,
+      payload: envelopeData,
       targetUrl: waba.forward_to_url,
       targetSecret: waba.forward_secret,
     });
@@ -87,7 +98,7 @@ async function enqueueForwards(waba, event, payload) {
       clientId: waba.client_id,
       wabaId: waba.id,
       event,
-      payload,
+      payload: envelopeData,
       targetUrl: clientWebhook.callback_url,
       targetSecret: clientWebhook.secret,
     });
@@ -170,16 +181,62 @@ async function handleInboundMessages(waba, value) {
       // attempt(s), on its own schedule, outside this request entirely —
       // see its module comment for why that separation is load-bearing,
       // not just tidy.
-      await enqueueForwards(waba, 'message.received', { chat_id: chat.id, message: inserted });
+      //
+      // message_id is promoted out of `inserted` to match message.status
+      // forwards' top-level field of the same name (fix #2) — meta_message_id
+      // is the real WhatsApp id, id/client_id are Wasi-internal PKs a
+      // receiving CRM has no use for and shouldn't see. status is dropped
+      // entirely (not renamed) — chatsRepo.insertInbound hardcodes it to
+      // 'delivered' for every inbound row (it's a DB-write confirmation, not
+      // a real WhatsApp delivery status), so forwarding it would mislead a
+      // CRM into reading it as one. message.status forwards (handleStatuses)
+      // carry Meta's real, meaningful status and are untouched by this.
+      // direction is dropped too — always 'in' on this event type (only
+      // inbound messages reach this handler), so it's pure redundancy with
+      // the event name itself. error_reason/meta_error_code are dropped —
+      // both columns are shared with outbound-send-failure rows in this same
+      // messages table and are always null on an inbound row; forwarding
+      // them here would just be two guaranteed-null fields.
+      const {
+        id, client_id, chat_id: _chatId, meta_message_id, status: _hardcodedStatus,
+        direction: _direction, error_reason: _errorReason, meta_error_code: _metaErrorCode,
+        ...forwardableMessage
+      } = inserted;
+      await enqueueForwards(waba, 'message.received', {
+        chat_id: chat.id,
+        message_id: meta_message_id,
+        message_type: msg.type,
+        contact: { wa_id: phone, name },
+        message: forwardableMessage,
+      });
     }
   }
 }
 
 // Delivery lifecycle for messages we sent: sent -> delivered -> read, or failed.
-async function handleStatuses(clientId, value) {
+// Takes the resolved waba row (not just clientId) — enqueueForwards below
+// needs waba.forward_to_url/forward_events/id, same reasoning as
+// handleInboundMessages/handleTemplateStatusUpdate/handleAccountUpdate above.
+async function handleStatuses(waba, value) {
   for (const status of value.statuses || []) {
     const error = status.errors?.[0];
-    await chatsRepo.updateStatusByMetaId(pool, clientId, status.id, status.status, error?.title || null, error?.code || null);
+    await chatsRepo.updateStatusByMetaId(pool, waba.client_id, status.id, status.status, error?.title || null, error?.code || null);
+
+    // Meta redelivers on anything short of a fast 2xx — without this guard a
+    // redelivered status produces a second identical forward to the CRM.
+    // Keyed on (meta_message_id, status), not just meta_message_id, so a
+    // real sent -> delivered -> read progression still forwards each
+    // transition; only an exact repeat of the same pair is suppressed.
+    // Atomic INSERT ... ON CONFLICT DO NOTHING, not check-then-act, so two
+    // concurrent deliveries for the same status can't both win.
+    const isNewForward = await messageStatusForwardsRepo.recordIfNew(pool, status.id, status.status);
+    if (!isNewForward) continue;
+
+    await enqueueForwards(waba, 'message.status', {
+      message_id: status.id,
+      status: status.status,
+      error: status.status === 'failed' ? { code: error?.code || null, message: error?.title || null } : null,
+    });
   }
 }
 
@@ -318,7 +375,7 @@ router.post('/', asyncHandler(async (req, res) => {
           handled = true;
         }
         if (waba && Array.isArray(value?.statuses) && value.statuses.length > 0) {
-          await handleStatuses(waba.client_id, value);
+          await handleStatuses(waba, value);
           handled = true;
         }
 

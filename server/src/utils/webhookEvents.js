@@ -3,6 +3,6 @@
 // both the zod schemas (validate.js) and the DB CHECK constraints
 // (migration 015_explicit_forward_events.js builds its SQL from this same
 // array) so the two can't drift apart.
-const WEBHOOK_EVENT_TYPES = ['message.received', 'message_template_status_update', 'account_update'];
+const WEBHOOK_EVENT_TYPES = ['message.received', 'message.status', 'message_template_status_update', 'account_update'];
 
 module.exports = { WEBHOOK_EVENT_TYPES };

@@ -524,7 +524,7 @@ const CLIENT_STATUS_OPTIONS = ['pending_setup', 'payment_confirmed', 'active', '
 // Mirrors server/src/utils/webhookEvents.js's WEBHOOK_EVENT_TYPES — no
 // endpoint exposes this list, so it's kept in sync by hand; the server's
 // zod schema is the actual source of truth and will reject anything else.
-const HUB_FORWARD_EVENTS = ['message.received', 'message_template_status_update', 'account_update'];
+const HUB_FORWARD_EVENTS = ['message.received', 'message.status', 'message_template_status_update', 'account_update'];
 
 function renderClientDetail(detail) {
   const { client, subscription, waba, templates, auditTrail } = detail;

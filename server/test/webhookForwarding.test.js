@@ -130,6 +130,32 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
   const parsed = JSON.parse(receivedBody);
   assert.equal(parsed.event, 'message.received');
 
+  // Full message.received payload-shape regression coverage (fix #3 +
+  // follow-ups A/C/D/E/F-cleanup) — asserts the exact key set at every
+  // level, not just presence of the good fields, so a future change that
+  // re-leaks an internal id (id/client_id/meta_message_id) or reintroduces
+  // a meaningless constant field (direction/error_reason/meta_error_code/
+  // the old hardcoded status) fails this test immediately instead of
+  // silently shipping.
+  const { data } = parsed;
+  assert.deepEqual(
+    Object.keys(data).sort(),
+    ['chat_id', 'contact', 'enqueued_at', 'message', 'message_id', 'message_type', 'waba_id']
+  );
+  assert.equal(typeof data.chat_id, 'string');
+  assert.match(data.message_id, /^wamid\.forward_/);
+  assert.equal(data.message_type, 'text');
+  assert.equal(data.waba_id, TEST_WABA_ID);
+  assert.ok(!Number.isNaN(Date.parse(data.enqueued_at)), 'enqueued_at must be a valid ISO 8601 timestamp');
+
+  assert.deepEqual(Object.keys(data.contact).sort(), ['name', 'wa_id']);
+  assert.equal(data.contact.wa_id, phone);
+  assert.equal(data.contact.name, 'Forward Test Sender');
+
+  assert.deepEqual(Object.keys(data.message).sort(), ['body', 'sent_at']);
+  assert.equal(data.message.body, 'hi');
+  assert.ok(!Number.isNaN(Date.parse(data.message.sent_at)), 'message.sent_at must be a valid ISO 8601 timestamp');
+
   const { rows: after } = await pool.query('select status, delivered_at from webhook_deliveries where id = $1', [delivery.id]);
   assert.equal(after[0].status, 'delivered');
   assert.ok(after[0].delivered_at);

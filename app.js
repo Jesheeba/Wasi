@@ -240,6 +240,21 @@ document.addEventListener('DOMContentLoaded', () => {
     state.user = client;
     authView.style.display = 'none';
     appShell.style.display = 'flex';
+
+    // The sidebar account indicator was a hardcoded "Mohamed" left over from
+    // the original mockup — every client saw the same name/avatar regardless
+    // of which account was actually logged in, which is exactly what made a
+    // resumed/wrong session look like "a different account" instead of an
+    // obvious, catchable mismatch. Same class of bug initialsFor's own
+    // comment describes for chat avatars ("AK" for every contact).
+    const profileItem = document.getElementById('user-profile-item');
+    if (profileItem) {
+      const nameEl = profileItem.querySelector('.nav-text');
+      const avatarEl = profileItem.querySelector('.avatar');
+      if (nameEl) nameEl.textContent = client.name || client.email || 'Account';
+      if (avatarEl) avatarEl.textContent = initialsFor(client.name || client.email);
+    }
+
     try {
       await loadInitialData();
     } catch (err) {
@@ -299,14 +314,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Resume session on page load if a token is already stored (spec §3 step 7: land
-  // straight in the dashboard rather than re-prompting for login every refresh).
+  // Resumes a session on page load if a token is already stored (spec §3
+  // step 7: don't force a returning user to re-type their password every
+  // refresh). This used to call enterApp(client) directly and silently —
+  // which meant a browser holding a stale-but-still-valid token from a
+  // DIFFERENT account (e.g. a shared device, or a demo/test login) landed
+  // straight in that account's dashboard with the login form never shown at
+  // all. showResumeConfirm names the account and requires one explicit
+  // click either way, so a mismatch is now always visible and one click
+  // from correct, instead of silently wrong.
+  function showResumeConfirm(client) {
+    const overlay = document.getElementById('modal-resume-session');
+    if (!overlay) { enterApp(client); return; } // markup missing — fail open to the old behavior rather than stranding the user
+    const nameEl = document.getElementById('resume-session-name');
+    const avatarEl = document.getElementById('resume-session-avatar');
+    const continueBtn = document.getElementById('resume-session-continue-btn');
+    const logoutBtn = document.getElementById('resume-session-logout-btn');
+    if (nameEl) nameEl.textContent = client.name || client.email || 'this account';
+    if (avatarEl) avatarEl.textContent = initialsFor(client.name || client.email);
+
+    const onContinue = () => { cleanup(); enterApp(client); };
+    const onLogout = () => {
+      cleanup();
+      stopPolling();
+      localStorage.removeItem('client_token');
+      showAuthView();
+    };
+    function cleanup() {
+      overlay.classList.remove('open');
+      continueBtn?.removeEventListener('click', onContinue);
+      logoutBtn?.removeEventListener('click', onLogout);
+    }
+    continueBtn?.addEventListener('click', onContinue);
+    logoutBtn?.addEventListener('click', onLogout);
+    overlay.classList.add('open');
+  }
+
   (async () => {
     const token = localStorage.getItem('client_token');
     if (!token) return;
     try {
       const client = await authFetch('/api/auth/me');
-      await enterApp(client);
+      showResumeConfirm(client);
     } catch {
       localStorage.removeItem('client_token');
     }
