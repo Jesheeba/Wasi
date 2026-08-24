@@ -1040,6 +1040,15 @@ body {
   text-align: right;
 }
 
+/* WhatsApp's own convention: single/double grey tick for sent/delivered,
+   double tick turns blue only once the customer has actually read it. */
+.msg-status {
+  font-weight: 600;
+}
+.msg-status[data-status="read"] {
+  color: #34b7f1;
+}
+
 .chat-input-bar {
   padding: 12px 1.25rem;
   background: white;
