@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const { Router } = require('express');
 const { pool } = require('../db/pool');
 const clientsRepo = require('../repositories/clientsRepo');
+const apiKeysRepo = require('../repositories/apiKeysRepo');
+const auditLogRepo = require('../repositories/auditLogRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, clientCreateSchema, clientUpdateSchema } = require('../utils/validate');
 const { hashPassword } = require('../utils/auth');
@@ -67,10 +69,19 @@ router.post('/', asyncHandler(async (req, res) => {
     password_hash,
   });
 
+  // Every client gets a Hub API key (build plan Phase 5) at creation time,
+  // not as a separate manual step — so their CRM/dev team can integrate
+  // (POST /api/v1/messages, /api/v1/templates) from day one. Same
+  // "generate, hash, persist only the hash, return raw key once" contract
+  // as the manual /api/admin/api-keys route; see apiKeysRepo.js.
+  const { record: apiKeyRecord, rawKey: apiKey } = await apiKeysRepo.create(pool, client.id, 'CRM Integration');
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_created', target: `${client.id}: ${apiKeyRecord.app_name} (auto, on client creation)` });
+
   res.status(201).json({
     ...omitPasswordHash(client),
     temporaryPassword,
     loginUrl: `${APP_URL}/index.html`,
+    apiKey,
   });
 }));
 

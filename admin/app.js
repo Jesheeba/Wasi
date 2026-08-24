@@ -469,16 +469,18 @@ async function handleCreateClientSubmit(e) {
     const resultEl = document.getElementById('create-client-result');
     resultEl.style.display = 'block';
     resultEl.innerHTML = `
-      <div class="inline-success" style="margin-bottom:0.75rem;">Client created — this password is shown once, copy it now.</div>
+      <div class="inline-success" style="margin-bottom:0.75rem;">Client created — this password and API key are shown once, copy them now.</div>
       <div class="detail-row"><span class="detail-row-label">Login URL</span><span class="detail-row-value">${escapeHtml(created.loginUrl)}</span></div>
       <div class="detail-row"><span class="detail-row-label">Email</span><span class="detail-row-value">${escapeHtml(created.email)}</span></div>
       <div class="detail-row"><span class="detail-row-label">Password</span><span class="detail-row-value" style="font-family:monospace; user-select:all;">${escapeHtml(created.temporaryPassword)}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Hub API Key</span><span class="detail-row-value" style="font-family:monospace; font-size:0.8rem; word-break:break-all; user-select:all;">${escapeHtml(created.apiKey)}</span></div>
       <div style="margin:1rem 0; padding:0.75rem; background:var(--bg-subtle,#F8FAFC); border-radius:6px; font-size:0.85rem; line-height:1.6;">
         <strong>Next steps:</strong>
         <ol style="margin:0.4rem 0 0 1.1rem; padding:0;">
           <li>Send them the login URL, email, and password above.</li>
           <li>They log in and connect WhatsApp (Embedded Signup) themselves.</li>
           <li>Any existing approved templates on their WABA sync in automatically once connected.</li>
+          <li>Hand the Hub API Key to their CRM/developer to call <code>POST /api/v1/messages</code> and <code>/api/v1/templates</code> (Authorization: Bearer). If lost, issue a new one from the API Keys page — this one still works until revoked.</li>
         </ol>
       </div>
     `;
@@ -519,6 +521,11 @@ async function loadClientDetail(clientId) {
 
 const CLIENT_STATUS_OPTIONS = ['pending_setup', 'payment_confirmed', 'active', 'suspended'];
 
+// Mirrors server/src/utils/webhookEvents.js's WEBHOOK_EVENT_TYPES — no
+// endpoint exposes this list, so it's kept in sync by hand; the server's
+// zod schema is the actual source of truth and will reject anything else.
+const HUB_FORWARD_EVENTS = ['message.received', 'message_template_status_update', 'account_update'];
+
 function renderClientDetail(detail) {
   const { client, subscription, waba, templates, auditTrail } = detail;
 
@@ -546,6 +553,24 @@ function renderClientDetail(detail) {
       <button class="btn-secondary btn-sm" id="retry-provisioning-btn" style="margin-top:0.75rem; width:100%; justify-content:center;">
         <i data-lucide="refresh-cw" style="width:14px;"></i> Retry Provisioning
       </button>
+
+      <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
+        <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.35rem;">CRM Inbound Forwarding</div>
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.6rem; line-height:1.5;">
+          Pushes inbound WhatsApp replies and template/account status changes to the client's own CRM webhook. Ask the client for their CRM's webhook URL before filling this in.
+        </div>
+        <input type="url" id="hub-forward-url" class="form-input" placeholder="https://client-crm.example.com/webhooks/wasi" value="${escapeHtml(waba.forward_to_url || '')}" style="margin-bottom:0.5rem; width:100%;">
+        <div style="display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.6rem; font-size:0.8rem;">
+          ${HUB_FORWARD_EVENTS.map((ev) => `
+            <label style="display:flex; align-items:center; gap:0.4rem;">
+              <input type="checkbox" data-hub-event value="${escapeHtml(ev)}" ${(waba.forward_events || []).includes(ev) ? 'checked' : ''}>
+              <span style="font-family:monospace;">${escapeHtml(ev)}</span>
+            </label>
+          `).join('')}
+        </div>
+        <div id="hub-forward-result"></div>
+        <button class="btn-secondary btn-sm" id="hub-forward-save-btn" style="width:100%; justify-content:center;">Save Forwarding Config</button>
+      </div>
     `
     : `
       <div class="empty-state">No WhatsApp Business Account connected yet.</div>
@@ -634,6 +659,42 @@ function renderClientDetail(detail) {
   document.getElementById('status-editor-save-btn').addEventListener('click', () => saveClientStatus(client.id));
   document.getElementById('retry-provisioning-btn').addEventListener('click', () => retryProvisioning(client.id));
   document.getElementById('delete-client-btn').addEventListener('click', () => confirmDeleteClient(client));
+  const hubForwardBtn = document.getElementById('hub-forward-save-btn');
+  if (hubForwardBtn) hubForwardBtn.addEventListener('click', () => saveHubForward(client.id));
+}
+
+async function saveHubForward(clientId) {
+  const btn = document.getElementById('hub-forward-save-btn');
+  const resultEl = document.getElementById('hub-forward-result');
+  const forward_to_url = document.getElementById('hub-forward-url').value.trim();
+  const events = Array.from(document.querySelectorAll('[data-hub-event]:checked')).map((el) => el.value);
+  resultEl.innerHTML = '';
+
+  if (!forward_to_url || !events.length) {
+    resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.6rem; margin-bottom:0;">A webhook URL and at least one event are required.</div>`;
+    return;
+  }
+
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Saving…';
+
+  try {
+    await apiFetch(`/api/admin/clients/${clientId}/hub-forward`, {
+      method: 'POST',
+      body: JSON.stringify({ forward_to_url, events }),
+    });
+    resultEl.innerHTML = `<div class="inline-success" style="margin-top:0.6rem; margin-bottom:0;">Forwarding config saved.</div>`;
+    showToast('Hub forwarding config saved.', 'success');
+    loadClientDetail(clientId);
+  } catch (err) {
+    if (err.status === 401) return;
+    resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.6rem; margin-bottom:0;">${escapeHtml(err.message)}</div>`;
+    showToast('Failed to save forwarding config: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 async function saveClientStatus(clientId) {
