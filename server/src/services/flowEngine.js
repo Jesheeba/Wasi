@@ -97,6 +97,17 @@ function normalizeKeyword(s) {
   return (s || '').trim().toLowerCase();
 }
 
+// The one placeholder the flow editor's Send Text/Send Buttons fields
+// advertise (see FlowNodeCard.jsx's "Hi {{customer_name}}, …" placeholder)
+// — unlike send_template's configurable paramMappings, this is a fixed,
+// always-on substitution over free text, not something authored per node.
+// contact.name is never null in practice (contactsRepo.upsertByPhone
+// defaults it to the phone number when Meta doesn't supply a display name),
+// but falls back to '' here rather than leaving the literal token in place.
+function renderBody(body, contact) {
+  return (body || '').replace(/\{\{\s*customer_name\s*\}\}/g, contact.name || '');
+}
+
 // Pure — no DB, no network — deliberately, so it's unit-testable the same
 // way templateSyncService.reconcileTemplates is (server/test/flowEngine.test.js).
 // `edges` must already be in flowEdgesRepo.listForNode's order (default
@@ -149,11 +160,11 @@ async function executeAction(db, clientId, contact, node) {
 // nothing silently skipped), not a crash.
 async function executeNode(db, clientId, contact, chat, node) {
   if (node.type === 'send_text') {
-    await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: node.config.body });
+    await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: renderBody(node.config.body, contact) });
   } else if (node.type === 'send_interactive_buttons') {
     await messagingService.sendChatMessage(db, clientId, chat, {
       type: 'interactive',
-      body: node.config.body,
+      body: renderBody(node.config.body, contact),
       buttons: node.config.buttons,
     });
   } else if (node.type === 'send_template') {
@@ -396,5 +407,5 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
 
 module.exports = {
   evaluate, startFlow, advanceDueNode,
-  normalizeInboundEvent, resolveInboundEdge, dueEdgeType, isEdgeTypeLegalForNode,
+  normalizeInboundEvent, resolveInboundEdge, dueEdgeType, isEdgeTypeLegalForNode, renderBody,
 };

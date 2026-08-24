@@ -8,7 +8,7 @@
 // tests and one live-DB end-to-end test.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeInboundEvent, resolveInboundEdge, dueEdgeType } = require('../src/services/flowEngine');
+const { normalizeInboundEvent, resolveInboundEdge, dueEdgeType, renderBody } = require('../src/services/flowEngine');
 
 // --- normalizeInboundEvent ---
 
@@ -115,4 +115,31 @@ test('dueEdgeType: a delay node fires its always edge when due', () => {
 
 test('dueEdgeType: a waiting-for-reply node fires its timeout edge when due', () => {
   assert.equal(dueEdgeType('send_interactive_buttons'), 'timeout');
+});
+
+// --- renderBody ---
+
+test('renderBody: substitutes {{customer_name}} with the contact\'s name', () => {
+  const out = renderBody('Thanks {{customer_name}}, we got it.', { name: 'Priya' });
+  assert.equal(out, 'Thanks Priya, we got it.');
+});
+
+test('renderBody: tolerates spacing inside the braces', () => {
+  const out = renderBody('Hi {{ customer_name }}!', { name: 'Priya' });
+  assert.equal(out, 'Hi Priya!');
+});
+
+test('renderBody: replaces every occurrence, not just the first', () => {
+  const out = renderBody('{{customer_name}}, hi {{customer_name}}', { name: 'Priya' });
+  assert.equal(out, 'Priya, hi Priya');
+});
+
+test('renderBody: falls back to empty string when the contact has no name', () => {
+  const out = renderBody('Hi {{customer_name}}!', {});
+  assert.equal(out, 'Hi !');
+});
+
+test('renderBody: an empty body stays empty rather than throwing', () => {
+  assert.equal(renderBody('', { name: 'Priya' }), '');
+  assert.equal(renderBody(undefined, { name: 'Priya' }), '');
 });
