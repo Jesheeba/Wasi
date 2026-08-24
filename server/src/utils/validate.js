@@ -360,6 +360,11 @@ const apiMessageSendSchema = z.object({
   template: z.string().optional(),
   params: z.record(z.any()).optional(),
   body: z.string().optional(),
+  // A media-header template only. The calling CRM's own document/image/video
+  // for this one send (server/src/services/mediaHeaderService.js's
+  // resolveMediaIdFromUrl fetches it, uploads it to Meta, and sends with the
+  // resulting id) — the alternative to first uploading through this app's UI.
+  headerMediaUrl: z.string().url().startsWith('https://').optional(),
 }).refine(
   (data) => (data.type === 'text' ? Boolean(data.body) : Boolean(data.template)),
   { message: "body is required for type 'text'; template is required for type 'template'" }

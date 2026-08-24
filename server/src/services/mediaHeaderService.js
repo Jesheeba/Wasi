@@ -15,6 +15,8 @@
 // execution that hits the same template, not one upload per recipient/
 // contact — that reuse is the whole point of caching by template_id rather
 // than resolving fresh on every send.
+const dns = require('dns').promises;
+const net = require('net');
 const metaClient = require('../utils/metaClient');
 const templateMediaCacheRepo = require('../repositories/templateMediaCacheRepo');
 
@@ -27,6 +29,16 @@ const MEDIA_HEADER_TYPES = new Set(['IMAGE', 'VIDEO', 'DOCUMENT']);
 function isMediaHeaderType(headerType) {
   return MEDIA_HEADER_TYPES.has(headerType);
 }
+
+// Single source of truth for header-media constraints — originally lived in
+// routes/templates.js only; exported from here now that resolveMediaIdFromUrl
+// (below) needs the same limits to validate a CRM-supplied URL, and
+// routes/templates.js imports this instead of keeping its own copy.
+const MEDIA_HEADER_LIMITS = {
+  IMAGE: { maxBytes: 5 * 1024 * 1024, mimeTypes: { 'image/jpeg': 'image/jpeg', 'image/jpg': 'image/jpeg', 'image/png': 'image/png' } },
+  VIDEO: { maxBytes: 16 * 1024 * 1024, mimeTypes: { 'video/mp4': 'video/mp4' } },
+  DOCUMENT: { maxBytes: 100 * 1024 * 1024, mimeTypes: { 'application/pdf': 'application/pdf' } },
+};
 
 // Distinct from a Meta rejection (MessagingError 'send_failed') — this
 // means the send never reached Meta at all because there was no valid media
@@ -87,6 +99,123 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
   }
 }
 
+function ipv4ToInt(ip) {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) + Number(octet), 0) >>> 0;
+}
+
+function inIpv4Range(ip, base, bits) {
+  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+  return (ipv4ToInt(ip) & mask) === (ipv4ToInt(base) & mask);
+}
+
+// Blocks the address ranges an SSRF payload would actually target: loopback,
+// RFC1918 private space, link-local (which is also where cloud providers
+// serve instance-metadata credentials — 169.254.169.254), and a few less
+// common but still non-public blocks. Not an exhaustive IANA reservation
+// list — just enough to keep a CRM-supplied "fetch this URL" from reaching
+// this server's own network.
+const BLOCKED_IPV4_RANGES = [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 4], ['240.0.0.0', 4],
+];
+
+function isBlockedAddress(ip) {
+  if (net.isIPv4(ip)) return BLOCKED_IPV4_RANGES.some(([base, bits]) => inIpv4Range(ip, base, bits));
+  if (net.isIPv6(ip)) {
+    const lower = ip.toLowerCase();
+    if (lower === '::1' || lower === '::') return true;
+    if (lower.startsWith('fe80:') || lower.startsWith('fc') || lower.startsWith('fd')) return true; // link-local + unique local
+    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/); // IPv4-mapped IPv6
+    if (mapped) return isBlockedAddress(mapped[1]);
+    return false;
+  }
+  return true; // couldn't classify it — fail closed
+}
+
+// Guards against sending this server fetching its own internal network (or
+// a cloud metadata endpoint) on a CRM's behalf. Resolves the hostname itself
+// rather than trusting fetch()'s own resolution, since the check has to run
+// before any request goes out.
+async function assertPublicHttpsUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new MediaResolutionError(`"${rawUrl}" is not a valid URL.`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new MediaResolutionError('headerMediaUrl must be an https:// URL.');
+  }
+  let addresses;
+  try {
+    addresses = await dns.lookup(parsed.hostname, { all: true });
+  } catch {
+    throw new MediaResolutionError(`Could not resolve host "${parsed.hostname}".`);
+  }
+  if (addresses.some((a) => isBlockedAddress(a.address))) {
+    throw new MediaResolutionError(`"${parsed.hostname}" resolves to a non-public address and can't be fetched.`);
+  }
+  return parsed;
+}
+
+// A CRM-supplied document/image/video URL for one send (Hub API's
+// headerMediaUrl, see routes/apiV1Messages.js) — the alternative to
+// resolveMediaId's asset-id lookup, for a caller that has never uploaded
+// anything through this app's UI. Downloads the file itself (Meta's
+// template `link` parameter is documented as less reliable than `id`, and
+// every other send path here already goes through an uploaded media id —
+// see the module comment), uploads it to Meta, and caches the resulting id
+// as a new non-default asset so a retry of the same logical send can reuse
+// it without a second fetch.
+async function resolveMediaIdFromUrl(db, clientId, waba, accessToken, template, mediaUrl, filename) {
+  const parsed = await assertPublicHttpsUrl(mediaUrl);
+  const limits = MEDIA_HEADER_LIMITS[template.header_type];
+
+  let res;
+  try {
+    res = await fetch(parsed, { signal: AbortSignal.timeout(15000) });
+  } catch (err) {
+    throw new MediaResolutionError(`Could not fetch headerMediaUrl: ${err.message}`);
+  }
+  if (!res.ok) {
+    throw new MediaResolutionError(`headerMediaUrl responded with ${res.status} ${res.statusText}.`);
+  }
+  const contentLength = Number(res.headers.get('content-length') || 0);
+  if (contentLength && contentLength > limits.maxBytes) {
+    throw new MediaResolutionError(
+      `headerMediaUrl's file is too large for a ${template.header_type.toLowerCase()} header (limit ${Math.round(limits.maxBytes / (1024 * 1024))}MB).`
+    );
+  }
+  const rawContentType = (res.headers.get('content-type') || '').split(';')[0].trim();
+  const mimeType = limits.mimeTypes[rawContentType];
+  if (!mimeType) {
+    throw new MediaResolutionError(
+      `headerMediaUrl's Content-Type ("${rawContentType || 'unknown'}") isn't accepted for a ${template.header_type} header — expected: ${Object.keys(limits.mimeTypes).join(', ')}.`
+    );
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > limits.maxBytes) {
+    throw new MediaResolutionError(
+      `headerMediaUrl's file is too large for a ${template.header_type.toLowerCase()} header (limit ${Math.round(limits.maxBytes / (1024 * 1024))}MB).`
+    );
+  }
+
+  const resolvedFilename = template.header_type === 'DOCUMENT'
+    ? (filename || decodeURIComponent(parsed.pathname.split('/').pop() || '') || null)
+    : null;
+
+  let uploaded;
+  try {
+    uploaded = await metaClient.uploadMedia(waba.phone_number_id, accessToken, buffer, mimeType, resolvedFilename || undefined);
+  } catch (err) {
+    throw new MediaResolutionError(`Could not upload headerMediaUrl's file to Meta: ${err.message}`);
+  }
+
+  const asset = await templateMediaCacheRepo.insertAsset(db, clientId, template.id, { mediaId: uploaded.id, filename: resolvedFilename });
+  return { mediaId: asset.media_id, filename: asset.filename };
+}
+
 // Meta's send-time header parameter shape — lowercase type key, matching a
 // plain media message's shape (see metaClient.sendTemplateMessage's
 // `components`). `filename` is Meta-recommended (not required) for a
@@ -101,7 +230,13 @@ function buildMediaHeaderComponent(headerType, mediaId, filename) {
 module.exports = {
   isMediaHeaderType,
   resolveMediaId,
+  resolveMediaIdFromUrl,
   buildMediaHeaderComponent,
   MediaResolutionError,
   REFRESH_THRESHOLD_MS,
+  MEDIA_HEADER_LIMITS,
+  // Exported for the SSRF-guard unit tests (test/mediaHeaderService.test.js)
+  // — pure and DNS-free for IP-literal input, so testable without a network.
+  isBlockedAddress,
+  assertPublicHttpsUrl,
 };

@@ -88,11 +88,17 @@ async function assertWithinPlanLimit(db, clientId) {
 // title}] } (flowEngine.js's send_interactive_buttons node — see
 // metaClient.sendInteractiveMessage; same session-window rule as 'text',
 // no template approval). type: 'template' -> { templateName,
-// templateLanguage, templateComponents, headerMediaAssetId }.
+// templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }.
 // headerMediaAssetId (optional, media-header templates only): a specific
 // uploaded asset (see templateMediaCacheRepo.insertAsset / migration 030) to
 // send instead of the template's approval-time default sample.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents, headerMediaAssetId }) {
+// headerMediaUrl (optional, media-header templates only, mutually exclusive
+// with headerMediaAssetId — this one wins if somehow both are given): a
+// document/image/video the caller hasn't uploaded through this app at all,
+// fetched and uploaded to Meta on the fly (see mediaHeaderService's
+// resolveMediaIdFromUrl). Exposed today only via the Hub API
+// (routes/apiV1Messages.js) for a client's own external CRM to point at.
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
@@ -119,7 +125,9 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
   if (type === 'template' && template && mediaHeaderService.isMediaHeaderType(template.header_type)) {
     let resolved;
     try {
-      resolved = await mediaHeaderService.resolveMediaId(db, clientId, waba, accessToken, template, headerMediaAssetId);
+      resolved = headerMediaUrl
+        ? await mediaHeaderService.resolveMediaIdFromUrl(db, clientId, waba, accessToken, template, headerMediaUrl)
+        : await mediaHeaderService.resolveMediaId(db, clientId, waba, accessToken, template, headerMediaAssetId);
     } catch (err) {
       if (err instanceof mediaHeaderService.MediaResolutionError) {
         throw new MessagingError(err.message, 'media_resolution_failed');

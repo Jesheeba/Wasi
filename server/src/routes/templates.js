@@ -13,16 +13,10 @@ const templateSyncService = require('../services/templateSyncService');
 
 const router = Router();
 
-// Meta's own documented limits per header media type (confirmed against
-// Meta's template media docs, not guessed) — a document HEADER specifically
-// only accepts PDF, distinct from a general document MESSAGE's wider
-// mime-type support. Enforced here as a fast, clear 400 rather than letting
-// a mismatched file reach Meta's upload APIs and fail there.
-const MEDIA_HEADER_LIMITS = {
-  IMAGE: { maxBytes: 5 * 1024 * 1024, mimeTypes: { 'image/jpeg': 'image/jpeg', 'image/jpg': 'image/jpeg', 'image/png': 'image/png' } },
-  VIDEO: { maxBytes: 16 * 1024 * 1024, mimeTypes: { 'video/mp4': 'video/mp4' } },
-  DOCUMENT: { maxBytes: 100 * 1024 * 1024, mimeTypes: { 'application/pdf': 'application/pdf' } },
-};
+// Meta's own documented limits per header media type — now lives in
+// mediaHeaderService.js (resolveMediaIdFromUrl needs the same limits to
+// validate a CRM-supplied URL), imported here rather than duplicated.
+const { MEDIA_HEADER_LIMITS } = mediaHeaderService;
 // Multer's own limit is set to the largest of the three (DOCUMENT) — the
 // per-type check above is what actually enforces the tighter IMAGE/VIDEO
 // caps with a specific error message; this is just a hard backstop.

@@ -57,6 +57,28 @@ curl -X POST https://<wasi-host>/api/v1/messages \
 
 - `type: "template"` — required outside the 24-hour customer-service
   window. Requires an **approved** template (see below).
+- `headerMediaUrl` (only for a template whose header is IMAGE/VIDEO/DOCUMENT)
+  — a public `https://` URL to *your* file for this one send (e.g. an
+  invoice PDF you generated for this order). Wasi fetches it, uploads it to
+  Meta, and sends with the resulting media id — no need to upload anything
+  through the Wasi UI first. The URL must be reachable by Wasi's server
+  without auth, and must match the header type's limits: JPEG/PNG up to 5MB
+  for IMAGE, MP4 up to 16MB for VIDEO, PDF up to 100MB for DOCUMENT. Omit it
+  to use the template's default approval-time sample instead.
+
+```bash
+curl -X POST https://<wasi-host>/api/v1/messages \
+  -H "Authorization: Bearer wasi_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "<the client'"'"'s UUID>",
+    "to": "91XXXXXXXXXX",
+    "type": "template",
+    "template": "invoice_document",
+    "params": { "1": "Priya" },
+    "headerMediaUrl": "https://yourcrm.example.com/invoices/4821.pdf"
+  }'
+```
 - `type: "text"` with `"body"` instead of `template`/`params` — only works
   within 24 hours of the customer's last inbound message (WhatsApp's
   session-message rule). Outside that window this call is rejected, not

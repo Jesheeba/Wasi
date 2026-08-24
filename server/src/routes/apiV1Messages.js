@@ -37,6 +37,7 @@ router.post('/', asyncHandler(async (req, res) => {
       templateName: data.template,
       templateLanguage: 'en_US',
       templateComponents: data.type === 'template' ? metaClient.buildNamedBodyComponents(data.params) : [],
+      headerMediaUrl: data.headerMediaUrl,
     });
     res.status(201).json(message);
   } catch (err) {
