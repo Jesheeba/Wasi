@@ -559,6 +559,15 @@ function renderClientDetail(detail) {
         <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.6rem; line-height:1.5;">
           Pushes inbound WhatsApp replies and template/account status changes to the client's own CRM webhook. Ask the client for their CRM's webhook URL before filling this in.
         </div>
+        ${waba.forward_secret ? `
+        <div class="detail-row" style="margin-bottom:0.6rem;">
+          <span class="detail-row-label">Webhook Secret</span>
+          <span class="detail-row-value" style="display:flex; align-items:center; gap:0.4rem;">
+            <span style="font-family:monospace; font-size:0.75rem; word-break:break-all;">${escapeHtml(waba.forward_secret)}</span>
+            <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value="${escapeHtml(waba.forward_secret)}" style="padding:2px 8px; flex-shrink:0;"><i data-lucide="copy" style="width:12px;"></i></button>
+          </span>
+        </div>
+        ` : ''}
         <input type="url" id="hub-forward-url" class="form-input" placeholder="https://client-crm.example.com/webhooks/wasi" value="${escapeHtml(waba.forward_to_url || '')}" style="margin-bottom:0.5rem; width:100%;">
         <div style="display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.6rem; font-size:0.8rem;">
           ${HUB_FORWARD_EVENTS.map((ev) => `
@@ -621,6 +630,13 @@ function renderClientDetail(detail) {
       <div class="detail-card">
         <div class="detail-card-title">Client Profile</div>
         <div class="detail-row"><span class="detail-row-label">Name</span><span class="detail-row-value">${escapeHtml(client.name)}</span></div>
+        <div class="detail-row">
+          <span class="detail-row-label">Client ID</span>
+          <span class="detail-row-value" style="display:flex; align-items:center; gap:0.4rem;">
+            <span style="font-family:monospace; font-size:0.75rem; word-break:break-all;">${escapeHtml(client.id)}</span>
+            <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value="${escapeHtml(client.id)}" style="padding:2px 8px; flex-shrink:0;"><i data-lucide="copy" style="width:12px;"></i></button>
+          </span>
+        </div>
         <div class="detail-row"><span class="detail-row-label">Email</span><span class="detail-row-value">${escapeHtml(client.email)}</span></div>
         <div class="detail-row"><span class="detail-row-label">Tenant Slug</span><span class="detail-row-value">${escapeHtml(client.tenant_slug)}</span></div>
         <div class="detail-row"><span class="detail-row-label">Created</span><span class="detail-row-value">${formatDate(client.created_at)}</span></div>
@@ -662,6 +678,14 @@ function renderClientDetail(detail) {
   `;
 
   if (window.lucide) lucide.createIcons();
+
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.getAttribute('data-copy-value') || '').then(() => {
+        showToast('Copied to clipboard.', 'success');
+      });
+    });
+  });
 
   document.getElementById('status-editor-save-btn').addEventListener('click', () => saveClientStatus(client.id));
   document.getElementById('retry-provisioning-btn').addEventListener('click', () => retryProvisioning(client.id));
