@@ -4,6 +4,10 @@ const broadcastRunner = require('./services/broadcastRunner');
 const forwardRunner = require('./services/forwardRunner');
 const alertRunner = require('./services/alertRunner');
 const flowRunner = require('./services/flowRunner');
+const logger = require('./utils/logger');
+const { initErrorTracking, captureException, flush } = require('./utils/errorTracking');
+
+initErrorTracking();
 
 // Defense-in-depth, not a replacement for fixing specific gaps (see
 // db/pool.js and broadcastRunner.js's own listeners for the two confirmed
@@ -16,7 +20,8 @@ const flowRunner = require('./services/flowRunner');
 // promise doesn't leave the process in the kind of undefined state a
 // synchronous throw does.
 process.on('unhandledRejection', (reason) => {
-  console.error('UNHANDLED REJECTION (process kept alive):', reason);
+  logger.error({ err: reason }, 'UNHANDLED REJECTION (process kept alive)');
+  captureException(reason);
 });
 
 // uncaughtException: Node's own docs are explicit that continuing after one
@@ -26,17 +31,22 @@ process.on('unhandledRejection', (reason) => {
 // (`npm start`, no --watch) Render's process supervisor restarts an exited
 // process; locally (`npm run dev`, --watch) a crash still requires a file
 // change to restart, same as before — this handler doesn't change that
-// local-dev behavior, only makes what happened loggable before the exit.
+// local-dev behavior, only makes what happened loggable (and, if
+// SENTRY_DSN is set, reportable) before the exit.
 process.on('uncaughtException', (err) => {
-  console.error('UNCAUGHT EXCEPTION (exiting):', err);
-  process.exit(1);
+  logger.fatal({ err }, 'UNCAUGHT EXCEPTION (exiting)');
+  captureException(err);
+  // Wait for the Sentry delivery before exiting — this is exactly the
+  // crash that report matters most for, and a same-tick process.exit()
+  // would otherwise race the network send and drop it.
+  flush().finally(() => process.exit(1));
 });
 
 const port = process.env.PORT || 4000;
 const app = createApp();
 
 app.listen(port, () => {
-  console.log(`wasi-crm-server listening on http://localhost:${port}`);
+  logger.info(`wasi-crm-server listening on http://localhost:${port}`);
   broadcastRunner.start();
   forwardRunner.start();
   alertRunner.start();

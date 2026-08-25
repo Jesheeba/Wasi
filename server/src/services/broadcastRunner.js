@@ -10,6 +10,8 @@ const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const messagingService = require('../services/messagingService');
 const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 const { MessagingError } = messagingService;
 
 const TICK_MS = 5000;
@@ -74,7 +76,8 @@ async function processBroadcast(broadcast) {
   // different object; needs its own listener. This runs every 5s for the
   // life of the process, so it's held far more often than any single route.
   client.on('error', (err) => {
-    console.error('broadcastRunner: checked-out client error (non-fatal):', err.message);
+    logger.error({ err }, 'broadcastRunner: checked-out client error (non-fatal)');
+    captureException(err);
   });
   let batch;
   try {
@@ -114,7 +117,8 @@ async function tick() {
       await processBroadcast(broadcast);
     }
   } catch (err) {
-    console.error('broadcastRunner tick failed:', err.message);
+    logger.error({ err }, 'broadcastRunner tick failed');
+    captureException(err);
   }
 }
 

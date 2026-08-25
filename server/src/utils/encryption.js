@@ -1,30 +1,42 @@
-// MVP secret storage: AES-256-GCM with a server-held key from env.
-// NOT a substitute for real KMS/Vault (spec §8 point 7) — the key still lives
-// on the app server. Upgrade before handling real client WABA tokens in production.
-const crypto = require('crypto');
+// Pluggable secret storage for wabas.access_token_encrypted — dispatches
+// to a concrete backend by SECRET_STORE (env var). Default ('env', or
+// unset) is envKeyStore.js, the original MVP AES-256-GCM-keyed-by-
+// SERVER_SECRET implementation — unchanged behavior for anyone who hasn't
+// opted in to the new backend. 'supabase_vault' (supabaseVaultStore.js) is
+// the real KMS/Vault upgrade GAP_FIX_PLAN.md Phase D1 called for; see that
+// file's header for its unverified-against-a-real-Vault caveats before
+// relying on it.
+//
+// Both encrypt/decrypt are async regardless of which backend is active —
+// envKeyStore's crypto calls are synchronous internally, but Vault's
+// aren't (a real DB round trip), so the public interface here is async
+// either way rather than making every one of this codebase's ~11 call
+// sites branch on which backend is active.
+//
+// IMPORTANT: switching SECRET_STORE on a database that already has tokens
+// encrypted under the OTHER backend breaks decryption for every existing
+// row — this module does NOT try both backends or auto-detect which one
+// produced a given stored value. A real cutover needs every existing
+// wabas.access_token_encrypted value re-encrypted under the new backend
+// first; see scripts/rotate-secret-store.js.
+const envKeyStore = require('./secretStores/envKeyStore');
+const supabaseVaultStore = require('./secretStores/supabaseVaultStore');
 
-function getKey() {
-  const secret = process.env.SERVER_SECRET;
-  if (!secret) throw new Error('SERVER_SECRET is not set (see .env.example)');
-  return crypto.createHash('sha256').update(secret).digest();
+const STORES = { env: envKeyStore, supabase_vault: supabaseVaultStore };
+
+function currentStore() {
+  const which = process.env.SECRET_STORE || 'env';
+  const store = STORES[which];
+  if (!store) throw new Error(`Unknown SECRET_STORE "${which}" — expected one of: ${Object.keys(STORES).join(', ')}.`);
+  return store;
 }
 
-function encrypt(plainText) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', getKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return Buffer.concat([iv, authTag, encrypted]).toString('base64');
+async function encrypt(plainText) {
+  return currentStore().encrypt(plainText);
 }
 
-function decrypt(payload) {
-  const buf = Buffer.from(payload, 'base64');
-  const iv = buf.subarray(0, 12);
-  const authTag = buf.subarray(12, 28);
-  const encrypted = buf.subarray(28);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', getKey(), iv);
-  decipher.setAuthTag(authTag);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+async function decrypt(payload) {
+  return currentStore().decrypt(payload);
 }
 
 module.exports = { encrypt, decrypt };

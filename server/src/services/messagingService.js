@@ -113,7 +113,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
   await assertWithinPlanLimit(db, clientId);
 
   const waba = await getSendableWaba(clientId);
-  const accessToken = decrypt(waba.access_token_encrypted);
+  const accessToken = await decrypt(waba.access_token_encrypted);
   const toPhone = chat.phone;
   const displayBody = type === 'template' ? `[template: ${templateName}]` : body;
 
@@ -184,7 +184,7 @@ async function retryMessage(db, clientId, chat, message) {
   }
 
   const waba = await getSendableWaba(clientId);
-  const accessToken = decrypt(waba.access_token_encrypted);
+  const accessToken = await decrypt(waba.access_token_encrypted);
 
   try {
     const metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
@@ -195,4 +195,4 @@ async function retryMessage(db, clientId, chat, message) {
   }
 }
 
-module.exports = { MessagingError, canSendFreeform, sendChatMessage, retryMessage, SESSION_WINDOW_MS };
+module.exports = { MessagingError, canSendFreeform, sendChatMessage, retryMessage, getSendableWaba, SESSION_WINDOW_MS };

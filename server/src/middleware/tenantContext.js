@@ -1,4 +1,6 @@
 const { pool } = require('../db/pool');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 // Runs every authenticated client request inside its own transaction, on its
 // own checked-out connection, as the restricted `wasi_app` role (see
@@ -38,7 +40,8 @@ async function withTenantContext(req, res, next) {
     try {
       await client.query(commit ? 'COMMIT' : 'ROLLBACK');
     } catch (err) {
-      console.error('tenantContext: commit/rollback failed:', err.message);
+      logger.error({ err }, 'tenantContext: commit/rollback failed');
+      captureException(err);
     } finally {
       client.release();
     }
@@ -50,13 +53,13 @@ async function withTenantContext(req, res, next) {
   res.json = (body) => {
     finalize(res.statusCode < 500)
       .then(() => originalJson(body))
-      .catch((err) => { console.error('tenantContext: response after finalize failed:', err.message); });
+      .catch((err) => { logger.error({ err }, 'tenantContext: response after finalize failed'); captureException(err); });
     return res;
   };
   res.send = (body) => {
     finalize(res.statusCode < 500)
       .then(() => originalSend(body))
-      .catch((err) => { console.error('tenantContext: response after finalize failed:', err.message); });
+      .catch((err) => { logger.error({ err }, 'tenantContext: response after finalize failed'); captureException(err); });
     return res;
   };
 

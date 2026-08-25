@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const { authLimiter, webhookLimiter, apiLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
@@ -31,6 +32,7 @@ const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
 const walletRouter = require('./routes/wallet');
 const clientWebhookRouter = require('./routes/clientWebhook');
+const apiKeysRouter = require('./routes/apiKeys');
 const apiV1MessagesRouter = require('./routes/apiV1Messages');
 const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 
@@ -56,6 +58,13 @@ function createApp() {
   // own. `1` trusts exactly one hop of X-Forwarded-For, matching both of
   // those single-proxy setups.
   app.set('trust proxy', 1);
+  // CSP left off for now: the root/admin/marketing static pages (no build
+  // step, see APPLICATION.md) rely on inline scripts/styles, and a default
+  // CSP would break them without a real audit of every inline block first —
+  // that's a separate, riskier follow-up. Every other helmet default
+  // (HSTS, X-Content-Type-Options, X-Frame-Options, X-Powered-By removal,
+  // etc.) is safe to enable immediately.
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({
     origin(origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
@@ -97,6 +106,7 @@ function createApp() {
   app.use('/api/payment-links', requireClientAuth, withTenantContext, paymentLinksRouter);
   app.use('/api/wallet', requireClientAuth, withTenantContext, walletRouter);
   app.use('/api/client-webhook', requireClientAuth, withTenantContext, clientWebhookRouter);
+  app.use('/api/api-keys', requireClientAuth, withTenantContext, apiKeysRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);

@@ -15,6 +15,8 @@
 const { pool } = require('../db/pool');
 const alertEventsRepo = require('../repositories/alertEventsRepo');
 const alertNotifier = require('../services/alertNotifier');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 const TICK_MS = 5 * 60 * 1000;
 const FAILED_SEND_SPIKE_THRESHOLD = 10;
@@ -228,7 +230,13 @@ async function tick() {
     await reconcile('auth_class_error', await checkAuthClassErrors());
     await maybeSendDailyDigest();
   } catch (err) {
-    console.error('alertRunner tick failed:', err.message);
+    // Deliberately not just "another tick failure" — if the alerting
+    // engine itself is silently broken, nothing else in this codebase
+    // would ever surface that (it's the thing that's supposed to notice
+    // problems, so its own failures need the one channel that doesn't
+    // depend on it: error tracking, not alertNotifier).
+    logger.error({ err }, 'alertRunner tick failed');
+    captureException(err);
   }
 }
 

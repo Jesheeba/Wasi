@@ -1,5 +1,7 @@
 const { Pool } = require('pg');
 const { assertNotProductionDatabase } = require('../utils/dbSafety');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 // Throws immediately (before any query, before any test even starts) if
 // DATABASE_URL points at a known-production database and this isn't the
@@ -36,7 +38,8 @@ const pool = new Pool({
 // pool discards the dead client and reconnects on the next query either way;
 // this handler's only job is to stop that from being fatal.
 pool.on('error', (err) => {
-  console.error('pg pool: idle client error (non-fatal, pool recovers automatically):', err.message);
+  logger.error({ err }, 'pg pool: idle client error (non-fatal, pool recovers automatically)');
+  captureException(err);
 });
 
 module.exports = { pool };

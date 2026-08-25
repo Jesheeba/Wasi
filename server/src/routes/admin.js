@@ -99,7 +99,7 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
   }
 
   try {
-    const accessToken = decrypt(waba.access_token_encrypted);
+    const accessToken = await decrypt(waba.access_token_encrypted);
     const details = await metaClient.getPhoneNumberDetails(waba.phone_number_id, accessToken);
     const updated = await wabasRepo.upsertForClient(id, {
       display_name: details.verified_name || waba.display_name,

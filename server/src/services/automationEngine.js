@@ -7,6 +7,7 @@
 const automationRulesRepo = require('../repositories/automationRulesRepo');
 const automationFlowsRepo = require('../repositories/automationFlowsRepo');
 const messagingService = require('../services/messagingService');
+const logger = require('../utils/logger');
 
 // Only ever called from flowEngine.js, with the privileged `pool` as `db`
 // (see repositories/tagsRepo.js's module comment for the convention).
@@ -42,7 +43,7 @@ async function evaluate(db, clientId, chat, inboundBody, contact) {
     } catch (err) {
       // Don't let one bad rule (e.g. WABA disconnected mid-flight) block
       // ingestion of the message that triggered it — already committed.
-      console.error(`automation rule "${rule.title}" failed for chat ${chat.id}:`, err.message);
+      logger.error({ err, ruleTitle: rule.title, chatId: chat.id }, 'automation rule failed');
     }
     break; // first match wins — avoids firing multiple auto-replies for one message
   }

@@ -170,7 +170,7 @@ router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req
     // doesn't exist, when the real fix is a key/env mismatch.
     let accessToken;
     try {
-      accessToken = decrypt(waba.access_token_encrypted);
+      accessToken = await decrypt(waba.access_token_encrypted);
     } catch (err) {
       return res.status(500).json({
         error: 'Could not decrypt this WABA\'s access token — the request never reached Meta',
@@ -279,7 +279,7 @@ router.post('/:id/header-media', uploadHeaderMedia.single('file'), asyncHandler(
 
   let accessToken;
   try {
-    accessToken = decrypt(waba.access_token_encrypted);
+    accessToken = await decrypt(waba.access_token_encrypted);
   } catch (err) {
     return res.status(500).json({
       error: 'Could not decrypt this WABA\'s access token',

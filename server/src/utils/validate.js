@@ -39,6 +39,13 @@ const chatCreateSchema = z.object({
 
 const chatUpdateSchema = chatCreateSchema.partial();
 
+// GAP_FIX_PLAN.md Phase E2 — team_member_id is nullable (not optional) so
+// "assign to nobody" (unassign) is an explicit request, not indistinguishable
+// from an omitted field.
+const chatAssignSchema = z.object({
+  team_member_id: uuid.nullable(),
+});
+
 // Outbound sends only — inbound messages arrive exclusively via the Meta
 // webhook now (server/src/routes/metaWebhook.js), never through this route.
 const messageSendSchema = z.object({
@@ -348,6 +355,15 @@ const tagCreateSchema = z.object({
   color: z.string().optional(),
 });
 
+// Self-signup client's own key management (GAP_FIX_PLAN.md Phase C2) —
+// client_id is never accepted here, unlike admin.js's equivalent route: a
+// client can only ever create a key for itself (req.clientId, from its own
+// JWT), so there's nothing to validate-against-mismatch the way
+// apiMessageSendSchema's client_id defense-in-depth check does.
+const apiKeyCreateSchema = z.object({
+  app_name: z.string().min(1).max(100),
+});
+
 // Hub API send endpoint (build plan Phase 5) — client_id is required in the
 // body (not just resolved from the API key) as a defense-in-depth sanity
 // check: routes/apiV1Messages.js rejects the request if it doesn't match
@@ -388,6 +404,7 @@ module.exports = {
   contactUpdateSchema,
   chatCreateSchema,
   chatUpdateSchema,
+  chatAssignSchema,
   messageSendSchema,
   registerSchema,
   loginSchema,
@@ -410,6 +427,7 @@ module.exports = {
   supportTicketCreateSchema,
   ticketStatusUpdateSchema,
   tagCreateSchema,
+  apiKeyCreateSchema,
   teamMemberCreateSchema,
   contactAttributeCreateSchema,
   paymentLinkCreateSchema,

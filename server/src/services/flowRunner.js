@@ -10,6 +10,8 @@ const contactFlowStateRepo = require('../repositories/contactFlowStateRepo');
 const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const flowEngine = require('./flowEngine');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 const TICK_MS = 5000;
 const BATCH_SIZE = 25;
@@ -41,7 +43,8 @@ async function advanceOne(row) {
     const rest = await flowEngine.advanceDueNode(pool, row.client_id, contact, chat, row);
     await contactFlowStateRepo.finalizeProcessing(pool, { ...base, ...rest });
   } catch (err) {
-    console.error('flowRunner: advanceOne failed for contact', row.contact_id, err.message);
+    logger.error({ err, contactId: row.contact_id, clientId: row.client_id }, 'flowRunner: advanceOne failed');
+    captureException(err);
     // Resolve the claim one way or another — leaving it 'processing'
     // forever (or worse, throwing back to a caller that never retries)
     // would mean this contact never gets reclaimed by the 5-minute stuck-row
@@ -60,7 +63,8 @@ async function tick() {
       await runWithConcurrency(batch, ADVANCE_CONCURRENCY, advanceOne);
     }
   } catch (err) {
-    console.error('flowRunner tick failed:', err.message);
+    logger.error({ err }, 'flowRunner tick failed');
+    captureException(err);
   }
 }
 

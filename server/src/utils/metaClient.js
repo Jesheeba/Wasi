@@ -3,6 +3,7 @@
 // a WhatsApp product config (META_CONFIG_ID) — none of that exists in dev by default,
 // so every call here will fail with a clear error until real credentials are set.
 const { validateTemplateText, validateHeaderText, defaultExampleFor } = require('./templateParams');
+const logger = require('./logger');
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -23,7 +24,13 @@ function assertConfigured() {
   }
 }
 
-async function graphFetch(path, { method = 'GET', accessToken, body } = {}) {
+// timeoutMs is opt-in and additive — omitted, this is byte-for-byte the
+// same unbounded fetch every existing caller already relies on
+// (wasi-build-plan.md §6.1 flags this file as never audited end-to-end for
+// missing timeouts; that's a separate, bigger pass than this one call
+// site, so this only adds the option, not a new default for callers that
+// don't ask for it).
+async function graphFetch(path, { method = 'GET', accessToken, body, timeoutMs } = {}) {
   const url = new URL(`${GRAPH_BASE}${path}`);
   if (accessToken && method === 'GET') url.searchParams.set('access_token', accessToken);
 
@@ -34,6 +41,7 @@ async function graphFetch(path, { method = 'GET', accessToken, body } = {}) {
       ...(accessToken && method !== 'GET' ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   });
 
   const data = await res.json().catch(() => ({}));
@@ -202,12 +210,15 @@ async function uploadMedia(phoneNumberId, accessToken, buffer, mimeType, filenam
 // bytes back from Meta before a cached id's 30-day window closes, rather
 // than this app persisting the file itself (see migration
 // 028_template_media_cache.js's module comment).
-async function getMediaUrl(mediaId, accessToken) {
-  return graphFetch(`/${mediaId}`, { accessToken }); // { url, mime_type, sha256, file_size, id }
+async function getMediaUrl(mediaId, accessToken, timeoutMs) {
+  return graphFetch(`/${mediaId}`, { accessToken, timeoutMs }); // { url, mime_type, sha256, file_size, id }
 }
 
-async function downloadMediaBytes(url, accessToken) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+async function downloadMediaBytes(url, accessToken, timeoutMs) {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
   if (!res.ok) {
     throw new Error(`Meta media download failed (${res.status}) — the media id it was resolved from may have expired.`);
   }
@@ -473,9 +484,9 @@ async function listTemplates(wabaId, accessToken) {
     url = new URL(data.paging.next);
     if (!url.searchParams.get('access_token')) url.searchParams.set('access_token', accessToken);
   }
-  console.error(
-    `metaClient.listTemplates: hit the ${MAX_TEMPLATE_PAGES}-page safety cap for WABA ${wabaId} — ` +
-    `paging.next kept returning more pages than expected; returning what was fetched so far, not looping forever.`
+  logger.error(
+    { wabaId, pageCap: MAX_TEMPLATE_PAGES },
+    'metaClient.listTemplates: hit the page safety cap — paging.next kept returning more pages than expected; returning what was fetched so far, not looping forever'
   );
   return all;
 }

@@ -46,4 +46,49 @@ async function createPaymentLink({ amountInPaise, description, referenceId }) {
   return data; // { id, short_url, status, ... }
 }
 
-module.exports = { createOrder, createPaymentLink };
+// Razorpay Subscriptions API (GAP_FIX_PLAN.md Phase E4) — real recurring
+// billing, distinct from createOrder's one-off Orders flow above. Requires
+// a Plan already created in the Razorpay dashboard (or via their API
+// directly — not something this codebase does) with a real plan_id;
+// see plans.razorpay_plan_id, which is NULL for every plan by default
+// until that's done. UNVERIFIED against a live Razorpay account as of
+// this writing (2026-08-25) — built from Razorpay's documented
+// Subscriptions API shape, no real credentials exist in this environment
+// to exercise it live. Before relying on this in production: create a
+// real Plan per pricing tier, set plans.razorpay_plan_id, and run one
+// real subscription-create + webhook-charge + cancel cycle end to end.
+//
+// totalCount: Razorpay has no literal "bill until cancelled" — the
+// documented convention for an open-ended subscription is a large
+// total_count and cancelling early rather than ever letting it complete
+// naturally. routes/billing.js's RECURRING_TOTAL_CYCLES picks the actual
+// number.
+async function createSubscription({ planId, totalCount, customerNotify = 1, notes }) {
+  assertConfigured();
+  const res = await fetch(`${RAZORPAY_BASE}/subscriptions`, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan_id: planId, total_count: totalCount, customer_notify: customerNotify, notes }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.description || `Razorpay subscription creation failed (${res.status})`);
+  }
+  return data; // { id, status, short_url, current_start, current_end, ... }
+}
+
+async function cancelSubscription(subscriptionId, { cancelAtCycleEnd = false } = {}) {
+  assertConfigured();
+  const res = await fetch(`${RAZORPAY_BASE}/subscriptions/${subscriptionId}/cancel`, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.description || `Razorpay subscription cancellation failed (${res.status})`);
+  }
+  return data;
+}
+
+module.exports = { createOrder, createPaymentLink, createSubscription, cancelSubscription };

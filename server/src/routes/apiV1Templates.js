@@ -36,7 +36,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
     try {
-      const accessToken = decrypt(waba.access_token_encrypted);
+      const accessToken = await decrypt(waba.access_token_encrypted);
       await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {

@@ -15,6 +15,7 @@
 const { pool } = require('../db/pool');
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
+const logger = require('../utils/logger');
 
 const requireApiKey = asyncHandler(async (req, res, next) => {
   const header = req.get('authorization') || '';
@@ -34,7 +35,7 @@ const requireApiKey = asyncHandler(async (req, res, next) => {
   // decision — a slow or failed update must never delay or fail the
   // request it's attached to.
   apiKeysRepo.touchLastUsed(pool, record.id).catch((err) => {
-    console.error('apiKeysRepo: touchLastUsed failed (non-fatal):', err.message);
+    logger.error({ err, apiKeyId: record.id }, 'apiKeysRepo: touchLastUsed failed (non-fatal)');
   });
 
   next();

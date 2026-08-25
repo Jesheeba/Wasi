@@ -56,6 +56,20 @@ async function update(db, clientId, id, fields) {
   return rows[0] || null;
 }
 
+// teamMemberId null unassigns. No existence check here — a bad/foreign
+// team_member id fails at the database via the FK constraint (migration
+// 035_chat_assignment.js), which errorHandler.js already turns into a
+// clean 400 (Postgres error code 23503); routes/chats.js's caller does its
+// own friendlier existence check first so that path returns a clearer 404
+// instead in the common case (assigning to a since-removed team member).
+async function assign(db, clientId, id, teamMemberId) {
+  const { rows } = await db.query(
+    `update chats set assigned_to = $3 where client_id = $1 and id = $2 returning *`,
+    [clientId, id, teamMemberId]
+  );
+  return rows[0] || null;
+}
+
 async function remove(db, clientId, id) {
   const { rowCount } = await db.query(
     'delete from chats where client_id = $1 and id = $2',
@@ -137,13 +151,13 @@ async function markFailed(db, clientId, messageId, errorReason, metaErrorCode) {
 // Idempotent inbound insert — Meta redelivers webhook events on retry/ack
 // timeout, so a repeated meta_message_id is a no-op, not a duplicate message.
 // Only ever called from metaWebhook.js, on the privileged connection.
-async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt }) {
+async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt, mediaId, mediaMimeType, mediaFilename }) {
   const { rows } = await db.query(
-    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at)
-     values ($1, $2, 'in', $3, 'delivered', $4, coalesce($5, now()))
+    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at, media_id, media_mime_type, media_filename)
+     values ($1, $2, 'in', $3, 'delivered', $4, coalesce($5, now()), $6, $7, $8)
      on conflict (meta_message_id) do nothing
      returning *`,
-    [chatId, clientId, body, metaMessageId, sentAt || null]
+    [chatId, clientId, body, metaMessageId, sentAt || null, mediaId || null, mediaMimeType || null, mediaFilename || null]
   );
   if (rows[0]) {
     await db.query(
@@ -174,6 +188,7 @@ module.exports = {
   create,
   findOrCreateByContact,
   update,
+  assign,
   remove,
   listMessages,
   findMessageById,

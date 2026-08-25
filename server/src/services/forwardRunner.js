@@ -22,6 +22,8 @@
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 const TICK_MS = 5000;
 const BATCH_SIZE = 25;
@@ -65,14 +67,18 @@ async function deliverOne(delivery) {
     );
     // Loud and structured on purpose, matching metaWebhook.js's "metaWebhook
     // FAILURE:" convention — grep-able, meant to be wired to an alert (see
-    // wasi-build-plan.md §6.1) rather than scrolled past.
-    console.error(giveUp ? 'webhookForward PERMANENT FAILURE:' : 'webhookForward retry scheduled:', {
+    // wasi-build-plan.md §6.1) rather than scrolled past. Not sent to Sentry
+    // (errorTracking.js): a consuming app's endpoint being down/slow is an
+    // external-target failure, not a bug in this codebase — alertRunner.js's
+    // checkWebhookDeliveryFailures already surfaces sustained failures of
+    // this kind as a proper alert, batched per client per day.
+    logger.error({
       deliveryId: delivery.id,
       clientId: delivery.client_id,
       event: delivery.event,
       attempt: nextAttemptCount,
-      error: err.message,
-    });
+      err,
+    }, giveUp ? 'webhookForward PERMANENT FAILURE' : 'webhookForward retry scheduled');
   }
 }
 
@@ -83,7 +89,8 @@ async function tick() {
       await runWithConcurrency(batch, DELIVER_CONCURRENCY, deliverOne);
     }
   } catch (err) {
-    console.error('forwardRunner tick failed:', err.message);
+    logger.error({ err }, 'forwardRunner tick failed');
+    captureException(err);
   }
 }
 

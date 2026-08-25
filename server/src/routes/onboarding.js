@@ -9,6 +9,7 @@ const templateSyncService = require('../services/templateSyncService');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { wabaConnectSchema, businessProfileUpdateSchema } = require('../utils/validate');
+const logger = require('../utils/logger');
 
 const router = Router();
 
@@ -50,7 +51,7 @@ router.get('/whatsapp/business-profile', asyncHandler(async (req, res) => {
     return res.json({ connected: false });
   }
   try {
-    const accessToken = decrypt(waba.access_token_encrypted);
+    const accessToken = await decrypt(waba.access_token_encrypted);
     const data = await metaClient.getBusinessProfile(waba.phone_number_id, accessToken);
     // Meta wraps the single profile object in a "data" array (one element,
     // always — a WABA phone number has exactly one business profile).
@@ -91,7 +92,7 @@ router.post('/whatsapp/business-profile', asyncHandler(async (req, res) => {
   }
 
   try {
-    const accessToken = decrypt(waba.access_token_encrypted);
+    const accessToken = await decrypt(waba.access_token_encrypted);
     await metaClient.updateBusinessProfile(waba.phone_number_id, accessToken, fields);
     await auditLogRepo.record({
       actor_type: 'client',
@@ -128,7 +129,7 @@ router.post('/whatsapp/business-profile/picture', uploadProfilePicture.single('f
   }
 
   try {
-    const accessToken = decrypt(waba.access_token_encrypted);
+    const accessToken = await decrypt(waba.access_token_encrypted);
     const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
       fileName: req.file.originalname || 'profile-picture',
       fileLength: req.file.size,
@@ -189,7 +190,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       display_name: details.verified_name || null,
       display_phone_number: details.display_phone_number || null,
       quality_rating: details.quality_rating || null,
-      access_token_encrypted: encrypt(accessToken),
+      access_token_encrypted: await encrypt(accessToken),
       verified_at: new Date().toISOString(),
       status: 'connected',
     });
@@ -209,7 +210,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     try {
       templateSync = await templateSyncService.syncTemplates(req.db, clientId);
     } catch (err) {
-      console.error('onboarding: template sync after connect failed (non-fatal):', err.message);
+      logger.error({ err, clientId }, 'onboarding: template sync after connect failed (non-fatal)');
     }
 
     const client = await clientsRepo.findById(req.db, clientId);

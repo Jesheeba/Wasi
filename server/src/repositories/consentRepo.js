@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const logger = require('../utils/logger');
 
 // The only writer of contacts.opt_in_status/opt_in_source/opt_in_at/opt_out_at
 // — every other place that touches a contact (contactCreateSchema,
@@ -20,7 +21,7 @@ const { pool } = require('../db/pool');
 // the outer request transaction.
 async function recordEvent(clientId, contactId, { event, source, evidence }) {
   const client = await pool.connect();
-  client.on('error', (err) => console.error('consentRepo: checked-out client error (non-fatal):', err.message));
+  client.on('error', (err) => logger.error({ err }, 'consentRepo: checked-out client error (non-fatal)'));
   try {
     await client.query('BEGIN');
 

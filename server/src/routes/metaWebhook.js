@@ -13,8 +13,15 @@ const messageStatusForwardsRepo = require('../repositories/messageStatusForwards
 const flowEngine = require('../services/flowEngine');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 const router = Router();
+
+// GAP_FIX_PLAN.md Phase E1 — msg.type values that carry a fetchable media
+// object, and the label used to build a message's body text for each.
+const MEDIA_TYPE_LABELS = { image: 'Image', audio: 'Audio', video: 'Video', document: 'Document', sticker: 'Sticker' };
+const INBOUND_MEDIA_TYPES = new Set(Object.keys(MEDIA_TYPE_LABELS));
 
 // Meta's verification handshake when you register this URL in the App Dashboard.
 router.get('/', (req, res) => {
@@ -90,7 +97,7 @@ async function enqueueForwards(waba, event, payload) {
   try {
     clientWebhook = await clientWebhooksRepo.findByClientId(pool, waba.client_id);
   } catch (err) {
-    console.error('metaWebhook: failed to look up client_webhooks for', waba.client_id, err.message);
+    logger.error({ err, clientId: waba.client_id }, 'metaWebhook: failed to look up client_webhooks');
     clientWebhook = null;
   }
   if (clientWebhook && clientWebhook.events?.includes(event)) {
@@ -126,7 +133,23 @@ async function handleInboundMessages(waba, value) {
     // buttons above. Reading .text here is what lets an automation rule's
     // trigger keyword match the button's label (e.g. "Received").
     const templateButtonText = msg.button?.text;
-    const body = msg.text?.body || buttonReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+    // image/audio/video/document/sticker all nest their payload under a key
+    // matching msg.type exactly (msg.image, msg.audio, ...) — Meta's
+    // consistent shape for every media message type. GAP_FIX_PLAN.md Phase
+    // E1: previously every one of these just fell through to the generic
+    // `[${msg.type}]` tag below with no way to actually see the file: media
+    // id/mime type/filename are now captured and fetched on demand through
+    // routes/chats.js's proxy route (see migration 034_inbound_media.js for
+    // why this app doesn't store the bytes itself). Location/contacts
+    // messages, and anything else Meta might send, still fall through to
+    // the generic tag — deliberately not in scope here.
+    const mediaPayload = INBOUND_MEDIA_TYPES.has(msg.type) ? msg[msg.type] : null;
+    const media = mediaPayload?.id
+      ? { id: mediaPayload.id, mimeType: mediaPayload.mime_type || null, filename: mediaPayload.filename || null }
+      : null;
+    const body = media
+      ? (mediaPayload.caption ? `[${MEDIA_TYPE_LABELS[msg.type]}] ${mediaPayload.caption}` : `[${MEDIA_TYPE_LABELS[msg.type]}]`)
+      : (msg.text?.body || buttonReply?.title || templateButtonText || `[${msg.type}]`); // MVP: other non-text, non-media types still render as a type tag
 
     // Capture-and-verify: interactive.button_reply's exact shape (id/title
     // field names, whether other fields are present) was inferred from
@@ -159,6 +182,9 @@ async function handleInboundMessages(waba, value) {
       metaMessageId: msg.id,
       body,
       sentAt: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null,
+      mediaId: media?.id,
+      mediaMimeType: media?.mimeType,
+      mediaFilename: media?.filename,
     });
 
     if (inserted) {
@@ -354,7 +380,7 @@ router.post('/', asyncHandler(async (req, res) => {
       waba = await wabasRepo.findByWabaId(entry.id);
       if (waba) wabaIdsTouched.add(waba.id);
     } catch (err) {
-      console.error('metaWebhook: failed to resolve waba for entry', entry.id, err.message);
+      logger.error({ err, entryId: entry.id }, 'metaWebhook: failed to resolve waba for entry');
     }
 
     for (const change of entry.changes || []) {
@@ -392,9 +418,9 @@ router.post('/', asyncHandler(async (req, res) => {
         }
 
         if (!handled) {
-          console.warn(
-            `metaWebhook: unhandled payload — field="${field}", entry=${entry.id}, ` +
-            `value keys=[${Object.keys(value || {}).join(', ')}]`
+          logger.warn(
+            { field, entryId: entry.id, valueKeys: Object.keys(value || {}) },
+            'metaWebhook: unhandled payload'
           );
         }
       } catch (err) {
@@ -409,15 +435,14 @@ router.post('/', asyncHandler(async (req, res) => {
         anyChangeFailed = true;
         failedFields.push(`${field}: ${err.message}`);
         // Loud and structured on purpose — grep-able as "metaWebhook FAILURE"
-        // distinctly from the "unhandled payload" warning below, so this is
-        // alertable later (see Phase 6 §6.1) rather than scrolling past in
-        // a log nobody's watching.
-        console.error('metaWebhook FAILURE:', {
-          field,
-          entryId: entry.id,
-          error: err.message,
-          stack: err.stack,
-        });
+        // distinctly from the "unhandled payload" warning above. Sent to
+        // Sentry too (errorTracking.js): this is exactly the failure class
+        // that risks permanent, unrecoverable message loss (Meta discards
+        // undelivered webhooks after 7 days with no replay), so it gets
+        // both the grep-able log line existing tooling watches for and a
+        // proper exception report with a stack trace.
+        logger.error({ field, entryId: entry.id, err }, 'metaWebhook FAILURE');
+        captureException(err);
       }
 
       await auditLogRepo.record({
@@ -430,11 +455,15 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 
   const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
-  const budgetFlag = durationMs > 2000 ? ' NEAR/OVER META\'S ~3s BUDGET' : '';
-  console.log(
-    `metaWebhook: processed [${fieldsSeen.join(', ') || 'no changes'}] in ${durationMs.toFixed(1)}ms${budgetFlag}` +
-    (anyChangeFailed ? ' — FAILED, returning 500 for Meta to retry' : '')
-  );
+  const overBudget = durationMs > 2000;
+  logger.info({
+    fields: fieldsSeen,
+    durationMs: Number(durationMs.toFixed(1)),
+    overBudget,
+    failed: anyChangeFailed,
+  }, `metaWebhook: processed [${fieldsSeen.join(', ') || 'no changes'}]` +
+    (overBudget ? ' NEAR/OVER META\'S ~3s BUDGET' : '') +
+    (anyChangeFailed ? ' — FAILED, returning 500 for Meta to retry' : ''));
 
   // Persisted, not just logged — see migration 018's module comment. A
   // failure here would be ironic (an unmonitorable monitoring write) but
@@ -453,7 +482,13 @@ router.post('/', asyncHandler(async (req, res) => {
       ]
     );
   } catch (err) {
-    console.error('metaWebhook: failed to persist meta_webhook_log row (non-fatal):', err.message);
+    // Captured, not just logged: alertRunner.js's checkWebhookSilence and
+    // checkSustainedFailures both read meta_webhook_log — if inserts into
+    // it start silently failing, the alerting engine itself goes blind
+    // without anyone noticing, the same "unmonitorable monitoring write"
+    // risk the original comment here already named.
+    logger.error({ err }, 'metaWebhook: failed to persist meta_webhook_log row (non-fatal)');
+    captureException(err);
   }
 
   res.sendStatus(anyChangeFailed ? 500 : 200);

@@ -1,4 +1,6 @@
 const { ZodError } = require('zod');
+const logger = require('../utils/logger');
+const { captureException } = require('../utils/errorTracking');
 
 function notFoundHandler(req, res) {
   res.status(404).json({ error: 'Not found' });
@@ -29,7 +31,12 @@ function errorHandler(err, req, res, next) {
     return res.status(400).json({ error: 'Invalid reference', detail: err.detail });
   }
 
-  console.error(err);
+  // Only the genuinely-unexpected case reaches here — ZodError, unique-
+  // constraint (23505), and FK-violation (23503) are all handled above as
+  // ordinary, expected failure modes, not bugs. Everything else is a real
+  // exception worth a stack trace and, if configured, a Sentry report.
+  logger.error({ err }, 'unhandled route error');
+  captureException(err);
   res.status(500).json({ error: 'Internal server error' });
 }
 

@@ -116,7 +116,7 @@ async function syncTemplates(db, clientId) {
     throw new TemplateSyncError('No connected WhatsApp Business number for this account.', 'waba_not_connected');
   }
 
-  const accessToken = decrypt(waba.access_token_encrypted);
+  const accessToken = await decrypt(waba.access_token_encrypted);
   const [metaTemplates, localTemplates] = await Promise.all([
     metaClient.listTemplates(waba.waba_id, accessToken),
     messageTemplatesRepo.listByClientId(db, clientId),

@@ -6,12 +6,12 @@ async function findByClientId(db, clientId) {
   return rows[0] || null;
 }
 
-async function create(db, { client_id, plan, status, payment_provider_ref }) {
+async function create(db, { client_id, plan, status, payment_provider_ref, billing_mode }) {
   const { rows } = await db.query(
-    `insert into subscriptions (client_id, plan, status, payment_provider_ref)
-     values ($1, $2, coalesce($3, 'pending_payment'), $4)
+    `insert into subscriptions (client_id, plan, status, payment_provider_ref, billing_mode)
+     values ($1, $2, coalesce($3, 'pending_payment'), $4, coalesce($5, 'one_off'))
      returning *`,
-    [client_id, plan, status, payment_provider_ref || null]
+    [client_id, plan, status, payment_provider_ref || null, billing_mode || null]
   );
   return rows[0];
 }

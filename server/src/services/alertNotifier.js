@@ -12,6 +12,7 @@ const { sendEmail } = require('../utils/emailService');
 const metaClient = require('../utils/metaClient');
 const wabasRepo = require('../repositories/wabasRepo');
 const { decrypt } = require('../utils/encryption');
+const logger = require('../utils/logger');
 
 async function notify(alertEvent) {
   const subject = `[Wasi ${alertEvent.severity.toUpperCase()}] ${alertEvent.alert_type}`;
@@ -22,10 +23,10 @@ async function notify(alertEvent) {
     try {
       await sendEmail({ to: emailTo, subject, html });
     } catch (err) {
-      console.error('alertNotifier: email send failed:', err.message);
+      logger.error({ err }, 'alertNotifier: email send failed');
     }
   } else {
-    console.log(`[alertNotifier] ALERT_EMAIL_TO not set — would have sent: ${subject}\n${alertEvent.message}`);
+    logger.info({ subject, message: alertEvent.message }, '[alertNotifier] ALERT_EMAIL_TO not set — would have sent');
   }
 
   await sendWhatsAppBestEffort(subject, alertEvent.message);
@@ -45,10 +46,10 @@ async function sendWhatsAppBestEffort(subject, message) {
   try {
     const waba = await wabasRepo.findByWabaId(wabaId);
     if (!waba || !waba.access_token_encrypted) {
-      console.error('alertNotifier: ALERT_WABA_ID does not match a connected WABA — skipping WhatsApp alert');
+      logger.error({ wabaId }, 'alertNotifier: ALERT_WABA_ID does not match a connected WABA — skipping WhatsApp alert');
       return;
     }
-    const accessToken = decrypt(waba.access_token_encrypted);
+    const accessToken = await decrypt(waba.access_token_encrypted);
     await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, to, {
       name: 'wasi_ops_alert',
       language: 'en_US',
@@ -57,7 +58,7 @@ async function sendWhatsAppBestEffort(subject, message) {
   } catch (err) {
     // Never fatal — email already carries this alert. Most likely cause
     // right now: wasi_ops_alert doesn't exist/isn't approved yet.
-    console.error('alertNotifier: WhatsApp send failed (non-fatal, email already sent):', err.message);
+    logger.error({ err }, 'alertNotifier: WhatsApp send failed (non-fatal, email already sent)');
   }
 }
 
