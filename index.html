@@ -168,10 +168,20 @@
                     <i data-lucide="sliders-horizontal" style="width:14px;"></i> Filters
                   </button>
                   <div class="filter-dropdown-panel" id="chat-filters-panel">
-                    <button class="filter-option active" data-tag-filter="all">All Chats</button>
-                    <button class="filter-option" data-tag-filter="Lead">Lead</button>
-                    <button class="filter-option" data-tag-filter="Customer">Customer</button>
-                    <button class="filter-option" data-tag-filter="VIP">VIP</button>
+                    <div id="tag-filter-options">
+                      <button class="filter-option active" data-tag-filter="all">All Chats</button>
+                      <button class="filter-option" data-tag-filter="Lead">Lead</button>
+                      <button class="filter-option" data-tag-filter="Customer">Customer</button>
+                      <button class="filter-option" data-tag-filter="VIP">VIP</button>
+                    </div>
+                    <!-- GAP_FIX_PLAN.md Phase E2 — populated from GET
+                         /api/team-members by app.js's renderAssigneeFilterOptions,
+                         a separate filter dimension (AND'd with the tag filter
+                         above), its own active-state group so the two don't
+                         clear each other's selection. -->
+                    <hr style="border: none; border-top: 1px solid var(--border-light); margin: 6px 0;" />
+                    <div style="padding: 4px 12px; font-size: 0.7rem; font-weight: 700; color: #9CA3AF; text-transform: uppercase;">Assigned to</div>
+                    <div id="assignee-filter-options"></div>
                   </div>
                 </div>
               </div>
@@ -212,7 +222,17 @@
                       <div style="font-size: 0.75rem; color: #22C55E; font-weight: 500;">WhatsApp Business</div>
                     </div>
                   </div>
-                  <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
+                    <!-- GAP_FIX_PLAN.md Phase E2 — attribution-only team inbox:
+                         everyone still shares the one client login (no
+                         per-agent auth), this just labels who's handling the
+                         conversation. Options populated by app.js's
+                         openActiveChat from GET /api/team-members. -->
+                    <select id="active-chat-assignee-select" class="form-input" style="width: auto; height: 32px; font-size: 0.8rem; padding: 0 8px;" title="Assign this chat to a team member">
+                      <option value="">Unassigned</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="chat-messages" id="chat-messages-container"></div>
@@ -648,11 +668,10 @@
 
                   <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="btn-secondary" style="height: 36px; padding: 0 10px;" id="refresh-reports-btn"><i data-lucide="rotate-cw" style="width: 14px;"></i></button>
+                    <button class="btn-secondary" style="height: 36px; padding: 0 12px; font-size: 0.8rem;" id="export-message-analytics-btn"><i data-lucide="download" style="width: 14px;"></i> Export CSV</button>
                     <div style="display: flex; align-items: center; gap: 8px; background: white; border: 1px solid var(--border-light); padding: 0 12px; height: 36px; border-radius: 8px; font-size: 0.85rem; color: #374151; font-weight: 500;">
                       <i data-lucide="calendar" style="width: 14px; color: #6B7280;"></i>
                       <span>Past 7 days</span>
-                      <i data-lucide="chevron-down" style="width: 14px;"></i>
-                      <span style="color: #9CA3AF; margin-left: 8px;">25 Jul 2026 - 01 Aug 2026</span>
                     </div>
                   </div>
                 </div>
@@ -700,41 +719,22 @@
                     </div>
                   </div>
 
+                  <!-- Populated by app.js's renderMessageTrendChart from real
+                       GET /api/analytics/messages/trend — was a hardcoded fake
+                       path with made-up numbers/dates regardless of any real
+                       account state. -->
                   <div style="width: 100%; height: 260px; position: relative;">
-                    <svg width="100%" height="100%" viewBox="0 0 700 220" preserveAspectRatio="none" style="overflow: visible;">
-                      <line x1="40" y1="20" x2="680" y2="20" stroke="#F1F5F9" stroke-width="1"/>
-                      <text x="15" y="24" font-size="11" fill="#9CA3AF">600</text>
-
-                      <line x1="40" y1="70" x2="680" y2="70" stroke="#F1F5F9" stroke-width="1"/>
-                      <text x="15" y="74" font-size="11" fill="#9CA3AF">400</text>
-
-                      <line x1="40" y1="120" x2="680" y2="120" stroke="#F1F5F9" stroke-width="1"/>
-                      <text x="15" y="124" font-size="11" fill="#9CA3AF">200</text>
-
-                      <line x1="40" y1="170" x2="680" y2="170" stroke="#E2E8F0" stroke-width="1"/>
-                      <text x="25" y="174" font-size="11" fill="#9CA3AF">0</text>
-
-                      <text x="40" y="195" font-size="11" fill="#6B7280">Sun Jul 26</text>
-                      <text x="145" y="195" font-size="11" fill="#6B7280">Mon Jul 27</text>
-                      <text x="250" y="195" font-size="11" fill="#6B7280">Tue Jul 28</text>
-                      <text x="355" y="195" font-size="11" fill="#6B7280">Wed Jul 29</text>
-                      <text x="460" y="195" font-size="11" fill="#6B7280">Thu Jul 30</text>
-                      <text x="565" y="195" font-size="11" fill="#6B7280">Fri Jul 31</text>
-                      <text x="645" y="195" font-size="11" fill="#6B7280">Sat Aug 01</text>
-
-                      <path d="M 40,170 Q 300,168 565,160 Q 620,157 670,125" fill="none" stroke="#38BDF8" stroke-width="2.5"/>
-                      <circle cx="670" cy="125" r="3" fill="#38BDF8"/>
-
-                      <path d="M 40,170 C 250,169 460,165 565,150 Q 620,100 670,40" fill="none" stroke="#F59E0B" stroke-width="2.5"/>
-                      <circle cx="670" cy="40" r="3" fill="#F59E0B"/>
-                    </svg>
+                    <svg id="message-trend-chart" width="100%" height="100%" viewBox="0 0 700 220" preserveAspectRatio="none" style="overflow: visible;"></svg>
                   </div>
                 </div>
               </div>
 
               <!-- Sub-page 2: TAGS ANALYTICS -->
               <div id="rep-view-tags" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Tag Performance Analytics</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                  <h2 style="font-size: 1.25rem; font-weight: 700;">Tag Performance Analytics</h2>
+                  <button class="btn-secondary" style="height: 36px; padding: 0 12px; font-size: 0.8rem;" id="export-tag-analytics-btn"><i data-lucide="download" style="width: 14px;"></i> Export CSV</button>
+                </div>
                 <div class="table-card">
                   <table class="data-table">
                     <thead><tr><th>Tag Name</th><th>Contacts Count</th><th>Conversion Rate</th><th>Status</th></tr></thead>
@@ -747,7 +747,10 @@
 
               <!-- Sub-page 3: CAMPAIGN ANALYTICS -->
               <div id="rep-view-campaign" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Campaign Analytics</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                  <h2 style="font-size: 1.25rem; font-weight: 700;">Campaign Analytics</h2>
+                  <button class="btn-secondary" style="height: 36px; padding: 0 12px; font-size: 0.8rem;" id="export-campaign-analytics-btn"><i data-lucide="download" style="width: 14px;"></i> Export CSV</button>
+                </div>
                 <div class="table-card">
                   <table class="data-table">
                     <thead><tr><th>Campaign Name</th><th>Sent</th><th>Delivered Rate</th><th>Read Rate</th></tr></thead>
@@ -1062,14 +1065,39 @@
               </div>
 
               <!-- Sub-page 7: DEVELOPER -->
+              <!-- Real, not a static fake key display — GAP_FIX_PLAN.md Phase
+                   C2. Backed by GET/POST /api/api-keys and DELETE
+                   /api/api-keys/:id (server/src/routes/apiKeys.js), the
+                   self-signup equivalent of the admin panel's API Keys page. -->
               <div id="sec-view-developer" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Access Tokens</h2>
-                <div class="profile-form-card" style="max-width: 600px;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API Keys</h2>
+                <p style="color:#6B7280;margin-bottom:1rem;font-size:0.875rem;max-width:600px;">
+                  Send and receive WhatsApp messages through this account from your own CRM or app —
+                  see the Hub API integration guide for how. A key's value is shown once, right after
+                  you generate it, and can't be retrieved again afterward; revoke it and generate a new
+                  one if it's lost.
+                </p>
+                <div class="profile-form-card" style="max-width: 600px; margin-bottom: 1.5rem;">
                   <div class="form-group">
-                    <label class="form-label">API Access Key</label>
-                    <input type="password" class="form-input" id="api-key-input" value="crm_live_sample000000000000" readonly />
+                    <label class="form-label">New Key Name</label>
+                    <input type="text" class="form-input" id="new-api-key-name" placeholder="e.g. My Order System" />
                   </div>
-                  <button class="btn-secondary" style="width: fit-content;" id="copy-api-key-btn"><i data-lucide="copy"></i> Copy API Key</button>
+                  <button class="btn-primary" style="width: auto; padding: 0 20px;" id="generate-api-key-btn">Generate New Key</button>
+                  <div id="new-api-key-display" style="display:none; margin-top: 1rem;">
+                    <label class="form-label">Copy this now — it won't be shown again</label>
+                    <div style="display:flex; gap: 8px;">
+                      <input type="text" class="form-input" id="new-api-key-value" readonly />
+                      <button class="btn-secondary" style="width: auto; padding: 0 16px;" id="copy-new-api-key-btn"><i data-lucide="copy"></i></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="table-card">
+                  <table class="data-table">
+                    <thead><tr><th>App Name</th><th>Created</th><th>Last Used</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="api-keys-table-body">
+                      <tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
@@ -1735,6 +1763,6 @@
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260824a"></script>
+  <script src="app.js?v=20260825d"></script>
 </body>
 </html>

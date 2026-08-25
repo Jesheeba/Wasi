@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chats: [],
     contacts: [],
     tagsById: {},
+    teamMembersById: {},
+    chatAssigneeFilter: 'all',
     broadcasts: [],
     automationRules: [],
     flows: [],
@@ -102,7 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
       phone: c.phone,
       tag: state.tagsById[c.tag_id]?.name || '—',
       time: timeLabel(c.last_message_at),
-      count: c.unread_count
+      count: c.unread_count,
+      assignedTo: c.assigned_to || null,
+      assignedToName: state.teamMembersById[c.assigned_to]?.name || null
     };
   }
 
@@ -145,8 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadInitialData() {
-    const [tags, contacts, chats, broadcasts, automationRules, flows, templates, tickets] = await Promise.all([
+    const [tags, teamMembers, contacts, chats, broadcasts, automationRules, flows, templates, tickets] = await Promise.all([
       authFetch('/api/tags'),
+      authFetch('/api/team-members'),
       authFetch('/api/contacts'),
       authFetch('/api/chats'),
       authFetch('/api/broadcasts'),
@@ -157,6 +162,11 @@ document.addEventListener('DOMContentLoaded', () => {
     ]);
 
     state.tagsById = Object.fromEntries(tags.map(t => [t.id, t]));
+    // Populated before adaptChat runs below — adaptChat resolves
+    // assignedToName from this lookup, same ordering dependency tagsById
+    // already has on chat.tag.
+    state.teamMembersById = Object.fromEntries(teamMembers.map(m => [m.id, m]));
+    renderAssigneeFilterOptions();
     state.contacts = contacts.map(adaptContact);
     state.chats = chats.map(adaptChat);
     state.broadcasts = broadcasts.map(adaptBroadcast);
@@ -459,16 +469,46 @@ document.addEventListener('DOMContentLoaded', () => {
     return `<span class="msg-status" data-status="${m.status}">${tick}</span>`;
   }
 
+  // Icon/label shown on an inbound media message's button before it's been
+  // fetched — mime type isn't known client-side until the proxy response
+  // arrives, so this is keyed off media_mime_type captured server-side at
+  // webhook time (routes/metaWebhook.js), not the blob itself.
+  function mediaButtonInfo(mimeType) {
+    if (mimeType?.startsWith('image/')) return { icon: 'image', label: 'View image' };
+    if (mimeType?.startsWith('audio/')) return { icon: 'music', label: 'Play audio' };
+    if (mimeType?.startsWith('video/')) return { icon: 'video', label: 'Play video' };
+    return { icon: 'file-text', label: 'Download attachment' };
+  }
+
   function renderMessages(messages) {
     const msgContainer = document.getElementById('chat-messages-container');
     if (!msgContainer) return;
-    msgContainer.innerHTML = messages.map(m => `
-      <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}">
-        <div>${m.body.replace(/</g, '&lt;')}</div>
-        <div class="msg-time">${timeLabel(m.sent_at)} ${statusBadge(m)}</div>
-      </div>
-    `).join('');
+    msgContainer.innerHTML = messages.map(m => {
+      if (m.media_id) {
+        // Backend body is "[Image] caption text" or just "[Image]" (see
+        // metaWebhook.js's MEDIA_TYPE_LABELS) — strip the bracketed tag,
+        // whatever's left (if anything) is the customer's actual caption.
+        const caption = m.body.replace(/^\[[^\]]+\]\s*/, '');
+        const { icon, label } = mediaButtonInfo(m.media_mime_type);
+        return `
+          <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}">
+            <button type="button" class="msg-media-btn" data-media-message-id="${m.id}" data-media-mime="${m.media_mime_type || ''}">
+              <i data-lucide="${icon}"></i> ${label}
+            </button>
+            ${caption ? `<div class="msg-media-caption">${caption.replace(/</g, '&lt;')}</div>` : ''}
+            <div class="msg-time">${timeLabel(m.sent_at)} ${statusBadge(m)}</div>
+          </div>
+        `;
+      }
+      return `
+        <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}">
+          <div>${m.body.replace(/</g, '&lt;')}</div>
+          <div class="msg-time">${timeLabel(m.sent_at)} ${statusBadge(m)}</div>
+        </div>
+      `;
+    }).join('');
     msgContainer.scrollTop = msgContainer.scrollHeight;
+    refreshIcons();
   }
 
   // Delegated once — renderMessages rebuilds the container's innerHTML on
@@ -482,6 +522,59 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatMessages();
     } catch (err) {
       showToast(err.message);
+    }
+  });
+
+  // Fetches an inbound media message's bytes on click (never eagerly —
+  // see index.css's comment above .msg-media-btn) and either opens it in a
+  // new tab (image/audio/video — the browser renders it natively) or
+  // triggers a download (documents), same object-URL pattern the CSV
+  // export button already uses elsewhere in this file.
+  async function authFetchBlob(path) {
+    const token = localStorage.getItem('client_token');
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('client_token');
+      stopPolling();
+      showAuthView();
+      throw new Error('Session expired, please log in again.');
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Request failed (${res.status})`);
+    }
+    return res.blob();
+  }
+
+  document.getElementById('chat-messages-container')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-media-message-id]');
+    if (!btn || !state.activeChatId) return;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Loading…';
+    try {
+      const blob = await authFetchBlob(`/api/chats/${state.activeChatId}/messages/${btn.dataset.mediaMessageId}/media`);
+      const objectUrl = URL.createObjectURL(blob);
+      const mime = btn.dataset.mediaMime || blob.type;
+      if (mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/')) {
+        window.open(objectUrl, '_blank');
+      } else {
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      // Not revoked here — the new tab/download still needs it valid after
+      // this handler returns; the browser reclaims it once that tab/page closes.
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
     }
   });
 
@@ -583,6 +676,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('drawer-contact-tags').innerHTML = hasTag
       ? `<span class="tag-badge">${escapeHtml(chat.tag)}</span>`
       : '<span style="font-size:0.8rem;color:#9CA3AF;">No tag assigned</span>';
+
+    const assigneeSelect = document.getElementById('active-chat-assignee-select');
+    if (assigneeSelect) {
+      assigneeSelect.innerHTML = '<option value="">Unassigned</option>' +
+        Object.values(state.teamMembersById).map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+      assigneeSelect.value = chat.assignedTo || '';
+    }
 
     try {
       await refreshActiveChatMessages();
@@ -1066,6 +1166,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Bound once, not inside openActiveChat — reads state.activeChatId at
+  // change time instead, same "avoid listener stacking across re-opens"
+  // reasoning as the chat-messages-container delegated listeners below.
+  document.getElementById('active-chat-assignee-select')?.addEventListener('change', async (e) => {
+    if (!state.activeChatId) return;
+    const teamMemberId = e.target.value || null;
+    try {
+      const updated = await authFetch(`/api/chats/${state.activeChatId}/assign`, {
+        method: 'PATCH',
+        body: JSON.stringify({ team_member_id: teamMemberId }),
+      });
+      const chat = state.chats.find(c => c.id === state.activeChatId);
+      if (chat) {
+        chat.assignedTo = updated.assigned_to;
+        chat.assignedToName = state.teamMembersById[updated.assigned_to]?.name || null;
+        renderChatList(state.chatTagFilter);
+      }
+      showToast(teamMemberId ? 'Chat assigned' : 'Chat unassigned');
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
   // --- Chat Filters Dropdown ---
   const chatFiltersBtn = document.getElementById('chat-filters-btn');
   const chatFiltersPanel = document.getElementById('chat-filters-panel');
@@ -1081,14 +1204,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  chatFiltersPanel?.querySelectorAll('.filter-option').forEach(btn => {
+  // Scoped to #tag-filter-options, not the whole panel — the assignee
+  // filter section below (GAP_FIX_PLAN.md Phase E2) is a second,
+  // independent dimension in the same dropdown with its own active-state
+  // group; sharing one .filter-option query across both would clear each
+  // other's selection on every click.
+  const tagFilterOptions = document.getElementById('tag-filter-options');
+  tagFilterOptions?.querySelectorAll('.filter-option').forEach(btn => {
     btn.addEventListener('click', () => {
-      chatFiltersPanel.querySelectorAll('.filter-option').forEach(b => b.classList.remove('active'));
+      tagFilterOptions.querySelectorAll('.filter-option').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderChatList(btn.dataset.tagFilter);
       chatFiltersPanel.classList.remove('open');
     });
   });
+
+  // Populated from GET /api/team-members (loadInitialData) — can't be
+  // bound statically like the tag buttons above since the team member
+  // list is dynamic per client, not a fixed set.
+  function renderAssigneeFilterOptions() {
+    const container = document.getElementById('assignee-filter-options');
+    if (!container) return;
+    const members = Object.values(state.teamMembersById);
+    container.innerHTML = [
+      `<button class="filter-option active" data-assignee-filter="all">Everyone</button>`,
+      `<button class="filter-option" data-assignee-filter="unassigned">Unassigned</button>`,
+      ...members.map(m => `<button class="filter-option" data-assignee-filter="${m.id}">${escapeHtml(m.name)}</button>`)
+    ].join('');
+    container.querySelectorAll('.filter-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.filter-option').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.chatAssigneeFilter = btn.dataset.assigneeFilter;
+        renderChatList(state.chatTagFilter);
+        chatFiltersPanel.classList.remove('open');
+      });
+    });
+  }
 
   // Chat attachment button is disabled in index.html (no upload backend
   // exists) — used to insert a fake sent-message bubble here with no
@@ -1100,9 +1252,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const filter = tagFilter || state.chatTagFilter || 'all';
     state.chatTagFilter = filter;
+    const assigneeFilter = state.chatAssigneeFilter || 'all';
 
     inboxChatList.innerHTML = '';
-    state.chats.filter(c => filter === 'all' || c.tag === filter).forEach(chat => {
+    state.chats
+      .filter(c => filter === 'all' || c.tag === filter)
+      .filter(c => {
+        if (assigneeFilter === 'all') return true;
+        if (assigneeFilter === 'unassigned') return !c.assignedTo;
+        return c.assignedTo === assigneeFilter;
+      })
+      .forEach(chat => {
       const itemHTML = `
         <div class="chat-item" data-chat-id="${chat.id}" style="padding: 12px 16px; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -1111,7 +1271,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div>
               <div style="font-size: 0.85rem; font-weight: 600; color: #1F2937;">${chat.name}</div>
-              <div style="font-size: 0.75rem; color: #6B7280;">WhatsApp</div>
+              <div style="font-size: 0.75rem; color: #6B7280;">WhatsApp${chat.assignedToName ? ` · <span style="color:#16A34A;">→ ${escapeHtml(chat.assignedToName)}</span>` : ''}</div>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
@@ -3021,16 +3181,69 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Report data refreshed');
   });
 
-  document.getElementById('copy-api-key-btn')?.addEventListener('click', () => {
-    const input = document.getElementById('api-key-input');
-    if (!input) return;
+  // --- API Keys (Settings > Developer) ---
+  async function renderApiKeysTable() {
+    const tbody = document.getElementById('api-keys-table-body');
+    if (!tbody) return;
+    try {
+      const keys = await authFetch('/api/api-keys');
+      tbody.innerHTML = keys.length ? keys.map(k => `
+        <tr>
+          <td>${k.app_name}</td>
+          <td>${new Date(k.created_at).toLocaleDateString()}</td>
+          <td>${k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</td>
+          <td><span class="status-badge ${k.revoked_at ? '' : 'active'}">${k.revoked_at ? 'Revoked' : 'Active'}</span></td>
+          <td>${k.revoked_at ? '' : `<button class="btn-secondary revoke-api-key-btn" data-id="${k.id}" style="width:auto;padding:4px 12px;">Revoke</button>`}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No API keys yet</td></tr>';
+      refreshIcons();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
 
+  document.getElementById('generate-api-key-btn')?.addEventListener('click', async () => {
+    const nameInput = document.getElementById('new-api-key-name');
+    const appName = nameInput?.value.trim();
+    if (!appName) return showToast('Enter a name for this key first.');
+    try {
+      const created = await authFetch('/api/api-keys', { method: 'POST', body: JSON.stringify({ app_name: appName }) });
+      const display = document.getElementById('new-api-key-display');
+      const valueInput = document.getElementById('new-api-key-value');
+      if (display && valueInput) {
+        valueInput.value = created.key;
+        display.style.display = 'block';
+      }
+      nameInput.value = '';
+      await renderApiKeysTable();
+      showToast("API key generated — copy it now, it won't be shown again");
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  document.getElementById('copy-new-api-key-btn')?.addEventListener('click', () => {
+    const input = document.getElementById('new-api-key-value');
+    if (!input?.value) return;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(input.value)
         .then(() => showToast('API key copied to clipboard'))
         .catch(() => showToast('Could not copy — clipboard permission denied'));
     } else {
       showToast('Clipboard access not available in this browser');
+    }
+  });
+
+  document.getElementById('api-keys-table-body')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.revoke-api-key-btn');
+    if (!btn) return;
+    if (!confirm('Revoke this API key? Any app using it will immediately stop working.')) return;
+    try {
+      await authFetch(`/api/api-keys/${btn.dataset.id}`, { method: 'DELETE' });
+      await renderApiKeysTable();
+      showToast('API key revoked');
+    } catch (err) {
+      showToast(err.message);
     }
   });
 
@@ -3127,7 +3340,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Reports: real data (spec Phase 3 — replaces hardcoded numbers) ---
   async function renderMessageAnalytics() {
     try {
-      const m = await authFetch('/api/analytics/messages');
+      const [m, trend] = await Promise.all([
+        authFetch('/api/analytics/messages'),
+        authFetch('/api/analytics/messages/trend?days=7'),
+      ]);
       const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
       set('metric-sent', m.sent);
       set('metric-delivered', m.delivered);
@@ -3135,10 +3351,104 @@ document.addEventListener('DOMContentLoaded', () => {
       set('metric-failed', m.failed);
       set('metric-incoming', m.incoming);
       set('metric-outgoing', m.outgoing);
+      renderMessageTrendChart(trend);
     } catch (err) {
       showToast(err.message);
     }
   }
+
+  // Real per-day data (GET /api/analytics/messages/trend) replacing what
+  // used to be a hardcoded fake SVG path with made-up numbers/dates. Trend
+  // only returns days that actually had a message — backfilled to zero here
+  // so the chart always shows the full 7-day axis rather than gaps.
+  function renderMessageTrendChart(trend) {
+    const svg = document.getElementById('message-trend-chart');
+    if (!svg) return;
+
+    const byDate = Object.fromEntries(trend.map(t => [t.date, t]));
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const row = byDate[key];
+      days.push({
+        label: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' }),
+        incoming: row ? row.incoming : 0,
+        outgoing: row ? row.outgoing : 0,
+      });
+    }
+
+    const maxVal = Math.max(5, ...days.map(d => Math.max(d.incoming, d.outgoing)));
+    const plotTop = 20, plotBottom = 170, plotLeft = 40, plotRight = 680;
+    const yFor = (val) => plotBottom - (val / maxVal) * (plotBottom - plotTop);
+    const xFor = (i) => plotLeft + (i / (days.length - 1)) * (plotRight - plotLeft);
+    const pathFor = (key) => days.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i)},${yFor(d[key])}`).join(' ');
+
+    const gridLines = [0, 0.33, 0.66, 1].map(frac => {
+      const y = plotBottom - frac * (plotBottom - plotTop);
+      const label = Math.round(maxVal * frac);
+      return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="${frac === 0 ? '#E2E8F0' : '#F1F5F9'}" stroke-width="1"/>` +
+             `<text x="${frac === 0 ? 25 : 15}" y="${y + 4}" font-size="11" fill="#9CA3AF">${label}</text>`;
+    }).join('');
+
+    const dayLabels = days.map((d, i) => `<text x="${xFor(i) - 25}" y="195" font-size="11" fill="#6B7280">${d.label}</text>`).join('');
+
+    const lastIncoming = days[days.length - 1].incoming;
+    const lastOutgoing = days[days.length - 1].outgoing;
+    svg.innerHTML = `
+      ${gridLines}
+      ${dayLabels}
+      <path d="${pathFor('incoming')}" fill="none" stroke="#38BDF8" stroke-width="2.5"/>
+      <circle cx="${xFor(days.length - 1)}" cy="${yFor(lastIncoming)}" r="3" fill="#38BDF8"/>
+      <path d="${pathFor('outgoing')}" fill="none" stroke="#F59E0B" stroke-width="2.5"/>
+      <circle cx="${xFor(days.length - 1)}" cy="${yFor(lastOutgoing)}" r="3" fill="#F59E0B"/>
+    `;
+  }
+
+  // Shared by every server-generated CSV export (messages, tags) — the blob
+  // itself is already valid CSV bytes from the backend, this just saves it,
+  // same object-URL + anchor-click pattern the contacts export and inbound
+  // media download already use.
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('export-message-analytics-btn')?.addEventListener('click', async () => {
+    try {
+      const blob = await authFetchBlob('/api/analytics/messages/export?days=30');
+      downloadBlob(blob, `wasi-messages-30d.csv`);
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  document.getElementById('export-tag-analytics-btn')?.addEventListener('click', async () => {
+    try {
+      const blob = await authFetchBlob('/api/analytics/tags/export');
+      downloadBlob(blob, 'wasi-tags.csv');
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  // Client-side, not a new backend endpoint — state.broadcasts is already
+  // loaded in exactly the shape this table displays (adaptBroadcast), same
+  // reasoning the existing contacts CSV export already uses.
+  document.getElementById('export-campaign-analytics-btn')?.addEventListener('click', () => {
+    if (!state.broadcasts.length) { showToast('No campaigns to export.'); return; }
+    const header = ['Campaign', 'Status', 'Delivered', 'Read Rate', 'Date'];
+    const rows = state.broadcasts.map(b => [b.title, b.status, b.delivered, b.readRate, b.date].map(csvField).join(','));
+    const csv = [header.join(','), ...rows].join('\r\n');
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `wasi-campaigns-${new Date().toISOString().slice(0, 10)}.csv`);
+  });
 
   async function renderTagAnalytics() {
     const tbody = document.getElementById('tag-analytics-tbody');
@@ -3201,6 +3511,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'attributes') renderAttributesTable();
       if (secKey === 'wallet') renderWallet();
       if (secKey === 'webhook') renderClientWebhook();
+      if (secKey === 'developer') renderApiKeysTable();
       if (secKey === 'subscription') renderSubscriptionTab();
       if (secKey === 'billing') renderBillingTab();
       refreshIcons();

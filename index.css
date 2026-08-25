@@ -1049,6 +1049,34 @@ body {
   color: #34b7f1;
 }
 
+/* Inbound media (image/audio/video/document/sticker) — fetched on demand
+   via GET /api/chats/:id/messages/:messageId/media, not stored/rendered
+   inline eagerly (see migration 034_inbound_media.js). */
+.msg-media-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: rgba(0, 0, 0, 0.04);
+  color: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.msg-media-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.msg-media-btn i {
+  width: 16px;
+  height: 16px;
+}
+.msg-media-caption {
+  margin-top: 6px;
+}
+
 .chat-input-bar {
   padding: 12px 1.25rem;
   background: white;

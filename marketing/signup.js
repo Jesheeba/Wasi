@@ -247,17 +247,23 @@
       }
 
       // Real integration path: load Razorpay Checkout.js and open it with
-      // the order details the backend just created.
+      // the order (one-off) or subscription (recurring, GAP_FIX_PLAN.md
+      // Phase E4 — only reachable once a plan has a real razorpay_plan_id;
+      // UNVERIFIED against a live account, see razorpayClient.js) details
+      // the backend just created. Checkout.js takes subscription_id
+      // instead of order_id/amount/currency for the recurring case — the
+      // plan itself already encodes the amount and cadence.
       await loadScriptOnce('https://checkout.razorpay.com/v1/checkout.js');
       state.checkoutOutcome = 'opened';
       setBanner('step2-info', 'Complete payment in the popup to activate billing — or click Next below to continue testing without completing payment.', infoIconSvg);
       revealStep2Next();
 
+      const isRecurring = Boolean(data.subscriptionId);
       const rzp = new window.Razorpay({
         key: data.keyId,
-        order_id: data.razorpayOrderId,
-        amount: data.amount,
-        currency: data.currency,
+        ...(isRecurring
+          ? { subscription_id: data.subscriptionId }
+          : { order_id: data.razorpayOrderId, amount: data.amount, currency: data.currency }),
         name: 'Wasi CRM',
         description: `${state.selectedPlan} plan subscription`,
         prefill: { email: state.client && state.client.email, name: state.client && state.client.name },
