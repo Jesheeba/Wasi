@@ -124,16 +124,11 @@ verify origin. Delivery is queued and retried with backoff
 (`webhookDeliveriesRepo`), not fire-and-forget.
 
 **Event types available today**: `message.received` (a customer's reply),
-`message_template_status_update` (Meta approved/paused/rejected a
-template), `account_update` (WABA restriction/ban/quality changes).
-**Not currently forwarded**: per-message delivery/read status
-(`sent → delivered → read → failed`) — Wasi tracks this internally
-(visible in the chat UI) but it was never wired into the forward queue.
-Adding it is a small, contained change (a new event constant plus one
-`enqueueForwards` call in `handleStatuses`, `server/src/routes/metaWebhook.js`)
-but does need a migration to widen the `wabas.forward_events` CHECK
-constraint — worth doing only if a client's CRM actually needs delivery
-receipts, not preemptively.
+`message.status` (per-message delivery lifecycle: `sent` → `delivered` → `read`,
+or `failed` with the Meta error code/message attached — deduped so Meta's
+webhook redelivery can't produce a second identical forward for the same
+message/status pair), `message_template_status_update` (Meta approved/paused/
+rejected a template), `account_update` (WABA restriction/ban/quality changes).
 
 ## 4. What's still manual per client
 
