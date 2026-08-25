@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+# Mirrors local dev exactly: a real postgres:16-alpine (same image as
+# server/docker-compose.yml), migrate, seed, then the real test suite over
+# HTTP (server/test/api.test.js boots the real Express app). No mocking of
+# the DB layer — this is the same "boot it for real" philosophy the test
+# suite itself already uses.
+#
+# Two independent jobs so a migration-only regression and a test-only
+# regression are distinguishable in the PR check list rather than one
+# job's failure hiding which half broke.
+jobs:
+  test:
+    name: Test suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_dev_pw
+          POSTGRES_DB: crm_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm -d crm_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # dotenv-cli's `-e .env` (used by the db:migrate/db:seed/test npm
+      # scripts) requires the file to actually exist, and
+      # test/api.test.js loads it directly too — so CI needs a real
+      # server/.env, not just step-level `env:` vars. Values mirror
+      # server/.env.example; secrets are throwaway strings scoped to this
+      # ephemeral CI database, not real credentials.
+      - name: Write CI .env
+        run: |
+          cat > .env <<'EOF'
+          PORT=4000
+          NODE_ENV=test
+          DATABASE_URL=postgres://crm:crm_dev_pw@localhost:5432/crm_dev
+          APP_URL=http://localhost:3000
+          ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+          DEV_CLIENT_ID=00000000-0000-0000-0000-000000000001
+          JWT_SECRET=ci-test-jwt-secret-not-for-prod
+          SERVER_SECRET=ci-test-server-secret-not-for-prod
+          META_APP_ID=
+          META_APP_SECRET=ci-test-meta-app-secret
+          META_CONFIG_ID=
+          META_GRAPH_API_VERSION=v21.0
+          META_WEBHOOK_VERIFY_TOKEN=ci-test-webhook-verify-token
+          RAZORPAY_KEY_ID=
+          RAZORPAY_KEY_SECRET=
+          RAZORPAY_WEBHOOK_SECRET=ci-test-razorpay-webhook-secret
+          RESEND_API_KEY=
+          EMAIL_FROM=Wasi CRM <noreply@example.com>
+          ALERT_EMAIL_TO=
+          ALERT_WHATSAPP_TO=
+          ALERT_WABA_ID=
+          EOF
+
+      - name: Run migrations
+        run: npm run db:migrate
+
+      - name: Seed demo data
+        run: npm run db:seed
+
+      - name: Run test suite
+        run: npm test
+
+  migration-dry-run:
+    name: Migration up/down dry-run
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_dev_pw
+          POSTGRES_DB: crm_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm -d crm_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write CI .env
+        run: |
+          cat > .env <<'EOF'
+          PORT=4000
+          NODE_ENV=test
+          DATABASE_URL=postgres://crm:crm_dev_pw@localhost:5432/crm_dev
+          JWT_SECRET=ci-test-jwt-secret-not-for-prod
+          SERVER_SECRET=ci-test-server-secret-not-for-prod
+          META_WEBHOOK_VERIFY_TOKEN=ci-test-webhook-verify-token
+          EOF
+
+      # Proves every migration file has a working `down` and that
+      # up -> down -> up all complete cleanly, not just that `up` alone
+      # succeeds once. Catches the exact failure shape wasi-build-plan.md
+      # §0.4 flags: a migration that works going forward but was never
+      # actually verified to roll back.
+      - name: Migrate up
+        run: npm run db:migrate
+
+      - name: Migrate all the way down
+        run: npm run db:migrate:down -- 0
+
+      - name: Migrate back up from empty
+        run: npm run db:migrate
