@@ -34,32 +34,66 @@
     try { lastMessage = JSON.parse(event.data); } catch (_) { /* not ours */ }
   });
 
+  // How long to wait for the FB.login popup to hand back a code before
+  // giving up. Deliberately generous, not a typical request timeout: Meta's
+  // own Coexistence docs say linking + initial history sync can legitimately
+  // take "several minutes" for a number with a lot of chat history, and the
+  // popup gives the user no feedback of its own while that's happening.
+  // Without this, a stalled popup left the caller's UI spinning forever with
+  // no way to tell a real failure from normal (if slow) syncing.
+  const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
+
+  // Reassures the user during the wait instead of leaving a bare spinner —
+  // onProgress(message) is optional so callers without a status UI can omit it.
+  const PROGRESS_STEPS = [
+    { atMs: 15_000, message: 'Waiting for you to finish in the Facebook popup…' },
+    { atMs: 60_000, message: 'Still connecting — if you scanned a QR code, this can take a few minutes while your chat history syncs. Keep the window open.' },
+    { atMs: 180_000, message: 'Still waiting — larger chat histories can take several minutes to sync. Make sure your phone stays connected to the internet.' },
+  ];
+
   // Runs the full FB.login() + postMessage handshake, resolves
   // { code, waba_id, phone_number_id }. Rejects with a message safe to show
   // the user directly (cancelled / error / timeout are all distinguished).
-  async function connect({ appId, configId }) {
+  async function connect({ appId, configId, onProgress }) {
     await loadSdk(appId);
     lastMessage = null;
 
-    const code = await new Promise((resolve, reject) => {
-      window.FB.login((response) => {
-        if (!response?.authResponse?.code) {
-          return reject(new Error('WhatsApp connection was not completed.'));
-        }
-        resolve(response.authResponse.code);
-      }, {
-        config_id: configId,
-        response_type: 'code',
-        override_default_response_type: true,
-        // featureType enables the Coexistence sub-flow (business keeps using
-        // the WhatsApp Business app on their phone; Meta syncs history to the
-        // Cloud API connection instead of migrating the number off the app).
-        // An empty string here forces the plain migration flow for everyone,
-        // even businesses who need to keep their app — see FINISH_* handling
-        // below for why the two paths can't be told apart after the fact.
-        extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+    const timers = [];
+    if (onProgress) {
+      for (const step of PROGRESS_STEPS) {
+        timers.push(setTimeout(() => onProgress(step.message), step.atMs));
+      }
+    }
+
+    let code;
+    try {
+      code = await new Promise((resolve, reject) => {
+        const hardTimeout = setTimeout(() => {
+          reject(new Error('Still not connected after 10 minutes. Please close the Facebook popup and try again — check that your phone has a stable internet connection.'));
+        }, LOGIN_TIMEOUT_MS);
+        timers.push(hardTimeout);
+
+        window.FB.login((response) => {
+          if (!response?.authResponse?.code) {
+            return reject(new Error('WhatsApp connection was not completed.'));
+          }
+          resolve(response.authResponse.code);
+        }, {
+          config_id: configId,
+          response_type: 'code',
+          override_default_response_type: true,
+          // featureType enables the Coexistence sub-flow (business keeps using
+          // the WhatsApp Business app on their phone; Meta syncs history to the
+          // Cloud API connection instead of migrating the number off the app).
+          // An empty string here forces the plain migration flow for everyone,
+          // even businesses who need to keep their app — see FINISH_* handling
+          // below for why the two paths can't be told apart after the fact.
+          extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+        });
       });
-    });
+    } finally {
+      timers.forEach(clearTimeout);
+    }
 
     // Coexistence completions fire a distinct event name, not plain FINISH —
     // per Meta's "Onboard WhatsApp Business app users" doc. Which one fired

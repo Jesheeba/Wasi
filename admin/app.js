@@ -562,7 +562,7 @@ function renderClientDetail(detail) {
         <input type="url" id="hub-forward-url" class="form-input" placeholder="https://client-crm.example.com/webhooks/wasi" value="${escapeHtml(waba.forward_to_url || '')}" style="margin-bottom:0.5rem; width:100%;">
         <div style="display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.6rem; font-size:0.8rem;">
           ${HUB_FORWARD_EVENTS.map((ev) => `
-            <label style="display:flex; align-items:center; gap:0.4rem;">
+            <label class="hub-event-label" style="display:flex; align-items:center; gap:0.4rem;">
               <input type="checkbox" data-hub-event value="${escapeHtml(ev)}" ${(waba.forward_events || []).includes(ev) ? 'checked' : ''}>
               <span style="font-family:monospace;">${escapeHtml(ev)}</span>
             </label>
@@ -630,6 +630,13 @@ function renderClientDetail(detail) {
           <button class="btn-primary btn-sm" id="status-editor-save-btn" style="width:auto; padding:0 16px;">Save</button>
         </div>
         <div id="status-editor-result"></div>
+
+        <div style="margin-top:0.85rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
+          <button class="btn-secondary btn-sm" id="reset-client-password-btn" style="width:100%; justify-content:center;">
+            <i data-lucide="key-round" style="width:14px;"></i> Reset Password
+          </button>
+          <div id="reset-client-password-result"></div>
+        </div>
       </div>
 
       <div class="detail-card">
@@ -659,6 +666,7 @@ function renderClientDetail(detail) {
   document.getElementById('status-editor-save-btn').addEventListener('click', () => saveClientStatus(client.id));
   document.getElementById('retry-provisioning-btn').addEventListener('click', () => retryProvisioning(client.id));
   document.getElementById('delete-client-btn').addEventListener('click', () => confirmDeleteClient(client));
+  document.getElementById('reset-client-password-btn').addEventListener('click', () => confirmResetClientPassword(client));
   const hubForwardBtn = document.getElementById('hub-forward-save-btn');
   if (hubForwardBtn) hubForwardBtn.addEventListener('click', () => saveHubForward(client.id));
 }
@@ -782,6 +790,42 @@ function confirmDeleteClient(client) {
       }
     },
   });
+}
+
+// Generates a fresh temporary password server-side and immediately
+// invalidates the client's current one (routes/clients.js POST
+// /:id/reset-password) — for a client that's locked out with no working
+// forgot-password email flow available. Same "shown once, never stored or
+// logged" contract as the create-client temporary password above.
+function confirmResetClientPassword(client) {
+  showConfirm({
+    title: "Reset this client's password?",
+    body: `
+      <p style="margin-bottom:0.75rem;">This immediately invalidates <strong>${escapeHtml(client.name)}</strong>'s (${escapeHtml(client.email)}) current password and generates a new one.</p>
+      <p>You'll need to send them the new password yourself — there's no notification email for this.</p>
+    `,
+    confirmLabel: 'Reset Password',
+    danger: true,
+    onConfirm: () => resetClientPassword(client),
+  });
+}
+
+async function resetClientPassword(client) {
+  const resultEl = document.getElementById('reset-client-password-result');
+  try {
+    const data = await apiFetch(`/api/clients/${client.id}/reset-password`, { method: 'POST' });
+    resultEl.innerHTML = `
+      <div class="inline-success" style="margin-top:0.75rem;">Password reset — shown once, copy it now.</div>
+      <div class="detail-row"><span class="detail-row-label">Login URL</span><span class="detail-row-value">${escapeHtml(data.loginUrl)}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Email</span><span class="detail-row-value">${escapeHtml(data.email)}</span></div>
+      <div class="detail-row"><span class="detail-row-label">New Password</span><span class="detail-row-value" style="font-family:monospace; user-select:all;">${escapeHtml(data.temporaryPassword)}</span></div>
+    `;
+    showToast('Password reset.', 'success');
+  } catch (err) {
+    if (err.status === 401) return;
+    resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.75rem;">${escapeHtml(err.message)}</div>`;
+    showToast('Failed to reset password: ' + err.message, 'error');
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -1585,6 +1629,34 @@ function initEventListeners() {
   document.querySelectorAll('.nav-item[data-view]').forEach((item) => {
     item.addEventListener('click', () => switchView(item.getAttribute('data-view')));
   });
+
+  // Mobile sidebar drawer (below the 900px tablet breakpoint) — same
+  // pattern as the root app's app.js; the actual show/hide rules live in
+  // ../index.css since admin/index.html links that file directly.
+  (function setupMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('mobile-sidebar-toggle-btn');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar || !toggleBtn || !backdrop) return;
+
+    const closeSidebar = () => {
+      sidebar.classList.remove('mobile-open');
+      backdrop.classList.remove('visible');
+    };
+    const openSidebar = () => {
+      sidebar.classList.add('mobile-open');
+      backdrop.classList.add('visible');
+    };
+
+    toggleBtn.addEventListener('click', () => {
+      if (sidebar.classList.contains('mobile-open')) closeSidebar();
+      else openSidebar();
+    });
+    backdrop.addEventListener('click', closeSidebar);
+    document.querySelectorAll('.nav-item[data-view]').forEach((item) => {
+      item.addEventListener('click', closeSidebar);
+    });
+  })();
 
   document.getElementById('back-to-clients-btn').addEventListener('click', () => switchView('clients'));
 

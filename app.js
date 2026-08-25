@@ -36,6 +36,37 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   refreshIcons();
 
+  // Mobile sidebar drawer (below the 900px tablet breakpoint — see
+  // index.css's matching @media block and breakpoints.css for the shared
+  // value). #sidebar itself is untouched above that width; this only ever
+  // toggles a class, the actual show/hide behavior lives entirely in CSS.
+  (function setupMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('mobile-sidebar-toggle-btn');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar || !toggleBtn || !backdrop) return;
+
+    const closeSidebar = () => {
+      sidebar.classList.remove('mobile-open');
+      backdrop.classList.remove('visible');
+    };
+    const openSidebar = () => {
+      sidebar.classList.add('mobile-open');
+      backdrop.classList.add('visible');
+    };
+
+    toggleBtn.addEventListener('click', () => {
+      if (sidebar.classList.contains('mobile-open')) closeSidebar();
+      else openSidebar();
+    });
+    backdrop.addEventListener('click', closeSidebar);
+    // Picking a nav item should close the drawer — otherwise it stays open,
+    // covering the view the user just navigated to.
+    sidebar.querySelectorAll('.nav-item').forEach((item) => {
+      item.addEventListener('click', closeSidebar);
+    });
+  })();
+
   // --- API helpers ---
   async function authFetch(path, options = {}) {
     const token = localStorage.getItem('client_token');
@@ -45,14 +76,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // caller already sends a JSON string body, so this only changes
     // behavior for the one new caller that passes FormData.
     const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {})
+    const { timeoutMs = 45_000, ...restOptions } = options;
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        ...restOptions,
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(options.headers || {})
+        }
+      });
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your connection and try again.');
       }
-    });
+      throw err;
+    }
     if (res.status === 401) {
       localStorage.removeItem('client_token');
       stopPolling();
@@ -447,6 +488,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatEmptyPlaceholder = document.getElementById('chat-empty-placeholder');
   const chatActiveWorkspace = document.getElementById('chat-active-workspace');
 
+  // Mobile-only back button (chat-header, index.html) — returns to the chat
+  // list. Just removes the class openActiveChat sets; doesn't touch
+  // state.activeChatId or the desktop inline display toggles, so reopening
+  // the same chat (or the desktop layout) is unaffected.
+  document.getElementById('chat-back-to-list-btn')?.addEventListener('click', () => {
+    document.getElementById('view-chat')?.classList.remove('chat-mobile-conversation-open');
+  });
+
   // Status ticks mirror WhatsApp's own convention; 'failed' gets a retry
   // affordance instead since silently dropping a message is worse than
   // surfacing that it needs one click to resend.
@@ -564,6 +613,10 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeChatId = chat.id;
     if (chatEmptyPlaceholder) chatEmptyPlaceholder.style.display = 'none';
     if (chatActiveWorkspace) chatActiveWorkspace.style.display = 'flex';
+    // Mobile-only (<=640px, index.css): swaps the single visible panel from
+    // the chat list to the active conversation. No-op at desktop widths —
+    // nothing there reads this class.
+    document.getElementById('view-chat')?.classList.add('chat-mobile-conversation-open');
 
     const initials = initialsFor(chat.name);
     document.getElementById('active-chat-avatar').innerText = initials;
@@ -3266,10 +3319,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const { code, waba_id, phone_number_id, via_coexistence } = await window.WasiEmbeddedSignup.connect({
           appId: config.appId,
           configId: config.configId,
+          onProgress: (message) => { btn.textContent = message; },
         });
+        btn.textContent = 'Finishing setup…';
         await authFetch('/api/onboarding/whatsapp/connect', {
           method: 'POST',
           body: JSON.stringify({ code, waba_id, phone_number_id, via_coexistence }),
+          timeoutMs: 90_000,
         });
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();

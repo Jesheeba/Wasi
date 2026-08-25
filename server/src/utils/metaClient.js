@@ -7,6 +7,27 @@ const { validateTemplateText, validateHeaderText, defaultExampleFor } = require(
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
+// Every Graph API call below goes through this instead of raw fetch() so a
+// stalled request (Meta-side network issue, not the normal multi-minute
+// Coexistence phone-linking wait — that happens entirely inside the FB.login
+// popup, before any of these calls run) fails after a bounded time instead of
+// hanging the connect route forever. Upload/download calls get a longer
+// budget since they carry real file bytes (up to 100MB documents), not just
+// small JSON payloads.
+const DEFAULT_TIMEOUT_MS = 20_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+async function fetchWithTimeout(url, options = {}, ms = DEFAULT_TIMEOUT_MS) {
+  try {
+    return await fetch(url, { ...options, signal: AbortSignal.timeout(ms) });
+  } catch (err) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+      throw new Error(`Meta API request timed out after ${Math.round(ms / 1000)}s`);
+    }
+    throw err;
+  }
+}
+
 // A template body/header failed local named-parameter validation before ever
 // reaching Meta — distinct from a real Graph API rejection so callers (the
 // templates route) can return 400 instead of 502.
@@ -27,7 +48,7 @@ async function graphFetch(path, { method = 'GET', accessToken, body } = {}) {
   const url = new URL(`${GRAPH_BASE}${path}`);
   if (accessToken && method === 'GET') url.searchParams.set('access_token', accessToken);
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -60,7 +81,7 @@ async function exchangeCodeForToken(code) {
   url.searchParams.set('client_secret', process.env.META_APP_SECRET);
   url.searchParams.set('code', code);
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.error?.message || `Token exchange failed (${res.status})`);
@@ -80,7 +101,7 @@ async function exchangeForLongLivedToken(shortLivedToken) {
   url.searchParams.set('client_secret', process.env.META_APP_SECRET);
   url.searchParams.set('fb_exchange_token', shortLivedToken);
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.error?.message || `Long-lived token exchange failed (${res.status})`);
@@ -143,7 +164,7 @@ async function createUploadSession(appId, accessToken, { fileName, fileLength, f
   url.searchParams.set('file_type', fileType);
   url.searchParams.set('access_token', accessToken);
 
-  const res = await fetch(url, { method: 'POST' });
+  const res = await fetchWithTimeout(url, { method: 'POST' });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.error?.message || `Meta upload-session creation failed (${res.status})`);
@@ -152,14 +173,14 @@ async function createUploadSession(appId, accessToken, { fileName, fileLength, f
 }
 
 async function uploadFileBytes(uploadSessionId, accessToken, buffer) {
-  const res = await fetch(`${GRAPH_BASE}/${uploadSessionId}`, {
+  const res = await fetchWithTimeout(`${GRAPH_BASE}/${uploadSessionId}`, {
     method: 'POST',
     headers: {
       Authorization: `OAuth ${accessToken}`,
       file_offset: '0',
     },
     body: buffer,
-  });
+  }, UPLOAD_TIMEOUT_MS);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.error?.message || `Meta file upload failed (${res.status})`);
@@ -183,11 +204,11 @@ async function uploadMedia(phoneNumberId, accessToken, buffer, mimeType, filenam
   form.append('type', mimeType);
   form.append('file', new Blob([buffer], { type: mimeType }), filename || 'file');
 
-  const res = await fetch(`${GRAPH_BASE}/${phoneNumberId}/media`, {
+  const res = await fetchWithTimeout(`${GRAPH_BASE}/${phoneNumberId}/media`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
-  });
+  }, UPLOAD_TIMEOUT_MS);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const error = new Error(data?.error?.message || `Meta media upload failed (${res.status})`);
@@ -207,7 +228,7 @@ async function getMediaUrl(mediaId, accessToken) {
 }
 
 async function downloadMediaBytes(url, accessToken) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${accessToken}` } }, UPLOAD_TIMEOUT_MS);
   if (!res.ok) {
     throw new Error(`Meta media download failed (${res.status}) — the media id it was resolved from may have expired.`);
   }
@@ -460,7 +481,7 @@ async function listTemplates(wabaId, accessToken) {
   url.searchParams.set('access_token', accessToken);
 
   for (let page = 0; page < MAX_TEMPLATE_PAGES; page++) {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const message = data?.error?.message || `Meta Graph API error (${res.status})`;

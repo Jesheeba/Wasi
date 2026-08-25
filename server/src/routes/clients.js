@@ -85,6 +85,28 @@ router.post('/', asyncHandler(async (req, res) => {
   });
 }));
 
+// Admin-triggered reset for an EXISTING client (e.g. they're locked out and
+// have no working forgot-password email flow available). Same contract as
+// creation's temporary password: generated here, hashed before it touches
+// clientsRepo.update, returned in plaintext exactly once in this response,
+// never stored or logged anywhere. Deliberately its own route rather than a
+// field on PATCH — clientUpdateSchema has no password_hash column to set
+// (see validate.js) and this should never be reachable by silently including
+// a password in an otherwise-unrelated update.
+router.post('/:id/reset-password', asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const existing = await clientsRepo.findById(pool, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  const temporaryPassword = generatePassword();
+  const password_hash = await hashPassword(temporaryPassword);
+  const client = await clientsRepo.update(pool, req.params.id, { password_hash });
+
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'client_password_reset', target: `${client.id}: ${client.email}` });
+
+  res.json({ ...omitPasswordHash(client), temporaryPassword, loginUrl: `${APP_URL}/index.html` });
+}));
+
 router.patch('/:id', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const data = clientUpdateSchema.parse(req.body);

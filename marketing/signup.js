@@ -32,7 +32,7 @@
   // ---------------------------------------------------------------------
   // Small fetch helper
   // ---------------------------------------------------------------------
-  async function api(path, { method = 'GET', body, auth = true } = {}) {
+  async function api(path, { method = 'GET', body, auth = true, timeoutMs = 45_000 } = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (auth && state.token) headers.Authorization = `Bearer ${state.token}`;
     let res;
@@ -41,8 +41,14 @@
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (networkErr) {
+      if (networkErr.name === 'TimeoutError' || networkErr.name === 'AbortError') {
+        const err = new Error('Request timed out. Please check your connection and try again.');
+        err.networkError = true;
+        throw err;
+      }
       const err = new Error('Could not reach the Wasi server. Is it running on http://localhost:4000?');
       err.networkError = true;
       throw err;
@@ -392,7 +398,13 @@
     const statusEl = document.getElementById('step3-status');
     statusEl.innerHTML = '<div class="status-pill pending">Waiting for Facebook popup…</div>';
     try {
-      const { code, waba_id, phone_number_id, via_coexistence } = await window.WasiEmbeddedSignup.connect({ appId, configId });
+      const { code, waba_id, phone_number_id, via_coexistence } = await window.WasiEmbeddedSignup.connect({
+        appId,
+        configId,
+        onProgress: (message) => {
+          statusEl.innerHTML = `<div class="status-pill pending">${message}</div>`;
+        },
+      });
       await completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence });
     } catch (err) {
       statusEl.innerHTML = `<div class="status-pill error">${err.message}</div>`;
@@ -406,6 +418,7 @@
       const data = await api('/api/onboarding/whatsapp/connect', {
         method: 'POST',
         body: { code, waba_id, phone_number_id, via_coexistence },
+        timeoutMs: 90_000,
       });
       state.wabaConnected = true;
       statusEl.innerHTML = `<div class="status-pill success">Connected: ${(data.waba && data.waba.display_name) || phone_number_id}</div>`;
