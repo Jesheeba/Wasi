@@ -167,15 +167,49 @@ async function handleInboundMessages(waba, value) {
       // Opt-out (build plan Phase 4) — recorded before automation runs, so
       // the consent_events row exists regardless of whatever a client's own
       // automation rules do with this same inbound message.
+      //
+      // Isolated for the same reason flowEngine.evaluate() below is: the
+      // insert above is idempotent on meta_message_id, so an uncaught throw
+      // here would 500 (Meta retries) but the retry's insert becomes a
+      // no-op, permanently skipping this whole block — including
+      // enqueueForwards — with no way to ever recover it. That's not a
+      // trade worth making for a consent write specifically: recordEvent is
+      // its own atomic transaction (see consentRepo.js), so a throw already
+      // means nothing was persisted regardless of whether we retry: the
+      // real enforcement point (messagingService.assertConsentForTemplate)
+      // re-checks contacts.opt_in_status fresh from the DB at send time
+      // rather than trusting this request succeeded. Swallowing here loses
+      // no protection the old code actually had — it just stops a lost
+      // consent write from also killing the forward.
       if (isOptOutMessage(body)) {
-        await consentRepo.recordEvent(clientId, contact.id, {
-          event: 'opted_out',
-          source: 'inbound_stop_keyword',
-          evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
-        });
+        try {
+          await consentRepo.recordEvent(clientId, contact.id, {
+            event: 'opted_out',
+            source: 'inbound_stop_keyword',
+            evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
+          });
+        } catch (err) {
+          console.error('metaWebhook: consentRepo.recordEvent FAILED for an opt-out message — opt-out was NOT recorded, needs manual follow-up:', {
+            clientId, metaMessageId: msg.id, error: err.message,
+          });
+        }
       }
 
-      await flowEngine.evaluate(pool, clientId, contact, chat, msg, body);
+      // Isolated so a bug in a client's own automation rules can never
+      // silently kill forwarding for this message: same idempotent-insert
+      // trap as the opt-out block above — an uncaught throw here would 500
+      // and make Meta retry, but the retry's insert is a no-op, so
+      // enqueueForwards below would never run again for this message. A
+      // receiving CRM silently losing an inbound message is worse than one
+      // client's automation rule silently not firing once, so this
+      // deliberately does NOT re-throw — do not "simplify" this away.
+      try {
+        await flowEngine.evaluate(pool, clientId, contact, chat, msg, body);
+      } catch (err) {
+        console.error('metaWebhook: flowEngine.evaluate FAILED — forwarding continues regardless:', {
+          clientId, metaMessageId: msg.id, error: err.message,
+        });
+      }
 
       // This only enqueues; forwardRunner.js does the actual delivery
       // attempt(s), on its own schedule, outside this request entirely —
