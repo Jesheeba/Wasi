@@ -1167,6 +1167,13 @@ body {
   border: 1px solid var(--border-light);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  /* .view-container.active is a fixed-height flex column — without this,
+     flexbox's default shrink-to-fit squashes this card down to whatever
+     fits the viewport (its automatic min-height is 0 because of the
+     overflow:hidden above), clipping content instead of letting the page
+     scroll. flex-shrink:0 keeps this at its natural content height so
+     .view-container's overflow-y:auto actually has something to scroll. */
+  flex-shrink: 0;
 }
 
 .table-header-tools {
