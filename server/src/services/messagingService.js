@@ -98,7 +98,15 @@ async function assertWithinPlanLimit(db, clientId) {
 // fetched and uploaded to Meta on the fly (see mediaHeaderService's
 // resolveMediaIdFromUrl). Exposed today only via the Hub API
 // (routes/apiV1Messages.js) for a client's own external CRM to point at.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }) {
+// connectionHooks ({ release, reacquire }) is only populated by a caller
+// holding a single connection across the whole request (routes/chats.js, via
+// tenantContext.js's req.db) — callers on the plain `pool` (metaWebhook.js,
+// apiV1Messages.js) have nothing to release, since pool.query() already
+// acquires/releases per call. When present, release() commits and frees the
+// connection right before the Meta network call below and reacquire()
+// opens a fresh one only for the final result write, so a slow Meta response
+// never pins a connection the pool's other concurrent requests need.
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }, connectionHooks = {}) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
@@ -140,8 +148,10 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
 
   const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody);
 
+  if (connectionHooks.release) await connectionHooks.release();
+
+  let metaMessageId;
   try {
-    let metaMessageId;
     if (type === 'text') {
       metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body);
     } else if (type === 'interactive') {
@@ -153,10 +163,8 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
         components: finalComponents,
       });
     }
-    const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId);
-    await usageRepo.incrementSent(db, clientId);
-    return sent;
   } catch (err) {
+    if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
     await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code);
     const sendError = new MessagingError(err.message, 'send_failed');
     // Carries Meta's raw error object through, if this failure came from a
@@ -165,6 +173,17 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
     sendError.metaError = err.metaError || null;
     throw sendError;
   }
+
+  // Meta already accepted the message by this point — anything that goes
+  // wrong from here (reacquiring a connection, the bookkeeping writes) must
+  // never be reported as a failed SEND, since it really did go out. Left
+  // deliberately unguarded (no catch-and-mark-failed here): a bookkeeping
+  // error surfaces as a plain 500, distinct from send_failed, rather than
+  // lying to the caller that the message never reached the recipient.
+  if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
+  const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId);
+  await usageRepo.incrementSent(db, clientId);
+  return sent;
 }
 
 // Re-attempts a previously failed send using its original text body. Only
@@ -172,7 +191,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
 // Cloud API error); a template retry should go through sendChatMessage again
 // with the template explicitly, since we don't persist which template a
 // message used.
-async function retryMessage(db, clientId, chat, message) {
+async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   if (message.status !== 'failed') {
     throw new MessagingError('Only a failed message can be retried.', 'not_failed');
   }
@@ -186,13 +205,19 @@ async function retryMessage(db, clientId, chat, message) {
   const waba = await getSendableWaba(clientId);
   const accessToken = decrypt(waba.access_token_encrypted);
 
+  if (connectionHooks.release) await connectionHooks.release();
+
+  let metaMessageId;
   try {
-    const metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
-    return chatsRepo.markSent(db, clientId, message.id, metaMessageId);
+    metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
   } catch (err) {
+    if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
     await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code);
     throw new MessagingError(err.message, 'send_failed');
   }
+
+  if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
+  return chatsRepo.markSent(db, clientId, message.id, metaMessageId);
 }
 
 module.exports = { MessagingError, canSendFreeform, sendChatMessage, retryMessage, SESSION_WINDOW_MS };

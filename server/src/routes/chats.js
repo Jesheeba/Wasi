@@ -68,7 +68,14 @@ router.post('/:id/messages', asyncHandler(async (req, res) => {
 
   const data = messageSendSchema.parse(req.body);
   try {
-    const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, data);
+    // Releases the tenant DB connection before the Meta call and reacquires
+    // one only for the result write — see messagingService.sendChatMessage's
+    // connectionHooks comment. Without this, the pool's one connection for
+    // this request sits idle-in-transaction for the whole Meta round trip.
+    const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, data, {
+      release: req.commitAndRelease,
+      reacquire: req.reacquireDb,
+    });
     res.status(201).json(message);
   } catch (err) {
     if (err instanceof messagingService.MessagingError) {
@@ -88,7 +95,10 @@ router.post('/:id/messages/:messageId/retry', asyncHandler(async (req, res) => {
   if (!message) return res.status(404).json({ error: 'Message not found' });
 
   try {
-    const updated = await messagingService.retryMessage(req.db, req.clientId, chat, message);
+    const updated = await messagingService.retryMessage(req.db, req.clientId, chat, message, {
+      release: req.commitAndRelease,
+      reacquire: req.reacquireDb,
+    });
     res.json(updated);
   } catch (err) {
     if (err instanceof messagingService.MessagingError) {

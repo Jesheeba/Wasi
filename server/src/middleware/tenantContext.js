@@ -17,15 +17,24 @@ const { pool } = require('../db/pool');
 // for a write that then fails to commit). Route handlers in this codebase
 // only ever finish a request via res.json(...) or res.status(n).send(...),
 // so those two are wrapped to await commit/rollback first.
+async function acquireTenantConnection(clientId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL ROLE wasi_app');
+    await client.query(`select set_config('app.current_client_id', $1, true)`, [clientId]);
+  } catch (err) {
+    client.release();
+    throw err;
+  }
+  return client;
+}
+
 async function withTenantContext(req, res, next) {
   let client;
   try {
-    client = await pool.connect();
-    await client.query('BEGIN');
-    await client.query('SET LOCAL ROLE wasi_app');
-    await client.query(`select set_config('app.current_client_id', $1, true)`, [req.clientId]);
+    client = await acquireTenantConnection(req.clientId);
   } catch (err) {
-    if (client) client.release();
     return next(err);
   }
 
@@ -43,6 +52,23 @@ async function withTenantContext(req, res, next) {
       client.release();
     }
   }
+
+  // Lets a route that's about to make a slow external call (e.g. the Meta
+  // Cloud API send in routes/chats.js) voluntarily end its transaction and
+  // release this connection early, instead of holding one of the pool's few
+  // connections idle for the whole call — the same principle forwardRunner.js's
+  // module comment already establishes for webhook delivery: a slow external
+  // call must never pin a shared resource other requests need. reacquireDb
+  // opens a fresh tenant-scoped transaction afterward for any follow-up write;
+  // settled resets so the normal res.json/res.send commit below still fires
+  // for whichever connection is current when the response actually goes out.
+  req.commitAndRelease = () => finalize(true);
+  req.reacquireDb = async () => {
+    client = await acquireTenantConnection(req.clientId);
+    req.db = client;
+    settled = false;
+    return client;
+  };
 
   const originalJson = res.json.bind(res);
   const originalSend = res.send.bind(res);
