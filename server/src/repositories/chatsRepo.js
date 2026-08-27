@@ -87,6 +87,19 @@ async function findMessageById(db, clientId, chatId, messageId) {
   return rows[0] || null;
 }
 
+// Hub API v1 (build plan Phase 5's MCP tool inventory, get_message_status) —
+// unlike findMessageById above, the caller only has the message id, not its
+// chat_id (a Hub API caller sends a message and gets back {id, ...} from
+// POST /api/v1/messages; it doesn't separately track which chat that landed
+// in). client_id alone is enough to scope this safely.
+async function findMessageByIdForClient(db, clientId, messageId) {
+  const { rows } = await db.query(
+    'select * from messages where client_id = $1 and id = $2',
+    [clientId, messageId]
+  );
+  return rows[0] || null;
+}
+
 // The 24-hour customer service window: free-form text is only deliverable if
 // the contact messaged in within the last 24h. No inbound message ever ->
 // no window has ever been open -> template-only, same as an expired window.
@@ -177,6 +190,7 @@ module.exports = {
   remove,
   listMessages,
   findMessageById,
+  findMessageByIdForClient,
   lastInboundAt,
   insertOutboundPending,
   markSent,

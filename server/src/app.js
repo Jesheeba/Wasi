@@ -31,8 +31,12 @@ const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
 const walletRouter = require('./routes/wallet');
 const clientWebhookRouter = require('./routes/clientWebhook');
+const apiKeysRouter = require('./routes/apiKeys');
 const apiV1MessagesRouter = require('./routes/apiV1Messages');
 const apiV1TemplatesRouter = require('./routes/apiV1Templates');
+const apiV1ConversationsRouter = require('./routes/apiV1Conversations');
+const apiV1ContactsRouter = require('./routes/apiV1Contacts');
+const apiV1AccountRouter = require('./routes/apiV1Account');
 
 // Same-origin static pages (this app.js, admin/, marketing/) never send an
 // Origin header Express sees as cross-site, so this allowlist only matters
@@ -97,6 +101,7 @@ function createApp() {
   app.use('/api/payment-links', requireClientAuth, withTenantContext, paymentLinksRouter);
   app.use('/api/wallet', requireClientAuth, withTenantContext, walletRouter);
   app.use('/api/client-webhook', requireClientAuth, withTenantContext, clientWebhookRouter);
+  app.use('/api/api-keys', requireClientAuth, withTenantContext, apiKeysRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);
@@ -112,6 +117,9 @@ function createApp() {
   // privileged connection, see middleware/requireApiKey.js.
   app.use('/api/v1/messages', apiLimiter, apiV1MessagesRouter);
   app.use('/api/v1/templates', apiLimiter, apiV1TemplatesRouter);
+  app.use('/api/v1/conversations', apiLimiter, apiV1ConversationsRouter);
+  app.use('/api/v1/contacts', apiLimiter, apiV1ContactsRouter);
+  app.use('/api/v1/account', apiLimiter, apiV1AccountRouter);
 
   // Static frontends (no build step) — mounted explicitly by directory
   // rather than serving the whole repo root, so server/.env, node_modules,

@@ -3074,17 +3074,117 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Report data refreshed');
   });
 
-  document.getElementById('copy-api-key-btn')?.addEventListener('click', () => {
-    const input = document.getElementById('api-key-input');
-    if (!input) return;
+  // --- Hub API Keys (Settings > Developer) ---
+  // The raw key value is never retrievable here — api_keys.key_hash is a
+  // one-way hash (server/src/repositories/apiKeysRepo.js) and the plaintext
+  // key is only ever shown once, at admin-issuance time. This view only
+  // manages existing keys (revoke/delete); issuing a new one stays
+  // admin-only, unchanged — see server/src/routes/apiKeys.js's module
+  // comment for the full reasoning behind that split.
+  function apiKeyStatusBadge(key) {
+    return key.revoked_at
+      ? '<span class="status-badge">Revoked</span>'
+      : '<span class="status-badge active">Active</span>';
+  }
 
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(input.value)
-        .then(() => showToast('API key copied to clipboard'))
-        .catch(() => showToast('Could not copy — clipboard permission denied'));
-    } else {
-      showToast('Clipboard access not available in this browser');
+  async function renderApiKeysManager() {
+    const tbody = document.getElementById('api-keys-table-body');
+    const errorEl = document.getElementById('api-keys-error');
+    if (!tbody) return;
+    if (errorEl) errorEl.style.display = 'none';
+
+    try {
+      const keys = await authFetch('/api/api-keys');
+      const activeCount = keys.filter((k) => !k.revoked_at).length;
+
+      if (!keys.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No API keys yet — contact support to get one issued.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = keys.map((k) => {
+        const isOnlyActiveKey = !k.revoked_at && activeCount <= 1;
+        const lockTitle = 'This is your only active key. Contact support to add a replacement before removing this one.';
+        const revokeBtn = k.revoked_at ? '' : `<button class="btn-secondary btn-sm" data-revoke-key="${k.id}" ${isOnlyActiveKey ? `disabled title="${lockTitle}"` : ''}>Revoke</button>`;
+        const deleteBtn = `<button class="btn-secondary btn-sm" data-delete-key="${k.id}" style="margin-left:0.4rem;" ${isOnlyActiveKey ? `disabled title="${lockTitle}"` : ''}>Remove</button>`;
+        const lockNote = isOnlyActiveKey
+          ? `<tr><td colspan="5" style="font-size:0.75rem; color:#B45309; padding-top:0; padding-bottom:0.6rem;">${escapeHtml(lockTitle)}</td></tr>`
+          : '';
+        return `
+          <tr>
+            <td style="font-weight:600;">${escapeHtml(k.app_name)}</td>
+            <td>${apiKeyStatusBadge(k)}</td>
+            <td>${k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</td>
+            <td>${(k.created_at || '').slice(0, 10)}</td>
+            <td style="text-align:right;">${revokeBtn}${deleteBtn}</td>
+          </tr>
+          ${lockNote}
+        `;
+      }).join('');
+      refreshIcons();
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
     }
+  }
+
+  document.getElementById('api-keys-table-body')?.addEventListener('click', async (e) => {
+    const revokeBtn = e.target.closest('[data-revoke-key]');
+    const deleteBtn = e.target.closest('[data-delete-key]');
+
+    if (revokeBtn && !revokeBtn.disabled) {
+      if (!confirm('Revoke this API key? Any integration (including an MCP/Claude connection) using it will stop working immediately.')) return;
+      try {
+        await authFetch(`/api/api-keys/${revokeBtn.dataset.revokeKey}/revoke`, { method: 'POST' });
+        showToast('API key revoked');
+        renderApiKeysManager();
+      } catch (err) {
+        showToast(err.message);
+      }
+    } else if (deleteBtn && !deleteBtn.disabled) {
+      if (!confirm('Remove this API key? This cannot be undone.')) return;
+      try {
+        await authFetch(`/api/api-keys/${deleteBtn.dataset.deleteKey}`, { method: 'DELETE' });
+        showToast('API key removed');
+        renderApiKeysManager();
+      } catch (err) {
+        showToast(err.message);
+      }
+    }
+  });
+
+  // "Connect to Claude" MCP config snippet — WASI_API_BASE_URL is this
+  // instance's own backend origin (same logic as API_BASE above: split
+  // origin only in local dev, same-origin everywhere else), since that's
+  // exactly the base URL an MCP server needs to reach this account's Hub
+  // API. The key value itself is deliberately left as a placeholder — see
+  // renderApiKeysManager's comment for why it can never be pre-filled here.
+  function renderMcpConfigSnippet() {
+    const el = document.getElementById('mcp-config-snippet');
+    if (!el) return;
+    const backendOrigin = API_BASE || location.origin;
+    el.textContent = JSON.stringify({
+      mcpServers: {
+        wasi: {
+          command: 'npx',
+          args: ['-y', '@wasi/mcp-server'],
+          env: {
+            WASI_API_KEY: 'your-api-key-here',
+            WASI_API_BASE_URL: backendOrigin,
+          },
+        },
+      },
+    }, null, 2);
+  }
+
+  document.getElementById('copy-mcp-config-btn')?.addEventListener('click', () => {
+    const el = document.getElementById('mcp-config-snippet');
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent)
+      .then(() => showToast('MCP config copied to clipboard'))
+      .catch(() => showToast('Could not copy — clipboard permission denied'));
   });
 
   // The raw secret is only ever held here, in memory, for the one render
@@ -3303,6 +3403,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'attributes') renderAttributesTable();
       if (secKey === 'wallet') renderWallet();
       if (secKey === 'webhook') renderClientWebhook();
+      if (secKey === 'developer') { renderApiKeysManager(); renderMcpConfigSnippet(); }
       if (secKey === 'subscription') renderSubscriptionTab();
       if (secKey === 'billing') renderBillingTab();
       refreshIcons();

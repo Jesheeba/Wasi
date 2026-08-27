@@ -13,7 +13,7 @@ const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { messageTemplateCreateSchema } = require('../utils/validate');
+const { messageTemplateCreateSchema, uuid } = require('../utils/validate');
 const { validateTemplateText } = require('../utils/templateParams');
 const { requireApiKey } = require('../middleware/requireApiKey');
 
@@ -22,6 +22,17 @@ router.use(requireApiKey);
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(pool, req.clientId));
+}));
+
+// get_template_details (MCP tool inventory) — full stored shape (body,
+// header, footer, buttons, bodyParamExamples) so a caller knows exactly
+// what parameters a template needs before sending it, not just its
+// approval status.
+router.get('/:id', asyncHandler(async (req, res) => {
+  const id = uuid.parse(req.params.id);
+  const template = await messageTemplatesRepo.findById(pool, req.clientId, id);
+  if (!template) return res.status(404).json({ error: 'Not found' });
+  res.json(template);
 }));
 
 router.post('/', asyncHandler(async (req, res) => {

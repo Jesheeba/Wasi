@@ -14,11 +14,31 @@ const chatsRepo = require('../repositories/chatsRepo');
 const messagingService = require('../services/messagingService');
 const metaClient = require('../utils/metaClient');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { apiMessageSendSchema } = require('../utils/validate');
+const { apiMessageSendSchema, uuid } = require('../utils/validate');
 const { requireApiKey } = require('../middleware/requireApiKey');
 
 const router = Router();
 router.use(requireApiKey);
+
+// get_message_status (MCP tool inventory) — id is this app's own message
+// row id, returned as `id` in the POST / response below, not Meta's
+// message id. Scoped to the caller's own client_id via
+// chatsRepo.findMessageByIdForClient regardless of which chat it landed in.
+router.get('/:id/status', asyncHandler(async (req, res) => {
+  const id = uuid.parse(req.params.id);
+  const message = await chatsRepo.findMessageByIdForClient(pool, req.clientId, id);
+  if (!message) return res.status(404).json({ error: 'Not found' });
+  res.json({
+    id: message.id,
+    chat_id: message.chat_id,
+    direction: message.direction,
+    status: message.status,
+    error_reason: message.error_reason,
+    meta_error_code: message.meta_error_code,
+    meta_message_id: message.meta_message_id,
+    sent_at: message.sent_at,
+  });
+}));
 
 router.post('/', asyncHandler(async (req, res) => {
   const data = apiMessageSendSchema.parse(req.body);

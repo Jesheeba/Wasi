@@ -608,6 +608,11 @@
             </div>
 
             <div class="detail-card">
+              <div class="detail-card-title">5b. Read Endpoints — Conversations, Contacts, Account, Message Status</div>
+              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id — not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
+            </div>
+
+            <div class="detail-card">
               <div class="detail-card-title">6. Error Handling</div>
               <p>Errors come back as <code>{ error, code, metaError? }</code> — Meta's real error body is attached when the rejection happened at Meta, not swallowed. Check <code>error.code</code> before parsing <code>metaError</code>, since not every error originates from Meta (e.g. consent-opt-out rejections, validation errors).</p>
             </div>
@@ -646,6 +651,28 @@
                 &nbsp;·&nbsp;
                 <a href="/postman/Wasi-Hub-API.postman_environment.json" class="api-guide-inline-link" target="_blank" rel="noopener">Wasi-Hub-API.postman_environment.json</a>
               </p>
+            </div>
+
+            <div class="detail-card" style="border-color:var(--color-primary-200);">
+              <div class="detail-card-title">Connect via MCP / Claude — No Integration Code Needed</div>
+              <p>For a faster path than building a custom integration: Wasi ships an <a href="https://modelcontextprotocol.io" class="api-guide-inline-link" target="_blank" rel="noopener">MCP (Model Context Protocol)</a> server that gives Claude (Desktop, Code, or any other MCP-compatible client) direct tool access to send messages, check delivery status, and read templates/conversations — using an existing Hub API key, with zero custom code. This is the same Hub API documented above, wrapped as MCP tools rather than raw REST endpoints.</p>
+              <p>Hand the client's developer (or a non-technical client who just wants Claude connected) this config, filled in with their own key and this deployment's URL:</p>
+              <div style="position:relative;">
+                <pre class="api-guide-code" id="mcp-config-prompt-text">{
+  "mcpServers": {
+    "wasi": {
+      "command": "npx",
+      "args": ["-y", "@wasi/mcp-server"],
+      "env": {
+        "WASI_API_KEY": "wasi_...",
+        "WASI_API_BASE_URL": "&lt;this Wasi deployment's URL&gt;"
+      }
+    }
+  }
+}</pre>
+                <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value-target="mcp-config-prompt-text" style="position:absolute; top:8px; right:8px;"><i data-lucide="copy" style="width:12px;"></i> Copy Config</button>
+              </div>
+              <p style="margin-top:0.75rem;">Full tool list, example prompts, and troubleshooting are in the server's own <code>README.md</code> (<code>mcp-server/</code> in this repository). Same security posture as any other API key use: the key lives only in the MCP client's own config, is never logged, and is scoped to exactly this client's data.</p>
             </div>
 
             <div class="detail-card" style="border-color:var(--color-primary-200);">

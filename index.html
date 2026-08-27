@@ -888,9 +888,10 @@
                     <i data-lucide="dollar-sign"></i>
                     <span>My Subscription</span>
                   </a>
-                  <!-- Developer (API key) removed — "crm_live_sample..."
-                       was a hardcoded fake key with no real API auth system
-                       behind it. -->
+                  <a class="sec-nav-item" data-sec-view="developer">
+                    <i data-lucide="terminal"></i>
+                    <span>Developer</span>
+                  </a>
                   <a class="sec-nav-item" data-sec-view="tags">
                     <i data-lucide="tag"></i>
                     <span>Tag Manager</span>
@@ -1078,12 +1079,31 @@
               <!-- Sub-page 7: DEVELOPER -->
               <div id="sec-view-developer" class="sec-content-view" style="display: none;">
                 <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Access Tokens</h2>
-                <div class="profile-form-card" style="max-width: 600px;">
-                  <div class="form-group">
-                    <label class="form-label">API Access Key</label>
-                    <input type="password" class="form-input" id="api-key-input" value="crm_live_sample000000000000" readonly />
+                <div class="profile-form-card" style="max-width: 640px;">
+                  <p style="color:#6B7280; font-size:0.85rem; margin:0 0 1rem; line-height:1.5;">
+                    Hub API keys let your own CRM, or an AI assistant like Claude (see "Connect to Claude" below), send WhatsApp messages and read your data through Wasi. The raw key value is shown once, when it's first issued — if you've lost it, contact support to request a new one; you can revoke or remove an existing key below at any time.
+                  </p>
+                  <div id="api-keys-error" class="inline-error" style="display:none; margin-bottom:0.75rem;"></div>
+                  <table class="data-table" style="width:100%;">
+                    <thead><tr><th>App</th><th>Status</th><th>Last Used</th><th>Created</th><th></th></tr></thead>
+                    <tbody id="api-keys-table-body">
+                      <tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">
+                  <div style="font-weight:600; margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
+                    <i data-lucide="sparkles" style="width:16px;"></i> Connect to Claude
                   </div>
-                  <button class="btn-secondary" style="width: fit-content;" id="copy-api-key-btn"><i data-lucide="copy"></i> Copy API Key</button>
+                  <p style="color:#6B7280; font-size:0.85rem; margin:0 0 0.75rem; line-height:1.5;">
+                    Give Claude (or any MCP-compatible AI assistant) direct access to send WhatsApp messages, check delivery status, and read your templates and conversations — using one of the API keys above. No custom integration code required.
+                  </p>
+                  <p style="font-size:0.8rem; color:#6B7280; margin:0 0 0.5rem;">Add this to your MCP client's configuration:</p>
+                  <div style="position:relative;">
+                    <pre id="mcp-config-snippet" style="background:#0F172A; color:#E2E8F0; font-size:0.75rem; padding:0.85rem; border-radius:8px; overflow-x:auto; margin:0; white-space:pre-wrap; word-break:break-all;">Loading…</pre>
+                    <button type="button" class="btn-secondary btn-sm" id="copy-mcp-config-btn" style="position:absolute; top:8px; right:8px;"><i data-lucide="copy" style="width:12px;"></i> Copy</button>
+                  </div>
                 </div>
               </div>
 
