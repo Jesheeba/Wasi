@@ -362,3 +362,123 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ===================== Responsive (mobile audit) ===================== */
+
+/* .page-title-bar (index.css) is a plain flex row — title on the left,
+   one or more action controls on the right — with no wrap. Every one of
+   the 16 admin views uses this shape; the "Issue Missing Keys (All
+   Clients)" + "New Key" pair on API Keys was the confirmed overflow case,
+   but the fix below applies to all of them consistently.
+   .page-title-actions groups a header's multiple action controls (used by
+   Volume, Templates Review, Tickets, API Keys) so they wrap/stack as one
+   unit. .page-title-auto marks an action button or <select class="form-input">
+   that needs an explicit auto width on desktop — overriding .btn-primary's
+   100% default, or a select's natural stretch — while remaining free to go
+   full-width under the mobile override below. */
+.page-title-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.page-title-auto {
+  width: auto;
+}
+
+/* Create Client modal: the Password field's input + "Generate" button is
+   the one side-by-side row among the 4 modals' fields that doesn't already
+   stack via .form-group's column behavior. */
+.password-generate-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Audit Log's client-id filter box was an inline style="width:340px" in
+   admin/index.html, which can exceed the available content width below
+   640px. Moved into a class here so the mobile override can win over it. */
+.search-box-wide {
+  width: 340px;
+}
+
+@media (max-width: 640px) {
+  /* --- 1. Page title bars: wrap instead of overflowing/crushing --- */
+  .page-title-bar {
+    flex-wrap: wrap;
+    row-gap: 0.75rem;
+  }
+
+  .page-title-bar > *:last-child {
+    width: 100%;
+  }
+
+  .page-title-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-title-actions > * {
+    width: 100%;
+  }
+
+  .page-title-auto {
+    width: 100%;
+  }
+
+  /* --- 2. Client Detail / Settings: .detail-grid forces a single column
+     below the 320px auto-fit minimum's breakpoint (admin-only markup,
+     safe to override here). --- */
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* --- 3. Create Client modal's Password/Generate row stacks. --- */
+  .password-generate-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* --- 5. Fixed-width inline styles found in the audit (Audit Log filter,
+     plus the generic search-box used on Clients/Audit Log). --- */
+  .search-box-wide {
+    width: 100%;
+  }
+
+  .search-box {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .table-header-tools {
+    flex-wrap: wrap;
+  }
+
+  /* --- 6. Touch targets: bump every interactive control to >=44px.
+     min-height (rather than height) is used deliberately so it combines
+     with each control's existing height/padding declaration instead of
+     needing to out-specificity it — the used height becomes
+     max(existing height, 44px) regardless of cascade order. --- */
+  .btn-primary,
+  .btn-secondary,
+  .btn-sm,
+  .form-input {
+    min-height: 44px;
+  }
+
+  .nav-item {
+    min-height: 44px;
+  }
+
+  .close-modal-btn,
+  .password-toggle-btn {
+    padding: 10px;
+  }
+
+  .status-editor-row select {
+    height: 44px;
+  }
+
+  .hub-event-label {
+    min-height: 44px;
+    padding: 6px 0;
+  }
+}

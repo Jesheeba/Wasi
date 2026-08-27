@@ -1,0 +1,21 @@
+/* Shared breakpoint reference for the whole codebase — the single source of
+   truth for the two responsive breakpoints already established in
+   marketing/marketing.css (tablet 900px, mobile 640px). index.css and
+   admin/admin.css previously had zero @media queries at all; any new
+   responsive rule added to them should use these same two values.
+
+   NOTE: CSS custom properties cannot be referenced inside @media conditions
+   (`@media (max-width: var(--x))` is not valid CSS in any browser) — that's
+   a platform limitation, not something a build step would fix without
+   introducing one (this codebase deliberately has none). So every actual
+   `@media (max-width: ...)` rule still has to hardcode the literal pixel
+   value below, matching this file's numbers. These custom properties exist
+   for (a) the one documented, canonical place both numbers live, so they
+   can't silently drift between files, and (b) any REGULAR CSS property
+   (widths, paddings, etc.) or JS breakpoint check (via
+   getComputedStyle(document.documentElement)) that wants to read them
+   directly rather than duplicating the literal number again. */
+:root {
+  --breakpoint-tablet: 900px;
+  --breakpoint-mobile: 640px;
+}

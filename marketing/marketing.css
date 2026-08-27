@@ -115,7 +115,7 @@ ul { list-style: none; }
 .nav-actions { display: flex; align-items: center; gap: 12px; }
 .nav-toggle {
   display: none;
-  width: 40px; height: 40px;
+  width: 44px; height: 44px;
   align-items: center; justify-content: center;
   border-radius: 8px; border: 1px solid var(--border-light); background: #fff;
   cursor: pointer;
@@ -433,4 +433,23 @@ footer.site-footer { background: var(--color-dark); color: rgba(255,255,255,0.75
   section { padding: 56px 0; }
   .wizard-panel { padding: 24px; }
   .cta-band { margin: 0 12px; padding: 40px 22px; }
+
+  /* The 4-label step indicator (circle + text per step, plus connectors)
+     measures ~440px across at full size — wider than the ~335px of usable
+     width inside .wizard-main's padding at a 375px viewport, which pushed
+     the wizard card into horizontal overflow. Collapse to circles-only:
+     the connectors already communicate progress, and the labels stay in
+     the accessibility tree (visually hidden, not display:none) so screen
+     reader users still get "Account", "Plan", etc. */
+  .step-indicator { gap: 4px; }
+  .step-indicator .connector { width: 16px; }
+  .step-indicator .lbl {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }

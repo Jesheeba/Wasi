@@ -301,6 +301,70 @@ body {
   padding: 12px;
 }
 
+/* Mobile sidebar drawer (below the 900px tablet breakpoint — see
+   breakpoints.css for the canonical value). Distinct from .sidebar.collapsed
+   above, which is an unrelated, never-wired-up desktop icon-rail state —
+   this is a full off-canvas overlay, shown/hidden via the .mobile-open class
+   toggled by #mobile-sidebar-toggle-btn (app.js / admin/app.js). Shared here
+   in index.css rather than duplicated in admin.css because both index.html
+   and admin/index.html use the exact same #sidebar/.sidebar markup and link
+   this file directly — admin.css needs no changes for this to apply to it. */
+.mobile-sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 25;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  padding: 0;
+}
+
+#sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-sidebar-toggle {
+    display: inline-flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    transform: translateX(-100%);
+    z-index: 40;
+    height: 100vh;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  #sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 30;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  #sidebar-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* Header & Main Content Area */
 .main-wrapper {
   flex: 1;
@@ -809,6 +873,7 @@ body {
 .view-container {
   display: none;
   height: 100%;
+  overflow-y: auto;
 }
 
 .view-container.active {
@@ -1068,6 +1133,33 @@ body {
   font-size: 0.875rem;
 }
 
+/* Root app Chat view (#view-chat, index.html) — left chat-list column.
+   Pulled out of an inline style specifically so the max-width:640px rule
+   below can override its width without an !important fight (an external
+   class beats an inline style only via !important; two rules on the same
+   class don't need it). */
+.chat-list-panel {
+  width: 320px;
+  border-right: 1px solid var(--border-light);
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Mobile-only "back to chat list" button in the chat header — hidden at
+   desktop widths, shown (and floored to a 44px touch target) below 640px
+   alongside the rest of the Chat view's mobile collapse, further down. */
+.chat-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-main);
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Data Tables */
 .table-card {
   background: white;
@@ -1128,6 +1220,222 @@ body {
   font-size: 0.875rem;
   border-bottom: 1px solid #F1F5F9;
   color: var(--text-main);
+}
+
+@media (max-width: 640px) {
+  /* .data-table is shared by both the admin panel and the root app (13
+     admin views + several root-app views use it), so this lives here once
+     rather than being duplicated per-surface. Targets the table element
+     itself rather than relying on each call site remembering its own
+     overflow-x:auto wrapper div (most already have one, e.g. the admin
+     Failures/API Keys views, but this is the guaranteed fallback for any
+     that don't — nesting with an existing wrapper is harmless). Native
+     scrollbars are invisible-until-hover on most desktop OSes, which
+     defeats the point of a visible scroll affordance on a touch device
+     that has no hover state at all — the ::-webkit-scrollbar/
+     scrollbar-width rules below force a persistent, visible one instead of
+     leaving horizontal scroll undiscoverable. */
+  .data-table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .data-table thead,
+  .data-table tbody,
+  .data-table tr {
+    display: table;
+    width: 100%;
+  }
+
+  .data-table::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .data-table::-webkit-scrollbar-thumb {
+    background: var(--border-tertiary);
+    border-radius: 999px;
+  }
+
+  /* .modal-box already scales its width down (width:100%, max-width:500px)
+     — this adds the missing height side for short mobile viewports
+     (landscape phones, small-screen Android) where a tall form modal could
+     otherwise exceed the viewport height. .modal-box-wide already had this
+     (max-height:88vh; overflow-y:auto); plain .modal-box didn't. */
+  .modal-box {
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+}
+
+/* ===================================================================
+   Root CRM app (Pass B) mobile fixes — scoped to classes/ids that exist
+   only in index.html's DOM, verified against admin/index.html, EXCEPT
+   .search-box and .btn-primary/.btn-secondary/.close-modal-btn/
+   .password-toggle-btn, which are intentionally shared: the admin panel
+   uses the exact same markup for these and benefits from the same fix,
+   the same way the .data-table rule above already applies to both
+   surfaces. See index.css's top-of-file comment / CLAUDE.md for why a
+   bare "#view-*" rule would be unsafe here — nothing below is that.
+   =================================================================== */
+@media (max-width: 640px) {
+  /* Chat view (#view-chat) — collapse the 3-column workspace (chat list /
+     active conversation / contact-details drawer) to a single visible
+     panel at a time. Default state (no class) shows the list; app.js adds
+     'chat-mobile-conversation-open' to #view-chat in openActiveChat() and
+     removes it in the back button's handler. Desktop's inline
+     display:none/flex toggling (openActiveChat, app.js) is untouched —
+     these rules only add a mobile-only override on top of it. */
+  .chat-list-panel {
+    width: 100%;
+    border-right: none;
+  }
+
+  #view-chat #chat-empty-placeholder,
+  #view-chat #chat-active-workspace {
+    display: none !important;
+  }
+
+  #view-chat.chat-mobile-conversation-open .chat-list-panel {
+    display: none !important;
+  }
+
+  #view-chat.chat-mobile-conversation-open #chat-active-workspace {
+    display: flex !important;
+  }
+
+  /* Right contact-details drawer (.contact-details-sidebar) has no CSS
+     rule of its own anywhere in this file — an existing gap, not
+     something introduced here — so at desktop it's just a content-sized
+     flex child with no fixed width. At mobile it would still be a 3rd
+     column squeezed in beside the message thread; hiding it keeps this a
+     true single-column view. Its summary info (name/avatar/tag) is
+     already shown in the chat-header above. */
+  .contact-details-sidebar {
+    display: none;
+  }
+
+  .chat-back-btn {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Contacts view's table toolbar — a fixed 280px .search-box next to the
+     Import/Export buttons didn't fit a 375px screen. */
+  .search-box {
+    width: 100%;
+  }
+
+  .table-header-tools {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  /* Page header row (title + primary action button), reused across every
+     top-level view and (via the class swap in index.html) 3 Settings
+     sub-views — wrap instead of squeezing the button against a shrinking
+     title. */
+  .page-title-bar {
+    flex-wrap: wrap;
+    row-gap: 0.75rem;
+  }
+
+  /* Settings' and Analytics' secondary nav sidebars (.secondary-sidebar:
+     240px fixed, .reports-sec-sidebar: 220px fixed) — collapse from a
+     permanent left column into a horizontally-scrollable strip above the
+     content, the same visible-scrollbar-affordance treatment as
+     .data-table above, rather than leaving a cramped ~135px-wide main
+     content area. */
+  .settings-layout,
+  .reports-layout {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .secondary-sidebar,
+  .reports-sec-sidebar {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .sec-nav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .sec-nav-item {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .settings-main-area {
+    padding: 1.25rem 1rem;
+  }
+
+  /* WhatsApp Settings > Profile tab (renderWhatsAppProfileTabs, app.js) —
+     160px / 1fr / 340px fixed-width 3-column grid. */
+  .profile-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Login screen — the decorative left banner contains an inline SVG with
+     a hard 280px width that overflows a 375px viewport on its own, well
+     before .auth-banner's own 50% width is the limiting factor. Hiding
+     the banner (shared class — admin/index.html's login view gets the
+     same treatment for free) leaves the actual login form as the sole,
+     full-width focus, which is the only actionable content anyway. */
+  .auth-banner {
+    display: none;
+  }
+
+  .auth-card-container {
+    padding: 1.5rem 1.25rem;
+    box-shadow: none;
+  }
+
+  /* 44x44 minimum touch target for common interactive controls. min-height
+     / min-width only raise the floor, so anything already >=44px (e.g.
+     .chat-item rows, already ~66px tall) is unaffected, and an inline
+     pixel width/height override on a specific button (e.g. #send-msg-btn's
+     width:40px) still gets floored up — min-* always wins over a smaller
+     width/height on the same box, regardless of selector specificity. */
+  .btn-secondary,
+  .btn-primary,
+  .close-modal-btn,
+  .password-toggle-btn,
+  .nav-item,
+  .sec-nav-item,
+  .filter-tab,
+  .inner-tab-btn,
+  .flow-view-btn,
+  .msg-retry-btn {
+    min-height: 44px;
+  }
+
+  .close-modal-btn,
+  .password-toggle-btn {
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .password-toggle-btn {
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+  }
 }
 
 .tag-badge {

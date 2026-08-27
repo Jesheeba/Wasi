@@ -1902,9 +1902,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return `
         <div class="template-card">
           <div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-              <span style="font-weight: 700;">${escapeHtml(t.name)}</span>
-              <span class="template-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(t.name)}</span>
+              <span class="template-badge ${statusClass}" style="flex-shrink: 0; white-space: nowrap;">${escapeHtml(statusLabel)}</span>
             </div>
             <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${bodyPreview}</p>
             ${rejectionNote}

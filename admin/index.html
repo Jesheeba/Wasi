@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wasi Admin Panel</title>
+  <link rel="stylesheet" href="../breakpoints.css" />
   <link rel="stylesheet" href="../index.css" />
   <link rel="stylesheet" href="admin.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -50,6 +51,13 @@
 
   <!-- ===================== APP SHELL ===================== -->
   <div id="app-shell" style="display:none;">
+    <!-- Mobile-only sidebar drawer controls — same pattern as the root app's
+         index.html, see ../index.css for the shared media-query rules. -->
+    <button type="button" id="mobile-sidebar-toggle-btn" class="mobile-sidebar-toggle" aria-label="Open menu">
+      <i data-lucide="menu"></i>
+    </button>
+    <div id="sidebar-backdrop"></div>
+
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="logo-container">
@@ -126,7 +134,7 @@
               <div class="page-title">Clients</div>
               <div class="page-subtitle">All tenants on the platform</div>
             </div>
-            <button class="btn-primary" id="open-create-client-btn" style="width:auto; padding:0 16px;"><i data-lucide="user-plus" style="width:14px;"></i> Add Client</button>
+            <button class="btn-primary page-title-auto" id="open-create-client-btn" style="padding:0 16px;"><i data-lucide="user-plus" style="width:14px;"></i> Add Client</button>
           </div>
           <div id="clients-error" class="inline-error" style="display:none;"></div>
 
@@ -296,8 +304,8 @@
               <div class="page-title">Usage &amp; Volume</div>
               <div class="page-subtitle">Messages sent/received per client, per day</div>
             </div>
-            <div style="display:flex; gap:8px;">
-              <select id="volume-days-filter" class="form-input" style="width:auto;">
+            <div class="page-title-actions">
+              <select id="volume-days-filter" class="form-input page-title-auto">
                 <option value="7">Last 7 days</option>
                 <option value="30" selected>Last 30 days</option>
                 <option value="90">Last 90 days</option>
@@ -435,8 +443,8 @@
               <div class="page-title">Templates Review</div>
               <div class="page-subtitle">Message templates submitted across every client</div>
             </div>
-            <div style="display:flex; gap:8px;">
-              <select id="templates-review-status-filter" class="form-input" style="width:auto;">
+            <div class="page-title-actions">
+              <select id="templates-review-status-filter" class="form-input page-title-auto">
                 <option value="">All statuses</option>
                 <option value="pending">Pending</option>
                 <option value="approved">Approved</option>
@@ -472,9 +480,9 @@
               <div class="page-title">API Keys</div>
               <div class="page-subtitle">Hub API keys issued to consuming apps, across every client</div>
             </div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn-secondary" id="backfill-api-keys-btn" style="width:auto; padding:0 16px;"><i data-lucide="key-round" style="width:14px;"></i> Issue Missing Keys (All Clients)</button>
-              <button class="btn-primary" id="open-create-api-key-btn" style="width:auto; padding:0 16px;"><i data-lucide="plus" style="width:14px;"></i> New Key</button>
+            <div class="page-title-actions">
+              <button class="btn-secondary page-title-auto" id="backfill-api-keys-btn" style="padding:0 16px;"><i data-lucide="key-round" style="width:14px;"></i> Issue Missing Keys (All Clients)</button>
+              <button class="btn-primary page-title-auto" id="open-create-api-key-btn" style="padding:0 16px;"><i data-lucide="plus" style="width:14px;"></i> New Key</button>
             </div>
           </div>
           <div id="api-keys-error" class="inline-error" style="display:none;"></div>
@@ -505,8 +513,8 @@
               <div class="page-title">Support / Tickets</div>
               <div class="page-subtitle">Client-reported issues</div>
             </div>
-            <div style="display:flex; gap:8px;">
-              <select id="tickets-status-filter" class="form-input" style="width:auto;">
+            <div class="page-title-actions">
+              <select id="tickets-status-filter" class="form-input page-title-auto">
                 <option value="">All statuses</option>
                 <option value="open">Open</option>
                 <option value="in_progress">In Progress</option>
@@ -543,7 +551,7 @@
               <div class="page-title">Team &amp; Roles</div>
               <div class="page-subtitle">Internal admin users and access control</div>
             </div>
-            <button class="btn-primary" id="open-invite-admin-btn" style="width:auto; padding:0 16px;"><i data-lucide="user-plus" style="width:14px;"></i> Invite Admin</button>
+            <button class="btn-primary page-title-auto" id="open-invite-admin-btn" style="padding:0 16px;"><i data-lucide="user-plus" style="width:14px;"></i> Invite Admin</button>
           </div>
           <div id="team-error" class="inline-error" style="display:none;"></div>
           <div class="table-card">
@@ -575,7 +583,7 @@
           <div id="audit-error" class="inline-error" style="display:none;"></div>
           <div class="table-card">
             <div class="table-header-tools">
-              <div class="search-box" style="width:340px;">
+              <div class="search-box search-box-wide">
                 <i data-lucide="filter" style="width:16px; color:var(--text-muted);"></i>
                 <input type="text" id="audit-client-filter" placeholder="Filter by client_id (UUID)…" />
               </div>
@@ -708,9 +716,9 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="create-client-password">Password</label>
-          <div style="display:flex; gap:8px;">
+          <div class="password-generate-row">
             <input type="text" id="create-client-password" class="form-input" minlength="8" placeholder="Auto-generated if left blank" />
-            <button type="button" class="btn-secondary" id="generate-client-password-btn" style="width:auto; padding:0 12px; white-space:nowrap;">Generate</button>
+            <button type="button" class="btn-secondary page-title-auto" id="generate-client-password-btn" style="padding:0 12px; white-space:nowrap;">Generate</button>
           </div>
         </div>
         <button type="submit" class="btn-primary" id="create-client-submit-btn">Create Client</button>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wasi - Smart Conversations & WhatsApp CRM</title>
   <meta name="description" content="Securely log in or sign up to access your account." />
+  <link rel="stylesheet" href="/breakpoints.css" />
   <link rel="stylesheet" href="index.css" />
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -72,6 +73,15 @@
 
   <!-- ================= MAIN APPLICATION SHELL ================= -->
   <div id="app-shell" style="display: none;">
+
+    <!-- Mobile-only (below the 900px tablet breakpoint, see index.css):
+         opens/closes the sidebar as an off-canvas drawer. Both hidden by
+         default via CSS; index.css's media query is what makes them visible
+         at all below that width. -->
+    <button type="button" id="mobile-sidebar-toggle-btn" class="mobile-sidebar-toggle" aria-label="Open menu">
+      <i data-lucide="menu"></i>
+    </button>
+    <div id="sidebar-backdrop"></div>
 
     <!-- Left Sidebar Navigation (Dark Forest Green matching screenshot) -->
     <aside id="sidebar" class="sidebar">
@@ -158,7 +168,7 @@
           <div style="display: flex; height: 100%;">
 
             <!-- Left Chat List Sidebar -->
-            <div style="width: 320px; border-right: 1px solid var(--border-light); background: white; display: flex; flex-direction: column;">
+            <div class="chat-list-panel">
               <div style="padding: 1rem; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
                 <button class="btn-secondary" style="font-size: 0.8rem; height: 34px;" id="start-new-chat-btn">
                   <i data-lucide="plus" style="width:14px;"></i>
@@ -206,6 +216,10 @@
               <div style="flex: 1; display: flex; flex-direction: column; background: #FAFDFB;">
                 <div class="chat-header">
                   <div style="display: flex; align-items: center; gap: 12px;">
+                    <!-- Mobile-only (below 640px, index.css) — returns to the
+                         chat list without touching the desktop 3-column
+                         layout or openActiveChat's own state. -->
+                    <button type="button" id="chat-back-to-list-btn" class="chat-back-btn" aria-label="Back to chat list"><i data-lucide="arrow-left"></i></button>
                     <div class="chat-avatar" id="active-chat-avatar"></div>
                     <div>
                       <div style="font-size: 0.875rem; font-weight: 600;" id="active-chat-name"></div>
@@ -1022,7 +1036,7 @@
 
               <!-- Sub-page 4: TEAM MANAGEMENT -->
               <div id="sec-view-team" class="sec-content-view" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div class="page-title-bar">
                   <h2 style="font-size: 1.25rem; font-weight: 700;">Manage Team Members</h2>
                   <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-invite-member-modal"><i data-lucide="user-plus"></i> Invite Member</button>
                 </div>
@@ -1075,7 +1089,7 @@
 
               <!-- Sub-page 8: TAG MANAGER -->
               <div id="sec-view-tags" class="sec-content-view" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div class="page-title-bar">
                   <h2 style="font-size: 1.25rem; font-weight: 700;">Tag Manager</h2>
                   <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-tag-modal"><i data-lucide="plus"></i> Add Tag</button>
                 </div>
@@ -1084,7 +1098,7 @@
 
               <!-- Sub-page 9: ATTRIBUTES (Fixes the exact screenshot issue!) -->
               <div id="sec-view-attributes" class="sec-content-view" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div class="page-title-bar">
                   <h2 style="font-size: 1.25rem; font-weight: 700;">Custom Contact Attributes</h2>
                   <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-attribute-modal"><i data-lucide="plus"></i> Add Attribute</button>
                 </div>
