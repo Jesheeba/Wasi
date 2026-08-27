@@ -152,13 +152,155 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
   assert.equal(data.contact.wa_id, phone);
   assert.equal(data.contact.name, 'Forward Test Sender');
 
-  assert.deepEqual(Object.keys(data.message).sort(), ['body', 'sent_at']);
+  assert.deepEqual(Object.keys(data.message).sort(), ['body', 'interactive', 'sent_at']);
   assert.equal(data.message.body, 'hi');
+  assert.equal(data.message.interactive, null, 'a plain text message must carry interactive: null, not an omitted key');
   assert.ok(!Number.isNaN(Date.parse(data.message.sent_at)), 'message.sent_at must be a valid ISO 8601 timestamp');
 
   const { rows: after } = await pool.query('select status, delivered_at from webhook_deliveries where id = $1', [delivery.id]);
   assert.equal(after[0].status, 'delivered');
   assert.ok(after[0].delivered_at);
+
+  await new Promise((resolve) => target.close(resolve));
+});
+
+// Payload shape matches a real production capture (audit_log,
+// interactive_message_received, 2026-08-19): {"type":"button_reply",
+// "button_reply":{"id":"flow_test_yes","title":"Yes"}} — not reconstructed
+// from Meta's docs.
+function buttonReplyPayload(phone) {
+  return {
+    object: 'whatsapp_business_account',
+    entry: [{
+      id: TEST_WABA_ID,
+      changes: [{
+        field: 'messages',
+        value: {
+          messaging_product: 'whatsapp',
+          metadata: { display_phone_number: '917339561631', phone_number_id: 'test_suite_forwarding_phone_id' },
+          contacts: [{ wa_id: phone, profile: { name: 'Forward Test Sender' } }],
+          messages: [{
+            from: phone,
+            id: `wamid.forward_btn_${Date.now()}_${Math.random()}`,
+            type: 'interactive',
+            interactive: { type: 'button_reply', button_reply: { id: 'flow_test_yes', title: 'Yes' } },
+            timestamp: '1786973208',
+          }],
+        },
+      }],
+    }],
+  };
+}
+
+test('1b. a button_reply tap forwards both id and title in message.interactive, not just the title in body', async () => {
+  let receivedBody;
+  const target = http.createServer((req, res) => {
+    let chunks = '';
+    req.on('data', (c) => { chunks += c; });
+    req.on('end', () => { receivedBody = chunks; res.writeHead(200); res.end('ok'); });
+  });
+  await new Promise((resolve) => target.listen(0, resolve));
+  const targetUrl = `http://localhost:${target.address().port}/hook`;
+
+  await wabasRepo.upsertForClient(testClientId, {
+    waba_id: TEST_WABA_ID,
+    status: 'connected',
+    forward_to_url: targetUrl,
+    forward_secret: FORWARD_SECRET,
+    forward_events: ['message.received'],
+  });
+
+  const phone = `91907${Date.now()}`.slice(0, 12);
+  const res = await signedMetaPost(buttonReplyPayload(phone));
+  assert.equal(res.status, 200);
+
+  const { rows } = await pool.query(
+    `select * from webhook_deliveries where client_id = $1 and event = 'message.received' order by created_at desc limit 1`,
+    [testClientId]
+  );
+  assert.equal(rows.length, 1);
+  await forwardRunner.deliverOne(rows[0]);
+
+  assert.ok(receivedBody, 'forwardRunner must have actually POSTed to the target');
+  const { data } = JSON.parse(receivedBody);
+  assert.equal(data.message_type, 'interactive');
+  assert.equal(data.message.body, 'Yes', 'body still carries the human-readable title, unchanged');
+  assert.deepEqual(data.message.interactive, { type: 'button_reply', id: 'flow_test_yes', title: 'Yes' });
+
+  await new Promise((resolve) => target.close(resolve));
+});
+
+// SYNTHETIC, unlike buttonReplyPayload above — no list message has ever been
+// sent by this app (no metaClient function builds one yet) so there is no
+// real production capture to build this from. Constructed directly from
+// Meta's documented interactive.list_reply shape (id/title/description)
+// instead: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/payload-examples#messages-list-message
+// Re-verify against a real payload once list sending actually exists and a
+// live tap has been captured, the same way button_reply was upgraded from
+// doc-shape to capture-verified above.
+function listReplyPayload(phone) {
+  return {
+    object: 'whatsapp_business_account',
+    entry: [{
+      id: TEST_WABA_ID,
+      changes: [{
+        field: 'messages',
+        value: {
+          messaging_product: 'whatsapp',
+          metadata: { display_phone_number: '917339561631', phone_number_id: 'test_suite_forwarding_phone_id' },
+          contacts: [{ wa_id: phone, profile: { name: 'Forward Test Sender' } }],
+          messages: [{
+            from: phone,
+            id: `wamid.forward_list_${Date.now()}_${Math.random()}`,
+            type: 'interactive',
+            interactive: {
+              type: 'list_reply',
+              list_reply: { id: 'row_pricing', title: 'Pricing', description: 'View our plans and pricing' },
+            },
+            timestamp: '1786973208',
+          }],
+        },
+      }],
+    }],
+  };
+}
+
+test('1c. a list_reply tap (synthetic — no real capture exists yet) forwards id/title/description instead of the old "[interactive]" placeholder', async () => {
+  let receivedBody;
+  const target = http.createServer((req, res) => {
+    let chunks = '';
+    req.on('data', (c) => { chunks += c; });
+    req.on('end', () => { receivedBody = chunks; res.writeHead(200); res.end('ok'); });
+  });
+  await new Promise((resolve) => target.listen(0, resolve));
+  const targetUrl = `http://localhost:${target.address().port}/hook`;
+
+  await wabasRepo.upsertForClient(testClientId, {
+    waba_id: TEST_WABA_ID,
+    status: 'connected',
+    forward_to_url: targetUrl,
+    forward_secret: FORWARD_SECRET,
+    forward_events: ['message.received'],
+  });
+
+  const phone = `91908${Date.now()}`.slice(0, 12);
+  const res = await signedMetaPost(listReplyPayload(phone));
+  assert.equal(res.status, 200);
+
+  const { rows } = await pool.query(
+    `select * from webhook_deliveries where client_id = $1 and event = 'message.received' order by created_at desc limit 1`,
+    [testClientId]
+  );
+  assert.equal(rows.length, 1);
+  await forwardRunner.deliverOne(rows[0]);
+
+  assert.ok(receivedBody, 'forwardRunner must have actually POSTed to the target');
+  const { data } = JSON.parse(receivedBody);
+  assert.equal(data.message_type, 'interactive');
+  assert.equal(data.message.body, 'Pricing', 'body carries the row title, not the old "[interactive]" placeholder');
+  assert.deepEqual(data.message.interactive, {
+    type: 'list_reply', id: 'row_pricing', title: 'Pricing', description: 'View our plans and pricing',
+  });
 
   await new Promise((resolve) => target.close(resolve));
 });

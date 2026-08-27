@@ -85,3 +85,13 @@ do (requires your business identity, bank details, legal documents) — this is 
 - Reports sub-views for Flow/API/Live-Chat/Operator-stats remain static — there's no
   underlying feature (Flows, a live-chat widget, multi-agent attribution) yet to
   report real numbers on. Message, Tags, and Campaign reports are real.
+- Interactive list-message inbound handling (`routes/metaWebhook.js`'s
+  `interactive.list_reply` branch, added alongside list-message *sending* in the
+  same change) is built from Meta's documented `list_reply` schema
+  (id/title/description), not confirmed against a real captured payload — unlike
+  `button_reply`, which was verified against a real `audit_log` capture, list
+  sending didn't exist in this system before this change, so there was no
+  historical tap to check the shape against. **Follow-up**: once any client
+  actually sends a list message in production and a real customer taps a row,
+  re-check `audit_log` (`action = 'interactive_message_received'`) for the first
+  real `list_reply` capture and confirm/correct the shape against it.

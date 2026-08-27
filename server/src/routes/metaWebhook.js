@@ -121,12 +121,35 @@ async function handleInboundMessages(waba, value) {
     // human reads in the chat; id is the stable value the flow engine
     // branches on (routes/flowEngine.js), never re-derived from title here.
     const buttonReply = msg.interactive?.button_reply;
+    // A tap on a list-message row — msg.interactive.list_reply.{id,title,
+    // description}, Meta's other interactive reply shape alongside
+    // button_reply above. Never received live yet (no metaClient function
+    // builds a list message to send in the first place — see
+    // metaClient.sendListMessage), so this is doc-shape, not
+    // capture-verified the way button_reply now is; still routed the same
+    // way rather than left as the old "[interactive]" fallback that
+    // silently discarded id/title/description entirely.
+    const listReply = msg.interactive?.list_reply;
     // Template quick-reply clicks (type: "button") are a separate shape —
     // msg.button.{text,payload} — from the flow-builder's own interactive
     // buttons above. Reading .text here is what lets an automation rule's
     // trigger keyword match the button's label (e.g. "Received").
     const templateButtonText = msg.button?.text;
-    const body = msg.text?.body || buttonReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+    const body = msg.text?.body || buttonReply?.title || listReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+
+    // Forwarded verbatim alongside `body` in message.received (see below) —
+    // body alone only ever carried the reply's title (e.g. "Yes"), never
+    // its id (e.g. "flow_test_yes") or, for a list row, its description —
+    // the stable values a receiving CRM needs to route on programmatically
+    // rather than parsing display text. null for a non-interactive message,
+    // kept as an explicit field (not omitted) so a receiving CRM can always
+    // check it rather than guess whether an absent key means "not
+    // interactive" or "never sent."
+    const interactiveReply = buttonReply
+      ? { type: 'button_reply', id: buttonReply.id, title: buttonReply.title }
+      : listReply
+        ? { type: 'list_reply', id: listReply.id, title: listReply.title, description: listReply.description ?? null }
+        : null;
 
     // Capture-and-verify: interactive.button_reply's exact shape (id/title
     // field names, whether other fields are present) was inferred from
@@ -241,7 +264,7 @@ async function handleInboundMessages(waba, value) {
         message_id: meta_message_id,
         message_type: msg.type,
         contact: { wa_id: phone, name },
-        message: forwardableMessage,
+        message: { ...forwardableMessage, interactive: interactiveReply },
       });
     }
   }

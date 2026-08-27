@@ -258,12 +258,29 @@ async function sendTextMessage(phoneNumberId, accessToken, toPhone, body) {
 // Free-form interactive reply buttons — like sendTextMessage, only
 // deliverable inside the 24h customer service window (no template approval
 // needed, but same window constraint). Meta caps free-form button messages
-// at 3 buttons, 20 chars each — enforced by the caller (flow engine), not
-// here, matching how sendTextMessage doesn't re-validate body length either.
-// `buttons` is [{ id, title }]; `id` is what comes back in the webhook's
-// interactive.button_reply.id on click — this is the value flow branching
-// matches against, never the (editable) title.
-async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bodyText, buttons }) {
+// at 3 buttons, 20 chars each — enforced at the schema level for the one
+// caller that takes untrusted external input (validate.js's
+// apiMessageSendSchema, for the Hub API); the flow engine's own caller
+// builds `buttons` from a flow node's own config, authored through the flow
+// editor UI, not re-validated here either way, matching how sendTextMessage
+// doesn't re-validate body length. `buttons` is [{ id, title }]; `id` is
+// what comes back in the webhook's interactive.button_reply.id on click —
+// this is the value flow branching matches against, never the (editable)
+// title. `header`/`footer` are optional text-only additions (Meta also
+// supports image/video/document headers on button messages; not built here
+// — no caller has asked for a media header on an interactive message yet,
+// unlike template headers which mediaHeaderService.js already handles).
+async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bodyText, buttons, header, footer }) {
+  const interactive = {
+    type: 'button',
+    body: { text: bodyText },
+    action: {
+      buttons: buttons.map((b) => ({ type: 'reply', reply: { id: b.id, title: b.title } })),
+    },
+  };
+  if (header) interactive.header = { type: 'text', text: header };
+  if (footer) interactive.footer = { text: footer };
+
   const data = await graphFetch(`/${phoneNumberId}/messages`, {
     method: 'POST',
     accessToken,
@@ -271,13 +288,50 @@ async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bod
       messaging_product: 'whatsapp',
       to: toPhone,
       type: 'interactive',
-      interactive: {
-        type: 'button',
-        body: { text: bodyText },
-        action: {
-          buttons: buttons.map((b) => ({ type: 'reply', reply: { id: b.id, title: b.title } })),
-        },
-      },
+      interactive,
+    },
+  });
+  return data.messages?.[0]?.id;
+}
+
+// Interactive list message — Meta's other interactive.type shape, alongside
+// sendInteractiveMessage's "button" above. Deliberately its own function,
+// not a branch inside sendInteractiveMessage: the object shape
+// (action.button + action.sections[].rows[] vs action.buttons[]) and limits
+// (10 rows total across every section combined vs 3 buttons) are different
+// enough that sharing one function would mean an internal if/else
+// duplicating the decision validate.js's apiMessageSendSchema already makes
+// by which fields are present (buttons vs sections). Row/section counts and
+// lengths, including the combined-10-rows-total limit, are enforced there,
+// not re-validated here — same as sendInteractiveMessage not re-validating
+// body length. `sections` is [{ title?, rows: [{ id, title, description? }] }].
+async function sendListMessage(phoneNumberId, accessToken, toPhone, { bodyText, buttonText, sections, header, footer }) {
+  const interactive = {
+    type: 'list',
+    body: { text: bodyText },
+    action: {
+      button: buttonText,
+      sections: sections.map((s) => ({
+        ...(s.title ? { title: s.title } : {}),
+        rows: s.rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          ...(r.description ? { description: r.description } : {}),
+        })),
+      })),
+    },
+  };
+  if (header) interactive.header = { type: 'text', text: header };
+  if (footer) interactive.footer = { text: footer };
+
+  const data = await graphFetch(`/${phoneNumberId}/messages`, {
+    method: 'POST',
+    accessToken,
+    body: {
+      messaging_product: 'whatsapp',
+      to: toPhone,
+      type: 'interactive',
+      interactive,
     },
   });
   return data.messages?.[0]?.id;
@@ -576,6 +630,7 @@ module.exports = {
   downloadMediaBytes,
   sendTextMessage,
   sendInteractiveMessage,
+  sendListMessage,
   sendTemplateMessage,
   buildNamedHeaderComponents,
   buildNamedBodyComponents,

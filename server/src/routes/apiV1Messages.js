@@ -38,6 +38,18 @@ router.post('/', asyncHandler(async (req, res) => {
       templateLanguage: 'en_US',
       templateComponents: data.type === 'template' ? metaClient.buildNamedBodyComponents(data.params) : [],
       headerMediaUrl: data.headerMediaUrl,
+      // interactive (type: 'interactive') only — buttons routes through
+      // sendChatMessage -> metaClient.sendInteractiveMessage, the same path
+      // the flow engine's "Send Interactive Buttons" node already uses
+      // (flowEngine.js's executeNode); sections routes to the new
+      // sendListMessage. Nothing here duplicates either function's
+      // Meta-object-building logic. All of these are undefined for
+      // text/template sends, matching current behavior exactly for those types.
+      header: data.header,
+      footer: data.footer,
+      buttons: data.buttons,
+      button: data.button,
+      sections: data.sections,
     });
     res.status(201).json(message);
   } catch (err) {

@@ -348,6 +348,35 @@ const tagCreateSchema = z.object({
   color: z.string().optional(),
 });
 
+// A single reply button on an interactive send (apiMessageSendSchema below)
+// — id/title length caps match Meta's own documented limits for a button
+// message (id up to 256 bytes, title up to 20 characters) so an oversized
+// request is rejected here with a clear message, not sent to Meta to fail
+// there with a less obvious error.
+const interactiveButtonSchema = z.object({
+  id: z.string().min(1).max(256),
+  title: z.string().min(1).max(20),
+});
+
+// One row within a list message's section — id/title/description caps
+// match Meta's own documented limits for a list message.
+const listRowSchema = z.object({
+  id: z.string().min(1).max(200),
+  title: z.string().min(1).max(24),
+  description: z.string().max(72).optional(),
+});
+
+// A section groups rows under an optional title (up to 10 sections per
+// message, capped where `sections` is used below). Only a floor on row
+// count is enforced per section (at least 1) — the real Meta ceiling is 10
+// rows TOTAL across every section combined, not 10 per section, which
+// can't be expressed as a per-item constraint here and is checked
+// separately in the cross-section refine below.
+const listSectionSchema = z.object({
+  title: z.string().min(1).max(24).optional(),
+  rows: z.array(listRowSchema).min(1),
+});
+
 // Hub API send endpoint (build plan Phase 5) — client_id is required in the
 // body (not just resolved from the API key) as a defense-in-depth sanity
 // check: routes/apiV1Messages.js rejects the request if it doesn't match
@@ -356,7 +385,7 @@ const tagCreateSchema = z.object({
 const apiMessageSendSchema = z.object({
   client_id: uuid,
   to: z.string().min(1),
-  type: z.enum(['text', 'template']).default('text'),
+  type: z.enum(['text', 'template', 'interactive']).default('text'),
   template: z.string().optional(),
   params: z.record(z.any()).optional(),
   body: z.string().optional(),
@@ -365,9 +394,50 @@ const apiMessageSendSchema = z.object({
   // resolveMediaIdFromUrl fetches it, uploads it to Meta, and sends with the
   // resulting id) — the alternative to first uploading through this app's UI.
   headerMediaUrl: z.string().url().startsWith('https://').optional(),
+  // interactive (type: 'interactive') only — two distinct Meta shapes
+  // sharing this one type value, decided by which fields are present:
+  // `buttons` -> interactive.type: "button" (metaClient.sendInteractiveMessage),
+  // `sections` -> interactive.type: "list" (metaClient.sendListMessage). A
+  // request setting both is rejected below — never sent as a mixed/ambiguous
+  // type. header/footer length caps (60 chars) and the 1024-char body cap
+  // (enforced below, not here — `body` is shared with text/template, which
+  // have different limits) match Meta's own documented limits for an
+  // interactive message, list or button alike.
+  header: z.string().min(1).max(60).optional(),
+  footer: z.string().min(1).max(60).optional(),
+  buttons: z.array(interactiveButtonSchema).min(1).max(3, 'WhatsApp allows at most 3 reply buttons per interactive message').optional(),
+  // List-message only — action.button in Meta's shape, the label on the
+  // list-opening button itself (distinct from the reply `buttons` above).
+  button: z.string().min(1).max(20).optional(),
+  sections: z.array(listSectionSchema).min(1).max(10).optional(),
 }).refine(
-  (data) => (data.type === 'text' ? Boolean(data.body) : Boolean(data.template)),
-  { message: "body is required for type 'text'; template is required for type 'template'" }
+  (data) => {
+    if (data.type === 'text') return Boolean(data.body);
+    if (data.type === 'template') return Boolean(data.template);
+    // interactive: exactly one of buttons/sections, never both, never neither.
+    if (data.buttons && data.sections) return false;
+    if (data.sections) return Boolean(data.body) && Boolean(data.button) && data.sections.length > 0;
+    return Boolean(data.body) && Array.isArray(data.buttons) && data.buttons.length > 0;
+  },
+  {
+    message:
+      "body is required for type 'text'; template is required for type 'template'; " +
+      "an interactive send needs either 1-3 buttons, or body+button+sections for a list — never both buttons and sections together",
+  }
+).refine(
+  (data) => data.type !== 'interactive' || !data.body || data.body.length <= 1024,
+  { message: 'body must be at most 1024 characters for an interactive message' }
+).refine(
+  (data) => {
+    if (data.type !== 'interactive' || !data.sections) return true;
+    const totalRows = data.sections.reduce((sum, s) => sum + s.rows.length, 0);
+    return totalRows <= 10;
+  },
+  // Deliberately a single combined-total message, not a per-section one —
+  // this check is a sum across every section, so there is no one section to
+  // blame in the error; see listSectionSchema's comment for why this can't
+  // be a per-item schema constraint instead.
+  { message: 'WhatsApp allows at most 10 rows total across all sections combined, not per section' }
 );
 
 // Deliberately its own schema, not part of contactUpdateSchema — consent

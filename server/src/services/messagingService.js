@@ -106,7 +106,7 @@ async function assertWithinPlanLimit(db, clientId) {
 // connection right before the Meta network call below and reacquire()
 // opens a fresh one only for the final result write, so a slow Meta response
 // never pins a connection the pool's other concurrent requests need.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }, connectionHooks = {}) {
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }, connectionHooks = {}) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window — send a template message instead.',
@@ -155,7 +155,14 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, templa
     if (type === 'text') {
       metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body);
     } else if (type === 'interactive') {
-      metaMessageId = await metaClient.sendInteractiveMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttons });
+      // Two distinct interactive shapes share type: 'interactive' — a
+      // reply-button message (buttons) or a list message (sections),
+      // decided by which one is present. validate.js's apiMessageSendSchema
+      // already guarantees exactly one of them is set before this is ever
+      // reached, so no third "neither/both" case needs handling here.
+      metaMessageId = sections
+        ? await metaClient.sendListMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttonText: button, sections, header, footer })
+        : await metaClient.sendInteractiveMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttons, header, footer });
     } else {
       metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
         name: templateName,
