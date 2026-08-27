@@ -124,6 +124,10 @@ function createApp() {
   app.get('/embeddedSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'embeddedSignup.js')));
   app.use('/marketing', express.static(path.join(REPO_ROOT, 'marketing')));
   app.use('/admin', express.static(path.join(REPO_ROOT, 'admin')));
+  // Postman collection + environment template for the admin panel's API
+  // Guide view to link to directly — static files, no auth needed (no
+  // secrets in them, placeholders only; see postman/README.md).
+  app.use('/postman', express.static(path.join(REPO_ROOT, 'postman')));
   // Stage 1 spike (flow-editor/) — the one build-step exception in this
   // repo, served from its own path exactly like marketing/admin above, not
   // injected into index.html/app.js's existing load path. Built by the

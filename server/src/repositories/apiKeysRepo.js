@@ -39,7 +39,7 @@ async function touchLastUsed(db, id) {
 async function listByClientId(db, clientId) {
   const { rows } = await db.query(
     `select id, client_id, app_name, last_used_at, revoked_at, created_at
-     from api_keys where client_id = $1 order by created_at desc`,
+     from api_keys where client_id = $1 and deleted_at is null order by created_at desc`,
     [clientId]
   );
   return rows;
@@ -53,4 +53,23 @@ async function revoke(db, id, clientId) {
   return rows[0] || null;
 }
 
-module.exports = { create, findActiveByHash, touchLastUsed, listByClientId, revoke };
+// Delete works on a key in any state (active or revoked) — one confirmed
+// destructive action from the admin panel. Sets revoked_at too (if not
+// already set) so a key that was never explicitly revoked doesn't end up
+// deleted-but-still-technically-active in the one instant between the two
+// writes; both happen in the same statement. This is a soft tombstone, not
+// a row delete — see migration 034_api_key_soft_delete.js — so it stays
+// excluded from listByClientId/admin.js's list query but audit_log entries
+// referencing this id keep resolving to a real row.
+async function softDelete(db, id, clientId) {
+  const { rows } = await db.query(
+    `update api_keys
+     set deleted_at = now(), revoked_at = coalesce(revoked_at, now())
+     where id = $1 and client_id = $2 and deleted_at is null
+     returning *`,
+    [id, clientId]
+  );
+  return rows[0] || null;
+}
+
+module.exports = { create, findActiveByHash, touchLastUsed, listByClientId, revoke, softDelete };

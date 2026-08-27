@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="../index.css" />
   <link rel="stylesheet" href="admin.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
 
@@ -67,6 +68,7 @@
       </div>
       <nav class="sidebar-nav">
         <a class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span class="nav-text">Dashboard</span></a>
+        <a class="nav-item" data-view="statistics"><i data-lucide="line-chart"></i><span class="nav-text">Statistics</span></a>
         <a class="nav-item" data-view="clients"><i data-lucide="users"></i><span class="nav-text">Clients</span></a>
         <a class="nav-item" data-view="onboarding"><i data-lucide="list-checks"></i><span class="nav-text">Onboarding Queue</span></a>
         <a class="nav-item" data-view="waba-health"><i data-lucide="activity"></i><span class="nav-text">WABA Health</span></a>
@@ -77,6 +79,7 @@
         <a class="nav-item" data-view="billing"><i data-lucide="credit-card"></i><span class="nav-text">Billing</span></a>
         <a class="nav-item" data-view="templates-review"><i data-lucide="file-check"></i><span class="nav-text">Templates Review</span></a>
         <a class="nav-item" data-view="api-keys"><i data-lucide="key"></i><span class="nav-text">API Keys</span></a>
+        <a class="nav-item" data-view="api-guide"><i data-lucide="book-open"></i><span class="nav-text">API Guide</span></a>
         <a class="nav-item" data-view="tickets"><i data-lucide="life-buoy"></i><span class="nav-text">Support / Tickets</span></a>
         <a class="nav-item" data-view="team"><i data-lucide="users-round"></i><span class="nav-text">Team &amp; Roles</span></a>
         <a class="nav-item" data-view="audit-log"><i data-lucide="scroll-text"></i><span class="nav-text">Audit Log</span></a>
@@ -127,6 +130,50 @@
           </div>
         </section>
 
+        <!-- ---------- Statistics ---------- -->
+        <section id="view-statistics" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Statistics</div>
+              <div class="page-subtitle">Trends across messaging, client growth, webhook delivery, and API usage</div>
+            </div>
+            <select id="statistics-range-select" class="form-input page-title-auto" style="width:auto;">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+          <div id="statistics-error" class="inline-error" style="display:none;"></div>
+          <div id="statistics-loading" class="empty-state" style="display:none;">Loading statistics…</div>
+
+          <div class="detail-grid" id="statistics-content" style="display:none;">
+            <div class="detail-card">
+              <div class="detail-card-title">Message Volume</div>
+              <div style="position:relative; height:220px;"><canvas id="chart-message-volume"></canvas></div>
+              <div class="empty-state" id="chart-message-volume-empty" style="display:none;">No message activity in this range.</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-title">Client Growth</div>
+              <div style="position:relative; height:220px;"><canvas id="chart-client-growth"></canvas></div>
+              <div class="empty-state" id="chart-client-growth-empty" style="display:none;">No new clients in this range.</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-title">Webhook Delivery Rate <span style="font-weight:400; color:var(--text-muted); font-size:0.8rem;">— <a href="#" id="statistics-webhook-failures-link">view failures</a></span></div>
+              <div style="position:relative; height:220px;"><canvas id="chart-webhook-deliveries"></canvas></div>
+              <div class="empty-state" id="chart-webhook-deliveries-empty" style="display:none;">No webhook deliveries in this range.</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-card-title">API Keys Issued Over Time</div>
+              <div style="position:relative; height:220px;"><canvas id="chart-api-keys"></canvas></div>
+              <div class="empty-state" id="chart-api-keys-empty" style="display:none;">No keys issued in this range.</div>
+            </div>
+            <div class="detail-card detail-card-full">
+              <div class="detail-card-title">Most Recently Active API Keys <span style="font-weight:400; color:var(--text-muted); font-size:0.8rem;">— click a client to view details</span></div>
+              <div id="statistics-api-activity-list"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- ---------- Clients ---------- -->
         <section id="view-clients" class="admin-view">
           <div class="page-title-bar">
@@ -144,6 +191,13 @@
                 <i data-lucide="search" style="width:16px; color:var(--text-muted);"></i>
                 <input type="text" id="clients-search" placeholder="Search by name, email, or status..." />
               </div>
+              <select id="clients-status-filter" class="form-input page-title-auto">
+                <option value="">All statuses</option>
+                <option value="pending_setup">Pending Setup</option>
+                <option value="payment_confirmed">Payment Confirmed</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
               <div style="font-size:0.8rem; color:var(--text-muted);" id="clients-count-label"></div>
             </div>
             <div style="overflow-x:auto;">
@@ -481,6 +535,7 @@
               <div class="page-subtitle">Hub API keys issued to consuming apps, across every client</div>
             </div>
             <div class="page-title-actions">
+              <a href="#api-guide" class="btn-secondary page-title-auto" id="api-keys-view-guide-link" style="padding:0 16px; text-decoration:none;"><i data-lucide="book-open" style="width:14px;"></i> Integration Guide</a>
               <button class="btn-secondary page-title-auto" id="backfill-api-keys-btn" style="padding:0 16px;"><i data-lucide="key-round" style="width:14px;"></i> Issue Missing Keys (All Clients)</button>
               <button class="btn-primary page-title-auto" id="open-create-api-key-btn" style="padding:0 16px;"><i data-lucide="plus" style="width:14px;"></i> New Key</button>
             </div>
@@ -502,6 +557,130 @@
                 </thead>
                 <tbody id="api-keys-table-body"></tbody>
               </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- API Guide ---------- -->
+        <section id="view-api-guide" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">API Integration Guide</div>
+              <div class="page-subtitle">Hand this to a client's developer to get their CRM sending/receiving WhatsApp messages through Wasi</div>
+            </div>
+            <a href="#api-keys" class="btn-secondary page-title-auto" id="api-guide-view-keys-link" style="padding:0 16px; text-decoration:none;"><i data-lucide="key" style="width:14px;"></i> Go to API Keys</a>
+          </div>
+
+          <div class="detail-grid" style="grid-template-columns: 1fr;">
+            <div class="detail-card">
+              <div class="detail-card-title">1. Get an API Key</div>
+              <p>Every client created from the <a href="#clients" class="api-guide-inline-link">Clients</a> page is auto-issued a Hub API key at creation time — it's shown once in the "Client created" confirmation screen. Lost it, or need a key for a second integration? Issue one from <a href="#api-keys" class="api-guide-inline-link">API Keys</a>. Keys are admin-issued, not self-serve — a client's developer can't generate their own.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">2. Authentication</div>
+              <p>Every request needs <code>Authorization: Bearer &lt;api_key&gt;</code>. Keys look like <code>wasi_&lt;48 hex chars&gt;</code>. There is no separate API secret or OAuth flow — the bearer key is the credential.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">3. Base URL &amp; Headers</div>
+              <p>Base URL is this Wasi deployment's own origin. Every write request needs <code>Content-Type: application/json</code> alongside the bearer header.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">4. Send a Message — <code>POST /api/v1/messages</code></div>
+              <pre class="api-guide-code">curl -X POST https://&lt;wasi-host&gt;/api/v1/messages \
+  -H "Authorization: Bearer wasi_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "&lt;CLIENT_UUID&gt;",
+    "to": "91XXXXXXXXXX",
+    "type": "template",
+    "template": "order_shipped",
+    "params": { "1": "Priya", "2": "#4821" }
+  }'</pre>
+              <p><code>type: "template"</code> is required outside the 24-hour customer-service window and needs a Meta-approved template. <code>type: "text"</code> with a <code>"body"</code> field only works inside that 24-hour window. <code>client_id</code> in the body must match the key's own client — a defense-in-depth check, not decoration.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">5. Manage Templates — <code>GET/POST /api/v1/templates</code></div>
+              <p>Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">6. Error Handling</div>
+              <p>Errors come back as <code>{ error, code, metaError? }</code> — Meta's real error body is attached when the rejection happened at Meta, not swallowed. Check <code>error.code</code> before parsing <code>metaError</code>, since not every error originates from Meta (e.g. consent-opt-out rejections, validation errors).</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">7. Webhooks — Inbound Forwarding</div>
+              <p>Configure a forwarding URL on the client's <a href="#clients" class="api-guide-inline-link">Client Detail</a> page (WhatsApp Business Account card → CRM Inbound Forwarding) once their WABA is connected. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> — HMAC-SHA256 of the raw JSON body, keyed by a per-client secret. <strong>Verify this signature before trusting a delivery.</strong> The secret itself is never shown in plaintext after generation — copy it once right after generating/regenerating it on the Client Detail page. Deliveries are queued and retried with backoff, not fire-and-forget.</p>
+              <p>Event types available: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">8. Rate Limits</div>
+              <p>The Hub API (<code>/api/v1/*</code>) is capped at <strong>300 requests/minute per key</strong>. A rate-limited request gets back <code>429</code> with <code>{ "error": "Too many requests." }</code>. This applies per key, not per client — a client with multiple keys gets the limit on each independently.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">9. Security Recommendations</div>
+              <ul style="margin:0; padding-left:1.1rem; line-height:1.7;">
+                <li>Never commit the API key or webhook secret to source control — load them from environment variables.</li>
+                <li>If a key is compromised, delete it from <a href="#api-keys" class="api-guide-inline-link">API Keys</a> and issue a new one — deletion takes effect immediately.</li>
+                <li>Always verify the <code>x-wasi-signature-256</code> header before acting on a forwarded webhook payload.</li>
+                <li>Treat <code>client_id</code> as non-secret (it's a UUID, not a credential) but still avoid logging the API key or webhook secret in application logs.</li>
+              </ul>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">10. Testing Workflow</div>
+              <p>Import the Postman collection (link below) with a real key in a local, gitignored Postman environment — never the shared/committed one. Start with <code>GET /api/v1/templates</code> to confirm auth works before attempting a send. Send a <code>type: "text"</code> message to your own test number inside an active 24-hour window before wiring up template sends.</p>
+            </div>
+
+            <div class="detail-card">
+              <div class="detail-card-title">Postman Collection</div>
+              <p>A ready-to-import Postman collection and environment template (placeholder values, no real credentials) covering every endpoint above, plus the admin-side API Key and webhook management endpoints:</p>
+              <p>
+                <a href="/postman/Wasi-Hub-API.postman_collection.json" class="api-guide-inline-link" target="_blank" rel="noopener">Wasi-Hub-API.postman_collection.json</a>
+                &nbsp;·&nbsp;
+                <a href="/postman/Wasi-Hub-API.postman_environment.json" class="api-guide-inline-link" target="_blank" rel="noopener">Wasi-Hub-API.postman_environment.json</a>
+              </p>
+            </div>
+
+            <div class="detail-card" style="border-color:var(--color-primary-200);">
+              <div class="detail-card-title">Using Claude Code to Build the Integration</div>
+              <p>If the client's developer uses <a href="https://claude.com/product/claude-code" class="api-guide-inline-link" target="_blank" rel="noopener">Claude Code</a>, they can hand it this prompt to scaffold the integration. It's written so Claude implements auth, sends, and webhook verification without ever seeing the raw key.</p>
+              <p style="background:#FEF3C7; border:1px solid #FDE68A; border-radius:8px; padding:0.6rem 0.75rem; font-size:0.82rem; color:#92400E; margin-bottom:0.75rem;">
+                <strong>Before you start:</strong> put the API key in an environment variable you set yourself (e.g. <code>WASI_API_KEY</code> in a local <code>.env</code> file, gitignored). Do <strong>not</strong> paste the raw key into the Claude Code conversation or prompt — Claude only needs the variable's <em>name</em>, never its value.
+              </p>
+              <div style="position:relative;">
+                <pre class="api-guide-code" id="claude-code-prompt-text">I'm integrating my CRM with the Wasi WhatsApp Hub API. Base URL and auth:
+
+- Base URL: &lt;fill in this Wasi deployment's URL&gt;
+- Auth: Authorization: Bearer $WASI_API_KEY — read this from an environment
+  variable named WASI_API_KEY that I've already set. Never ask me to paste
+  the raw key, never print it, never write it to a log or commit it.
+- Endpoints: POST /api/v1/messages (send a WhatsApp message — supports
+  "template" and "text" types), GET/POST /api/v1/templates (list/submit
+  templates).
+- Every request needs client_id (my Wasi client UUID, not secret) matching
+  the key's own client.
+- Errors come back as { error, code, metaError? } — handle both a plain
+  `error` and a Meta-originated `metaError` distinctly.
+- I also receive inbound webhooks signed with header
+  x-wasi-signature-256: sha256=<hmac-sha256 of the raw body, keyed by a
+  per-client webhook secret I'll provide via WASI_WEBHOOK_SECRET>. Verify
+  this signature before trusting a payload, using a constant-time compare.
+
+Please implement: (1) a small client module wrapping authenticated calls to
+these two endpoints with typed request/response handling, (2) an inbound
+webhook receiver that verifies the signature and dispatches on event type,
+(3) error handling that surfaces `metaError` distinctly from a plain
+validation error, and (4) a way to test all of this against real values
+without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
+                <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value-target="claude-code-prompt-text" style="position:absolute; top:8px; right:8px;"><i data-lucide="copy" style="width:12px;"></i> Copy Prompt</button>
+              </div>
             </div>
           </div>
         </section>
@@ -698,7 +877,7 @@
 
   <!-- ===================== CREATE CLIENT MODAL ===================== -->
   <div id="create-client-modal" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box modal-box-wide">
       <div class="modal-header">
         <div class="modal-title">Add Client</div>
         <button class="close-modal-btn" data-close-create-client><i data-lucide="x"></i></button>
@@ -706,6 +885,7 @@
       <div id="create-client-error" class="inline-error" style="display:none;"></div>
       <div id="create-client-result" style="display:none;"></div>
       <form id="create-client-form">
+        <div class="form-section-title">Basic Information</div>
         <div class="form-group">
           <label class="form-label" for="create-client-name">Business Name</label>
           <input type="text" id="create-client-name" class="form-input" required />
@@ -721,7 +901,56 @@
             <button type="button" class="btn-secondary page-title-auto" id="generate-client-password-btn" style="padding:0 12px; white-space:nowrap;">Generate</button>
           </div>
         </div>
-        <button type="submit" class="btn-primary" id="create-client-submit-btn">Create Client</button>
+
+        <details class="form-section-details">
+          <summary>Contact Information <span class="form-hint">(optional)</span></summary>
+          <div class="form-group">
+            <label class="form-label" for="create-client-contact-name">Contact Person</label>
+            <input type="text" id="create-client-contact-name" class="form-input" placeholder="Who do we talk to day-to-day?" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="create-client-contact-phone">Contact Phone</label>
+            <input type="tel" id="create-client-contact-phone" class="form-input" placeholder="+91 90000 00000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="create-client-company-details">Company Details</label>
+            <textarea id="create-client-company-details" class="form-input" rows="2" placeholder="Industry, size, locations..."></textarea>
+          </div>
+        </details>
+
+        <details class="form-section-details">
+          <summary>Technical / Developer Information <span class="form-hint">(optional)</span></summary>
+          <div class="form-group">
+            <label class="form-label" for="create-client-developer-name">Developer Name</label>
+            <input type="text" id="create-client-developer-name" class="form-input" placeholder="Who's integrating the API/webhooks?" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="create-client-developer-phone">Developer Phone</label>
+            <input type="tel" id="create-client-developer-phone" class="form-input" placeholder="+91 90000 00000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="create-client-developer-email">Developer Email</label>
+            <input type="email" id="create-client-developer-email" class="form-input" />
+          </div>
+        </details>
+
+        <details class="form-section-details">
+          <summary>Integration Details <span class="form-hint">(optional)</span></summary>
+          <div class="form-group">
+            <label class="form-label" for="create-client-integration-requirements">Integration Requirements</label>
+            <textarea id="create-client-integration-requirements" class="form-input" rows="2" placeholder="Webhooks needed, systems to connect, timeline..."></textarea>
+          </div>
+        </details>
+
+        <details class="form-section-details">
+          <summary>Additional Information <span class="form-hint">(optional)</span></summary>
+          <div class="form-group">
+            <label class="form-label" for="create-client-additional-notes">Notes</label>
+            <textarea id="create-client-additional-notes" class="form-input" rows="2"></textarea>
+          </div>
+        </details>
+
+        <button type="submit" class="btn-primary" id="create-client-submit-btn" style="margin-top:1rem;">Create Client</button>
       </form>
     </div>
   </div>

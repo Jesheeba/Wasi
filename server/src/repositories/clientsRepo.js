@@ -5,7 +5,10 @@
 // unrestricted) so they're safe to run under the restricted role even though
 // nothing routes them there today beyond onboarding.js's own-client-row read
 // and update.
-const SAFE_COLUMNS = 'id, name, email, status, tenant_slug, created_at, email_verified';
+const SAFE_COLUMNS = `id, name, email, status, tenant_slug, created_at, email_verified,
+  contact_person_name, contact_phone, company_details,
+  developer_name, developer_phone, developer_email,
+  integration_requirements, additional_notes`;
 
 async function list(db) {
   const { rows } = await db.query(`select ${SAFE_COLUMNS} from clients order by created_at desc`);
@@ -30,12 +33,27 @@ async function slugExists(db, tenant_slug) {
   return rowCount > 0;
 }
 
-async function create(db, { name, email, tenant_slug, status, password_hash }) {
+async function create(db, {
+  name, email, tenant_slug, status, password_hash,
+  contact_person_name, contact_phone, company_details,
+  developer_name, developer_phone, developer_email,
+  integration_requirements, additional_notes,
+}) {
   const { rows } = await db.query(
-    `insert into clients (name, email, tenant_slug, status, password_hash)
-     values ($1, $2, $3, coalesce($4, 'pending_setup'), $5)
+    `insert into clients (
+       name, email, tenant_slug, status, password_hash,
+       contact_person_name, contact_phone, company_details,
+       developer_name, developer_phone, developer_email,
+       integration_requirements, additional_notes
+     )
+     values ($1, $2, $3, coalesce($4, 'pending_setup'), $5, $6, $7, $8, $9, $10, $11, $12, $13)
      returning ${SAFE_COLUMNS}`,
-    [name, email, tenant_slug, status, password_hash || null]
+    [
+      name, email, tenant_slug, status, password_hash || null,
+      contact_person_name || null, contact_phone || null, company_details || null,
+      developer_name || null, developer_phone || null, developer_email || null,
+      integration_requirements || null, additional_notes || null,
+    ]
   );
   return rows[0];
 }

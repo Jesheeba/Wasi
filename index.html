@@ -1123,8 +1123,13 @@
                     <input type="text" class="form-input" id="webhook-url-input" value="https://api.yourcrm.example/v1/webhook" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Signing Secret (generated — verify the <code>x-wasi-signature-256</code> header with this)</label>
-                    <input type="text" class="form-input" id="webhook-secret-display" readonly value="Save a URL to generate one" />
+                    <label class="form-label">Signing Secret (verify the <code>x-wasi-signature-256</code> header with this)</label>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                      <input type="text" class="form-input" id="webhook-secret-display" readonly value="Save a URL to generate one" style="font-family:monospace;" />
+                      <button type="button" class="btn-secondary" id="copy-webhook-secret-btn" style="display:none; width:auto; padding:0 12px; flex-shrink:0;"><i data-lucide="copy"></i></button>
+                      <button type="button" class="btn-secondary" id="regenerate-webhook-secret-btn" style="display:none; width:auto; padding:0 12px; flex-shrink:0;" title="Regenerate secret"><i data-lucide="refresh-cw"></i></button>
+                    </div>
+                    <div id="webhook-secret-hint" style="font-size:0.78rem; color:var(--text-muted, #64748b); margin-top:0.35rem;"></div>
                   </div>
                   <button class="btn-primary" style="width: auto; padding: 0 20px;" id="save-webhook-btn">Save Webhook</button>
                 </div>

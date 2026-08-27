@@ -3087,16 +3087,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // The raw secret is only ever held here, in memory, for the one render
+  // right after a create/regenerate response — never written into the
+  // #webhook-secret-display input's value (that field only ever shows the
+  // masked form), so it can't leak via view-source/inspect element.
+  function renderWebhookSecretField(webhook, revealedSecret) {
+    const secretDisplay = document.getElementById('webhook-secret-display');
+    const copyBtn = document.getElementById('copy-webhook-secret-btn');
+    const regenBtn = document.getElementById('regenerate-webhook-secret-btn');
+    const hint = document.getElementById('webhook-secret-hint');
+    if (!secretDisplay) return;
+
+    if (!webhook || !webhook.has_secret) {
+      secretDisplay.value = 'Save a URL to generate one';
+      copyBtn.style.display = 'none';
+      regenBtn.style.display = 'none';
+      hint.textContent = '';
+      return;
+    }
+
+    secretDisplay.value = '•'.repeat(8) + (webhook.secret_last4 || '????');
+    regenBtn.style.display = '';
+    regenBtn.onclick = () => regenerateWebhookSecret();
+
+    if (revealedSecret) {
+      copyBtn.style.display = '';
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(revealedSecret)
+          .then(() => showToast('Secret copied to clipboard'))
+          .catch(() => showToast('Could not copy — clipboard permission denied'));
+      };
+      hint.textContent = "New secret generated — copy it now, it won't be shown again.";
+    } else {
+      copyBtn.style.display = 'none';
+      hint.textContent = 'Only the last 4 characters are shown after generation. Regenerate to get a fresh copyable secret.';
+    }
+  }
+
   async function renderClientWebhook() {
     const urlInput = document.getElementById('webhook-url-input');
-    const secretDisplay = document.getElementById('webhook-secret-display');
     if (!urlInput) return;
     try {
       const webhook = await authFetch('/api/client-webhook');
       if (webhook) {
-        urlInput.value = webhook.callback_url;
-        if (secretDisplay) secretDisplay.value = webhook.secret;
+        urlInput.value = webhook.callback_url || '';
+        renderWebhookSecretField(webhook, null);
       }
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function regenerateWebhookSecret() {
+    if (!confirm('Regenerate the webhook signing secret? The current secret will stop verifying immediately — update your endpoint with the new one before relying on it again.')) return;
+    try {
+      const saved = await authFetch('/api/client-webhook/regenerate-secret', { method: 'POST' });
+      renderWebhookSecretField(saved, saved.secret);
+      showToast('Webhook secret regenerated');
     } catch (err) {
       showToast(err.message);
     }
@@ -3107,8 +3154,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!url) return showToast('Enter a webhook URL first.');
     try {
       const saved = await authFetch('/api/client-webhook', { method: 'POST', body: JSON.stringify({ callback_url: url }) });
-      const secretDisplay = document.getElementById('webhook-secret-display');
-      if (secretDisplay) secretDisplay.value = saved.secret;
+      // saved.secret is only present the very first time a secret is
+      // generated for this client — every later save/reload only returns
+      // the masked form (see server/src/routes/clientWebhook.js).
+      renderWebhookSecretField(saved, saved.secret || null);
       showToast('Webhook settings saved');
     } catch (err) {
       showToast(err.message);

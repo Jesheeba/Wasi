@@ -263,6 +263,7 @@ function renderAdminProfile() {
    --------------------------------------------------------------- */
 const VIEW_TITLES = {
   dashboard: 'Dashboard',
+  statistics: 'Statistics',
   clients: 'Clients',
   'client-detail': 'Client Detail',
   onboarding: 'Onboarding Queue',
@@ -278,7 +279,28 @@ const VIEW_TITLES = {
   team: 'Team & Roles',
   'audit-log': 'Audit Log',
   settings: 'Settings',
+  'api-guide': 'API Guide',
 };
+
+// Set true only while the popstate handler below is restoring a view from a
+// browser back/forward navigation — switchView() checks this so it doesn't
+// push a *new* history entry in response to a navigation that came from
+// history in the first place (which would break the back button: every
+// "back" would immediately re-push forward).
+let isRestoringViewFromHistory = false;
+
+// KPI-card navigation and the sidebar both call plain switchView(viewName)
+// with no extra params — client-detail's id and the clients status filter
+// travel via `state` (already set by their callers: openClientDetail sets
+// state.currentClientId before calling switchView; the dashboard cards and
+// the status dropdown set state.clientsStatusFilter) rather than through
+// switchView's signature, so every existing call site keeps working
+// unchanged.
+function hashForView(viewName) {
+  if (viewName === 'client-detail' && state.currentClientId) return `#client-detail/${state.currentClientId}`;
+  if (viewName === 'clients' && state.clientsStatusFilter) return `#clients?status=${encodeURIComponent(state.clientsStatusFilter)}`;
+  return `#${viewName}`;
+}
 
 function switchView(viewName) {
   document.querySelectorAll('.admin-view').forEach((el) => el.classList.remove('active'));
@@ -291,7 +313,13 @@ function switchView(viewName) {
 
   document.getElementById('header-title').textContent = VIEW_TITLES[viewName] || '';
 
+  if (!isRestoringViewFromHistory) {
+    const hash = hashForView(viewName);
+    if (location.hash !== hash) history.pushState({ view: viewName }, '', hash);
+  }
+
   if (viewName === 'dashboard') loadDashboard();
+  else if (viewName === 'statistics') loadStatistics();
   else if (viewName === 'clients') loadClients();
   else if (viewName === 'onboarding') loadOnboarding();
   else if (viewName === 'waba-health') loadWabas();
@@ -307,6 +335,38 @@ function switchView(viewName) {
   else if (viewName === 'audit-log') loadAuditLog();
   else if (viewName === 'settings') loadSettings();
 }
+
+function parseViewHash(hash) {
+  const raw = (hash || '').replace(/^#/, '');
+  if (!raw) return { viewName: 'dashboard' };
+  const [pathPart, queryPart] = raw.split('?');
+  const [viewName, id] = pathPart.split('/');
+  const params = new URLSearchParams(queryPart || '');
+  return { viewName, id, status: params.get('status') };
+}
+
+// Only meaningful once state.token exists (i.e. after showAppShell has run) —
+// a back/forward navigation while still on the login screen has nothing to
+// restore into.
+window.addEventListener('popstate', () => {
+  if (!state.token) return;
+  isRestoringViewFromHistory = true;
+  try {
+    const { viewName, id, status } = parseViewHash(location.hash);
+    if (viewName === 'client-detail' && id) {
+      state.currentClientId = id;
+      switchView('client-detail');
+      loadClientDetail(id);
+    } else if (viewName === 'clients') {
+      state.clientsStatusFilter = status || null;
+      switchView('clients');
+    } else {
+      switchView(viewName || 'dashboard');
+    }
+  } finally {
+    isRestoringViewFromHistory = false;
+  }
+});
 
 /* ---------------------------------------------------------------
    Dashboard
@@ -335,15 +395,15 @@ function renderDashboard(overview) {
   const received = overview.messagesToday?.received ?? 0;
 
   const cards = [
-    { icon: 'users', label: 'Total Clients', val: totalClients },
-    { icon: 'check-circle', label: 'Active Clients', val: activeCount },
-    { icon: 'alert-triangle', label: 'Failed Onboardings (WABA)', val: failedOnboardings },
-    { icon: 'send', label: 'Messages Sent Today', val: sent },
-    { icon: 'inbox', label: 'Messages Received Today', val: received },
+    { icon: 'users', label: 'Total Clients', val: totalClients, onNavigate: () => { state.clientsStatusFilter = null; switchView('clients'); } },
+    { icon: 'check-circle', label: 'Active Clients', val: activeCount, onNavigate: () => { state.clientsStatusFilter = 'active'; switchView('clients'); } },
+    { icon: 'alert-triangle', label: 'Failed Onboardings (WABA)', val: failedOnboardings, onNavigate: () => switchView('onboarding') },
+    { icon: 'send', label: 'Messages Sent Today', val: sent, onNavigate: () => switchView('volume') },
+    { icon: 'inbox', label: 'Messages Received Today', val: received, onNavigate: () => switchView('volume') },
   ];
 
-  document.getElementById('dashboard-stats').innerHTML = cards.map((c) => `
-    <div class="stat-card">
+  document.getElementById('dashboard-stats').innerHTML = cards.map((c, i) => `
+    <div class="stat-card${c.onNavigate ? ' clickable' : ''}" ${c.onNavigate ? `role="button" tabindex="0" data-stat-card-index="${i}"` : ''}>
       <div class="stat-icon"><i data-lucide="${c.icon}"></i></div>
       <div>
         <div class="stat-val">${c.val}</div>
@@ -351,6 +411,14 @@ function renderDashboard(overview) {
       </div>
     </div>
   `).join('');
+
+  document.querySelectorAll('#dashboard-stats [data-stat-card-index]').forEach((el) => {
+    const card = cards[Number(el.getAttribute('data-stat-card-index'))];
+    el.addEventListener('click', card.onNavigate);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.onNavigate(); }
+    });
+  });
 
   const maxCount = Math.max(1, ...byStatus.map((s) => s.count));
   const barsHtml = byStatus.length
@@ -368,6 +436,115 @@ function renderDashboard(overview) {
 }
 
 /* ---------------------------------------------------------------
+   Statistics / Analytics — read-only trend charts over GET /api/admin/stats.
+   Chart.js instances are tracked and destroyed before every re-render (date
+   range change, or revisiting the view) so repeated visits don't leak
+   canvases/memory. --------------------------------------------------------------- */
+const statisticsCharts = {};
+
+function destroyStatChart(key) {
+  if (statisticsCharts[key]) {
+    statisticsCharts[key].destroy();
+    delete statisticsCharts[key];
+  }
+}
+
+async function loadStatistics() {
+  setInlineError('statistics-error', null);
+  const loading = document.getElementById('statistics-loading');
+  const content = document.getElementById('statistics-content');
+  loading.style.display = 'block';
+  content.style.display = 'none';
+
+  const days = document.getElementById('statistics-range-select').value || '30';
+
+  try {
+    const stats = await apiFetch(`/api/admin/stats?days=${encodeURIComponent(days)}`);
+    renderStatistics(stats);
+    content.style.display = '';
+  } catch (err) {
+    if (err.status === 401) return;
+    setInlineError('statistics-error', err.message);
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+function renderStatChart(key, canvasId, emptyId, rows, config) {
+  destroyStatChart(key);
+  const canvas = document.getElementById(canvasId);
+  const empty = document.getElementById(emptyId);
+  const hasData = rows.length > 0;
+  canvas.style.display = hasData ? '' : 'none';
+  empty.style.display = hasData ? 'none' : 'block';
+  if (hasData) statisticsCharts[key] = new Chart(canvas, config);
+}
+
+function renderStatistics(stats) {
+  // Chart.js loads from a CDN (no bundler in this admin panel, same
+  // approach as Lucide) — if that's blocked/offline, skip charts rather
+  // than throw; the rest of the page (activity list, filters) still works.
+  if (!window.Chart) return;
+
+  const mv = stats.messageVolume || [];
+  renderStatChart('messageVolume', 'chart-message-volume', 'chart-message-volume-empty', mv, {
+    type: 'line',
+    data: {
+      labels: mv.map((r) => formatDate(r.date)),
+      datasets: [
+        { label: 'Sent', data: mv.map((r) => r.messages_sent), borderColor: '#4AC959', backgroundColor: 'rgba(74,201,89,0.1)', tension: 0.3 },
+        { label: 'Received', data: mv.map((r) => r.messages_received), borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.3 },
+      ],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+  });
+
+  const cg = stats.clientGrowth || [];
+  renderStatChart('clientGrowth', 'chart-client-growth', 'chart-client-growth-empty', cg, {
+    type: 'bar',
+    data: { labels: cg.map((r) => formatDate(r.date)), datasets: [{ label: 'New Clients', data: cg.map((r) => r.new_clients), backgroundColor: '#4AC959' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+
+  const wd = (stats.webhookDeliveries && stats.webhookDeliveries.daily) || [];
+  renderStatChart('webhookDeliveries', 'chart-webhook-deliveries', 'chart-webhook-deliveries-empty', wd, {
+    type: 'bar',
+    data: {
+      labels: wd.map((r) => formatDate(r.date)),
+      datasets: [
+        { label: 'Delivered', data: wd.map((r) => r.delivered), backgroundColor: '#4AC959' },
+        { label: 'Failed', data: wd.map((r) => r.failed), backgroundColor: '#DC2626' },
+      ],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+
+  const ak = (stats.apiKeys && stats.apiKeys.daily) || [];
+  renderStatChart('apiKeys', 'chart-api-keys', 'chart-api-keys-empty', ak, {
+    type: 'bar',
+    data: { labels: ak.map((r) => formatDate(r.date)), datasets: [{ label: 'Keys Issued', data: ak.map((r) => r.keys_issued), backgroundColor: '#6366F1' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+
+  // Recently active API keys — each row links into that client's detail
+  // page, per the "API usage stats connect to relevant client details"
+  // requirement.
+  const activity = (stats.apiKeys && stats.apiKeys.recentActivity) || [];
+  const listEl = document.getElementById('statistics-api-activity-list');
+  listEl.innerHTML = activity.length
+    ? activity.map((a) => `
+        <div class="detail-row clickable-row" data-client-id="${escapeHtml(a.client_id)}" style="cursor:pointer;">
+          <span class="detail-row-label">${escapeHtml(a.client_name)} <span style="color:var(--text-muted); font-weight:400;">(${escapeHtml(a.app_name)})</span></span>
+          <span class="detail-row-value">${formatDateTime(a.last_used_at)}</span>
+        </div>
+      `).join('')
+    : '<div class="empty-state">No API activity in this range.</div>';
+  listEl.querySelectorAll('[data-client-id]').forEach((row) => {
+    row.addEventListener('click', () => openClientDetail(row.getAttribute('data-client-id')));
+  });
+}
+
+/* ---------------------------------------------------------------
    Clients list
    --------------------------------------------------------------- */
 async function loadClients() {
@@ -378,7 +555,11 @@ async function loadClients() {
   try {
     const clients = await apiFetch('/api/clients');
     state.clients = clients;
-    renderClientsTable(clients);
+    // A KPI card (e.g. "Active Clients") may have set this before navigating
+    // here — reflect it in the dropdown and apply it to this fresh fetch.
+    const statusSelect = document.getElementById('clients-status-filter');
+    if (statusSelect) statusSelect.value = state.clientsStatusFilter || '';
+    filterClientsTable();
   } catch (err) {
     if (err.status === 401) return;
     tbody.innerHTML = '';
@@ -412,16 +593,19 @@ function renderClientsTable(clients) {
 
 function filterClientsTable() {
   const q = document.getElementById('clients-search').value.trim().toLowerCase();
-  if (!q) {
-    renderClientsTable(state.clients);
-    return;
+  const status = document.getElementById('clients-status-filter').value;
+  state.clientsStatusFilter = status || null;
+
+  let filtered = state.clients;
+  if (status) filtered = filtered.filter((c) => c.status === status);
+  if (q) {
+    filtered = filtered.filter((c) =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.status || '').toLowerCase().includes(q) ||
+      (c.tenant_slug || '').toLowerCase().includes(q)
+    );
   }
-  const filtered = state.clients.filter((c) =>
-    (c.name || '').toLowerCase().includes(q) ||
-    (c.email || '').toLowerCase().includes(q) ||
-    (c.status || '').toLowerCase().includes(q) ||
-    (c.tenant_slug || '').toLowerCase().includes(q)
-  );
   renderClientsTable(filtered);
 }
 
@@ -430,6 +614,10 @@ function filterClientsTable() {
    --------------------------------------------------------------- */
 function openCreateClientModal() {
   document.getElementById('create-client-form').reset();
+  // form.reset() only resets form controls — the progressive-disclosure
+  // <details> sections don't participate in that, so collapse them by hand
+  // for a clean reopen.
+  document.querySelectorAll('#create-client-form details.form-section-details').forEach((d) => { d.open = false; });
   document.getElementById('create-client-form').style.display = '';
   document.getElementById('create-client-submit-btn').style.display = '';
   document.getElementById('create-client-result').style.display = 'none';
@@ -463,6 +651,23 @@ async function handleCreateClientSubmit(e) {
   try {
     const body = { name, email };
     if (password) body.password = password;
+    // Every field below is optional (see migration 035_client_onboarding_fields.js)
+    // — only send the ones the admin actually filled in, so an empty string
+    // never reaches z.string().email().optional() and trips validation.
+    const optionalFields = {
+      contact_person_name: 'create-client-contact-name',
+      contact_phone: 'create-client-contact-phone',
+      company_details: 'create-client-company-details',
+      developer_name: 'create-client-developer-name',
+      developer_phone: 'create-client-developer-phone',
+      developer_email: 'create-client-developer-email',
+      integration_requirements: 'create-client-integration-requirements',
+      additional_notes: 'create-client-additional-notes',
+    };
+    for (const [field, elId] of Object.entries(optionalFields)) {
+      const value = document.getElementById(elId).value.trim();
+      if (value) body[field] = value;
+    }
     const created = await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(body) });
 
     document.getElementById('create-client-form').style.display = 'none';
@@ -510,6 +715,7 @@ async function loadClientDetail(clientId) {
 
   try {
     const detail = await apiFetch(`/api/admin/clients/${clientId}`);
+    state.currentClientDetail = detail;
     renderClientDetail(detail);
   } catch (err) {
     if (err.status === 401) return;
@@ -526,7 +732,12 @@ const CLIENT_STATUS_OPTIONS = ['pending_setup', 'payment_confirmed', 'active', '
 // zod schema is the actual source of truth and will reject anything else.
 const HUB_FORWARD_EVENTS = ['message.received', 'message.status', 'message_template_status_update', 'account_update'];
 
-function renderClientDetail(detail) {
+// revealedForwardSecret is only ever set for the one render immediately
+// after a generate/regenerate response — held in a local variable here, not
+// on `waba` itself and never written into a DOM attribute, so it can't leak
+// via inspectable HTML and disappears the moment the user navigates away or
+// the view re-renders from a plain GET (which never carries the raw value).
+function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   const { client, subscription, waba, templates, auditTrail } = detail;
 
   const statusOptionsHtml = CLIENT_STATUS_OPTIONS.map((s) =>
@@ -559,14 +770,16 @@ function renderClientDetail(detail) {
         <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.6rem; line-height:1.5;">
           Pushes inbound WhatsApp replies and template/account status changes to the client's own CRM webhook. Ask the client for their CRM's webhook URL before filling this in.
         </div>
-        ${waba.forward_secret ? `
+        ${waba.has_forward_secret ? `
         <div class="detail-row" style="margin-bottom:0.6rem;">
           <span class="detail-row-label">Webhook Secret</span>
           <span class="detail-row-value" style="display:flex; align-items:center; gap:0.4rem;">
-            <span style="font-family:monospace; font-size:0.75rem; word-break:break-all;">${escapeHtml(waba.forward_secret)}</span>
-            <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value="${escapeHtml(waba.forward_secret)}" style="padding:2px 8px; flex-shrink:0;"><i data-lucide="copy" style="width:12px;"></i></button>
+            <span style="font-family:monospace; font-size:0.75rem;">•••••••• ${escapeHtml((revealedForwardSecret || waba.forward_secret_last4 || '????').slice(-4))}</span>
+            ${revealedForwardSecret ? `<button type="button" class="btn-secondary btn-sm" id="copy-forward-secret-btn" style="padding:2px 8px; flex-shrink:0;" title="Copy secret"><i data-lucide="copy" style="width:12px;"></i></button>` : ''}
+            <button type="button" class="btn-secondary btn-sm" id="regenerate-forward-secret-btn" style="padding:2px 8px; flex-shrink:0;" title="Regenerate secret"><i data-lucide="refresh-cw" style="width:12px;"></i></button>
           </span>
         </div>
+        ${revealedForwardSecret ? `<div class="inline-success" style="margin-bottom:0.6rem;">New secret generated — copy it now, it won't be shown again.</div>` : `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.6rem;">Only the last 4 characters are ever shown again after generation. Regenerate to get a fresh copyable secret.</div>`}
         ` : ''}
         <input type="url" id="hub-forward-url" class="form-input" placeholder="https://client-crm.example.com/webhooks/wasi" value="${escapeHtml(waba.forward_to_url || '')}" style="margin-bottom:0.5rem; width:100%;">
         <div style="display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.6rem; font-size:0.8rem;">
@@ -693,6 +906,35 @@ function renderClientDetail(detail) {
   document.getElementById('reset-client-password-btn').addEventListener('click', () => confirmResetClientPassword(client));
   const hubForwardBtn = document.getElementById('hub-forward-save-btn');
   if (hubForwardBtn) hubForwardBtn.addEventListener('click', () => saveHubForward(client.id));
+
+  const copyForwardSecretBtn = document.getElementById('copy-forward-secret-btn');
+  if (copyForwardSecretBtn && revealedForwardSecret) {
+    copyForwardSecretBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(revealedForwardSecret).then(() => showToast('Copied to clipboard.', 'success'));
+    });
+  }
+  const regenerateForwardSecretBtn = document.getElementById('regenerate-forward-secret-btn');
+  if (regenerateForwardSecretBtn) regenerateForwardSecretBtn.addEventListener('click', () => confirmRegenerateForwardSecret(client.id));
+}
+
+function confirmRegenerateForwardSecret(clientId) {
+  showConfirm({
+    title: 'Regenerate webhook secret?',
+    body: '<p>The current secret will stop working immediately — any signature verification on the client\'s CRM using the old secret will start failing until it\'s updated with the new one.</p>',
+    confirmLabel: 'Regenerate',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        const updated = await apiFetch(`/api/admin/clients/${clientId}/hub-forward/regenerate-secret`, { method: 'POST' });
+        state.currentClientDetail = { ...state.currentClientDetail, waba: updated };
+        showToast('Webhook secret regenerated.', 'success');
+        renderClientDetail(state.currentClientDetail, { revealedForwardSecret: updated.forward_secret });
+      } catch (err) {
+        if (err.status === 401) return;
+        showToast('Failed to regenerate secret: ' + err.message, 'error');
+      }
+    },
+  });
 }
 
 async function saveHubForward(clientId) {
@@ -712,13 +954,17 @@ async function saveHubForward(clientId) {
   btn.textContent = 'Saving…';
 
   try {
-    await apiFetch(`/api/admin/clients/${clientId}/hub-forward`, {
+    const updated = await apiFetch(`/api/admin/clients/${clientId}/hub-forward`, {
       method: 'POST',
       body: JSON.stringify({ forward_to_url, events }),
     });
-    resultEl.innerHTML = `<div class="inline-success" style="margin-top:0.6rem; margin-bottom:0;">Forwarding config saved.</div>`;
     showToast('Hub forwarding config saved.', 'success');
-    loadClientDetail(clientId);
+    // updated.forward_secret is only present the very first time a secret is
+    // generated for this WABA — reusing it here (instead of a plain reload)
+    // is the only way the admin ever sees it, since every GET after this
+    // point returns only the masked/last-4 view (see admin.js's maskWaba).
+    state.currentClientDetail = { ...state.currentClientDetail, waba: updated };
+    renderClientDetail(state.currentClientDetail, { revealedForwardSecret: updated.forward_secret || null });
   } catch (err) {
     if (err.status === 401) return;
     resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.6rem; margin-bottom:0;">${escapeHtml(err.message)}</div>`;
@@ -1281,16 +1527,50 @@ function renderApiKeys(rows) {
       <td>${formatDateTime(k.last_used_at)}</td>
       <td>${formatDate(k.created_at)}</td>
       <td>${k.revoked_at ? statusBadge('revoked') : statusBadge('active')}</td>
-      <td>${!k.revoked_at ? `<button class="btn-secondary btn-sm" data-revoke-key="${escapeHtml(k.id)}" data-revoke-client="${escapeHtml(k.client_id)}">Revoke</button>` : ''}</td>
+      <td>
+        <div class="row-actions-menu">
+          <button type="button" class="row-actions-trigger" aria-haspopup="true" aria-expanded="false" data-row-menu-trigger title="Actions">
+            <i data-lucide="more-vertical" style="width:16px;"></i>
+          </button>
+          <div class="row-actions-popover">
+            ${!k.revoked_at ? `<button type="button" data-revoke-key="${escapeHtml(k.id)}" data-revoke-client="${escapeHtml(k.client_id)}"><i data-lucide="ban" style="width:14px;"></i> Revoke</button>` : ''}
+            <button type="button" class="danger" data-delete-key="${escapeHtml(k.id)}" data-delete-client="${escapeHtml(k.client_id)}"><i data-lucide="trash-2" style="width:14px;"></i> Delete</button>
+          </div>
+        </div>
+      </td>
     </tr>
   `).join('');
+  if (window.lucide) lucide.createIcons();
+
+  tbody.querySelectorAll('[data-row-menu-trigger]').forEach((trigger) => {
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const popover = trigger.nextElementSibling;
+      const wasOpen = popover.classList.contains('open');
+      closeAllRowActionMenus();
+      if (!wasOpen) {
+        popover.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
 
   tbody.querySelectorAll('[data-revoke-key]').forEach((btn) => {
     btn.addEventListener('click', () => confirmRevokeApiKey(btn.getAttribute('data-revoke-key'), btn.getAttribute('data-revoke-client')));
   });
+  tbody.querySelectorAll('[data-delete-key]').forEach((btn) => {
+    btn.addEventListener('click', () => confirmDeleteApiKey(btn.getAttribute('data-delete-key'), btn.getAttribute('data-delete-client')));
+  });
 }
 
+function closeAllRowActionMenus() {
+  document.querySelectorAll('.row-actions-popover.open').forEach((p) => p.classList.remove('open'));
+  document.querySelectorAll('[data-row-menu-trigger][aria-expanded="true"]').forEach((t) => t.setAttribute('aria-expanded', 'false'));
+}
+document.addEventListener('click', closeAllRowActionMenus);
+
 function confirmRevokeApiKey(keyId, clientId) {
+  closeAllRowActionMenus();
   showConfirm({
     title: 'Revoke this API key?',
     body: '<p>The consuming app will immediately lose access. This cannot be undone.</p>',
@@ -1307,6 +1587,29 @@ function confirmRevokeApiKey(keyId, clientId) {
       } catch (err) {
         if (err.status === 401) return;
         showToast('Failed to revoke key: ' + err.message, 'error');
+      }
+    },
+  });
+}
+
+function confirmDeleteApiKey(keyId, clientId) {
+  closeAllRowActionMenus();
+  showConfirm({
+    title: 'Delete this API key?',
+    body: '<p>This permanently removes it from the API Keys list. If it was still active, the consuming app loses access immediately. This cannot be undone.</p>',
+    confirmLabel: 'Delete Key',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await apiFetch(`/api/admin/api-keys/${keyId}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ client_id: clientId }),
+        });
+        showToast('API key deleted.', 'success');
+        loadApiKeys();
+      } catch (err) {
+        if (err.status === 401) return;
+        showToast('Failed to delete key: ' + err.message, 'error');
       }
     },
   });
@@ -1685,6 +1988,25 @@ function initEventListeners() {
   document.getElementById('back-to-clients-btn').addEventListener('click', () => switchView('clients'));
 
   document.getElementById('clients-search').addEventListener('input', filterClientsTable);
+  document.getElementById('clients-status-filter').addEventListener('change', filterClientsTable);
+
+  // Static (not re-rendered) copy targets, e.g. the API Guide's Claude Code
+  // prompt block — too long/multiline to carry as a data-copy-value
+  // attribute, so it copies from another element's textContent by id
+  // instead of the existing data-copy-value pattern.
+  document.querySelectorAll('[data-copy-value-target]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-copy-value-target');
+      const text = document.getElementById(targetId)?.textContent || '';
+      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard.', 'success'));
+    });
+  });
+
+  document.getElementById('statistics-range-select').addEventListener('change', loadStatistics);
+  document.getElementById('statistics-webhook-failures-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    switchView('failures');
+  });
 
   document.getElementById('open-create-client-btn').addEventListener('click', openCreateClientModal);
   document.querySelectorAll('[data-close-create-client]').forEach((btn) => btn.addEventListener('click', closeCreateClientModal));

@@ -482,3 +482,175 @@ body {
     padding: 6px 0;
   }
 }
+
+/* Per-row contextual action menu (kebab button + popover) — used by the API
+   Keys table so Revoke/Delete don't compete visually with primary actions.
+   Generic enough to reuse for any other table that grows more than one
+   per-row action later. */
+.row-actions-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.row-actions-trigger {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.row-actions-trigger:hover,
+.row-actions-trigger[aria-expanded="true"] {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+  color: #111827;
+}
+
+.row-actions-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 170px;
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  padding: 4px;
+  z-index: 30;
+  display: none;
+}
+
+.row-actions-popover.open {
+  display: block;
+}
+
+.row-actions-popover button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #111827;
+}
+
+.row-actions-popover button:hover {
+  background: #F3F4F6;
+}
+
+.row-actions-popover button.danger {
+  color: #DC2626;
+}
+
+.row-actions-popover button.danger:hover {
+  background: #FEF2F2;
+}
+
+/* Dashboard KPI cards that navigate somewhere — matches the visual language
+   already used for .clickable-row (table rows). Cards with no destination
+   omit this class entirely and stay static. */
+.stat-card.clickable {
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  border-color: var(--color-primary-200);
+}
+
+.stat-card.clickable:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-card.clickable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Progressive-disclosure sections in the Create Client modal — a small
+   heading for the always-visible first section, collapsible <details> for
+   everything after it so the required 3 fields stay the whole story until
+   an admin chooses to add more. */
+.form-section-title {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.6rem;
+}
+
+.form-section-details {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.form-section-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-main);
+}
+
+.form-section-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-section-details summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.form-section-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.form-section-details .form-group:first-of-type {
+  margin-top: 0.75rem;
+}
+
+/* API Guide view */
+.api-guide-code {
+  background: #0F172A;
+  color: #E2E8F0;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.5rem 0;
+}
+
+.api-guide-inline-link {
+  color: var(--color-primary-700);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.api-guide-inline-link:hover {
+  text-decoration: underline;
+}

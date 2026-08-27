@@ -1,0 +1,333 @@
+{
+  "info": {
+    "_postman_id": "wasi-hub-api-collection",
+    "name": "Wasi Hub API",
+    "description": "Wasi CRM / WhatsApp Hub API — server-to-server messaging and templates for a client's own CRM, plus the admin endpoints used to issue credentials and configure webhooks. No OpenAPI spec exists for this service yet; every request here is authored directly from the route/controller source in server/src/routes/. Import this collection alongside Wasi-Hub-API.postman_environment.json, then fill in your own base_url/api_key/admin_token/client_token — every value in the environment template is a placeholder, never a real credential.\n\nSee the in-app API Guide (admin panel → API Guide) for a narrative walkthrough of the same endpoints, including a copy-pasteable Claude Code integration prompt.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "Messages",
+      "description": "Server-to-server messaging for a client's own CRM. Auth: Bearer {{api_key}} (a Hub API key, admin-issued — see the Admin - API Keys folder).",
+      "item": [
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{api_key}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/messages",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"to\": \"91XXXXXXXXXX\",\n  \"type\": \"template\",\n  \"template\": \"order_shipped\",\n  \"params\": { \"1\": \"Priya\", \"2\": \"#4821\" }\n}"
+            },
+            "description": "Sends a WhatsApp message through the client's own connected WABA.\n\n`type: \"template\"` — required outside the 24-hour customer-service window; the template must already be Meta-approved (see Templates folder). Optional `headerMediaUrl` for a template with an IMAGE/VIDEO/DOCUMENT header — a public https:// URL Wasi fetches and uploads to Meta for this one send.\n\n`type: \"text\"` with a `\"body\"` field instead of `template`/`params` — only works within 24 hours of the customer's last inbound message; rejected (not silently downgraded) outside that window.\n\n`client_id` in the body must match the client the API key belongs to — a defense-in-depth check.\n\nRate limit: 300 requests/minute per key."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/messages" },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"c2b1a6f0-...\",\n  \"status\": \"sent\",\n  \"to\": \"91XXXXXXXXXX\"\n}"
+            },
+            {
+              "name": "400 — Meta rejected the send",
+              "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/messages" },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"error\": \"Message rejected by WhatsApp\",\n  \"code\": \"meta_error\",\n  \"metaError\": { \"code\": 131047, \"message\": \"Re-engagement message\" }\n}"
+            },
+            {
+              "name": "401 — bad or revoked key",
+              "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/messages" },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"error\": \"Invalid or revoked API key\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "description": "Auth: Bearer {{api_key}}.",
+      "item": [
+        {
+          "name": "List Templates",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{api_key}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/templates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "templates"]
+            },
+            "description": "Lists templates for the calling API key's client."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Template",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{api_key}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/templates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "templates"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"order_shipped\",\n  \"category\": \"UTILITY\",\n  \"language\": \"en\",\n  \"body\": \"Hi {{1}}, your order {{2}} has shipped!\"\n}"
+            },
+            "description": "Submits a template for Meta approval. Not instant — approval takes minutes to a day; don't build an integration that assumes same-request approval."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - API Keys",
+      "description": "Auth: Bearer {{admin_token}} (an admin JWT from POST /api/admin/auth/login). Keys are admin-issued only — there is no self-serve key creation for clients.",
+      "item": [
+        {
+          "name": "List API Keys (all clients)",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/admin/api-keys", "host": ["{{base_url}}"], "path": ["api", "admin", "api-keys"] },
+            "description": "Excludes soft-deleted keys (deleted_at is null)."
+          },
+          "response": []
+        },
+        {
+          "name": "List API Keys for a Client",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/admin/api-keys?client_id={{client_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "api-keys"],
+              "query": [{ "key": "client_id", "value": "{{client_id}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create API Key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/admin/api-keys", "host": ["{{base_url}}"], "path": ["api", "admin", "api-keys"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"app_name\": \"GV Mart Integration\"\n}"
+            },
+            "description": "The raw key is returned exactly once, in this response, under `key`. It is never retrievable again — only its hash is stored. Copy it immediately."
+          },
+          "response": [
+            {
+              "name": "201 Created (raw key shown once)",
+              "originalRequest": { "method": "POST", "url": "{{base_url}}/api/admin/api-keys" },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"01aaba39-...\",\n  \"client_id\": \"{{client_id}}\",\n  \"app_name\": \"GV Mart Integration\",\n  \"revoked_at\": null,\n  \"deleted_at\": null,\n  \"created_at\": \"2026-01-01T00:00:00.000Z\",\n  \"key\": \"wasi_...(only ever shown here)\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/admin/api-keys/{{api_key_id}}/revoke",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "api-keys", "{{api_key_id}}", "revoke"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"client_id\": \"{{client_id}}\"\n}" },
+            "description": "Disables the key immediately — the consuming app loses access. Still visible in the list afterward, marked Revoked. Reversible only by issuing a brand-new key (there is no un-revoke)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete API Key",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/admin/api-keys/{{api_key_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "api-keys", "{{api_key_id}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"client_id\": \"{{client_id}}\"\n}" },
+            "description": "Permanently removes the key from the API Keys list (soft-deleted server-side — audit_log history referencing this id is preserved). Works on a key in any state; if it wasn't already revoked, this revokes it in the same step. Irreversible from the UI's point of view."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/admin/api-keys/{{api_key_id}}" },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{ \"ok\": true }"
+            },
+            {
+              "name": "404 — already deleted",
+              "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/admin/api-keys/{{api_key_id}}" },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{ \"error\": \"Not found, or already deleted\" }"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin - Hub Forwarding",
+      "description": "Configures Wasi to forward inbound WhatsApp events (replies, template/account status) to the client's own consuming app. Auth: Bearer {{admin_token}}.",
+      "item": [
+        {
+          "name": "Configure Hub Forwarding",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/admin/clients/{{client_id}}/hub-forward",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "clients", "{{client_id}}", "hub-forward"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"forward_to_url\": \"https://client-crm.example.com/webhooks/wasi\",\n  \"events\": [\"message.received\", \"message_template_status_update\", \"account_update\"]\n}"
+            },
+            "description": "Requires the client's WABA to already be connected. `forward_secret` is only returned in the response body the first time it's generated for this WABA — every later call (including a later save of just the URL/events) returns it masked as `forward_secret_last4`/`has_forward_secret` only. Deliveries are signed `x-wasi-signature-256: sha256=<hmac>` (HMAC-SHA256 of the raw JSON body, keyed by this secret) and queued with retry/backoff, not fire-and-forget."
+          },
+          "response": []
+        },
+        {
+          "name": "Regenerate Hub Forward Secret",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/admin/clients/{{client_id}}/hub-forward/regenerate-secret",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "clients", "{{client_id}}", "hub-forward", "regenerate-secret"]
+            },
+            "description": "Force-generates a new forward_secret, invalidating the old one immediately for future deliveries (already-queued deliveries keep using their snapshotted secret). The new raw secret is returned once, in this response only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Client Webhook Config",
+      "description": "The client's own self-configured inbound webhook (separate from Admin - Hub Forwarding above, which is admin-provisioned). Auth: Bearer {{client_token}} (a client JWT from POST /api/auth/login).",
+      "item": [
+        {
+          "name": "Get Webhook Config",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{client_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/client-webhook", "host": ["{{base_url}}"], "path": ["api", "client-webhook"] },
+            "description": "Never returns the raw secret — only `has_secret`/`secret_last4`. The raw value is only ever returned by Save (first time) or Regenerate below."
+          },
+          "response": [
+            {
+              "name": "200 OK (masked)",
+              "originalRequest": { "method": "GET", "url": "{{base_url}}/api/client-webhook" },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"e0125b53-...\",\n  \"client_id\": \"{{client_id}}\",\n  \"callback_url\": \"https://your-crm.example.com/webhooks\",\n  \"events\": [\"message.received\"],\n  \"has_secret\": true,\n  \"secret_last4\": \"e647\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Save Webhook Config",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{client_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/client-webhook", "host": ["{{base_url}}"], "path": ["api", "client-webhook"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"callback_url\": \"https://your-crm.example.com/webhooks\",\n  \"events\": [\"message.received\"]\n}"
+            },
+            "description": "The raw `secret` field is present in the response only the very first time a secret is generated for this client. Saving the URL/events again later never re-exposes it."
+          },
+          "response": []
+        },
+        {
+          "name": "Regenerate Webhook Secret",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{client_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/client-webhook/regenerate-secret", "host": ["{{base_url}}"], "path": ["api", "client-webhook", "regenerate-secret"] },
+            "description": "Force-generates a new secret, invalidating the old one immediately. Returned raw exactly once, in this response."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Statistics",
+      "description": "Auth: Bearer {{admin_token}}.",
+      "item": [
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/admin/stats?days=30",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "stats"],
+              "query": [{ "key": "days", "value": "30", "description": "Rolling window, clamped 1-365. Default 30." }]
+            },
+            "description": "Read-only aggregates: daily message volume, client growth, webhook delivery success/failure, and API key issuance/activity — backs the admin panel's Statistics view."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -16,6 +16,17 @@ const clientCreateSchema = z.object({
   // clientsRepo.update's dynamic set-clause (there is no `password` column,
   // only `password_hash`).
   password: z.string().min(8).optional(),
+  // Onboarding context beyond the three fields above — all optional, so the
+  // minimal name/email/password flow keeps working unchanged. See migration
+  // 035_client_onboarding_fields.js.
+  contact_person_name: z.string().min(1).optional(),
+  contact_phone: z.string().min(1).optional(),
+  company_details: z.string().min(1).optional(),
+  developer_name: z.string().min(1).optional(),
+  developer_phone: z.string().min(1).optional(),
+  developer_email: z.string().email().optional(),
+  integration_requirements: z.string().min(1).optional(),
+  additional_notes: z.string().min(1).optional(),
 });
 
 const clientUpdateSchema = clientCreateSchema.omit({ password: true }).partial();

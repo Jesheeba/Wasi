@@ -21,6 +21,15 @@ const { z } = require('zod');
 
 const router = Router();
 
+// Strips both secrets a wabas row can carry (Meta access token, hub-forward
+// signing secret) from any response — used by every route that returns a
+// waba row so a future added field can't reintroduce a leak by accident.
+function maskWaba(waba) {
+  if (!waba) return null;
+  const { access_token_encrypted, forward_secret, ...rest } = waba;
+  return { ...rest, has_forward_secret: !!forward_secret, forward_secret_last4: forward_secret ? forward_secret.slice(-4) : null };
+}
+
 // --- Overview / KPIs ---
 router.get('/overview', asyncHandler(async (req, res) => {
   const [{ rows: clientCounts }, { rows: msgToday }, { rows: failedOnboardings }] = await Promise.all([
@@ -68,7 +77,7 @@ router.get('/onboarding-queue', asyncHandler(async (req, res) => {
 // --- WABA health monitor across all tenants ---
 router.get('/wabas', asyncHandler(async (req, res) => {
   const rows = await wabasRepo.listAllWithClient();
-  res.json(rows.map(({ access_token_encrypted, ...rest }) => rest));
+  res.json(rows.map(maskWaba));
 }));
 
 // --- Rich client detail: client + subscription + waba + templates + audit trail ---
@@ -85,9 +94,8 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
   ]);
 
   const { password_hash, ...safeClient } = client;
-  const safeWaba = waba ? (({ access_token_encrypted, ...rest }) => rest)(waba) : null;
 
-  res.json({ client: safeClient, subscription, waba: safeWaba, templates, auditTrail });
+  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail });
 }));
 
 // --- Manual retry: re-pull phone number status from Meta for a connected WABA ---
@@ -229,6 +237,7 @@ router.get('/api-keys', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select k.id, k.client_id, k.app_name, k.last_used_at, k.revoked_at, k.created_at, c.name as client_name
     from api_keys k join clients c on c.id = k.client_id
+    where k.deleted_at is null
     order by k.created_at desc
   `);
   res.json(rows);
@@ -281,6 +290,21 @@ router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
   res.json(revoked);
 }));
 
+// Delete works on a key in any state — see apiKeysRepo.softDelete's comment.
+// Soft tombstone, not a row delete, so it's a DELETE verb over an endpoint
+// that never actually removes the row; that's intentional (see migration
+// 034_api_key_soft_delete.js) — DELETE is still the correct HTTP semantics
+// from the caller's point of view, since the key permanently leaves the list.
+router.delete('/api-keys/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const schema = z.object({ client_id: z.string().uuid() });
+  const { client_id } = schema.parse(req.body);
+  const deleted = await apiKeysRepo.softDelete(pool, id, client_id);
+  if (!deleted) return res.status(404).json({ error: 'Not found, or already deleted' });
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_deleted', target: id });
+  res.json({ ok: true });
+}));
+
 // --- Hub inbound forwarding config (build plan Phase 5) — sets
 // wabas.forward_to_url/forward_events for a client's connected WABA. Was
 // missing entirely until now: the columns existed (migration
@@ -297,11 +321,29 @@ router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
   const existing = await wabasRepo.findByClientId(id);
   if (!existing) return res.status(404).json({ error: 'No WABA connected for this client yet' });
 
+  const isNewSecret = !existing.forward_secret;
   const forward_secret = existing.forward_secret || crypto.randomBytes(24).toString('hex');
   const updated = await wabasRepo.upsertForClient(id, { forward_to_url, forward_secret, forward_events: events });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'hub_forward_configured', target: id });
-  const { access_token_encrypted, ...safe } = updated;
-  res.json(safe);
+  // Only a genuinely new secret (first-time setup) is ever returned raw —
+  // saving the URL/events on top of an existing secret must not re-expose it.
+  res.json(isNewSecret ? { ...maskWaba(updated), forward_secret } : maskWaba(updated));
+}));
+
+// Separate, explicit action — force-generates a new forward_secret even if
+// one already exists, invalidating the old one immediately (deliveries
+// already queued keep using their snapshotted target_secret — see migration
+// 014_hub_capability.js's comment — only future deliveries are affected).
+// The frontend must warn before calling this.
+router.post('/clients/:id/hub-forward/regenerate-secret', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const existing = await wabasRepo.findByClientId(id);
+  if (!existing || !existing.forward_to_url) return res.status(404).json({ error: 'No hub forwarding configured for this client yet' });
+
+  const forward_secret = crypto.randomBytes(24).toString('hex');
+  const updated = await wabasRepo.upsertForClient(id, { forward_secret });
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'hub_forward_secret_regenerated', target: id });
+  res.json({ ...maskWaba(updated), forward_secret });
 }));
 
 // --- Platform Overview: tenant, WABA, phone number, connection status, plan,
@@ -356,6 +398,80 @@ router.get('/volume', asyncHandler(async (req, res) => {
     [days]
   );
   res.json(rows);
+}));
+
+// --- Statistics/Analytics: trend data for the admin Statistics view.
+// Read-only aggregation over tables that already exist (usage_logs, clients,
+// webhook_deliveries, api_keys) — no new tables. `days` follows the same
+// clamped rolling-window convention as /volume above, for consistency. ---
+router.get('/stats', asyncHandler(async (req, res) => {
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+
+  const [
+    { rows: messageVolume },
+    { rows: clientGrowth },
+    { rows: webhookByStatus },
+    { rows: webhookDaily },
+    { rows: apiKeyTotals },
+    { rows: apiKeyDaily },
+    { rows: apiKeyActivity },
+  ] = await Promise.all([
+    pool.query(
+      `select date, coalesce(sum(messages_sent), 0)::int as messages_sent,
+              coalesce(sum(messages_received), 0)::int as messages_received
+       from usage_logs where date >= current_date - $1::int
+       group by date order by date asc`,
+      [days]
+    ),
+    pool.query(
+      `select date_trunc('day', created_at)::date as date, count(*)::int as new_clients
+       from clients where created_at >= current_date - $1::int
+       group by 1 order by 1 asc`,
+      [days]
+    ),
+    pool.query(
+      `select status, count(*)::int as count from webhook_deliveries
+       where created_at >= current_date - $1::int
+       group by status`,
+      [days]
+    ),
+    pool.query(
+      `select date_trunc('day', created_at)::date as date,
+              count(*) filter (where status = 'delivered')::int as delivered,
+              count(*) filter (where status = 'failed')::int as failed
+       from webhook_deliveries where created_at >= current_date - $1::int
+       group by 1 order by 1 asc`,
+      [days]
+    ),
+    pool.query(
+      `select count(*) filter (where revoked_at is null and deleted_at is null)::int as active,
+              count(*) filter (where revoked_at is not null and deleted_at is null)::int as revoked,
+              count(*) filter (where deleted_at is not null)::int as deleted
+       from api_keys`
+    ),
+    pool.query(
+      `select date_trunc('day', created_at)::date as date, count(*)::int as keys_issued
+       from api_keys where created_at >= current_date - $1::int and deleted_at is null
+       group by 1 order by 1 asc`,
+      [days]
+    ),
+    // Most recently active keys, for a "which client/app is actually using
+    // the Hub API" list that links into that client's detail page.
+    pool.query(
+      `select k.client_id, c.name as client_name, k.app_name, k.last_used_at
+       from api_keys k join clients c on c.id = k.client_id
+       where k.deleted_at is null and k.last_used_at is not null
+       order by k.last_used_at desc limit 10`
+    ),
+  ]);
+
+  res.json({
+    days,
+    messageVolume,
+    clientGrowth,
+    webhookDeliveries: { byStatus: webhookByStatus, daily: webhookDaily },
+    apiKeys: { totals: apiKeyTotals[0], daily: apiKeyDaily, recentActivity: apiKeyActivity },
+  });
 }));
 
 // --- Failures: failed sends with Meta error codes, webhook_deliveries in

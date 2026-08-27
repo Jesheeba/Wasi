@@ -67,6 +67,14 @@ router.post('/', asyncHandler(async (req, res) => {
     tenant_slug,
     status: data.status,
     password_hash,
+    contact_person_name: data.contact_person_name,
+    contact_phone: data.contact_phone,
+    company_details: data.company_details,
+    developer_name: data.developer_name,
+    developer_phone: data.developer_phone,
+    developer_email: data.developer_email,
+    integration_requirements: data.integration_requirements,
+    additional_notes: data.additional_notes,
   });
 
   // Every client gets a Hub API key (build plan Phase 5) at creation time,
