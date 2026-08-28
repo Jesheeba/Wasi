@@ -150,7 +150,7 @@ test('get_rate_limit_status: GETs /api/v1/account/rate-limit', async () => {
 test('a Hub API code with a known hint (session_window_closed) gets the plain-English next-step appended', async () => {
   responses.set('POST /api/v1/messages', {
     status: 409,
-    body: { error: 'This chat is outside the 24-hour customer service window — send a template message instead.', code: 'session_window_closed' },
+    body: { error: { code: 'session_window_closed', message: 'This chat is outside the 24-hour customer service window — send a template message instead.' } },
   });
   const result = await callHandler('send_text_message', { to: '919876543210', body: 'hi' });
   assert.equal(result.isError, true);
@@ -161,7 +161,7 @@ test('a Hub API code with a known hint (session_window_closed) gets the plain-En
 test('a Meta metaError code (131047) gets its own plain-English hint appended', async () => {
   responses.set('POST /api/v1/messages', {
     status: 502,
-    body: { error: 'Meta rejected the send', code: 'send_failed', metaError: { code: 131047, message: '(#131047) Re-engagement message' } },
+    body: { error: { code: 'send_failed', message: 'Meta rejected the send', metaError: { code: 131047, message: '(#131047) Re-engagement message' } } },
   });
   const result = await callHandler('send_text_message', { to: '919876543210', body: 'hi' });
   assert.equal(result.isError, true);
@@ -169,7 +169,7 @@ test('a Meta metaError code (131047) gets its own plain-English hint appended', 
 });
 
 test('a template that fails validation returns Hub API details verbatim, not a bare status code', async () => {
-  responses.set('GET /api/v1/templates/bad-id', { status: 404, body: { error: 'Not found' } });
+  responses.set('GET /api/v1/templates/bad-id', { status: 404, body: { error: { code: 'template_not_found', message: 'Not found.' } } });
   const result = await callHandler('get_template_details', { template_id: 'bad-id' });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /not found/i);

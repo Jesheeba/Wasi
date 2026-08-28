@@ -84,11 +84,15 @@ async function hubRequest(method, path, { query, body } = {}) {
   }
 
   if (!res.ok) {
-    throw new HubApiError(data.error || `Hub API request failed (HTTP ${res.status})`, {
+    // Hub API v1's error shape is { error: { code, message, ...extra } }
+    // (server/src/utils/apiError.js) — every /api/v1/* endpoint returns
+    // this same nested shape now, so there's exactly one place to parse it.
+    const errBody = data.error && typeof data.error === 'object' ? data.error : {};
+    throw new HubApiError(errBody.message || `Hub API request failed (HTTP ${res.status})`, {
       status: res.status,
-      code: data.code,
-      metaError: data.metaError,
-      details: data.details,
+      code: errBody.code,
+      metaError: errBody.metaError,
+      details: errBody.details,
     });
   }
   return data;

@@ -148,7 +148,7 @@ test('5. send reuses the 24-hour session-window guard', async () => {
   });
   assert.equal(res.status, 409);
   const data = await res.json();
-  assert.equal(data.code, 'session_window_closed');
+  assert.equal(data.error.code, 'session_window_closed');
 });
 
 test('6. send reuses the Phase 4 opt-in consent guard for marketing templates', async () => {
@@ -163,7 +163,7 @@ test('6. send reuses the Phase 4 opt-in consent guard for marketing templates', 
   });
   assert.equal(res.status, 409);
   const data = await res.json();
-  assert.equal(data.code, 'consent_required');
+  assert.equal(data.error.code, 'consent_required');
 });
 
 test('7. with no guard blocking it, send reaches (and is stopped only by) the real send attempt', async () => {
@@ -187,7 +187,7 @@ test('7. with no guard blocking it, send reaches (and is stopped only by) the re
   // aren't accidentally blocking a legitimate send too.
   assert.equal(res.status, 409);
   const data = await res.json();
-  assert.equal(data.code, 'waba_not_connected');
+  assert.equal(data.error.code, 'waba_not_connected');
 });
 
 test('7b. interactive send: schema rejects more than 3 buttons with a clear error, before ever reaching Meta', async () => {
@@ -449,7 +449,7 @@ test('8. send reuses the plan-limit guard', async () => {
   });
   assert.equal(res.status, 409);
   const data = await res.json();
-  assert.equal(data.code, 'plan_limit_reached');
+  assert.equal(data.error.code, 'plan_limit_reached');
 });
 
 test('9. template creation via the hub API reuses named-parameter validation', async () => {
@@ -460,5 +460,5 @@ test('9. template creation via the hub API reuses named-parameter validation', a
   });
   assert.equal(res.status, 400);
   const data = await res.json();
-  assert.match(data.details.join(' '), /numbered parameters/i);
+  assert.match(data.error.details.join(' '), /numbered parameters/i);
 });

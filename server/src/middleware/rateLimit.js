@@ -24,12 +24,24 @@ const webhookLimiter = rateLimit({
 // than a browser-facing limiter, but still bounded: a leaked/compromised API
 // key shouldn't be able to hammer this without limit just because it's a
 // valid credential.
+//
+// legacyHeaders is on (unlike authLimiter/webhookLimiter above) specifically
+// to emit X-RateLimit-Limit/Remaining/Reset on every /api/v1/* response —
+// wasi-master-plan.md §8.6's rate-limit visibility requirement. This is
+// express-rate-limit's own built-in header set (see its setLegacyHeaders),
+// not custom Wasi logic, and it fires on both allowed and 429 responses for
+// free. standardHeaders (the draft RateLimit-* headers) stays on too —
+// additive, already present before this change, no reason to remove it.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 300,
   standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests.' },
+  legacyHeaders: true,
+  // Hub API v1's own {error: {code, message}} shape (utils/apiError.js),
+  // not the plain {error: 'string'} authLimiter/webhookLimiter above use —
+  // a 429 from this limiter is still a /api/v1/* response and must match
+  // every other error this API returns.
+  message: { error: { code: 'rate_limited', message: 'Too many requests.' } },
 });
 
 module.exports = { authLimiter, webhookLimiter, apiLimiter };

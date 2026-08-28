@@ -46,13 +46,13 @@
               "body": "{\n  \"id\": \"c2b1a6f0-...\",\n  \"status\": \"sent\",\n  \"to\": \"91XXXXXXXXXX\"\n}"
             },
             {
-              "name": "400 — Meta rejected the send",
+              "name": "502 — Meta rejected the send",
               "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/messages" },
-              "status": "Bad Request",
-              "code": 400,
+              "status": "Bad Gateway",
+              "code": 502,
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"error\": \"Message rejected by WhatsApp\",\n  \"code\": \"meta_error\",\n  \"metaError\": { \"code\": 131047, \"message\": \"Re-engagement message\" }\n}"
+              "body": "{\n  \"error\": {\n    \"code\": \"send_failed\",\n    \"message\": \"Message rejected by WhatsApp\",\n    \"metaError\": { \"code\": 131047, \"message\": \"Re-engagement message\" }\n  }\n}"
             },
             {
               "name": "401 — bad or revoked key",
@@ -61,7 +61,7 @@
               "code": 401,
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"error\": \"Invalid or revoked API key\"\n}"
+              "body": "{\n  \"error\": {\n    \"code\": \"invalid_api_key\",\n    \"message\": \"Invalid or revoked API key.\"\n  }\n}"
             }
           ]
         }

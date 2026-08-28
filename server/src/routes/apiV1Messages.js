@@ -16,6 +16,7 @@ const metaClient = require('../utils/metaClient');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { apiMessageSendSchema, uuid } = require('../utils/validate');
 const { requireApiKey } = require('../middleware/requireApiKey');
+const { sendApiError } = require('../utils/apiError');
 
 const router = Router();
 router.use(requireApiKey);
@@ -27,7 +28,7 @@ router.use(requireApiKey);
 router.get('/:id/status', asyncHandler(async (req, res) => {
   const id = uuid.parse(req.params.id);
   const message = await chatsRepo.findMessageByIdForClient(pool, req.clientId, id);
-  if (!message) return res.status(404).json({ error: 'Not found' });
+  if (!message) return sendApiError(res, 404, 'message_not_found', 'Not found.');
   res.json({
     id: message.id,
     chat_id: message.chat_id,
@@ -44,7 +45,7 @@ router.post('/', asyncHandler(async (req, res) => {
   const data = apiMessageSendSchema.parse(req.body);
 
   if (data.client_id !== req.clientId) {
-    return res.status(403).json({ error: 'client_id does not match this API key\'s client' });
+    return sendApiError(res, 403, 'client_id_mismatch', 'client_id does not match this API key\'s client.');
   }
 
   const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone: data.to });
@@ -78,7 +79,7 @@ router.post('/', asyncHandler(async (req, res) => {
       // metaError (see metaClient.js/messagingService.js) is Meta's actual
       // error body, not just the message string — omitted when there isn't
       // one (e.g. a plan-limit or consent rejection never reached Meta).
-      return res.status(status).json({ error: err.message, code: err.code, metaError: err.metaError || undefined });
+      return sendApiError(res, status, err.code, err.message, { metaError: err.metaError || undefined });
     }
     throw err;
   }

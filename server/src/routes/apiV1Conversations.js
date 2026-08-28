@@ -20,6 +20,7 @@ const chatsRepo = require('../repositories/chatsRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid } = require('../utils/validate');
 const { requireApiKey } = require('../middleware/requireApiKey');
+const { sendApiError } = require('../utils/apiError');
 
 const router = Router();
 router.use(requireApiKey);
@@ -45,7 +46,7 @@ router.get('/:id/messages', asyncHandler(async (req, res) => {
   const id = uuid.parse(req.params.id);
   const { limit } = historyQuerySchema.parse(req.query);
   const chat = await chatsRepo.findById(pool, req.clientId, id);
-  if (!chat) return res.status(404).json({ error: 'Not found' });
+  if (!chat) return sendApiError(res, 404, 'conversation_not_found', 'Not found.');
   const messages = await chatsRepo.listMessages(pool, req.clientId, id);
   res.json(messages.slice(-limit));
 }));

@@ -90,8 +90,22 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   your client's consent policy), the send is rejected. This is enforced
   centrally in `messagingService.sendChatMessage`, the same function the
   Wasi chat UI itself calls — the CRM API isn't a side door around it.
-- Errors come back as `{ error, code, metaError? }` with Meta's real error
-  body attached when the rejection happened at Meta (not swallowed).
+- Errors come back in one consistent shape across every `/api/v1/*`
+  endpoint: `{ "error": { "code": "...", "message": "...", ... } }` — a
+  stable, machine-readable `code` to branch on, a human-readable `message`,
+  and endpoint-specific extra fields nested alongside them (e.g. `metaError`
+  with Meta's real error body attached when the rejection happened at Meta,
+  not swallowed; `details` for a list of validation failures). For example:
+  ```json
+  { "error": { "code": "send_failed", "message": "Meta rejected the send.", "metaError": { "code": 131047, "message": "..." } } }
+  ```
+- **Rate limits**: every `/api/v1/*` response carries live
+  `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset`
+  headers so a well-behaved integration can self-throttle before hitting a
+  429, rather than discovering the ceiling by trial and error. The limit is
+  300 requests/minute, currently scoped per source IP (also available as a
+  static reference via `GET /api/v1/account/rate-limit`). A 429 response
+  uses the same error shape as above: `{ "error": { "code": "rate_limited", "message": "Too many requests." } }`.
 
 **Manage templates** — `GET /api/v1/templates`, `POST /api/v1/templates`
 (same auth). A template must be Meta-approved before it can be used in a

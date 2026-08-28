@@ -37,17 +37,22 @@ router.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
-// Static ceiling only, not live per-key usage — middleware/rateLimit.js's
-// apiLimiter store is in-memory/per-process and isn't queryable, and this
-// project deliberately doesn't stand up new usage-tracking infrastructure
-// just for this v1 tool (see wasi-mcp-server-plan.md's open decisions).
-// Still useful to a calling model as a hard number to pace bursts against.
+// Static ceiling, documenting the same number middleware/rateLimit.js's
+// apiLimiter actually enforces — kept as a stable, easy-to-fetch reference
+// for a calling model, now that every /api/v1/* response (this one
+// included) also carries live X-RateLimit-Limit/Remaining/Reset headers
+// (see rateLimit.js's apiLimiter config) reflecting the real-time count.
+// Scope is genuinely per source IP, not per API key — apiLimiter uses
+// express-rate-limit's default IP-based keyGenerator; this project
+// deliberately hasn't stood up per-API-key usage-tracking infrastructure
+// (see wasi-mcp-server-plan.md's open decisions), and the previous wording
+// here ("per API key") was inaccurate and is corrected below.
 router.get('/rate-limit', asyncHandler(async (req, res) => {
   res.json({
     limit_per_minute: 300,
     window_seconds: 60,
-    scope: 'per API key, shared across every Hub API endpoint',
-    note: 'This is the account-wide ceiling, not live usage — usage isn\'t tracked per-key yet. Pace bursts (e.g. broadcast-style sends) comfortably under this number rather than relying on hitting a 429 to find the edge.',
+    scope: 'per source IP, shared across every Hub API v1 endpoint (not yet tracked per API key)',
+    note: 'This is the account-wide ceiling. Live, real-time usage is reported via the X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset headers on every /api/v1/* response, including this one — prefer those over polling this endpoint. Pace bursts (e.g. broadcast-style sends) comfortably under this number rather than relying on hitting a 429 to find the edge.',
   });
 }));
 

@@ -16,6 +16,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { messageTemplateCreateSchema, uuid } = require('../utils/validate');
 const { validateTemplateText } = require('../utils/templateParams');
 const { requireApiKey } = require('../middleware/requireApiKey');
+const { sendApiError } = require('../utils/apiError');
 
 const router = Router();
 router.use(requireApiKey);
@@ -31,7 +32,7 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const id = uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(pool, req.clientId, id);
-  if (!template) return res.status(404).json({ error: 'Not found' });
+  if (!template) return sendApiError(res, 404, 'template_not_found', 'Not found.');
   res.json(template);
 }));
 
@@ -40,7 +41,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
   const validation = validateTemplateText(data.body, { label: 'Body' });
   if (!validation.valid) {
-    return res.status(400).json({ error: 'Invalid template body', details: validation.errors });
+    return sendApiError(res, 400, 'invalid_template_body', 'Invalid template body.', { details: validation.errors });
   }
 
   const waba = await wabasRepo.findByClientId(req.clientId);
@@ -51,9 +52,12 @@ router.post('/', asyncHandler(async (req, res) => {
       await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
-        return res.status(400).json({ error: 'Invalid template body', details: err.errors });
+        return sendApiError(res, 400, 'invalid_template_body', 'Invalid template body.', { details: err.errors });
       }
-      return res.status(502).json({ error: 'Meta rejected this template', detail: err.message, metaError: err.metaError || undefined });
+      return sendApiError(res, 502, 'meta_template_rejected', 'Meta rejected this template.', {
+        detail: err.message,
+        metaError: err.metaError || undefined,
+      });
     }
   }
 

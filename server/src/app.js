@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const { authLimiter, webhookLimiter, apiLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
+const { apiV1NotFoundHandler, apiV1ErrorHandler } = require('./middleware/apiV1ErrorHandler');
 const { requireClientAuth } = require('./middleware/requireClientAuth');
 const { requireAdminAuth } = require('./middleware/requireAdminAuth');
 const { withTenantContext } = require('./middleware/tenantContext');
@@ -120,6 +121,13 @@ function createApp() {
   app.use('/api/v1/conversations', apiLimiter, apiV1ConversationsRouter);
   app.use('/api/v1/contacts', apiLimiter, apiV1ContactsRouter);
   app.use('/api/v1/account', apiLimiter, apiV1AccountRouter);
+  // Catches unmatched /api/v1/* paths and any error thrown inside the five
+  // routers above (Zod validation, Postgres constraint violations, an
+  // uncaught error) — both in the {error: {code, message}} shape, before
+  // falling through to the app-wide handlers below, which stay on the old
+  // {error: 'string'} shape for every other route in this app.
+  app.use('/api/v1', apiV1NotFoundHandler);
+  app.use('/api/v1', apiV1ErrorHandler);
 
   // Static frontends (no build step) — mounted explicitly by directory
   // rather than serving the whole repo root, so server/.env, node_modules,

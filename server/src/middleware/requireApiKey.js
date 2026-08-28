@@ -15,17 +15,18 @@
 const { pool } = require('../db/pool');
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { sendApiError } = require('../utils/apiError');
 
 const requireApiKey = asyncHandler(async (req, res, next) => {
   const header = req.get('authorization') || '';
   const [scheme, token] = header.split(' ');
   if (scheme !== 'Bearer' || !token) {
-    return res.status(401).json({ error: 'Missing bearer API key' });
+    return sendApiError(res, 401, 'missing_bearer_token', 'Missing bearer API key.');
   }
 
   const record = await apiKeysRepo.findActiveByHash(pool, token);
   if (!record) {
-    return res.status(401).json({ error: 'Invalid or revoked API key' });
+    return sendApiError(res, 401, 'invalid_api_key', 'Invalid or revoked API key.');
   }
 
   req.clientId = record.client_id;
