@@ -112,6 +112,10 @@
           <i data-lucide="layout"></i>
           <span class="nav-text">Template</span>
         </a>
+        <a class="nav-item" data-view="template-library">
+          <i data-lucide="book-open"></i>
+          <span class="nav-text">Template Library</span>
+        </a>
         <a class="nav-item" data-view="automation">
           <i data-lucide="bot"></i>
           <span class="nav-text">Automation</span>
@@ -372,6 +376,40 @@
           </div>
           <div class="table-card" style="padding: 1.5rem;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="templates-grid"></div>
+          </div>
+        </div>
+
+        <!-- 4b. TEMPLATE LIBRARY VIEW -->
+        <div id="view-template-library" class="view-container" style="padding: 1.5rem;">
+          <div class="page-title-bar">
+            <div>
+              <h1 class="page-title">Template Library</h1>
+              <p class="page-subtitle">Pre-vetted, ready-to-customize WhatsApp templates by industry — checked against Meta's real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.</p>
+            </div>
+          </div>
+          <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+              <select id="library-filter-industry" class="form-input" style="width: auto; min-width: 160px;">
+                <option value="">All Industries</option>
+              </select>
+              <select id="library-filter-category" class="form-input" style="width: auto; min-width: 160px;">
+                <option value="">All Categories</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Utility">Utility</option>
+                <option value="Authentication">Authentication</option>
+              </select>
+              <select id="library-filter-use-case" class="form-input" style="width: auto; min-width: 160px;">
+                <option value="">All Use Cases</option>
+              </select>
+            </div>
+          </div>
+          <div class="library-layout">
+            <div class="table-card" style="padding: 1.5rem;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;" id="library-grid"></div>
+            </div>
+            <div class="table-card library-preview-card" style="padding: 1.5rem;" id="library-preview-panel">
+              <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
+            </div>
           </div>
         </div>
 

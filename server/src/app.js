@@ -33,6 +33,7 @@ const paymentLinksRouter = require('./routes/paymentLinks');
 const walletRouter = require('./routes/wallet');
 const clientWebhookRouter = require('./routes/clientWebhook');
 const apiKeysRouter = require('./routes/apiKeys');
+const templateLibraryRouter = require('./routes/templateLibrary');
 const apiV1MessagesRouter = require('./routes/apiV1Messages');
 const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 const apiV1ConversationsRouter = require('./routes/apiV1Conversations');
@@ -103,6 +104,7 @@ function createApp() {
   app.use('/api/wallet', requireClientAuth, withTenantContext, walletRouter);
   app.use('/api/client-webhook', requireClientAuth, withTenantContext, clientWebhookRouter);
   app.use('/api/api-keys', requireClientAuth, withTenantContext, apiKeysRouter);
+  app.use('/api/template-library', requireClientAuth, withTenantContext, templateLibraryRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);

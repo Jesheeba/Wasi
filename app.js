@@ -26,7 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     flowCanvasEditor: null,
     wabaConnected: false,
     templates: [],
-    tickets: []
+    tickets: [],
+    libraryEntries: [],
+    librarySelectedEntry: null
   };
 
   const refreshIcons = () => {
@@ -461,6 +463,14 @@ document.addEventListener('DOMContentLoaded', () => {
         state.templates = templates;
         if (state.currentView === 'template') renderTemplates();
       }).catch(() => {});
+    }
+    if (targetView === 'template-library') {
+      // Curated reference content, not live per-client data (unlike
+      // chat/contacts above) — only changes when an admin re-runs
+      // seedTemplateLibrary.js, so caching for the session avoids refetching
+      // the same 36+ rows every time this view is opened.
+      if (!state.libraryEntries.length) loadTemplateLibrary();
+      else renderLibraryGrid();
     }
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
@@ -1915,6 +1925,239 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     }).join('');
   }
+
+  // --- Template Library (wasi-master-plan.md §2) ---
+  // "Use this Template" reuses the EXISTING Create Template modal/submit
+  // path entirely (open-create-template-modal's own handler, above) — this
+  // section only ever populates that form's fields and opens it; it never
+  // POSTs to /api/templates itself. GET /api/template-library and
+  // POST /api/template-library/:id/use (usage logging only) are the only
+  // new endpoints this feature touches.
+
+  // Meta template names must be lowercase/underscore only
+  // (messageTemplateCreateSchema's regex) and unique per client+language —
+  // this is a starting suggestion, not a guaranteed-unique final value; the
+  // name field stays fully editable and a real collision surfaces the
+  // existing 409 error same as any manually-typed name would.
+  function slugifyTemplateName(title) {
+    const slug = (title || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60);
+    return slug || 'template';
+  }
+
+  function populateLibraryFilterOptions() {
+    const industries = [...new Set(state.libraryEntries.map((t) => t.industry))].sort();
+    const useCases = [...new Set(state.libraryEntries.map((t) => t.use_case))].sort();
+
+    const industrySelect = document.getElementById('library-filter-industry');
+    if (industrySelect) {
+      const current = industrySelect.value;
+      industrySelect.innerHTML = '<option value="">All Industries</option>' +
+        industries.map((i) => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
+      industrySelect.value = current;
+    }
+
+    const useCaseSelect = document.getElementById('library-filter-use-case');
+    if (useCaseSelect) {
+      const current = useCaseSelect.value;
+      useCaseSelect.innerHTML = '<option value="">All Use Cases</option>' +
+        useCases.map((u) => `<option value="${escapeHtml(u)}">${escapeHtml(u.replace(/_/g, ' '))}</option>`).join('');
+      useCaseSelect.value = current;
+    }
+  }
+
+  function filteredLibraryEntries() {
+    const industry = document.getElementById('library-filter-industry')?.value || '';
+    const category = document.getElementById('library-filter-category')?.value || '';
+    const useCase = document.getElementById('library-filter-use-case')?.value || '';
+    return state.libraryEntries.filter((t) =>
+      (!industry || t.industry === industry) &&
+      (!category || t.category === category) &&
+      (!useCase || t.use_case === useCase)
+    );
+  }
+
+  function renderLibraryGrid() {
+    const grid = document.getElementById('library-grid');
+    if (!grid) return;
+    const entries = filteredLibraryEntries();
+
+    if (!entries.length) {
+      grid.innerHTML = '<p style="padding:1rem;color:#6B7280;">No templates match these filters.</p>';
+      return;
+    }
+
+    grid.innerHTML = entries.map((t) => {
+      const preview = t.category === 'Authentication'
+        ? 'Meta-generated verification message (code delivery, expiration notice).'
+        : escapeHtml((t.body || '').length > 90 ? `${t.body.slice(0, 90)}…` : (t.body || ''));
+      const selected = state.librarySelectedEntry?.id === t.id ? ' selected' : '';
+      return `
+        <div class="template-card library-template-card${selected}" data-library-id="${t.id}">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(t.title)}</span>
+              <span class="template-badge approved" style="flex-shrink: 0; white-space: nowrap;">${escapeHtml(t.category)}</span>
+            </div>
+            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${preview}</p>
+          </div>
+          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">${escapeHtml(t.industry)} &middot; ${escapeHtml(t.use_case.replace(/_/g, ' '))}</div>
+        </div>
+      `;
+    }).join('');
+
+    grid.querySelectorAll('[data-library-id]').forEach((card) => {
+      card.addEventListener('click', () => selectLibraryEntry(card.dataset.libraryId));
+    });
+  }
+
+  function selectLibraryEntry(id) {
+    const entry = state.libraryEntries.find((t) => t.id === id);
+    if (!entry) return;
+    state.librarySelectedEntry = entry;
+    renderLibraryGrid();
+    renderLibraryPreview(entry);
+  }
+
+  // Same WhatsApp-bubble preview markup/CSS as the Create Template modal's
+  // own preview (template-preview-frame/-bubble/-header/-footer/-buttons) —
+  // reused as-is, not reimplemented, so a library preview and the modal's
+  // preview of the same content always look identical.
+  function renderLibraryPreview(entry) {
+    const panel = document.getElementById('library-preview-panel');
+    if (!panel) return;
+
+    let bubbleHtml;
+    if (entry.category === 'Authentication') {
+      bubbleHtml = `
+        <div>Your verification code is *123456*. For your security, do not share this code with anyone.</div>
+        <div class="template-preview-buttons"><div class="template-preview-button">&#128203; Copy Code</div></div>
+      `;
+    } else {
+      const samples = entry.sample_values_json || {};
+      let html = '';
+      if (entry.header_type === 'TEXT' && entry.header_content) {
+        html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(entry.header_content, samples))}</div>`;
+      }
+      html += `<div>${escapeHtml(substituteTemplateParams(entry.body, samples))}</div>`;
+      if (entry.footer) {
+        html += `<div class="template-preview-footer">${escapeHtml(entry.footer)}</div>`;
+      }
+      const buttons = entry.buttons_json || [];
+      if (buttons.length) {
+        const icon = { URL: '&#128279;', PHONE_NUMBER: '&#128222;', QUICK_REPLY: '&#8617;' };
+        html += `<div class="template-preview-buttons">${buttons.map((b) =>
+          `<div class="template-preview-button">${icon[b.type] || ''} ${escapeHtml(b.text || '')}</div>`
+        ).join('')}</div>`;
+      }
+      bubbleHtml = html;
+    }
+
+    panel.innerHTML = `
+      <div class="library-preview-meta">${escapeHtml(entry.industry)} &middot; ${escapeHtml(entry.use_case.replace(/_/g, ' '))} &middot; ${escapeHtml(entry.category)}</div>
+      <h3 style="margin:0 0 0.75rem;">${escapeHtml(entry.title)}</h3>
+      <div class="template-preview-frame">
+        <div class="msg-bubble msg-out template-preview-bubble" id="library-preview-bubble"></div>
+      </div>
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem;">Pre-vetted against Meta's policy — first-attempt approval rates are higher, but this is not a guarantee of approval. Review and customize before submitting.</p>
+      <button type="button" class="btn-primary" style="margin-top:0.5rem;" id="use-library-template-btn">Use This Template</button>
+    `;
+    const bubble = document.getElementById('library-preview-bubble');
+    if (bubble) bubble.innerHTML = bubbleHtml;
+    document.getElementById('use-library-template-btn')?.addEventListener('click', () => useTemplateFromLibrary(entry));
+  }
+
+  async function loadTemplateLibrary() {
+    const grid = document.getElementById('library-grid');
+    try {
+      const entries = await authFetch('/api/template-library');
+      state.libraryEntries = entries;
+      populateLibraryFilterOptions();
+      renderLibraryGrid();
+    } catch (err) {
+      if (grid) grid.innerHTML = '<p style="padding:1rem;color:#B91C1C;">Could not load the template library. Please try again.</p>';
+    }
+  }
+
+  // Opens the EXISTING Create Template modal pre-filled from a library
+  // entry — mirrors open-create-template-modal's own reset/WABA-status/
+  // gating sequence exactly, then fills in the fields a manual author would
+  // have typed. Everything stays editable before submit; nothing here
+  // bypasses messageTemplateCreateSchema or validateTemplateText — the
+  // actual POST /api/templates on submit is completely unchanged.
+  async function useTemplateFromLibrary(entry) {
+    document.getElementById('create-template-form')?.reset();
+    templateButtons = [];
+
+    try {
+      const status = await authFetch('/api/onboarding/whatsapp/status');
+      state.wabaConnected = Boolean(status.connected);
+    } catch (err) {
+      state.wabaConnected = false;
+    }
+    applyMediaHeaderGating();
+
+    document.getElementById('new-template-name').value = slugifyTemplateName(entry.title);
+    document.getElementById('new-template-category').value = entry.category;
+    const languageSelect = document.getElementById('new-template-language');
+    if (languageSelect && entry.language && [...languageSelect.options].some((o) => o.value === entry.language)) {
+      languageSelect.value = entry.language;
+    }
+
+    if (entry.category !== 'Authentication') {
+      document.getElementById('new-template-header-type').value = entry.header_type || 'NONE';
+      document.getElementById('new-template-header-text').value = entry.header_content || '';
+      document.getElementById('new-template-body').value = entry.body || '';
+      document.getElementById('new-template-footer').value = entry.footer || '';
+      templateButtons = (entry.buttons_json || []).map((b) => ({
+        type: b.type, text: b.text || '', url: b.url || '', phone_number: b.phone_number || '',
+      }));
+    } else if (entry.auth_options) {
+      // The library's suggested defaults for this Authentication entry
+      // (e.g. a shorter code-expiration window for a login OTP vs. account
+      // verification) — same fields the modal's own Authentication UI
+      // already has, updateTemplateCategoryFields (triggered by
+      // syncTemplateFormUI below) just shows/hides them, it doesn't reset
+      // their values.
+      const expirationInput = document.getElementById('new-template-auth-expiration');
+      if (expirationInput && entry.auth_options.codeExpirationMinutes) {
+        expirationInput.value = entry.auth_options.codeExpirationMinutes;
+      }
+      const disclaimerCheckbox = document.getElementById('new-template-auth-disclaimer');
+      if (disclaimerCheckbox && typeof entry.auth_options.addSecurityDisclaimer === 'boolean') {
+        disclaimerCheckbox.checked = entry.auth_options.addSecurityDisclaimer;
+      }
+    }
+    renderTemplateButtonsList();
+
+    switchView('template');
+    document.getElementById('modal-create-template')?.classList.add('open');
+    syncTemplateFormUI();
+
+    // syncTemplateFormUI (above) already rendered one sample-value input per
+    // {{param}} detected in the body — fill them from the library's own
+    // sample values now that those inputs exist in the DOM.
+    if (entry.category !== 'Authentication') {
+      const samples = entry.sample_values_json || {};
+      Object.entries(samples).forEach(([name, value]) => {
+        const input = document.querySelector(`#template-sample-values-list [data-param-name="${name}"]`);
+        if (input) input.value = value;
+      });
+      updateTemplatePreview();
+    }
+
+    // Usage logging only — never blocks or fails opening the prefilled
+    // modal if it errors (e.g. a network blip), same "don't let analytics
+    // break the actual feature" reasoning as the backend route itself.
+    authFetch(`/api/template-library/${entry.id}/use`, { method: 'POST' }).catch(() => {});
+  }
+
+  document.getElementById('library-filter-industry')?.addEventListener('change', renderLibraryGrid);
+  document.getElementById('library-filter-category')?.addEventListener('change', renderLibraryGrid);
+  document.getElementById('library-filter-use-case')?.addEventListener('change', renderLibraryGrid);
 
   // --- Tag Manager ---
   function renderTagsManager() {

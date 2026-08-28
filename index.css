@@ -830,6 +830,49 @@ body {
   margin-top: 0.5rem;
 }
 
+/* Template Library (wasi-master-plan.md §2) — cards | preview, two columns
+   on desktop. Collapses to one column at the project's existing tablet
+   breakpoint (900px, see breakpoints.css) rather than inventing a new one,
+   same convention as every other responsive rule in this file. */
+.library-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .library-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.library-template-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.library-template-card:hover {
+  border-color: var(--color-primary-300, #86EFAC);
+}
+
+.library-template-card.selected {
+  border-color: var(--color-primary-500, #22C55E);
+  box-shadow: 0 0 0 2px var(--color-primary-100, #DCFCE7);
+}
+
+.library-preview-card {
+  position: sticky;
+  top: 1.5rem;
+}
+
+.library-preview-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
 .template-inline-warning {
   font-size: 0.78rem;
   color: #B91C1C;
