@@ -384,31 +384,68 @@
           <div class="page-title-bar">
             <div>
               <h1 class="page-title">Template Library</h1>
-              <p class="page-subtitle">Pre-vetted, ready-to-customize WhatsApp templates by industry — checked against Meta's real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.</p>
+              <p class="page-subtitle" id="library-source-subtitle">Pre-vetted, ready-to-customize WhatsApp templates by industry — checked against Meta's real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.</p>
             </div>
           </div>
-          <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
-            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
-              <select id="library-filter-industry" class="form-input" style="width: auto; min-width: 160px;">
-                <option value="">All Industries</option>
-              </select>
-              <select id="library-filter-category" class="form-input" style="width: auto; min-width: 160px;">
-                <option value="">All Categories</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Utility">Utility</option>
-                <option value="Authentication">Authentication</option>
-              </select>
-              <select id="library-filter-use-case" class="form-input" style="width: auto; min-width: 160px;">
-                <option value="">All Use Cases</option>
-              </select>
+          <!-- Two clearly separate, clearly labeled sources (wasi-master-plan.md
+               §2b.2) — Wasi's own curated library (customizable, needs the normal
+               submission wait) vs Meta's official one (fixed content, Utility
+               category only, skips the review wait entirely). Never merged into
+               one filterable list — conflating them would mislead a client about
+               which templates still need to wait for approval. -->
+          <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+            <button type="button" class="btn-primary library-source-tab active" data-library-source="wasi" style="width:auto; padding:0 16px;">Wasi Curated</button>
+            <button type="button" class="btn-secondary library-source-tab" data-library-source="meta" style="width:auto; padding:0 16px;">Meta Official (Utility)</button>
+          </div>
+
+          <div id="library-source-wasi">
+            <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
+              <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+                <select id="library-filter-industry" class="form-input" style="width: auto; min-width: 160px;">
+                  <option value="">All Industries</option>
+                </select>
+                <select id="library-filter-category" class="form-input" style="width: auto; min-width: 160px;">
+                  <option value="">All Categories</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Utility">Utility</option>
+                  <option value="Authentication">Authentication</option>
+                </select>
+                <select id="library-filter-use-case" class="form-input" style="width: auto; min-width: 160px;">
+                  <option value="">All Use Cases</option>
+                </select>
+              </div>
+            </div>
+            <div class="library-layout">
+              <div class="table-card" style="padding: 1.5rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;" id="library-grid"></div>
+              </div>
+              <div class="table-card library-preview-card" style="padding: 1.5rem;" id="library-preview-panel">
+                <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
+              </div>
             </div>
           </div>
-          <div class="library-layout">
-            <div class="table-card" style="padding: 1.5rem;">
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;" id="library-grid"></div>
+
+          <!-- Meta Official Template Library (wasi-master-plan.md §2b) — content
+               is Meta's own, fixed, never editable here. v1 only shows entries
+               with no {{n}} variables (Phase 0 decision: the API returns
+               positional {{1}}/{{2}} params, incompatible with this app's
+               named-parameters-only template pipeline) — see CLAUDE.md Known Gaps. -->
+          <div id="library-source-meta" style="display:none;">
+            <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
+              <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+                <select id="meta-library-filter-usecase" class="form-input" style="width: auto; min-width: 180px;">
+                  <option value="">All Use Cases</option>
+                </select>
+                <input type="text" id="meta-library-search" class="form-input" style="width: auto; min-width: 200px;" placeholder="Search by name…">
+              </div>
             </div>
-            <div class="table-card library-preview-card" style="padding: 1.5rem;" id="library-preview-panel">
-              <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
+            <div class="library-layout">
+              <div class="table-card" style="padding: 1.5rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;" id="meta-library-grid"></div>
+              </div>
+              <div class="table-card library-preview-card" style="padding: 1.5rem;" id="meta-library-preview-panel">
+                <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1462,6 +1499,34 @@
       </div>
       <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
         <button type="button" class="btn-secondary" data-close-modal="modal-template-chat-preview">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== USE META OFFICIAL TEMPLATE MODAL ===================== -->
+  <!-- Narrow, read-only-content flow (wasi-master-plan.md §2b, Phase 0 decision) —
+       unlike the Create/Edit Template modal, this never lets a client retype
+       Meta's fixed body/header/footer text; only the template's own registered
+       name and (if the entry has buttons) their destinations are editable. -->
+  <div id="modal-use-meta-library-template" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Use Meta Official Template</h3>
+        <button class="close-modal-btn" data-close-modal="modal-use-meta-library-template"><i data-lucide="x"></i></button>
+      </div>
+      <p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 0.75rem;">This content is written and pre-approved by Meta — it can't be edited. Skips the normal review wait entirely.</p>
+      <div class="template-preview-frame">
+        <div class="msg-bubble msg-out template-preview-bubble" id="meta-use-preview-bubble"></div>
+      </div>
+      <div class="form-group" style="margin-top:1rem;">
+        <label class="form-label">Template Name</label>
+        <input type="text" id="meta-use-template-name" class="form-input">
+      </div>
+      <div id="meta-use-button-inputs"></div>
+      <div id="meta-use-error" class="inline-error" style="display:none; margin-top:0.5rem;"></div>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+        <button type="button" class="btn-secondary" data-close-modal="modal-use-meta-library-template">Cancel</button>
+        <button type="button" class="btn-primary" id="meta-use-submit-btn">Submit to Meta</button>
       </div>
     </div>
   </div>

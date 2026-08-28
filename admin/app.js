@@ -333,7 +333,7 @@ function switchView(viewName) {
   else if (viewName === 'tickets') loadTickets();
   else if (viewName === 'team') loadTeam();
   else if (viewName === 'audit-log') loadAuditLog();
-  else if (viewName === 'settings') loadSettings();
+  else if (viewName === 'settings') { loadSettings(); loadMetaTemplateLibraryStatus(); }
 }
 
 function parseViewHash(hash) {
@@ -1895,6 +1895,43 @@ async function loadSettings() {
     setInlineError('settings-error', err.message);
   }
 }
+
+// Meta Official Template Library (wasi-master-plan.md §2b) — server-wide
+// cache status, not per-client settings, so it's a separate card/call from
+// loadSettings above rather than folded into GET /api/admin/settings' shape.
+async function loadMetaTemplateLibraryStatus() {
+  setInlineError('meta-template-library-error', null);
+  const el = document.getElementById('meta-template-library-status');
+  try {
+    const status = await apiFetch('/api/admin/template-library/meta/status');
+    const lastRefreshed = status.last_refreshed_at
+      ? new Date(status.last_refreshed_at).toLocaleString()
+      : 'Never';
+    el.innerHTML = `
+      Last refreshed: <strong>${escapeHtml(lastRefreshed)}</strong>
+      &middot; ${status.cached_zero_variable_count} usable (variable-free) of ${status.cached_total_count} cached Utility entries
+      ${status.last_refresh_error ? `<br><span style="color:#B91C1C;">Last refresh error: ${escapeHtml(status.last_refresh_error)}</span>` : ''}
+    `;
+  } catch (err) {
+    if (err.status === 401) return;
+    el.textContent = '';
+    setInlineError('meta-template-library-error', err.message);
+  }
+}
+
+document.getElementById('refresh-meta-template-library-btn')?.addEventListener('click', async () => {
+  setInlineError('meta-template-library-error', null);
+  const btn = document.getElementById('refresh-meta-template-library-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/admin/template-library/meta/refresh', { method: 'POST' });
+    await loadMetaTemplateLibraryStatus();
+  } catch (err) {
+    setInlineError('meta-template-library-error', err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 function configPill(ok, okLabel, missingLabel) {
   return ok

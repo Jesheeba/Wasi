@@ -824,6 +824,21 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
           </div>
           <div id="settings-error" class="inline-error" style="display:none;"></div>
           <div id="settings-content"></div>
+
+          <!-- Meta Official Template Library (wasi-master-plan.md §2b) — server-wide
+               cache, admin-triggered + periodic (weekly) refresh, per Phase 0 decision.
+               Not per-client: this is Meta's own catalog, identical for every client. -->
+          <div class="table-card" style="padding:1.5rem; margin-top:1.5rem;">
+            <div class="page-title-bar" style="margin-bottom:0.75rem;">
+              <div>
+                <div class="page-title" style="font-size:1.05rem;">Meta Official Template Library Cache</div>
+                <div class="page-subtitle">Server-wide catalog cache used by every client's Template Library "Meta Official" tab. Refreshes automatically once a week; use the button below to refresh immediately.</div>
+              </div>
+              <button class="btn-secondary" id="refresh-meta-template-library-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh Now</button>
+            </div>
+            <div id="meta-template-library-status" style="font-size:0.85rem; color:var(--text-muted);">Loading…</div>
+            <div id="meta-template-library-error" class="inline-error" style="display:none; margin-top:0.5rem;"></div>
+          </div>
         </section>
 
       </main>

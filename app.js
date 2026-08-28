@@ -28,7 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
     templates: [],
     tickets: [],
     libraryEntries: [],
-    librarySelectedEntry: null
+    librarySelectedEntry: null,
+    metaLibraryEntries: [],
+    metaLibrarySelectedEntry: null
   };
 
   const refreshIcons = () => {
@@ -471,6 +473,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // the same 36+ rows every time this view is opened.
       if (!state.libraryEntries.length) loadTemplateLibrary();
       else renderLibraryGrid();
+      if (!state.metaLibraryEntries.length) loadMetaTemplateLibrary();
+      else renderMetaLibraryGrid();
     }
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
@@ -2113,6 +2117,212 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // --- Meta Official Template Library (wasi-master-plan.md §2b) ---
+  // A second, clearly separate source from state.libraryEntries above —
+  // never merged into the same array/grid (Phase 0 decision: conflating the
+  // two would mislead a client about which templates still need to wait for
+  // Meta's review). GET /api/template-library/meta already only returns
+  // zero-variable entries (server-side filter, routes/templateLibrary.js) —
+  // this UI doesn't need to re-check that itself.
+  const LIBRARY_SOURCE_SUBTITLES = {
+    wasi: 'Pre-vetted, ready-to-customize WhatsApp templates by industry — checked against Meta\'s real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.',
+    meta: 'Meta\'s own official template catalog — fixed content, Utility category only, written and pre-approved by Meta itself. Using one skips the normal review wait entirely; you can only fill in a name and any button destinations, not the wording.',
+  };
+
+  function switchLibrarySource(source) {
+    document.getElementById('library-source-subtitle').textContent = LIBRARY_SOURCE_SUBTITLES[source];
+    document.getElementById('library-source-wasi').style.display = source === 'wasi' ? '' : 'none';
+    document.getElementById('library-source-meta').style.display = source === 'meta' ? '' : 'none';
+    document.querySelectorAll('.library-source-tab').forEach((btn) => {
+      const active = btn.dataset.librarySource === source;
+      btn.classList.toggle('active', active);
+      btn.classList.toggle('btn-primary', active);
+      btn.classList.toggle('btn-secondary', !active);
+    });
+  }
+
+  document.querySelectorAll('.library-source-tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchLibrarySource(btn.dataset.librarySource));
+  });
+
+  async function loadMetaTemplateLibrary() {
+    const grid = document.getElementById('meta-library-grid');
+    try {
+      const entries = await authFetch('/api/template-library/meta');
+      state.metaLibraryEntries = entries;
+      const useCaseSelect = document.getElementById('meta-library-filter-usecase');
+      if (useCaseSelect) {
+        const useCases = [...new Set(entries.map((e) => e.usecase).filter(Boolean))].sort();
+        const current = useCaseSelect.value;
+        useCaseSelect.innerHTML = '<option value="">All Use Cases</option>' +
+          useCases.map((u) => `<option value="${escapeHtml(u)}">${escapeHtml(u.replace(/_/g, ' '))}</option>`).join('');
+        useCaseSelect.value = current;
+      }
+      renderMetaLibraryGrid();
+    } catch (err) {
+      if (grid) grid.innerHTML = '<p style="padding:1rem;color:#B91C1C;">Could not load Meta\'s template library. Please try again.</p>';
+    }
+  }
+
+  function filteredMetaLibraryEntries() {
+    const useCase = document.getElementById('meta-library-filter-usecase')?.value || '';
+    const search = (document.getElementById('meta-library-search')?.value || '').trim().toLowerCase();
+    return state.metaLibraryEntries.filter((e) =>
+      (!useCase || e.usecase === useCase) &&
+      (!search || e.name.toLowerCase().includes(search) || (e.body || '').toLowerCase().includes(search))
+    );
+  }
+
+  function renderMetaLibraryGrid() {
+    const grid = document.getElementById('meta-library-grid');
+    if (!grid) return;
+    const entries = filteredMetaLibraryEntries();
+
+    if (!entries.length) {
+      grid.innerHTML = '<p style="padding:1rem;color:#6B7280;">No templates match these filters.</p>';
+      return;
+    }
+
+    grid.innerHTML = entries.map((e) => {
+      const selected = state.metaLibrarySelectedEntry?.id === e.id ? ' selected' : '';
+      const preview = escapeHtml((e.body || '').length > 90 ? `${e.body.slice(0, 90)}…` : (e.body || ''));
+      return `
+        <div class="template-card library-template-card${selected}" data-meta-library-id="${e.id}">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(e.name)}</span>
+              <span class="template-badge approved" style="flex-shrink: 0; white-space: nowrap;">Meta Official</span>
+            </div>
+            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${preview}</p>
+          </div>
+          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">${escapeHtml((e.usecase || '').replace(/_/g, ' ') || 'General')}</div>
+        </div>
+      `;
+    }).join('');
+
+    grid.querySelectorAll('[data-meta-library-id]').forEach((card) => {
+      card.addEventListener('click', () => selectMetaLibraryEntry(card.dataset.metaLibraryId));
+    });
+  }
+
+  function selectMetaLibraryEntry(id) {
+    const entry = state.metaLibraryEntries.find((e) => e.id === id);
+    if (!entry) return;
+    state.metaLibrarySelectedEntry = entry;
+    renderMetaLibraryGrid();
+    renderMetaLibraryPreview(entry);
+  }
+
+  // Same template-preview-bubble markup as everything else in this app
+  // (renderTemplateBubbleMarkup, shared with the Create Template modal and
+  // the read-only per-card preview) — a small field-name adapter since this
+  // entry comes from meta_template_library_cache's own column names
+  // (header_text/buttons_json), not message_templates'.
+  function renderMetaLibraryPreview(entry) {
+    const panel = document.getElementById('meta-library-preview-panel');
+    if (!panel) return;
+
+    const bubbleShim = {
+      header_type: entry.header_text ? 'TEXT' : 'NONE',
+      header_content: entry.header_text,
+      body: entry.body,
+      footer_text: entry.footer_text,
+      buttons: entry.buttons_json || [],
+    };
+
+    panel.innerHTML = `
+      <div class="library-preview-meta">${escapeHtml((entry.usecase || '').replace(/_/g, ' ') || 'General')} &middot; Meta Official &middot; Utility</div>
+      <h3 style="margin:0 0 0.75rem;">${escapeHtml(entry.name)}</h3>
+      <div class="template-preview-frame">
+        <div class="msg-bubble msg-out template-preview-bubble" id="meta-library-preview-bubble"></div>
+      </div>
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem;">Written and pre-approved by Meta — skips the normal review wait entirely. Content can't be edited; only the name and button destinations below.</p>
+      <button type="button" class="btn-primary" style="margin-top:0.5rem;" id="use-meta-library-template-btn">Use This Template</button>
+    `;
+    const bubble = document.getElementById('meta-library-preview-bubble');
+    if (bubble) bubble.innerHTML = renderTemplateBubbleMarkup(bubbleShim, {});
+    document.getElementById('use-meta-library-template-btn')?.addEventListener('click', () => openUseMetaLibraryTemplateModal(entry));
+  }
+
+  // Opens the narrow "Use Meta Official Template" modal (Phase 0 decision —
+  // NOT the rich Create Template modal, since this content can't be edited).
+  // One button-destination input per URL/PHONE_NUMBER button the entry has;
+  // other button types (e.g. QUICK_REPLY) need no input, their text is fixed.
+  function openUseMetaLibraryTemplateModal(entry) {
+    document.getElementById('meta-use-preview-bubble').innerHTML = renderTemplateBubbleMarkup({
+      header_type: entry.header_text ? 'TEXT' : 'NONE',
+      header_content: entry.header_text,
+      body: entry.body,
+      footer_text: entry.footer_text,
+      buttons: entry.buttons_json || [],
+    }, {});
+    document.getElementById('meta-use-template-name').value = slugifyTemplateName(entry.name);
+
+    const inputsContainer = document.getElementById('meta-use-button-inputs');
+    const editableButtons = (entry.buttons_json || []).filter((b) => b.type === 'URL' || b.type === 'PHONE_NUMBER');
+    inputsContainer.innerHTML = editableButtons.map((b, i) => {
+      if (b.type === 'URL') {
+        return `
+          <div class="form-group" style="margin-top:0.75rem;">
+            <label class="form-label">Button "${escapeHtml(b.text || 'Link')}" — your website URL</label>
+            <input type="text" class="form-input meta-use-button-input" data-button-index="${i}" data-button-type="URL" placeholder="https://your-site.example.com">
+          </div>
+        `;
+      }
+      return `
+        <div class="form-group" style="margin-top:0.75rem;">
+          <label class="form-label">Button "${escapeHtml(b.text || 'Call')}" — your phone number</label>
+          <input type="text" class="form-input meta-use-button-input" data-button-index="${i}" data-button-type="PHONE_NUMBER" placeholder="+919876543210">
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('meta-use-error').style.display = 'none';
+    document.getElementById('meta-use-submit-btn').onclick = () => submitUseMetaLibraryTemplate(entry);
+    document.getElementById('modal-use-meta-library-template')?.classList.add('open');
+  }
+
+  async function submitUseMetaLibraryTemplate(entry) {
+    const errorEl = document.getElementById('meta-use-error');
+    errorEl.style.display = 'none';
+    const name = document.getElementById('meta-use-template-name').value.trim();
+    if (!name) {
+      errorEl.textContent = 'Template name is required.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const buttonInputs = [];
+    let missingInput = false;
+    document.querySelectorAll('.meta-use-button-input').forEach((input) => {
+      const type = input.dataset.buttonType;
+      const value = input.value.trim();
+      if (!value) { missingInput = true; return; }
+      buttonInputs.push(type === 'URL'
+        ? { type: 'URL', base_url: value }
+        : { type: 'PHONE_NUMBER', phone_number: value });
+    });
+    if (missingInput) {
+      errorEl.textContent = 'Every button above needs a value before this can be submitted.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      await authFetch(`/api/template-library/meta/${entry.id}/use`, {
+        method: 'POST',
+        body: JSON.stringify({ name, buttonInputs: buttonInputs.length ? buttonInputs : undefined }),
+      });
+      document.getElementById('modal-use-meta-library-template')?.classList.remove('open');
+      showToast('Submitted to Meta');
+      switchView('template');
+      refreshTemplates();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+
   // Opens the EXISTING Create Template modal pre-filled from a library
   // entry — mirrors open-create-template-modal's own reset/WABA-status/
   // gating sequence exactly, then fills in the fields a manual author would
@@ -2264,6 +2474,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('library-filter-industry')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('library-filter-category')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('library-filter-use-case')?.addEventListener('change', renderLibraryGrid);
+  document.getElementById('meta-library-filter-usecase')?.addEventListener('change', renderMetaLibraryGrid);
+  document.getElementById('meta-library-search')?.addEventListener('input', renderMetaLibraryGrid);
 
   // --- Tag Manager ---
   function renderTagsManager() {

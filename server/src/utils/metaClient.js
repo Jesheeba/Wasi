@@ -518,6 +518,82 @@ async function createMessageTemplate(wabaId, accessToken, templateData) {
   return data; // { id, status, category }
 }
 
+// Meta Official Template Library (wasi-master-plan.md §2b) — fetches
+// Meta's OWN global catalog, not a WABA-scoped resource (confirmed: the
+// documented endpoint is GET /message_template_library, not
+// /{waba-id}/message_template_library). Any currently-connected WABA's
+// access token is sufficient — services/metaTemplateLibraryRefreshRunner.js
+// picks one, since this catalog is identical regardless of which WABA asks
+// for it. Bypasses graphFetch (same reasoning as listTemplates above: needs
+// its own query-param building, not graphFetch's single access_token-only
+// GET shape) — pagination is not implemented since Meta's own docs don't
+// document a paging.next for this endpoint (unlike message_templates); if
+// that changes, add the same paging loop listTemplates already has.
+async function listTemplateLibraryCatalog(accessToken, { search, topic, usecase, industry, language, name } = {}) {
+  const url = new URL(`${GRAPH_BASE}/message_template_library`);
+  url.searchParams.set('access_token', accessToken);
+  if (search) url.searchParams.set('search', search);
+  if (topic) url.searchParams.set('topic', topic);
+  if (usecase) url.searchParams.set('usecase', usecase);
+  if (industry) url.searchParams.set('industry', industry);
+  if (language) url.searchParams.set('language', language);
+  if (name) url.searchParams.set('name', name);
+
+  const res = await fetchWithTimeout(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data?.error?.message || `Meta Graph API error (${res.status})`;
+    const error = new Error(message);
+    error.metaError = data?.error || null;
+    throw error;
+  }
+  return data.data || [];
+}
+
+// Creates a template from Meta's own pre-approved library content —
+// SAME endpoint as createMessageTemplate (confirmed via Meta's docs: "same
+// endpoint as standard template creation, but with specialized fields"),
+// just a different payload shape. category is hardcoded 'UTILITY' — the
+// only value Meta's own docs confirm this flow supports ("Must be UTILITY
+// for use with Template Library"), not a caller-supplied option, so this
+// function can never accidentally submit a non-Utility library template.
+// buttonInputs arrives here in the FLAT shape routes/templateLibrary.js's
+// libraryButtonInputSchema validates ({ type, base_url } / { type,
+// phone_number }) — this function is the one place that reshapes it into
+// Meta's own documented library_template_button_inputs wire format, which
+// nests the URL type's destination under a `url` object
+// ({ type: 'URL', url: { base_url } }) but keeps PHONE_NUMBER flat
+// ({ type: 'PHONE_NUMBER', phone_number }). Independent audit finding: an
+// earlier version of this function forwarded the flat shape straight
+// through unchanged, silently contradicting this exact comment — Meta
+// would have received a malformed URL button on every real submission.
+// Only sent if the library entry actually has buttons; omitted key, not an
+// empty array, for a button-free entry (matches this project's general
+// "don't send a field Meta doesn't need" convention elsewhere in this file).
+function buildLibraryButtonInputs(buttonInputs) {
+  return buttonInputs.map((b) =>
+    b.type === 'URL' ? { type: 'URL', url: { base_url: b.base_url } } : { type: 'PHONE_NUMBER', phone_number: b.phone_number }
+  );
+}
+
+async function createTemplateFromLibrary(wabaId, accessToken, { name, libraryTemplateName, language = 'en_US', buttonInputs }) {
+  const payload = {
+    name,
+    category: 'UTILITY',
+    language,
+    library_template_name: libraryTemplateName,
+  };
+  if (buttonInputs && buttonInputs.length) {
+    payload.library_template_button_inputs = buildLibraryButtonInputs(buttonInputs);
+  }
+  const data = await graphFetch(`/${wabaId}/message_templates`, {
+    method: 'POST',
+    accessToken,
+    body: payload,
+  });
+  return data; // { id, status, category }
+}
+
 // Edits an ALREADY-SUBMITTED template in place. Unlike createMessageTemplate,
 // this targets the template's own numeric id (not the WABA) — Meta re-
 // reviews the new content while the CURRENTLY-APPROVED content keeps
@@ -682,6 +758,8 @@ module.exports = {
   updateMessageTemplate,
   deleteMessageTemplate,
   listTemplates,
+  listTemplateLibraryCatalog,
+  createTemplateFromLibrary,
   parseTemplateComponents,
   TemplateValidationError,
 };

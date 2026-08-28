@@ -4,6 +4,7 @@ const broadcastRunner = require('./services/broadcastRunner');
 const forwardRunner = require('./services/forwardRunner');
 const alertRunner = require('./services/alertRunner');
 const flowRunner = require('./services/flowRunner');
+const metaTemplateLibraryRefreshRunner = require('./services/metaTemplateLibraryRefreshRunner');
 
 // Defense-in-depth, not a replacement for fixing specific gaps (see
 // db/pool.js and broadcastRunner.js's own listeners for the two confirmed
@@ -41,4 +42,5 @@ app.listen(port, () => {
   forwardRunner.start();
   alertRunner.start();
   flowRunner.start();
+  metaTemplateLibraryRefreshRunner.start();
 });

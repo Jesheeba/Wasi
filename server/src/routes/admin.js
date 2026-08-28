@@ -11,6 +11,8 @@ const auditLogRepo = require('../repositories/auditLogRepo');
 const adminUsersRepo = require('../repositories/adminUsersRepo');
 const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRepo');
 const apiKeysRepo = require('../repositories/apiKeysRepo');
+const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
+const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { hashPassword } = require('../utils/auth');
@@ -561,6 +563,34 @@ router.get('/settings', asyncHandler(async (req, res) => {
     },
     plans,
   });
+}));
+
+// Meta Official Template Library (wasi-master-plan.md §2b) — admin-facing
+// refresh controls. GET /status is read-only (last refresh time, whether
+// it errored, cached entry count); POST /refresh does the real Meta fetch
+// synchronously and returns the result inline, same "await it, no queue"
+// shape as every other admin-triggered action in this file — an admin
+// clicking "Refresh Catalog" expects to see the outcome, not poll for it.
+router.get('/template-library/meta/status', asyncHandler(async (req, res) => {
+  const meta = await metaTemplateLibraryRepo.getRefreshMeta(pool);
+  const cached = await metaTemplateLibraryRepo.listCached(pool, { includeParameterized: true });
+  res.json({
+    last_refreshed_at: meta?.last_refreshed_at || null,
+    last_refresh_entry_count: meta?.last_refresh_entry_count ?? null,
+    last_refresh_error: meta?.last_refresh_error || null,
+    cached_total_count: cached.length,
+    cached_zero_variable_count: cached.filter((e) => (e.body_params || []).length === 0).length,
+  });
+}));
+
+router.post('/template-library/meta/refresh', asyncHandler(async (req, res) => {
+  try {
+    const count = await metaTemplateLibraryRefreshRunner.refreshNow();
+    await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'meta_template_library_refreshed', target: `${count} entries` });
+    res.json({ ok: true, entry_count: count });
+  } catch (err) {
+    res.status(502).json({ error: 'Refresh failed', detail: err.message });
+  }
 }));
 
 module.exports = router;

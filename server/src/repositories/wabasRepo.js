@@ -29,6 +29,21 @@ async function findByWabaId(wabaId) {
   return rows[0] || null;
 }
 
+// Meta Official Template Library refresh (build plan Phase 2b,
+// services/metaTemplateLibraryRefreshRunner.js) — GET /message_template_library
+// is Meta's own global catalog, identical regardless of which WABA's token
+// asks for it (confirmed in Phase 0 research: no waba-id in the endpoint
+// path), so any single currently-connected WABA is sufficient to fetch it
+// on behalf of every client. Picked by most-recently-connected, not a
+// specific one — there's no reason to prefer one client's WABA over
+// another's for a call that reads Meta's own content, not theirs.
+async function findAnyConnected() {
+  const { rows } = await pool.query(
+    `select * from wabas where status = 'connected' order by created_at desc limit 1`
+  );
+  return rows[0] || null;
+}
+
 async function listAllWithClient() {
   const { rows } = await pool.query(
     `select w.*, c.name as client_name, c.tenant_slug
@@ -62,4 +77,4 @@ async function upsertForClient(clientId, fields) {
   return rows[0];
 }
 
-module.exports = { findByClientId, findById, findByWabaId, listAllWithClient, upsertForClient };
+module.exports = { findByClientId, findById, findByWabaId, findAnyConnected, listAllWithClient, upsertForClient };
