@@ -2191,6 +2191,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- New Campaign Modal ---
   let newCampaignHeaderMediaAssetId = null; // set once a new header file has been uploaded for this campaign
+  let campaignContactLists = []; // fetched fresh each time the modal opens
 
   function updateNewCampaignMediaField() {
     const templateName = document.getElementById('new-campaign-template').value;
@@ -2199,14 +2200,75 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaField.style.display = template && MEDIA_HEADER_TYPES.includes(template.header_type) ? '' : 'none';
   }
 
-  document.getElementById('open-create-broadcast-modal')?.addEventListener('click', () => {
+  function populateContactListSelect(selectEl) {
+    if (!selectEl) return;
+    selectEl.innerHTML = campaignContactLists.length
+      ? campaignContactLists.map(l => `<option value="${l.id}">${escapeHtml(l.name)} (${l.member_count})</option>`).join('')
+      : '<option value="">No contact lists yet — import one below</option>';
+  }
+
+  function updateCampaignAudienceModeUI() {
+    const isList = document.getElementById('campaign-audience-mode-list').checked;
+    document.getElementById('new-campaign-tag').style.display = isList ? 'none' : '';
+    document.getElementById('campaign-audience-list-section').style.display = isList ? '' : 'none';
+  }
+
+  document.getElementById('open-create-broadcast-modal')?.addEventListener('click', async () => {
     populateTagSelect(document.getElementById('new-campaign-tag'));
     populateTemplateSelect(document.getElementById('new-campaign-template'));
     newCampaignHeaderMediaAssetId = null;
     document.getElementById('new-campaign-media-file').value = '';
     document.getElementById('new-campaign-media-status').textContent = '';
+    document.getElementById('new-campaign-list-name').value = '';
+    document.getElementById('new-campaign-list-file').value = '';
+    document.getElementById('campaign-list-import-status').textContent = '';
+    document.getElementById('new-campaign-pace').value = '';
+    document.getElementById('campaign-audience-mode-tag').checked = true;
+    updateCampaignAudienceModeUI();
     updateNewCampaignMediaField();
     document.getElementById('modal-create-campaign')?.classList.add('open');
+
+    try {
+      campaignContactLists = await authFetch('/api/contact-lists');
+    } catch (err) {
+      campaignContactLists = [];
+    }
+    populateContactListSelect(document.getElementById('new-campaign-contact-list'));
+  });
+
+  document.getElementById('campaign-audience-mode-tag')?.addEventListener('change', updateCampaignAudienceModeUI);
+  document.getElementById('campaign-audience-mode-list')?.addEventListener('change', updateCampaignAudienceModeUI);
+
+  document.getElementById('import-campaign-list-btn')?.addEventListener('click', async () => {
+    const nameInput = document.getElementById('new-campaign-list-name');
+    const fileInput = document.getElementById('new-campaign-list-file');
+    const status = document.getElementById('campaign-list-import-status');
+    const name = nameInput.value.trim();
+    const file = fileInput.files[0];
+    if (!name) { status.textContent = 'Give the list a name first.'; status.style.color = '#B91C1C'; return; }
+    if (!file) { status.textContent = 'Choose a CSV file first.'; status.style.color = '#B91C1C'; return; }
+
+    status.textContent = 'Importing…';
+    status.style.color = 'var(--text-muted)';
+    try {
+      const list = await authFetch('/api/contact-lists', { method: 'POST', body: JSON.stringify({ name }) });
+      const form = new FormData();
+      form.append('file', file);
+      const report = await authFetch(`/api/contact-lists/${list.id}/import`, { method: 'POST', body: form });
+      campaignContactLists = await authFetch('/api/contact-lists');
+      const select = document.getElementById('new-campaign-contact-list');
+      populateContactListSelect(select);
+      select.value = list.id;
+      nameInput.value = '';
+      fileInput.value = '';
+      status.style.color = report.rejected > 0 ? '#B45309' : '#166534';
+      status.textContent = report.rejected > 0
+        ? `Imported ${report.imported} of ${report.rows_in_file} rows — ${report.rejected} rejected: ${report.errors.slice(0, 3).map(e => `row ${e.row}: ${e.reason}`).join('; ')}${report.errors.length > 3 ? '…' : ''}`
+        : `Imported all ${report.imported} contacts into "${escapeHtml(name)}".`;
+    } catch (err) {
+      status.style.color = '#B91C1C';
+      status.textContent = `Import failed: ${err.message}`;
+    }
   });
 
   document.getElementById('new-campaign-template')?.addEventListener('change', () => {
@@ -2240,11 +2302,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('create-campaign-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = document.getElementById('new-campaign-name').value.trim();
-    const tagId = document.getElementById('new-campaign-tag').value;
+    const isListMode = document.getElementById('campaign-audience-mode-list').checked;
+    const tagId = isListMode ? null : document.getElementById('new-campaign-tag').value;
+    const contactListId = isListMode ? document.getElementById('new-campaign-contact-list').value : null;
     const templateName = document.getElementById('new-campaign-template').value;
+    const paceValue = document.getElementById('new-campaign-pace').value;
     if (!title) return;
     if (!templateName) {
       showToast('Create a message template first — campaigns send via an approved template.');
+      return;
+    }
+    if (isListMode && !contactListId) {
+      showToast('Select a contact list, or import one, before launching.');
       return;
     }
 
@@ -2252,8 +2321,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const created = await authFetch('/api/broadcasts', {
         method: 'POST',
         body: JSON.stringify({
-          title, tag_id: tagId || undefined, templateName,
+          title, tag_id: tagId || undefined, contact_list_id: contactListId || undefined, templateName,
           headerMediaAssetId: newCampaignHeaderMediaAssetId || undefined,
+          pacingConfig: paceValue ? { messages_per_minute: Number(paceValue) } : undefined,
         })
       });
       await refreshBroadcasts();

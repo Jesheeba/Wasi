@@ -1290,8 +1290,22 @@
           <input type="text" id="new-campaign-name" class="form-input" placeholder="e.g. September Flash Sale" required />
         </div>
         <div class="form-group">
-          <label class="form-label">Audience Tag</label>
+          <label class="form-label">Audience</label>
+          <div style="display:flex; gap:1rem; margin-bottom:0.5rem; font-size:0.85rem;">
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-tag" value="tag" checked /> By Tag</label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-list" value="list" /> By Contact List</label>
+          </div>
           <select id="new-campaign-tag" class="form-input"></select>
+          <div id="campaign-audience-list-section" style="display:none;">
+            <select id="new-campaign-contact-list" class="form-input" style="margin-bottom:0.5rem;"></select>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.35rem;">Or import a new list from CSV (columns: name, phone):</div>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="text" class="form-input" id="new-campaign-list-name" placeholder="List name" style="flex:1;" />
+              <input type="file" class="form-input" id="new-campaign-list-file" accept=".csv" style="flex:1;" />
+              <button type="button" class="btn-secondary" id="import-campaign-list-btn" style="width:auto; padding:0 12px; white-space:nowrap;">Import</button>
+            </div>
+            <div id="campaign-list-import-status" style="font-size:0.78rem; margin-top:0.35rem;"></div>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Message Template</label>
@@ -1301,6 +1315,16 @@
           <label class="form-label">Header file</label>
           <input type="file" class="form-input" id="new-campaign-media-file" />
           <div id="new-campaign-media-status" style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sending Pace</label>
+          <select id="new-campaign-pace" class="form-input">
+            <option value="">Normal (runner default)</option>
+            <option value="30">Slow — 30 messages/min</option>
+            <option value="60">Standard — 60 messages/min</option>
+            <option value="120">Fast — 120 messages/min</option>
+          </select>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Slows this campaign's own send rate — useful for protecting a fresh or lower-tier number's quality rating. Well under WhatsApp's real throughput limits either way.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-campaign">Cancel</button>
