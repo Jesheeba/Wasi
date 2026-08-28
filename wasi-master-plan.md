@@ -118,6 +118,58 @@ static library is live and proven — don't let this block v1.
 
 ---
 
+## 2b. Feature 1b — Meta Official Template Library Integration (added after
+initial plan; sequenced after Phase 4)
+
+### 2b.1 What it is
+Distinct from §2's originally-authored Wasi library. Meta itself maintains
+an official template library (confirmed via direct research: accessible
+through WhatsApp Manager and programmatically via the Graph API) offering
+fixed-content, pre-approved templates for UTILITY and AUTHENTICATION
+categories only. Because Meta itself authored and approved the content, a
+client using one skips the normal submission/review wait entirely — a
+genuinely true "ready to use in minutes" claim, unlike any marketing-category
+claim, which always requires per-client Meta review regardless of source.
+
+### 2b.2 Why this is additive, not a replacement for §2
+- Meta's library is fixed-content — a client can only fill in predefined
+  variables and button URLs, not rewrite the copy. Wasi's own library (§2)
+  remains the only option for fully custom or marketing-category templates.
+- Surfaced as a second, clearly-labeled source inside the same Template
+  Library UI already built in Phase 2 — a filter/tab distinguishing "Meta
+  Official (instant, utility/auth only)" from "Wasi Curated (customizable,
+  needs submission)." The UI must make this distinction obvious; conflating
+  the two would mislead a client about which templates still require a
+  review wait.
+
+### 2b.3 Build scope
+- Phase 0 investigation, real not assumed: confirm the exact Graph API
+  endpoint(s) for Meta's template library exist and are accessible with the
+  access-token scopes Wasi's existing WABA connections already have — do not
+  assume programmatic access matches what's available through WhatsApp
+  Manager's own UI; verify directly against Meta's real API reference before
+  building anything.
+- Backend: a thin integration pulling Meta's library catalog (industry, use
+  case, fixed body/variables) via the Graph API, cached appropriately (this
+  is Meta's content, not Wasi's — don't let it silently go stale; decide a
+  real refresh cadence, not "cache forever").
+- "Use this template" flow: since content is fixed, this is narrower than
+  §2's flow — a client selects, fills in variables/button URLs, and submits
+  via Meta's own accelerated path for library-sourced templates (confirm in
+  Phase 0 whether this is a genuinely different Graph API call than the
+  standard template-creation endpoint, or the same endpoint with a
+  library-reference parameter — don't assume).
+- What NOT to build: no editing of Meta's library content (it's fixed by
+  definition), no marketing-category support (Meta's library doesn't offer
+  it), no claim of "instant" beyond utility/authentication — the UI copy
+  must not blur this line.
+
+### 2b.4 Sequencing
+After Phase 4 (Zapier) completes and is pushed — this is a new, separately
+discovered addition, not a blocker for anything already in flight.
+
+---
+
 ## 3. Feature 2 — Integrations Marketplace
 
 ### 3.1 Three tiers, build in this order
