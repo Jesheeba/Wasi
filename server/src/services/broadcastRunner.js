@@ -29,9 +29,24 @@ const SEND_CONCURRENCY = 5; // well under Meta's lowest per-tier throughput cap
 // phase). A slower real tick (send latency, DB round-trips) only ever
 // makes the achieved rate slower than configured, never faster — safe for
 // a rate ceiling.
+// Independent audit found: `messages_per_minute` is only validated at the
+// zod schema layer (validate.js's broadcastCreateSchema), unlike
+// tag_id/contact_list_id's mutual exclusivity, which also has a DB CHECK
+// constraint as a second guarantee — a non-numeric value reaching this
+// column any other way (a future admin tool, a direct DB edit, a bug
+// elsewhere) turns into `NaN` here, which Postgres rejects as a LIMIT
+// parameter ("invalid input syntax for type bigint"). Confirmed this isn't
+// just theoretical: that error propagates out of claimBatch, out of
+// processBroadcast (whose own try/catch only wraps the claim transaction
+// and rethrows), and tick()'s loop has one try/catch around the WHOLE
+// loop — so one broadcast with a bad pacing_config would abort every
+// OTHER active broadcast's processing for that tick, indefinitely (the bad
+// broadcast stays 'Sending' and gets re-selected every 5s). Number.isFinite
+// guards against this at the source rather than relying on tick()'s loop
+// structure alone.
 function effectiveBatchSize(broadcast) {
   const perMinute = broadcast.pacing_config?.messages_per_minute;
-  if (!perMinute) return BATCH_SIZE;
+  if (!Number.isFinite(perMinute) || perMinute <= 0) return BATCH_SIZE;
   const perTick = Math.max(1, Math.floor((perMinute * TICK_MS) / 60000));
   return Math.min(BATCH_SIZE, perTick);
 }
@@ -140,7 +155,18 @@ async function tick() {
 
     const active = await broadcastsRepo.listActive(pool);
     for (const broadcast of active) {
-      await processBroadcast(broadcast);
+      // Independent audit finding: a single try/catch around this whole
+      // loop means one broadcast throwing (the NaN pacing_config case
+      // above, or any other future error) aborts every OTHER client's
+      // active broadcast for this tick too — not just the bad one, and not
+      // just once, since the bad broadcast stays 'Sending' and gets
+      // re-selected every 5s indefinitely. Isolated per-broadcast so one
+      // client's broken campaign can't starve everyone else's.
+      try {
+        await processBroadcast(broadcast);
+      } catch (err) {
+        console.error(`broadcastRunner: processBroadcast failed for broadcast ${broadcast.id} (non-fatal, other broadcasts continue):`, err.message);
+      }
     }
   } catch (err) {
     console.error('broadcastRunner tick failed:', err.message);

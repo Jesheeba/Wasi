@@ -51,24 +51,33 @@ async function createFromList(db, broadcastId, clientId, contactListId) {
 //
 // Atomically claims a batch of pending (or stuck-in-flight, see below) rows
 // for exactly this broadcast, via a CTE, not `UPDATE ... WHERE id IN
-// (SELECT ... LIMIT n FOR UPDATE SKIP LOCKED)` — that shape is a known
-// Postgres footgun: found live during Phase 3 (wasi-master-plan.md §8.3)
-// when a small per-broadcast pacing limit (down from the previous constant
-// BATCH_SIZE=25) made the bug's symptom actually observable — the plain
-// WHERE-IN-subquery form does NOT reliably respect its own LIMIT once
-// wrapped in the outer UPDATE (confirmed directly: limit=1 against 5 real
-// pending rows claimed all 5, not 1). This was a real, silent, pre-existing
-// bug — invisible before Phase 3 only because BATCH_SIZE=25 rarely bound
-// against real pending counts, not because it didn't exist. The CTE form
-// below materializes the SELECT ... LIMIT ... FOR UPDATE SKIP LOCKED result
-// as its own statement first, then the UPDATE joins onto exactly that
-// already-limited set — the standard, correct pattern for a SKIP LOCKED
-// work queue. Once this commits no other tick (this process or a future
-// multi-instance one) can claim the same rows — unlike a plain
-// SELECT ... FOR UPDATE, whose lock releases at commit while the rows are
-// still 'pending' and re-claimable. Also reclaims rows stuck in 'sending'
-// for >5 minutes (a crash between claim and markSent/markFailed) rather
-// than abandoning them forever.
+// (SELECT ... LIMIT n FOR UPDATE SKIP LOCKED)`. Precise finding, not a
+// vague "known footgun" claim — this project's own independent Auditor
+// initially could NOT reproduce a LIMIT violation for the plain WHERE-IN
+// form against a local Postgres 16 instance (single-call and 10-way
+// concurrent, both correct). Re-verified directly against THIS app's real
+// database (Supabase-managed Postgres 17.6, confirmed via `select
+// version()`) with 3 repeated trials of each form on identical data: the
+// WHERE-IN form deterministically claimed all 5 pending rows for
+// limit=1 in every trial; the CTE form below deterministically claimed
+// exactly 1 in every trial. This is a real, reproducible PG17-specific (or
+// PG17-plus-Supavisor-pooler-specific — not further isolated) behavior
+// difference for this exact query shape, not a flaky/rare occurrence and
+// not a testing artifact — confirmed on the actual deployment target, which
+// is what matters here regardless of the local-PG16 result. Invisible
+// before Phase 3 (wasi-master-plan.md §8.3) only because the previous
+// constant BATCH_SIZE=25 rarely bound against real pending counts, not
+// because it didn't exist — Phase 3's smaller per-broadcast pacing limits
+// are what made the symptom observable. The CTE form materializes the
+// SELECT ... LIMIT ... FOR UPDATE SKIP LOCKED result as its own statement
+// first, then the UPDATE joins onto exactly that already-limited set — the
+// standard, textbook-correct pattern for a SKIP LOCKED work queue
+// regardless of this version-specific finding. Once this commits no other
+// tick (this process or a future multi-instance one) can claim the same
+// rows — unlike a plain SELECT ... FOR UPDATE, whose lock releases at
+// commit while the rows are still 'pending' and re-claimable. Also
+// reclaims rows stuck in 'sending' for >5 minutes (a crash between claim
+// and markSent/markFailed) rather than abandoning them forever.
 async function claimBatch(db, broadcastId, limit) {
   const { rows } = await db.query(
     `with claimed as (

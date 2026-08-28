@@ -103,6 +103,23 @@ exports.down = async (pgm) => {
     );
   }
 
+  // Independent audit found this check alone was inconsistent with its own
+  // stated discipline: pacing_config is usable independently of
+  // contact_list_id (a tag_id-only broadcast can still set a pacing
+  // preference), so a rollback could silently destroy a real client's
+  // pacing configuration even with zero contact_lists rows. Same
+  // check-first-fail-loud treatment.
+  const [{ count: pacingCount }] = await pgm.db.select(
+    'select count(*)::int as count from broadcasts where pacing_config is not null'
+  );
+  if (pacingCount > 0) {
+    throw new Error(
+      `Cannot roll back 039_contact_lists: ${pacingCount} broadcast(s) have a real ` +
+      `pacing_config set (independent of contact_list_id usage). Export/back up this ` +
+      `data first if it needs to be kept, then retry this rollback.`
+    );
+  }
+
   pgm.dropConstraint('broadcasts', 'broadcasts_audience_not_both');
   pgm.dropColumns('broadcasts', ['contact_list_id', 'pacing_config']);
 
