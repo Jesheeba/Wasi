@@ -4,7 +4,7 @@
 // between what the webhook knows and what this list shows.
 async function list(db, clientId) {
   const { rows } = await db.query(
-    `select b.id, b.client_id, b.title, b.tag_id, b.status, b.template_name, b.scheduled_date, b.created_at,
+    `select b.id, b.client_id, b.title, b.tag_id, b.contact_list_id, b.pacing_config, b.status, b.template_name, b.scheduled_date, b.created_at,
             coalesce(rc.total, 0)::int as recipient_count,
             coalesce(rc.sent, 0)::int as delivered_count,
             coalesce(rc.skipped, 0)::int as skipped_consent_count,
@@ -37,15 +37,24 @@ async function findById(db, clientId, id) {
   return rows[0] || null;
 }
 
-async function create(db, clientId, { title, tag_id, template_name, scheduled_date, param_mappings, header_media_asset_id }) {
+async function create(db, clientId, {
+  title, tag_id, contact_list_id, template_name, scheduled_date, param_mappings, header_media_asset_id, pacing_config,
+}) {
   // No scheduled_date (or one that's today/past) -> ready to send now.
   const isFuture = scheduled_date && new Date(scheduled_date) > new Date(new Date().toDateString());
   const status = isFuture ? 'Scheduled' : 'Sending';
   const { rows } = await db.query(
-    `insert into broadcasts (client_id, title, tag_id, template_name, scheduled_date, status, param_mappings, header_media_asset_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+    `insert into broadcasts (
+       client_id, title, tag_id, contact_list_id, template_name, scheduled_date, status,
+       param_mappings, header_media_asset_id, pacing_config
+     )
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      returning *`,
-    [clientId, title, tag_id || null, template_name, scheduled_date || null, status, JSON.stringify(param_mappings || {}), header_media_asset_id || null]
+    [
+      clientId, title, tag_id || null, contact_list_id || null, template_name, scheduled_date || null, status,
+      JSON.stringify(param_mappings || {}), header_media_asset_id || null,
+      pacing_config ? JSON.stringify(pacing_config) : null,
+    ]
   );
   return rows[0];
 }

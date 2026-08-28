@@ -26,7 +26,7 @@ function requiredParamNames(template) {
 }
 
 router.post('/', asyncHandler(async (req, res) => {
-  const { templateName, paramMappings, headerMediaAssetId, ...data } = broadcastCreateSchema.parse(req.body);
+  const { templateName, paramMappings, headerMediaAssetId, pacingConfig, ...data } = broadcastCreateSchema.parse(req.body);
 
   // Fetched once, up front — needed for both the param-coverage check below
   // and the consent-category check further down, and (build plan Phase 4)
@@ -50,8 +50,15 @@ router.post('/', asyncHandler(async (req, res) => {
 
   const broadcast = await broadcastsRepo.create(req.db, req.clientId, {
     ...data, template_name: templateName, param_mappings: paramMappings, header_media_asset_id: headerMediaAssetId,
+    pacing_config: pacingConfig,
   });
-  const recipients = await broadcastRecipientsRepo.createFromAudience(req.db, broadcast.id, req.clientId, data.tag_id);
+  // Audience source: contact_list_id if set, else the existing tag_id path
+  // (null tag_id there already means "everyone" — unchanged). Mutually
+  // exclusive, enforced by broadcastCreateSchema's superRefine and the DB's
+  // own CHECK constraint (migration 039).
+  const recipients = data.contact_list_id
+    ? await broadcastRecipientsRepo.createFromList(req.db, broadcast.id, req.clientId, data.contact_list_id)
+    : await broadcastRecipientsRepo.createFromAudience(req.db, broadcast.id, req.clientId, data.tag_id);
   if (recipients.length === 0) {
     await broadcastsRepo.markStatus(req.db, broadcast.id, 'Completed');
   }

@@ -34,6 +34,7 @@ const walletRouter = require('./routes/wallet');
 const clientWebhookRouter = require('./routes/clientWebhook');
 const apiKeysRouter = require('./routes/apiKeys');
 const templateLibraryRouter = require('./routes/templateLibrary');
+const contactListsRouter = require('./routes/contactLists');
 const apiV1MessagesRouter = require('./routes/apiV1Messages');
 const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 const apiV1ConversationsRouter = require('./routes/apiV1Conversations');
@@ -93,6 +94,7 @@ function createApp() {
   app.use('/api/onboarding', requireClientAuth, withTenantContext, onboardingRouter);
   app.use('/api/billing', requireClientAuth, withTenantContext, billingRouter);
   app.use('/api/broadcasts', requireClientAuth, withTenantContext, broadcastsRouter);
+  app.use('/api/contact-lists', requireClientAuth, withTenantContext, contactListsRouter);
   app.use('/api/automation-rules', requireClientAuth, withTenantContext, automationRulesRouter);
   app.use('/api/automation-flows', requireClientAuth, withTenantContext, automationFlowsRouter);
   app.use('/api/templates', requireClientAuth, withTenantContext, templatesRouter);

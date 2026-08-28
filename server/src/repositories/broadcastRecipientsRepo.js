@@ -21,6 +21,28 @@ async function createFromAudience(db, broadcastId, clientId, tagId) {
   return rows;
 }
 
+// Same shape and same "returns opt_in_status immediately for the caller's
+// pre-send consent warning" reasoning as createFromAudience above — the
+// only difference is the source of contact ids (list membership instead of
+// a tag match).
+async function createFromList(db, broadcastId, clientId, contactListId) {
+  const { rows } = await db.query(
+    `with inserted as (
+       insert into broadcast_recipients (broadcast_id, client_id, contact_id)
+       select $1, $2, clm.contact_id
+       from contact_list_members clm
+       join contact_lists cl on cl.id = clm.contact_list_id
+       where cl.id = $3 and cl.client_id = $2
+       returning *
+     )
+     select inserted.*, contacts.opt_in_status
+     from inserted
+     join contacts on contacts.id = inserted.contact_id`,
+    [broadcastId, clientId, contactListId]
+  );
+  return rows;
+}
+
 // broadcastRunner-only from here down — always the privileged connection,
 // since a single tick processes recipients across every client's broadcasts
 // concurrently (see build plan Phase 3 investigation notes in migration
@@ -28,18 +50,28 @@ async function createFromAudience(db, broadcastId, clientId, tagId) {
 // (claimBatch runs inside processBroadcast's own BEGIN/COMMIT), not the pool.
 //
 // Atomically claims a batch of pending (or stuck-in-flight, see below) rows
-// for exactly this broadcast: the UPDATE ... WHERE id IN (SELECT ... FOR
-// UPDATE SKIP LOCKED) sets status='sending' inside the same statement, so
-// once this commits no other tick (this process or a future multi-instance
-// one) can claim the same rows — unlike a plain SELECT ... FOR UPDATE, whose
-// lock releases at commit while the rows are still 'pending' and re-claimable.
-// Also reclaims rows stuck in 'sending' for >5 minutes (a crash between claim
-// and markSent/markFailed) rather than abandoning them forever.
+// for exactly this broadcast, via a CTE, not `UPDATE ... WHERE id IN
+// (SELECT ... LIMIT n FOR UPDATE SKIP LOCKED)` — that shape is a known
+// Postgres footgun: found live during Phase 3 (wasi-master-plan.md §8.3)
+// when a small per-broadcast pacing limit (down from the previous constant
+// BATCH_SIZE=25) made the bug's symptom actually observable — the plain
+// WHERE-IN-subquery form does NOT reliably respect its own LIMIT once
+// wrapped in the outer UPDATE (confirmed directly: limit=1 against 5 real
+// pending rows claimed all 5, not 1). This was a real, silent, pre-existing
+// bug — invisible before Phase 3 only because BATCH_SIZE=25 rarely bound
+// against real pending counts, not because it didn't exist. The CTE form
+// below materializes the SELECT ... LIMIT ... FOR UPDATE SKIP LOCKED result
+// as its own statement first, then the UPDATE joins onto exactly that
+// already-limited set — the standard, correct pattern for a SKIP LOCKED
+// work queue. Once this commits no other tick (this process or a future
+// multi-instance one) can claim the same rows — unlike a plain
+// SELECT ... FOR UPDATE, whose lock releases at commit while the rows are
+// still 'pending' and re-claimable. Also reclaims rows stuck in 'sending'
+// for >5 minutes (a crash between claim and markSent/markFailed) rather
+// than abandoning them forever.
 async function claimBatch(db, broadcastId, limit) {
   const { rows } = await db.query(
-    `update broadcast_recipients
-     set status = 'sending', claimed_at = now()
-     where id in (
+    `with claimed as (
        select id from broadcast_recipients
        where broadcast_id = $1
          and (status = 'pending' or (status = 'sending' and claimed_at < now() - interval '5 minutes'))
@@ -47,7 +79,11 @@ async function claimBatch(db, broadcastId, limit) {
        limit $2
        for update skip locked
      )
-     returning *`,
+     update broadcast_recipients
+     set status = 'sending', claimed_at = now()
+     from claimed
+     where broadcast_recipients.id = claimed.id
+     returning broadcast_recipients.*`,
     [broadcastId, limit]
   );
   if (rows.length === 0) return [];
@@ -100,4 +136,4 @@ async function hasPending(db, broadcastId) {
   return rows.length > 0;
 }
 
-module.exports = { createFromAudience, claimBatch, markSent, markFailed, markSkipped, hasPending };
+module.exports = { createFromAudience, createFromList, claimBatch, markSent, markFailed, markSkipped, hasPending };

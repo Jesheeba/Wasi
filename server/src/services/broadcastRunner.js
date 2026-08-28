@@ -16,6 +16,26 @@ const TICK_MS = 5000;
 const BATCH_SIZE = 25;
 const SEND_CONCURRENCY = 5; // well under Meta's lowest per-tier throughput cap
 
+// Per-broadcast pacing (wasi-master-plan.md §8.3, Phase 3) — optional,
+// stored on broadcasts.pacing_config (migration 039). A broadcast with no
+// pacing_config keeps the exact pre-Phase-3 behavior (BATCH_SIZE every
+// tick, unchanged) — this only ever narrows the claim size, never widens
+// it past BATCH_SIZE, since claiming more than SEND_CONCURRENCY can
+// usefully process per tick anyway wouldn't change actual throughput.
+// This paces THIS APP's own send rate against a client-configured ceiling
+// (e.g. to protect a fresh/low-tier number's quality rating) — it is not,
+// and isn't meant to be, live Meta throughput/tier enforcement (see
+// migration 039's comment for why that's explicitly out of scope this
+// phase). A slower real tick (send latency, DB round-trips) only ever
+// makes the achieved rate slower than configured, never faster — safe for
+// a rate ceiling.
+function effectiveBatchSize(broadcast) {
+  const perMinute = broadcast.pacing_config?.messages_per_minute;
+  if (!perMinute) return BATCH_SIZE;
+  const perTick = Math.max(1, Math.floor((perMinute * TICK_MS) / 60000));
+  return Math.min(BATCH_SIZE, perTick);
+}
+
 async function runWithConcurrency(items, limit, worker) {
   let cursor = 0;
   async function next() {
@@ -72,19 +92,28 @@ async function processBroadcast(broadcast) {
   // clients still sitting in the pool, not one actively held here mid-
   // transaction. Same crash risk (see pool.js's comment for the mechanism),
   // different object; needs its own listener. This runs every 5s for the
-  // life of the process, so it's held far more often than any single route.
-  client.on('error', (err) => {
+  // life of the process, so it's held far more often than any single route —
+  // and pg.Pool reuses the same underlying Client object across separate
+  // connect()/release() cycles, so the listener MUST be removed before
+  // release(), not just added on connect(): found live (Phase 3 pacing
+  // testing repeatedly calling processBroadcast in a tight loop, far more
+  // per-minute than the real 5s tick would in practice) as a genuine
+  // MaxListenersExceededWarning — a real, if previously invisible,
+  // pre-existing accumulation, not introduced by pacing itself.
+  const onClientError = (err) => {
     console.error('broadcastRunner: checked-out client error (non-fatal):', err.message);
-  });
+  };
+  client.on('error', onClientError);
   let batch;
   try {
     await client.query('BEGIN');
-    batch = await broadcastRecipientsRepo.claimBatch(client, broadcast.id, BATCH_SIZE);
+    batch = await broadcastRecipientsRepo.claimBatch(client, broadcast.id, effectiveBatchSize(broadcast));
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
+    client.removeListener('error', onClientError);
     client.release();
   }
 

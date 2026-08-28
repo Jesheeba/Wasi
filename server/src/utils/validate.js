@@ -143,9 +143,28 @@ const broadcastParamMappingSchema = z.object({
   }
 });
 
+// messages_per_minute is a soft, human-facing pacing knob, not a Meta
+// throughput protection — the real throughput ceiling (Cloud API's default
+// 80 messages/second per business phone number, confirmed via a live fetch
+// of developers.facebook.com during Phase 3 planning, wasi-master-plan.md
+// §8.3) is 4800/min, far above this field's 300 max. This exists so a
+// client can deliberately slow a campaign down further than the runner's
+// own defaults, e.g. to protect quality rating on a fresh/low-tier number —
+// see migration 039_contact_lists.js's comment for why real-time Meta
+// tier detection itself is explicitly out of scope this phase.
+const pacingConfigSchema = z.object({
+  messages_per_minute: z.number().int().min(1).max(300),
+}).optional();
+
 const broadcastCreateSchema = z.object({
   title: z.string().min(1),
   tag_id: uuid.optional(),
+  // Alternative to tag_id (Phase 3, wasi-master-plan.md §8.3) — a
+  // CSV-imported or manually-created contact_lists audience. Mutually
+  // exclusive with tag_id, enforced below and by the DB's own
+  // broadcasts_audience_not_both CHECK constraint (migration 039) as a
+  // second, storage-level guarantee.
+  contact_list_id: uuid.optional(),
   templateName: z.string().min(1),
   scheduled_date: z.string().optional(),
   // Keyed by parameter name (e.g. "customer_name"). Coverage against the
@@ -158,6 +177,19 @@ const broadcastCreateSchema = z.object({
   // /:id/header-media) this campaign sends instead of a media-header
   // template's approval-time default sample. Omitted -> that default.
   headerMediaAssetId: uuid.optional(),
+  pacingConfig: pacingConfigSchema,
+}).superRefine((val, ctx) => {
+  if (val.tag_id && val.contact_list_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['contact_list_id'],
+      message: 'A broadcast targets its audience by tag OR by contact list, not both.',
+    });
+  }
+});
+
+const contactListCreateSchema = z.object({
+  name: z.string().min(1),
 });
 
 // A rule either sends free text (action) or starts a flow (flow_id) — never
@@ -478,6 +510,7 @@ module.exports = {
   wabaConnectSchema,
   businessProfileUpdateSchema,
   broadcastCreateSchema,
+  contactListCreateSchema,
   automationRuleCreateSchema,
   automationRuleUpdateSchema,
   automationFlowCreateSchema,
