@@ -1920,10 +1920,14 @@ document.addEventListener('DOMContentLoaded', () => {
             ${rejectionNote}
             ${orphanedNote}
           </div>
-          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${escapeHtml(t.category)}</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+            <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${escapeHtml(t.category)}</div>
+            <button type="button" class="delete-template-btn" data-delete-template="${t.id}" title="Delete template" style="border: none; background: none; color: #DC2626; cursor: pointer; padding: 0.25rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
+          </div>
         </div>
       `;
     }).join('');
+    refreshIcons();
   }
 
   // --- Template Library (wasi-master-plan.md §2) ---
@@ -2293,6 +2297,27 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.disabled = false;
       btn.innerHTML = originalHtml;
       refreshIcons();
+    }
+  });
+
+  // Deletes on Meta (if the template was ever submitted there) and locally
+  // in one step — see routes/templates.js's DELETE /:id. Delegated on the
+  // grid container since renderTemplates() rebuilds the card markup wholesale
+  // on every call, which would drop a listener bound to an individual button.
+  document.getElementById('templates-grid')?.addEventListener('click', async (e) => {
+    const deleteBtn = e.target.closest('[data-delete-template]');
+    if (!deleteBtn) return;
+    if (!confirm('Delete this template? If it was submitted to Meta, it will be removed there too and can no longer be sent. This cannot be undone.')) return;
+
+    deleteBtn.disabled = true;
+    try {
+      await authFetch(`/api/templates/${deleteBtn.dataset.deleteTemplate}`, { method: 'DELETE' });
+      await refreshTemplates();
+      renderTemplates();
+      showToast('Template deleted');
+    } catch (err) {
+      showToast(err.message);
+      deleteBtn.disabled = false;
     }
   });
 

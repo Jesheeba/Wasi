@@ -170,6 +170,20 @@ async function markOrphaned(db, id) {
   return rows[0] || null;
 }
 
+// A real delete, unlike markOrphaned above — used by routes/templates.js's
+// DELETE /:id, which deletes on Meta first (when the row was ever submitted
+// there) and only removes the local row after that succeeds or the template
+// was never on Meta to begin with. template_media_cache's FK to this table
+// is ON DELETE CASCADE (migration 028_template_media_cache.js), so any
+// cached send-time media id for this template is cleaned up automatically.
+async function remove(db, clientId, id) {
+  const { rows } = await db.query(
+    'delete from message_templates where client_id = $1 and id = $2 returning id',
+    [clientId, id]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   listByClientId,
   create,
@@ -181,4 +195,5 @@ module.exports = {
   createFromMetaSync,
   updateFromMetaSync,
   markOrphaned,
+  remove,
 };

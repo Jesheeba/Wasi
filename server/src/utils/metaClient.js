@@ -555,6 +555,29 @@ async function listTemplates(wabaId, accessToken) {
   return all;
 }
 
+// Deletes a template on Meta. Unlike createMessageTemplate/listTemplates,
+// Meta targets this by query params, not id-in-path or a JSON body — `name`
+// alone deletes EVERY language variant sharing that name on the WABA, so
+// callers should also pass hsm_id (the template's own meta_template_id) to
+// scope the delete to just this one language, matching this app's local
+// (name, language) row granularity. Returns { success: true } on Meta's side.
+async function deleteMessageTemplate(wabaId, accessToken, name, hsmId) {
+  const url = new URL(`${GRAPH_BASE}/${wabaId}/message_templates`);
+  url.searchParams.set('name', name);
+  if (hsmId) url.searchParams.set('hsm_id', hsmId);
+  url.searchParams.set('access_token', accessToken);
+
+  const res = await fetchWithTimeout(url, { method: 'DELETE' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data?.error?.message || `Meta Graph API error (${res.status})`;
+    const error = new Error(message);
+    error.metaError = data?.error || null;
+    throw error;
+  }
+  return data;
+}
+
 // Inverse of buildUtilityMarketingPayload's component construction — turns
 // Meta's real `components` array (as returned by listTemplates) into this
 // app's local column shape. Deliberately permissive, unlike the authoring
@@ -636,6 +659,7 @@ module.exports = {
   buildNamedBodyComponents,
   buildTemplateCreatePayload,
   createMessageTemplate,
+  deleteMessageTemplate,
   listTemplates,
   parseTemplateComponents,
   TemplateValidationError,

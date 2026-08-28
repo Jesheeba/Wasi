@@ -301,4 +301,54 @@ router.post('/:id/header-media', uploadHeaderMedia.single('file'), asyncHandler(
   res.status(201).json({ id: asset.id, filename: asset.filename });
 }));
 
+// Deletes a template — on Meta first (when it was ever submitted there),
+// then the local row, so the two never diverge (a client-visible "deleted"
+// template still sitting live on Meta, sendable from Business Manager).
+// meta_template_id is only null for a local draft never submitted (no WABA
+// connected yet at creation) — nothing to delete on Meta's side for that
+// case. orphaned_at means Meta already doesn't have it (confirmed by a
+// prior sync — see templateSyncService.js), so the Meta call is skipped
+// there too rather than erroring on a template that's already gone.
+router.delete('/:id', asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
+  if (!template) return res.status(404).json({ error: 'Not found' });
+
+  if (template.meta_template_id && !template.orphaned_at) {
+    const waba = await wabasRepo.findByClientId(req.clientId);
+    if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
+      return res.status(400).json({
+        error: 'Cannot delete on Meta',
+        detail: 'This template was submitted to Meta, but WhatsApp isn\'t connected right now — reconnect before deleting so it isn\'t left behind live on Meta.',
+      });
+    }
+
+    let accessToken;
+    try {
+      accessToken = decrypt(waba.access_token_encrypted);
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Could not decrypt this WABA\'s access token',
+        detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token.',
+      });
+    }
+
+    try {
+      await metaClient.deleteMessageTemplate(waba.waba_id, accessToken, template.name, template.meta_template_id);
+    } catch (err) {
+      // Meta errors out if the template is already gone there (deleted
+      // directly in Business Manager since the last sync) — treated as
+      // success rather than blocking the local delete on a template that
+      // no longer exists to delete.
+      const alreadyGone = /does not exist|cannot be found|no longer exists/i.test(err.message || '');
+      if (!alreadyGone) {
+        return res.status(502).json({ error: 'Could not delete template on Meta', detail: err.message });
+      }
+    }
+  }
+
+  await messageTemplatesRepo.remove(req.db, req.clientId, template.id);
+  res.status(204).send();
+}));
+
 module.exports = router;
