@@ -400,6 +400,18 @@ body {
   width: 340px;
 }
 
+/* API Guide's two code-block copy buttons (Connect via MCP / Claude Code
+   prompt) were previously position:absolute via an INLINE style in
+   admin/index.html — an inline style always beats a class selector
+   regardless of media query, which silently made the mobile override
+   below a no-op. Moved here, same fix shape as .search-box-wide above, so
+   the mobile override can actually win via source order. */
+.code-block-wrapper .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 @media (max-width: 640px) {
   /* --- 1. Page title bars: wrap instead of overflowing/crushing --- */
   .page-title-bar {
@@ -435,6 +447,57 @@ body {
   .password-generate-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* Dashboard's Clients-by-status bars: the label has a fixed 160px width
+     (see rule outside this media block) which squeezes .status-bar-track
+     to a sliver at narrow widths. Wrap so the label takes its own line,
+     leaving the track+count a full line to themselves. */
+  .status-bar-row {
+    flex-wrap: wrap;
+  }
+
+  .status-bar-label {
+    width: 100%;
+  }
+
+  /* Client Detail: status <select> + Save button row stacks, same pattern
+     as .password-generate-row above. */
+  .status-editor-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Client Detail: the webhook-secret row (masked secret + copy/regenerate
+     icon buttons) is a plain .detail-row but too cramped to stay inline at
+     mobile widths. Scoped to .detail-row-secret specifically so the many
+     other simple label/value .detail-row instances elsewhere are untouched. */
+  .detail-row-secret {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+  }
+
+  .detail-row-secret .detail-row-value {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* API Guide: copy button overlaid on top of a code block covers the
+     first line(s) of wrapped code at mobile widths. Move it above the
+     code block instead. Scoped to .code-block-wrapper .copy-btn (not bare
+     .copy-btn, which is also used elsewhere e.g. the Client ID copy
+     button on Client Detail). */
+  .code-block-wrapper {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .code-block-wrapper .copy-btn {
+    position: static;
+    align-self: flex-end;
+    order: -1;
+    margin-bottom: 8px;
   }
 
   /* --- 5. Fixed-width inline styles found in the audit (Audit Log filter,

@@ -771,7 +771,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
           Pushes inbound WhatsApp replies and template/account status changes to the client's own CRM webhook. Ask the client for their CRM's webhook URL before filling this in.
         </div>
         ${waba.has_forward_secret ? `
-        <div class="detail-row" style="margin-bottom:0.6rem;">
+        <div class="detail-row detail-row-secret" style="margin-bottom:0.6rem;">
           <span class="detail-row-label">Webhook Secret</span>
           <span class="detail-row-value" style="display:flex; align-items:center; gap:0.4rem;">
             <span style="font-family:monospace; font-size:0.75rem;">•••••••• ${escapeHtml((revealedForwardSecret || waba.forward_secret_last4 || '????').slice(-4))}</span>
@@ -1551,6 +1551,7 @@ function renderApiKeys(rows) {
       if (!wasOpen) {
         popover.classList.add('open');
         trigger.setAttribute('aria-expanded', 'true');
+        positionRowActionsPopover(trigger, popover);
       }
     });
   });
@@ -1563,8 +1564,42 @@ function renderApiKeys(rows) {
   });
 }
 
+// The table these popovers live in has overflow-x:auto (and, per the CSS
+// overflow spec, that forces overflow-y to compute as auto too), so a
+// popover positioned via the default CSS (position:absolute; right:0;
+// top:calc(100% + 4px)) risks being clipped by the table's own scroll
+// container near its bottom/right edge. Reposition with position:fixed,
+// anchored to the trigger button's live bounding rect, flipping above the
+// trigger when there isn't room below.
+function positionRowActionsPopover(trigger, popover) {
+  const rect = trigger.getBoundingClientRect();
+  const margin = 4;
+  const popoverHeight = popover.offsetHeight;
+  const popoverWidth = popover.offsetWidth;
+
+  let top = rect.bottom + margin;
+  if (top + popoverHeight > window.innerHeight) {
+    top = rect.top - popoverHeight - margin;
+  }
+  if (top < margin) top = margin;
+
+  let left = rect.right - popoverWidth;
+  if (left < margin) left = margin;
+
+  popover.style.position = 'fixed';
+  popover.style.top = `${top}px`;
+  popover.style.left = `${left}px`;
+  popover.style.right = 'auto';
+}
+
 function closeAllRowActionMenus() {
-  document.querySelectorAll('.row-actions-popover.open').forEach((p) => p.classList.remove('open'));
+  document.querySelectorAll('.row-actions-popover.open').forEach((p) => {
+    p.classList.remove('open');
+    p.style.position = '';
+    p.style.top = '';
+    p.style.left = '';
+    p.style.right = '';
+  });
   document.querySelectorAll('[data-row-menu-trigger][aria-expanded="true"]').forEach((t) => t.setAttribute('aria-expanded', 'false'));
 }
 document.addEventListener('click', closeAllRowActionMenus);

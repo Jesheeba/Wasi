@@ -1277,6 +1277,27 @@ body {
   }
 }
 
+/* Base height for the Bot Flow Editor canvas — moved out of an inline
+   style on #bot-flow-editor-canvas in index.html so the 640px mobile
+   override below (which shrinks it to 320px) can actually take effect;
+   an inline style attribute always outranks a stylesheet rule, ID
+   selector or not, short of !important. Placed before the Pass B media
+   block on purpose: with equal specificity, source order decides, and
+   this must lose to the media rule at narrow widths. */
+#bot-flow-editor-canvas {
+  height: 480px;
+}
+
+/* Base position for the Developer settings "Connect to Claude" copy
+   button — moved out of an inline style on #copy-mcp-config-btn in
+   index.html (same reason as #bot-flow-editor-canvas above, and placed
+   before the Pass B block for the same source-order reason). */
+#copy-mcp-config-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 /* ===================================================================
    Root CRM app (Pass B) mobile fixes — scoped to classes/ids that exist
    only in index.html's DOM, verified against admin/index.html, EXCEPT
@@ -1442,6 +1463,71 @@ body {
     top: 50%;
     right: 4px;
     transform: translateY(-50%);
+  }
+
+  /* Analytics > Message sub-tab .metrics-cards-grid (~line 698) — hard
+     3-column grid holding ~6 stat cards has no mobile override anywhere
+     else in this file. 2-up reads better than 1-per-row (less vertical
+     scroll) and the cards' content (a label + a number) isn't dense
+     enough to need the full row width at 375px. */
+  .metrics-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Settings > Wallet .wallet-card (~line 840) — no-wrap flex row squeezes
+     a 2.25rem balance figure against a "+ Recharge Balance" button. Stack
+     instead, same pattern as other row-squeeze fixes in this block. */
+  .wallet-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  /* .channel-status-card (~line 549) — shared by #view-instagram, Settings
+     > Instagram, and Settings > WhatsApp's channel header. No-wrap flex
+     row squeezes channel info against action buttons; let it wrap. */
+  .channel-status-card {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  /* Bot Flow Editor modal (#modal-bot-flow-editor) canvas — base height is
+     set in the #bot-flow-editor-canvas rule above, before this media block
+     (moved out of an inline style so this override can actually win);
+     shrinking it here keeps the modal's header + toolbar + legend +
+     canvas + footer within .modal-box-wide's existing max-height:88vh on
+     a ~640-700px-tall mobile viewport. Pan/zoom (app.js, unchanged) still
+     works at the smaller size. */
+  #bot-flow-editor-canvas {
+    height: 320px;
+  }
+
+  /* Canvas zoom toolbar (−/Reset/+, ~index.html lines 1625-1627) — these
+     are .btn-secondary so they already inherit min-height:44px from the
+     shared touch-target rule above, but that rule sets no min-width, and
+     their inline width:auto + 2px 10px padding leaves the single-glyph
+     −/+ buttons narrower than 44px. Explicit floor for all three so they
+     stay >=44x44 after the canvas itself shrinks. */
+  #bot-flow-canvas-zoom-out-btn,
+  #bot-flow-canvas-zoom-reset-btn,
+  #bot-flow-canvas-zoom-in-btn {
+    min-width: 44px;
+  }
+
+  /* Developer settings > Connect to Claude code block (#sec-view-developer)
+     — .copy-mcp-config-btn overlaid via position:absolute on top of the
+     <pre> would sit on top of wrapped code at narrow widths. Move it above
+     the block instead. */
+  .code-block-wrapper {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .code-block-wrapper #copy-mcp-config-btn {
+    position: static;
+    align-self: flex-end;
+    order: -1;
+    margin-bottom: 8px;
   }
 }
 

@@ -108,7 +108,7 @@ ul { list-style: none; }
   border-bottom: 1px solid var(--border-light);
 }
 .site-nav .container { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+.nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
 .nav-links { display: flex; align-items: center; gap: 28px; }
 .nav-links a { font-size: 0.9rem; font-weight: 500; color: var(--color-heading); text-decoration: none; }
 .nav-links a:hover { color: var(--color-primary-700); }
@@ -119,6 +119,7 @@ ul { list-style: none; }
   align-items: center; justify-content: center;
   border-radius: 8px; border: 1px solid var(--border-light); background: #fff;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .nav-toggle span, .nav-toggle span::before, .nav-toggle span::after {
   content: ''; display: block; width: 18px; height: 2px; background: var(--color-heading); position: relative; transition: 0.2s;
@@ -427,12 +428,63 @@ footer.site-footer { background: var(--color-dark); color: rgba(255,255,255,0.75
 @media (max-width: 640px) {
   .nav-links, .nav-actions .btn-secondary { display: none; }
   .nav-toggle { display: flex; }
+  .nav-links a {
+    display: block;
+    width: 100%;
+    padding: 12px 0;
+    min-height: 44px;
+  }
+  /* Real, measured overflow (Playwright at 375px: nav-toggle's right edge
+     landed at 377.5px, 2.5px past the viewport) — with .nav-actions
+     .btn-secondary hidden above, "Start Free Trial" is the only button
+     left, and logo + its 22px-a-side padding + gaps + the 44px toggle
+     genuinely don't fit in 375px. Reclaim space by tightening the
+     container's gap and this one button's padding rather than hiding the
+     CTA or shrinking its text below 14px (still 0.9rem / 14.4px here). */
+  .site-nav .container {
+    gap: 12px;
+  }
+  .nav-actions .btn {
+    padding: 0 14px;
+  }
   .feature-grid { grid-template-columns: 1fr; }
   .steps-grid { grid-template-columns: 1fr; }
-  .footer-grid { grid-template-columns: 1fr 1fr; }
+  .footer-grid { grid-template-columns: 1fr; }
   section { padding: 56px 0; }
   .wizard-panel { padding: 24px; }
   .cta-band { margin: 0 12px; padding: 40px 22px; }
+
+  /* .mock-stat-row's 3 flex:1 tiles squeeze to ~82px each at 375px, wrapping
+     labels like "Conversations this month" into 4-5 lines against a 2-3
+     digit number. Stack them full-width instead. */
+  .mock-stat-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Both .wizard-actions buttons use .btn's white-space:nowrap; their
+     combined min-content width can exceed the wizard panel's mobile content
+     width (padding drops to 24px above). Stack to full-width buttons. */
+  .wizard-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .wizard-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* .plan-option-price is nowrap-protected, which squeezes
+     .plan-option-desc into a narrow column and wraps it densely. Move the
+     price below the name/description instead of beside it. */
+  .plan-option {
+    flex-wrap: wrap;
+  }
+  .plan-option-price {
+    width: 100%;
+    text-align: left;
+    margin-top: 4px;
+  }
 
   /* The 4-label step indicator (circle + text per step, plus connectors)
      measures ~440px across at full size — wider than the ~335px of usable

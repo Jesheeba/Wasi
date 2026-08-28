@@ -137,7 +137,7 @@
               <div class="page-title">Statistics</div>
               <div class="page-subtitle">Trends across messaging, client growth, webhook delivery, and API usage</div>
             </div>
-            <select id="statistics-range-select" class="form-input page-title-auto" style="width:auto;">
+            <select id="statistics-range-select" class="form-input page-title-auto">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
               <option value="90">Last 90 days</option>
@@ -614,7 +614,7 @@
 
             <div class="detail-card">
               <div class="detail-card-title">6. Error Handling</div>
-              <p>Errors come back as <code>{ error, code, metaError? }</code> — Meta's real error body is attached when the rejection happened at Meta, not swallowed. Check <code>error.code</code> before parsing <code>metaError</code>, since not every error originates from Meta (e.g. consent-opt-out rejections, validation errors).</p>
+              <p>Errors come back in one consistent shape across every endpoint: <code>{ "error": { "code": "...", "message": "...", ... } }</code> — a stable, machine-readable <code>code</code> to branch on, a human-readable <code>message</code>, and endpoint-specific extra fields nested alongside them (e.g. <code>metaError</code>, Meta's real error body, attached when the rejection happened at Meta, not swallowed; <code>details</code> for validation failures). Check <code>error.code</code> before parsing <code>error.metaError</code>, since not every error originates from Meta (e.g. consent-opt-out rejections, validation errors).</p>
             </div>
 
             <div class="detail-card">
@@ -625,7 +625,7 @@
 
             <div class="detail-card">
               <div class="detail-card-title">8. Rate Limits</div>
-              <p>The Hub API (<code>/api/v1/*</code>) is capped at <strong>300 requests/minute per key</strong>. A rate-limited request gets back <code>429</code> with <code>{ "error": "Too many requests." }</code>. This applies per key, not per client — a client with multiple keys gets the limit on each independently.</p>
+              <p>The Hub API (<code>/api/v1/*</code>) is capped at <strong>300 requests/minute</strong>, currently scoped per source IP (not yet tracked per key). Every response carries live <code>X-RateLimit-Limit</code> / <code>X-RateLimit-Remaining</code> / <code>X-RateLimit-Reset</code> headers so a well-behaved integration can self-throttle before hitting the limit. A rate-limited request gets back <code>429</code> with <code>{ "error": { "code": "rate_limited", "message": "Too many requests." } }</code>, the same error shape as any other Hub API failure.</p>
             </div>
 
             <div class="detail-card">
@@ -657,7 +657,7 @@
               <div class="detail-card-title">Connect via MCP / Claude — No Integration Code Needed</div>
               <p>For a faster path than building a custom integration: Wasi ships an <a href="https://modelcontextprotocol.io" class="api-guide-inline-link" target="_blank" rel="noopener">MCP (Model Context Protocol)</a> server that gives Claude (Desktop, Code, or any other MCP-compatible client) direct tool access to send messages, check delivery status, and read templates/conversations — using an existing Hub API key, with zero custom code. This is the same Hub API documented above, wrapped as MCP tools rather than raw REST endpoints.</p>
               <p>Hand the client's developer (or a non-technical client who just wants Claude connected) this config, filled in with their own key and this deployment's URL:</p>
-              <div style="position:relative;">
+              <div class="code-block-wrapper" style="position:relative;">
                 <pre class="api-guide-code" id="mcp-config-prompt-text">{
   "mcpServers": {
     "wasi": {
@@ -670,7 +670,7 @@
     }
   }
 }</pre>
-                <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value-target="mcp-config-prompt-text" style="position:absolute; top:8px; right:8px;"><i data-lucide="copy" style="width:12px;"></i> Copy Config</button>
+                <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value-target="mcp-config-prompt-text"><i data-lucide="copy" style="width:12px;"></i> Copy Config</button>
               </div>
               <p style="margin-top:0.75rem;">Full tool list, example prompts, and troubleshooting are in the server's own <code>README.md</code> (<code>mcp-server/</code> in this repository). Same security posture as any other API key use: the key lives only in the MCP client's own config, is never logged, and is scoped to exactly this client's data.</p>
             </div>
@@ -681,7 +681,7 @@
               <p style="background:#FEF3C7; border:1px solid #FDE68A; border-radius:8px; padding:0.6rem 0.75rem; font-size:0.82rem; color:#92400E; margin-bottom:0.75rem;">
                 <strong>Before you start:</strong> put the API key in an environment variable you set yourself (e.g. <code>WASI_API_KEY</code> in a local <code>.env</code> file, gitignored). Do <strong>not</strong> paste the raw key into the Claude Code conversation or prompt — Claude only needs the variable's <em>name</em>, never its value.
               </p>
-              <div style="position:relative;">
+              <div class="code-block-wrapper" style="position:relative;">
                 <pre class="api-guide-code" id="claude-code-prompt-text">I'm integrating my CRM with the Wasi WhatsApp Hub API. Base URL and auth:
 
 - Base URL: &lt;fill in this Wasi deployment's URL&gt;
@@ -706,7 +706,7 @@ webhook receiver that verifies the signature and dispatches on event type,
 (3) error handling that surfaces `metaError` distinctly from a plain
 validation error, and (4) a way to test all of this against real values
 without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
-                <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value-target="claude-code-prompt-text" style="position:absolute; top:8px; right:8px;"><i data-lucide="copy" style="width:12px;"></i> Copy Prompt</button>
+                <button type="button" class="btn-secondary btn-sm copy-btn" data-copy-value-target="claude-code-prompt-text"><i data-lucide="copy" style="width:12px;"></i> Copy Prompt</button>
               </div>
             </div>
           </div>
