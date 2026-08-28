@@ -115,8 +115,7 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
       status: 'connected',
     });
     await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'retry_provisioning', target: id });
-    const { access_token_encrypted, ...safe } = updated;
-    res.json({ retried: true, waba: safe });
+    res.json({ retried: true, waba: maskWaba(updated) });
   } catch (err) {
     res.status(502).json({ error: 'Retry failed', detail: err.message });
   }
