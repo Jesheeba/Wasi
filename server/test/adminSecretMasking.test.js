@@ -173,3 +173,41 @@ test('GET /api/client-webhook (clientWebhook.js): no raw secret leaked to the ow
   const body = JSON.parse(bodyText);
   assert.equal(body.has_secret, true);
 });
+
+// A different table than the waba/webhook secrets above — api_keys.key_hash
+// (the SHA-256 lookup value requireApiKey.js hashes an incoming bearer key
+// against, not a reversible secret, but internal and never meant to leave
+// this process). apiKeysRepo.create/revoke both `returning *`, so both
+// routes previously spread key_hash straight into their response alongside
+// the intentional raw `key`/`revoked_at` fields. Field-presence checks, not
+// a body-string search, since the hash value is generated per-call and not
+// known ahead of time the way the fixed forward_secret fixtures above are.
+test('POST /api/admin/api-keys: response never includes key_hash', async () => {
+  const res = await fetch(`${baseUrl}/api/admin/api-keys`, {
+    method: 'POST',
+    headers: authed(adminToken),
+    body: JSON.stringify({ client_id: testClientId, app_name: `${SUITE_PREFIX}key_hash_check` }),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 201, JSON.stringify(body));
+  assert.equal('key_hash' in body, false);
+  assert.ok(body.key, 'the raw key itself must still be returned — that part is intentional');
+});
+
+test('POST /api/admin/api-keys/:id/revoke: response never includes key_hash', async () => {
+  const created = await fetch(`${baseUrl}/api/admin/api-keys`, {
+    method: 'POST',
+    headers: authed(adminToken),
+    body: JSON.stringify({ client_id: testClientId, app_name: `${SUITE_PREFIX}key_hash_check_revoke` }),
+  }).then((r) => r.json());
+
+  const res = await fetch(`${baseUrl}/api/admin/api-keys/${created.id}/revoke`, {
+    method: 'POST',
+    headers: authed(adminToken),
+    body: JSON.stringify({ client_id: testClientId }),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(body));
+  assert.equal('key_hash' in body, false);
+  assert.ok(body.revoked_at, 'the revoke confirmation itself must still come through — that part is intentional');
+});

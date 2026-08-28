@@ -253,7 +253,12 @@ router.post('/api-keys', asyncHandler(async (req, res) => {
 
   const { record, rawKey } = await apiKeysRepo.create(pool, client_id, app_name);
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_created', target: `${client_id}: ${app_name}` });
-  res.status(201).json({ ...record, key: rawKey });
+  // key_hash is internal (the lookup value requireApiKey.js hashes an
+  // incoming bearer key against) — the intended secret to reveal here is
+  // rawKey, given separately below; key_hash has no reason to ever leave
+  // this process.
+  const { key_hash, ...safeRecord } = record;
+  res.status(201).json({ ...safeRecord, key: rawKey });
 }));
 
 // Bulk-issue a Hub API key for every client that doesn't already have an
@@ -286,7 +291,8 @@ router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
   const revoked = await apiKeysRepo.revoke(pool, id, client_id);
   if (!revoked) return res.status(404).json({ error: 'Not found, or already revoked' });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_revoked', target: id });
-  res.json(revoked);
+  const { key_hash, ...safeRevoked } = revoked;
+  res.json(safeRevoked);
 }));
 
 // Delete works on a key in any state — see apiKeysRepo.softDelete's comment.
