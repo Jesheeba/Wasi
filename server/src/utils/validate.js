@@ -339,6 +339,53 @@ const messageTemplateCreateSchema = z.object({
   }
 });
 
+// Editable subset of messageTemplateCreateSchema's fields — name/category/
+// language are fixed once a template exists (routes/templates.js's
+// PUT /:id reads those three from the existing row instead; Meta's own
+// edit endpoint doesn't accept them either, since the template id already
+// identifies all three). header.type is narrowed to NONE/TEXT — a media
+// header (IMAGE/VIDEO/DOCUMENT) can't be changed via edit yet, only via
+// delete + recreate, so this schema simply doesn't accept those values
+// rather than accepting and rejecting them deeper in the route.
+//
+// The button-count/url/phone-required checks below are duplicated from
+// messageTemplateCreateSchema's superRefine rather than shared — that
+// schema is a ZodEffects (from its own .superRefine), which zod doesn't
+// allow calling .omit() on to build this narrower one. Category-branching
+// (Authentication has none of these fields) is enforced in the route
+// instead, where the existing template's real category is already known
+// — this schema alone can't tell which category a given PUT is for.
+const messageTemplateUpdateSchema = z.object({
+  body: z.string().min(1).max(1024).optional(),
+  bodyParamExamples: z.record(z.string()).optional(),
+  header: z.object({
+    type: z.enum(['NONE', 'TEXT']),
+    text: z.string().max(60).optional(),
+  }).optional(),
+  footer: z.string().max(60).optional(),
+  buttons: z.array(templateButtonSchema).max(10).optional(),
+
+  // Authentication only.
+  codeExpirationMinutes: z.number().int().positive().max(90).optional(),
+  addSecurityDisclaimer: z.boolean().optional(),
+  otpButtonType: z.enum(['COPY_CODE']).optional(),
+}).superRefine((data, ctx) => {
+  if (data.header?.type === 'TEXT' && !data.header.text) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['header'], message: 'Header text is required when header type is TEXT.' });
+  }
+
+  if (data.buttons?.length) {
+    const urlCount = data.buttons.filter((b) => b.type === 'URL').length;
+    const phoneCount = data.buttons.filter((b) => b.type === 'PHONE_NUMBER').length;
+    if (urlCount > 2) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'At most 2 URL buttons allowed.' });
+    if (phoneCount > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'At most 1 phone number button allowed.' });
+    for (const b of data.buttons) {
+      if (b.type === 'URL' && !b.url) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'A URL button requires a url.' });
+      if (b.type === 'PHONE_NUMBER' && !b.phone_number) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['buttons'], message: 'A phone number button requires a phone_number.' });
+    }
+  }
+});
+
 const templateStatusUpdateSchema = z.object({
   status: z.enum(['approved', 'pending', 'rejected']),
 });
@@ -383,6 +430,55 @@ const clientWebhookSchema = z.object({
 const hubForwardConfigSchema = z.object({
   forward_to_url: z.string().url(),
   events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1),
+});
+
+// Blocks the single highest-value SSRF target with zero legitimate use case
+// (independent Auditor + QA both found target_url accepted this unguarded —
+// the cloud-metadata endpoint on every major provider, reachable only from
+// inside that provider's own network, is how a real SSRF turns into stolen
+// instance credentials). Scoped narrowly to link-local (169.254.0.0/16,
+// which covers 169.254.169.254) rather than the full private-range set
+// (127.0.0.1, 10.x, 172.16-31.x, 192.168.x): this project's own webhook
+// forwarding test suite (webhookForwarding.test.js, apiV1Subscriptions.test.js)
+// deliberately targets local http.createServer instances on loopback to
+// capture and verify real deliveries — blocking those hosts here would
+// break that established, legitimate test pattern with no config escape
+// hatch. Broader private-range blocking (env-gated, so tests can opt in)
+// is a real follow-up, not silently skipped — see CLAUDE.md Known Gaps.
+// The SAME gap exists on wabas.forward_to_url/client_webhooks' callback_url
+// (hubForwardConfigSchema/clientWebhookSchema above, both bare z.string().url()
+// with no host check) — pre-existing, inherited by this new schema rather
+// than introduced by it, and out of this narrow fix's scope to also close.
+function isLinkLocalHost(url) {
+  try {
+    const { hostname } = new URL(url);
+    if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (hostname === '[fe80::1]' || hostname.toLowerCase().startsWith('fe80:')) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Zapier REST Hook subscribe (build plan Phase 4) — event is fixed to
+// 'message.received' rather than reusing the full WEBHOOK_EVENT_TYPES enum:
+// that's the only trigger actually built (see wasi-master-plan.md §3.1's
+// single-trigger scope), and migration 040's own CHECK constraint agrees.
+// Widen both together if a second Zapier trigger ships later, same
+// discipline as migration 032 widening WEBHOOK_EVENT_TYPES itself.
+const zapierSubscribeSchema = z.object({
+  target_url: z.string().url()
+    .refine((url) => /^https?:\/\//i.test(url), { message: 'target_url must use http or https.' })
+    .refine((url) => !isLinkLocalHost(url), { message: 'target_url may not point at a link-local address.' }),
+  event: z.enum(['message.received']).default('message.received'),
+});
+
+// Client self-serve API key creation (build plan Phase 4) — routes/
+// apiKeys.js. app_name is the only input; everything else (the raw key
+// itself, key_hash) is generated server-side, same as admin.js's own
+// POST /api-keys.
+const apiKeySelfCreateSchema = z.object({
+  app_name: z.string().min(1).max(100),
 });
 
 const tagCreateSchema = z.object({
@@ -520,6 +616,7 @@ module.exports = {
   flowEdgeCreateSchema,
   flowEdgeUpdateSchema,
   messageTemplateCreateSchema,
+  messageTemplateUpdateSchema,
   templateStatusUpdateSchema,
   supportTicketCreateSchema,
   ticketStatusUpdateSchema,
@@ -532,4 +629,6 @@ module.exports = {
   hubForwardConfigSchema,
   consentEventCreateSchema,
   apiMessageSendSchema,
+  zapierSubscribeSchema,
+  apiKeySelfCreateSchema,
 };

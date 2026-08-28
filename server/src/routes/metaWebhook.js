@@ -10,6 +10,7 @@ const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
 const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
 const messageStatusForwardsRepo = require('../repositories/messageStatusForwardsRepo');
+const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo');
 const flowEngine = require('../services/flowEngine');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -101,6 +102,29 @@ async function enqueueForwards(waba, event, payload) {
       payload: envelopeData,
       targetUrl: clientWebhook.callback_url,
       targetSecret: clientWebhook.secret,
+    });
+  }
+
+  // Zapier's "New WhatsApp Message Received" trigger (build plan Phase 4,
+  // wasi-master-plan.md §3.1) — unlike the two targets above, a client can
+  // have several of these active at once (one per Zap), so this is a list,
+  // not a single lookup. Same enqueue call, same downstream queue/runner —
+  // Zapier's subscription is just a third source feeding it.
+  let zapierSubscriptions;
+  try {
+    zapierSubscriptions = await zapierSubscriptionsRepo.listByClientAndEvent(pool, waba.client_id, event);
+  } catch (err) {
+    console.error('metaWebhook: failed to look up zapier_subscriptions for', waba.client_id, err.message);
+    zapierSubscriptions = [];
+  }
+  for (const subscription of zapierSubscriptions) {
+    await webhookDeliveriesRepo.enqueue(pool, {
+      clientId: waba.client_id,
+      wabaId: waba.id,
+      event,
+      payload: envelopeData,
+      targetUrl: subscription.target_url,
+      targetSecret: subscription.secret,
     });
   }
 }

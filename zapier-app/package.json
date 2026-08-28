@@ -1,0 +1,20 @@
+{
+  "name": "wasi-zapier-app",
+  "version": "1.0.0",
+  "description": "Private/beta Zapier integration for Wasi's WhatsApp Hub API — a no-code bridge (wasi-master-plan.md §3.1, Tier 2) built on the same Hub API v1 contract as mcp-server/. Not submitted to Zapier's certified app program.",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "test:integration": "node --test test/app.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "zapier-platform-core": "^19.0.0"
+  },
+  "devDependencies": {
+    "dotenv": "^17.4.2"
+  }
+}

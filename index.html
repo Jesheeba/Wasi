@@ -1119,15 +1119,26 @@
                 <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Access Tokens</h2>
                 <div class="profile-form-card" style="max-width: 640px;">
                   <p style="color:#6B7280; font-size:0.85rem; margin:0 0 1rem; line-height:1.5;">
-                    Hub API keys let your own CRM, or an AI assistant like Claude (see "Connect to Claude" below), send WhatsApp messages and read your data through Wasi. The raw key value is shown once, when it's first issued — if you've lost it, contact support to request a new one; you can revoke or remove an existing key below at any time.
+                    Hub API keys let your own CRM, an AI assistant like Claude (see "Connect to Claude" below), or a no-code tool like Zapier send WhatsApp messages and read your data through Wasi. Each key's raw value is shown once, right when it's created — you can revoke or remove any key below at any time.
                   </p>
                   <div id="api-keys-error" class="inline-error" style="display:none; margin-bottom:0.75rem;"></div>
+                  <!-- New key's raw value is shown here exactly once, right after
+                       creation — never re-fetchable afterward (only key_hash is
+                       stored server-side, see apiKeysRepo.js). -->
+                  <div id="new-api-key-reveal" style="display:none; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:0.75rem; margin-bottom:0.75rem;">
+                    <div style="font-size:0.8rem; color:#166534; margin-bottom:0.4rem;">New key created — copy it now, it won't be shown again:</div>
+                    <div style="display:flex; gap:0.5rem;">
+                      <input id="new-api-key-value" type="text" readonly style="flex:1; font-family:monospace; font-size:0.8rem; padding:0.4rem 0.6rem; border:1px solid #D1D5DB; border-radius:6px; background:#fff;">
+                      <button type="button" class="btn-secondary btn-sm" id="copy-new-api-key-btn">Copy</button>
+                    </div>
+                  </div>
                   <table class="data-table" style="width:100%;">
                     <thead><tr><th>App</th><th>Status</th><th>Last Used</th><th>Created</th><th></th></tr></thead>
                     <tbody id="api-keys-table-body">
                       <tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
                     </tbody>
                   </table>
+                  <button type="button" class="btn-secondary btn-sm" id="new-api-key-btn" style="margin-top:0.75rem;">+ New API Key</button>
                 </div>
 
                 <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">

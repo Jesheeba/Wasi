@@ -1,7 +1,9 @@
-// Client self-serve API key revoke/delete (routes/apiKeys.js) — reverses
-// admin.js's original "consuming apps don't self-serve keys" comment for
-// revoke/delete only; issuing a new key stays admin-only (no POST / here).
-// Same dedicated-disposable-test-client pattern as apiV1.test.js.
+// Client self-serve API key management (routes/apiKeys.js) — reverses
+// admin.js's original "consuming apps don't self-serve keys" comment, first
+// for revoke/delete, then (build plan Phase 4) for creation too: a client
+// can now generate their own named key (e.g. "Zapier") via POST / without
+// contacting support. Same dedicated-disposable-test-client pattern as
+// apiV1.test.js.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
@@ -161,5 +163,52 @@ test('deleting an already-revoked key is allowed even if it\'s the client\'s las
 
 test('unauthenticated requests to /api/api-keys are rejected', async () => {
   const res = await fetch(`${baseUrl}/api/api-keys`);
+  assert.equal(res.status, 401);
+});
+
+test('POST /api/api-keys self-serve creation: returns a working raw key exactly once, never key_hash', async () => {
+  const res = await fetch(`${baseUrl}/api/api-keys`, {
+    method: 'POST',
+    headers: authed(clientToken),
+    body: JSON.stringify({ app_name: `${SUITE_PREFIX}app_selfserve` }),
+  });
+  assert.equal(res.status, 201);
+  const created = await res.json();
+  assert.equal(created.app_name, `${SUITE_PREFIX}app_selfserve`);
+  assert.equal(created.client_id, testClientId);
+  assert.ok(created.key && created.key.startsWith('wasi_'), 'raw key must be returned once, in the expected format');
+  assert.ok(!('key_hash' in created), 'key_hash must never leave this process');
+
+  // Real behavioral proof, not just response shape: the returned raw key
+  // must actually authenticate a live Hub API v1 request (requireApiKey.js),
+  // the same key mechanism a client would paste into Zapier's connection
+  // dialog (Phase 4's interim auth decision).
+  const accountRes = await fetch(`${baseUrl}/api/v1/account`, { headers: { Authorization: `Bearer ${created.key}` } });
+  assert.equal(accountRes.status, 200);
+  const account = await accountRes.json();
+  assert.equal(account.client_id, testClientId);
+
+  // The list endpoint must reflect the new key but still never expose key_hash.
+  const listed = await fetch(`${baseUrl}/api/api-keys`, { headers: authed(clientToken) }).then((r) => r.json());
+  const listedKey = listed.find((k) => k.id === created.id);
+  assert.ok(listedKey, 'newly created key must appear in the list');
+  assert.ok(!('key_hash' in listedKey));
+});
+
+test('POST /api/api-keys requires app_name and rejects an empty one', async () => {
+  const res = await fetch(`${baseUrl}/api/api-keys`, {
+    method: 'POST',
+    headers: authed(clientToken),
+    body: JSON.stringify({ app_name: '' }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('unauthenticated POST /api/api-keys is rejected', async () => {
+  const res = await fetch(`${baseUrl}/api/api-keys`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_name: 'should-not-be-created' }),
+  });
   assert.equal(res.status, 401);
 });

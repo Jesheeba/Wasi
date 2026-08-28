@@ -40,6 +40,7 @@ const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 const apiV1ConversationsRouter = require('./routes/apiV1Conversations');
 const apiV1ContactsRouter = require('./routes/apiV1Contacts');
 const apiV1AccountRouter = require('./routes/apiV1Account');
+const apiV1SubscriptionsRouter = require('./routes/apiV1Subscriptions');
 
 // Same-origin static pages (this app.js, admin/, marketing/) never send an
 // Origin header Express sees as cross-site, so this allowlist only matters
@@ -125,7 +126,10 @@ function createApp() {
   app.use('/api/v1/conversations', apiLimiter, apiV1ConversationsRouter);
   app.use('/api/v1/contacts', apiLimiter, apiV1ContactsRouter);
   app.use('/api/v1/account', apiLimiter, apiV1AccountRouter);
-  // Catches unmatched /api/v1/* paths and any error thrown inside the five
+  // Zapier REST Hook subscribe/unsubscribe (build plan Phase 4) — same Hub
+  // API shape as the five routers above, not a client-facing resource.
+  app.use('/api/v1/subscriptions', apiLimiter, apiV1SubscriptionsRouter);
+  // Catches unmatched /api/v1/* paths and any error thrown inside the six
   // routers above (Zod validation, Postgres constraint violations, an
   // uncaught error) — both in the {error: {code, message}} shape, before
   // falling through to the app-wide handlers below, which stay on the old

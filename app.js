@@ -3413,12 +3413,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Hub API Keys (Settings > Developer) ---
-  // The raw key value is never retrievable here — api_keys.key_hash is a
-  // one-way hash (server/src/repositories/apiKeysRepo.js) and the plaintext
-  // key is only ever shown once, at admin-issuance time. This view only
-  // manages existing keys (revoke/delete); issuing a new one stays
-  // admin-only, unchanged — see server/src/routes/apiKeys.js's module
-  // comment for the full reasoning behind that split.
+  // The raw key value is never retrievable after creation — api_keys.key_hash
+  // is a one-way hash (server/src/repositories/apiKeysRepo.js) and the
+  // plaintext key is only ever shown once, in the response to the request
+  // that just created it (POST /api/api-keys, build plan Phase 4 — added
+  // specifically so a client can self-serve a key named "Zapier" without
+  // contacting support; see server/src/routes/apiKeys.js's module comment).
   function apiKeyStatusBadge(key) {
     return key.revoked_at
       ? '<span class="status-badge">Revoked</span>'
@@ -3436,7 +3436,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const activeCount = keys.filter((k) => !k.revoked_at).length;
 
       if (!keys.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No API keys yet — contact support to get one issued.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No API keys yet — click "+ New API Key" above to create one.</td></tr>';
         return;
       }
 
@@ -3467,6 +3467,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   }
+
+  document.getElementById('new-api-key-btn')?.addEventListener('click', async () => {
+    const appName = prompt('Name this key (e.g. "Zapier") so you can recognize it later:');
+    if (!appName || !appName.trim()) return;
+    try {
+      const created = await authFetch('/api/api-keys', { method: 'POST', body: JSON.stringify({ app_name: appName.trim() }) });
+      const revealEl = document.getElementById('new-api-key-reveal');
+      const valueEl = document.getElementById('new-api-key-value');
+      if (revealEl && valueEl) {
+        valueEl.value = created.key;
+        revealEl.style.display = '';
+      }
+      showToast('API key created');
+      renderApiKeysManager();
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  document.getElementById('copy-new-api-key-btn')?.addEventListener('click', () => {
+    const valueEl = document.getElementById('new-api-key-value');
+    if (!valueEl) return;
+    navigator.clipboard.writeText(valueEl.value)
+      .then(() => showToast('API key copied to clipboard'))
+      .catch(() => showToast('Could not copy — clipboard permission denied'));
+  });
 
   document.getElementById('api-keys-table-body')?.addEventListener('click', async (e) => {
     const revokeBtn = e.target.closest('[data-revoke-key]');

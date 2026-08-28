@@ -138,16 +138,13 @@ verify origin. Delivery is queued and retried with backoff
 (`webhookDeliveriesRepo`), not fire-and-forget.
 
 **Event types available today**: `message.received` (a customer's reply),
-`message_template_status_update` (Meta approved/paused/rejected a
-template), `account_update` (WABA restriction/ban/quality changes).
-**Not currently forwarded**: per-message delivery/read status
-(`sent → delivered → read → failed`) — Wasi tracks this internally
-(visible in the chat UI) but it was never wired into the forward queue.
-Adding it is a small, contained change (a new event constant plus one
-`enqueueForwards` call in `handleStatuses`, `server/src/routes/metaWebhook.js`)
-but does need a migration to widen the `wabas.forward_events` CHECK
-constraint — worth doing only if a client's CRM actually needs delivery
-receipts, not preemptively.
+`message.status` (per-message delivery lifecycle, `sent → delivered → read
+→ failed`), `message_template_status_update` (Meta approved/paused/rejected
+a template), `account_update` (WABA restriction/ban/quality changes). All
+four are live and wired into `enqueueForwards`
+(`server/src/routes/metaWebhook.js`) — this paragraph previously said
+`message.status` wasn't forwarded yet; that was corrected once it shipped
+(migration `032_widen_forward_events.js`).
 
 ## 4. What's still manual per client
 
@@ -164,8 +161,23 @@ receipts, not preemptively.
 This auto-generates a key for clients **created by an admin** via
 `POST /api/clients` (the normal Sirah-team onboarding flow). Self-signup
 (`POST /api/auth/register`, the public marketing signup page) does **not**
-get one automatically — there's no admin in that loop to hand the key off,
-and no client-facing UI yet to let a self-signed-up client view/regenerate
-their own key. If that's needed later, it's a separate, larger piece of
-work (a client-authenticated `/api/api-keys` surface), not a one-line
-addition to `/register`.
+get one automatically — there's no admin in that loop to hand the key off.
+A self-signed-up client isn't stuck without one, though: **Settings →
+Developer** in the root CRM app is a full client-authenticated `/api/api-keys`
+surface — list, create (`POST /`, shows the raw key once), revoke, and
+delete, all scoped to the caller's own account (`server/src/routes/apiKeys.js`).
+
+## 5. No-code connector: Zapier (private/beta)
+
+For a client who wants message automation without writing integration code
+at all, `zapier-app/` is a private/beta Zapier Platform CLI app built on
+top of everything above — same `POST /api/v1/messages` for its "Send
+WhatsApp Message" action, same Bearer API key auth (a client pastes their
+own key from Settings → Developer into Zapier's connection dialog, no
+different in kind from handing it to a CRM developer above). Its "New
+WhatsApp Message Received" trigger is an instant REST Hook, riding the
+exact same `webhook_deliveries`/`forwardRunner.js` queue described in
+§3 above, via a new per-Zap subscription (`POST`/`DELETE
+/api/v1/subscriptions`) rather than the single `forward_to_url` this
+section covers. See `zapier-app/README.md` for setup and scope — not
+submitted to Zapier's certified app directory yet.

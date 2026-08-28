@@ -44,4 +44,21 @@ const apiLimiter = rateLimit({
   message: { error: { code: 'rate_limited', message: 'Too many requests.' } },
 });
 
-module.exports = { authLimiter, webhookLimiter, apiLimiter };
+// Client self-serve API key creation (build plan Phase 4, routes/apiKeys.js
+// POST /) — mints a live Bearer credential on every call, the one
+// capability this route family didn't have to consider abuse-throttling for
+// until now (independent audit finding: unlike every /api/v1/* route above,
+// nothing bounded how many keys an authenticated client could mint in a
+// loop). Keyed by the authenticated client (req.clientId), not IP — the
+// abuse case here is one account looping this endpoint after a valid
+// login, not one IP spreading requests across accounts.
+const apiKeyCreationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.clientId || req.ip,
+  message: { error: 'Too many API keys created recently. Try again later, or contact support if you need more.' },
+});
+
+module.exports = { authLimiter, webhookLimiter, apiLimiter, apiKeyCreationLimiter };
