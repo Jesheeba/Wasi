@@ -1011,20 +1011,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return values;
   }
 
-  function updateSendTemplatePreview() {
-    const bubble = document.getElementById('send-chat-template-preview');
-    if (!bubble || !sendTemplateTarget) return;
-    const t = sendTemplateTarget;
-    const values = collectSendTemplateParamValues();
-
+  // Shared by the send-to-a-contact preview below AND the standalone
+  // Templates-view preview (openTemplateChatPreview) AND the Create/Edit
+  // Template modal's own live preview (updateTemplatePreview) — one bubble
+  // renderer so all three can never drift into showing a template
+  // differently from how it actually sends. header/body/footer text runs
+  // through substituteTemplateParams so a {{param}} shows its real sample
+  // value (or "[param]" if one isn't set yet) instead of the raw
+  // placeholder syntax. headerMediaNote is optional context specific to
+  // the send flow ("will send with the file you chose above") — omitted
+  // entirely for a read-only preview, where there's nothing to choose.
+  function renderTemplateBubbleMarkup(t, values, headerMediaNote) {
     let html = '';
     if (t.header_type === 'TEXT' && t.header_content) {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(t.header_content, values))}</div>`;
     } else if (MEDIA_HEADER_TYPES.includes(t.header_type)) {
-      const headerNote = sendTemplateHeaderMediaAssetId
-        ? 'the file you chose above'
-        : 'the approval sample — choose a file above to send something else';
-      html += `<div class="template-preview-header">${t.header_type.charAt(0)}${t.header_type.slice(1).toLowerCase()} header — will send with ${headerNote}</div>`;
+      const label = `${t.header_type.charAt(0)}${t.header_type.slice(1).toLowerCase()} header`;
+      html += `<div class="template-preview-header">${headerMediaNote ? `${label} — ${headerMediaNote}` : label}</div>`;
     }
     html += `<div>${escapeHtml(substituteTemplateParams(t.body || '', values))}</div>`;
     if (t.footer_text) {
@@ -1036,7 +1039,27 @@ document.addEventListener('DOMContentLoaded', () => {
         `<div class="template-preview-button">${icon[b.type] || ''} ${escapeHtml(b.text || '')}</div>`
       ).join('')}</div>`;
     }
-    bubble.innerHTML = html;
+    return html;
+  }
+
+  function updateSendTemplatePreview() {
+    const bubble = document.getElementById('send-chat-template-preview');
+    if (!bubble || !sendTemplateTarget) return;
+    const values = collectSendTemplateParamValues();
+    const headerMediaNote = sendTemplateHeaderMediaAssetId
+      ? 'will send with the file you chose above'
+      : 'will send with the approval sample — choose a file above to send something else';
+    bubble.innerHTML = renderTemplateBubbleMarkup(sendTemplateTarget, values, headerMediaNote);
+  }
+
+  // Read-only preview of an EXISTING template (Templates view's per-card
+  // preview button) — no params to fill in, just the template's own saved
+  // body_param_examples standing in for what a real send would fill.
+  function openTemplateChatPreview(template) {
+    document.getElementById('template-chat-preview-name').textContent = template.name;
+    const bubble = document.getElementById('template-chat-preview-bubble');
+    if (bubble) bubble.innerHTML = renderTemplateBubbleMarkup(template, template.body_param_examples || {});
+    document.getElementById('modal-template-chat-preview')?.classList.add('open');
   }
 
   // Same split-by-component-type logic as
@@ -1922,7 +1945,11 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
             <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${escapeHtml(t.category)}</div>
-            <button type="button" class="delete-template-btn" data-delete-template="${t.id}" title="Delete template" style="border: none; background: none; color: #DC2626; cursor: pointer; padding: 0.25rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
+            <div style="display: flex; gap: 0.25rem;">
+              <button type="button" class="preview-template-btn" data-preview-template="${t.id}" title="Preview in chat" style="border: none; background: none; color: #4B5563; cursor: pointer; padding: 0.25rem;"><i data-lucide="eye" style="width: 14px;"></i></button>
+              <button type="button" class="edit-template-btn" data-edit-template="${t.id}" title="Edit template" style="border: none; background: none; color: #4B5563; cursor: pointer; padding: 0.25rem;"><i data-lucide="pencil" style="width: 14px;"></i></button>
+              <button type="button" class="delete-template-btn" data-delete-template="${t.id}" title="Delete template" style="border: none; background: none; color: #DC2626; cursor: pointer; padding: 0.25rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
+            </div>
           </div>
         </div>
       `;
@@ -2159,6 +2186,81 @@ document.addEventListener('DOMContentLoaded', () => {
     authFetch(`/api/template-library/${entry.id}/use`, { method: 'POST' }).catch(() => {});
   }
 
+  // Opens the SAME Create Template modal pre-filled from an EXISTING
+  // template (Templates view's per-card edit button) — same prefill
+  // pattern as useTemplateFromLibrary above, but name/category/language get
+  // disabled rather than left editable: routes/templates.js's PUT /:id
+  // can't change any of the three (Meta's own edit endpoint doesn't accept
+  // them either — the template id already identifies all three). A media
+  // header (IMAGE/VIDEO/DOCUMENT) can't be changed via edit yet either
+  // (that route's schema only accepts NONE/TEXT), so those options are
+  // disabled here regardless of WhatsApp connection status — unlike
+  // applyMediaHeaderGating's own gating, which is about connection, not
+  // about edit-vs-create.
+  async function openEditTemplateModal(template) {
+    document.getElementById('create-template-form')?.reset();
+    templateButtons = Array.isArray(template.buttons)
+      ? template.buttons.map((b) => ({ type: b.type, text: b.text || '', url: b.url || '', phone_number: b.phone_number || '' }))
+      : [];
+    editingTemplateId = template.id;
+
+    try {
+      const status = await authFetch('/api/onboarding/whatsapp/status');
+      state.wabaConnected = Boolean(status.connected);
+    } catch (err) {
+      state.wabaConnected = false;
+    }
+    applyMediaHeaderGating();
+
+    document.getElementById('new-template-name').value = template.name;
+    document.getElementById('new-template-category').value = template.category;
+    const languageSelect = document.getElementById('new-template-language');
+    if (languageSelect) languageSelect.value = template.language || 'en_US';
+    document.getElementById('new-template-name').disabled = true;
+    document.getElementById('new-template-category').disabled = true;
+    languageSelect.disabled = true;
+
+    const headerSelect = document.getElementById('new-template-header-type');
+    headerSelect.value = template.header_type || 'NONE';
+    MEDIA_HEADER_TYPES.forEach((type) => {
+      const option = headerSelect.querySelector(`option[value="${type}"]`);
+      if (option) option.disabled = true;
+    });
+    // A template that already HAS a media header can't have its header
+    // touched at all in edit v1 (no re-upload path in this route) — lock
+    // the whole dropdown, not just the other media options, so there's
+    // nowhere to switch it to or from.
+    headerSelect.disabled = MEDIA_HEADER_TYPES.includes(template.header_type);
+
+    if (template.category !== 'Authentication') {
+      document.getElementById('new-template-header-text').value = template.header_type === 'TEXT' ? (template.header_content || '') : '';
+      document.getElementById('new-template-body').value = template.body || '';
+      document.getElementById('new-template-footer').value = template.footer_text || '';
+    } else {
+      const auth = template.auth_options || {};
+      document.getElementById('new-template-auth-expiration').value = auth.codeExpirationMinutes || '';
+      document.getElementById('new-template-auth-disclaimer').checked = Boolean(auth.addSecurityDisclaimer);
+    }
+    renderTemplateButtonsList();
+
+    document.getElementById('modal-create-template')?.classList.add('open');
+    syncTemplateFormUI();
+
+    if (template.category !== 'Authentication') {
+      const examples = template.body_param_examples || {};
+      Object.entries(examples).forEach(([name, value]) => {
+        const input = document.querySelector(`#template-sample-values-list [data-param-name="${name}"]`);
+        if (input) input.value = value;
+      });
+      updateTemplatePreview();
+    }
+
+    const modalTitle = document.querySelector('#modal-create-template .modal-title');
+    if (modalTitle) modalTitle.textContent = 'Edit Template';
+    const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = 'Save & Resubmit for Review';
+  }
+
   document.getElementById('library-filter-industry')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('library-filter-category')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('library-filter-use-case')?.addEventListener('change', renderLibraryGrid);
@@ -2370,24 +2472,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Deletes on Meta (if the template was ever submitted there) and locally
-  // in one step — see routes/templates.js's DELETE /:id. Delegated on the
-  // grid container since renderTemplates() rebuilds the card markup wholesale
-  // on every call, which would drop a listener bound to an individual button.
+  // Preview / Edit / Delete — all three delegated on the grid container
+  // since renderTemplates() rebuilds the card markup wholesale on every
+  // call, which would drop a listener bound to an individual button.
   document.getElementById('templates-grid')?.addEventListener('click', async (e) => {
+    const previewBtn = e.target.closest('[data-preview-template]');
+    const editBtn = e.target.closest('[data-edit-template]');
     const deleteBtn = e.target.closest('[data-delete-template]');
-    if (!deleteBtn) return;
-    if (!confirm('Delete this template? If it was submitted to Meta, it will be removed there too and can no longer be sent. This cannot be undone.')) return;
 
-    deleteBtn.disabled = true;
-    try {
-      await authFetch(`/api/templates/${deleteBtn.dataset.deleteTemplate}`, { method: 'DELETE' });
-      await refreshTemplates();
-      renderTemplates();
-      showToast('Template deleted');
-    } catch (err) {
-      showToast(err.message);
-      deleteBtn.disabled = false;
+    if (previewBtn) {
+      const template = state.templates.find((t) => t.id === previewBtn.dataset.previewTemplate);
+      if (template) openTemplateChatPreview(template);
+      return;
+    }
+
+    if (editBtn) {
+      const template = state.templates.find((t) => t.id === editBtn.dataset.editTemplate);
+      if (template) await openEditTemplateModal(template);
+      return;
+    }
+
+    if (deleteBtn) {
+      if (!confirm('Delete this template? If it was submitted to Meta, it will be removed there too and can no longer be sent. This cannot be undone.')) return;
+      deleteBtn.disabled = true;
+      try {
+        await authFetch(`/api/templates/${deleteBtn.dataset.deleteTemplate}`, { method: 'DELETE' });
+        await refreshTemplates();
+        renderTemplates();
+        showToast('Template deleted');
+      } catch (err) {
+        showToast(err.message);
+        deleteBtn.disabled = false;
+      }
     }
   });
 
@@ -2520,6 +2636,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // time — dynamically added/removed rows make DOM-as-source-of-truth
   // fiddly, and this mirrors what actually gets submitted directly.
   let templateButtons = [];
+
+  // The Create Template modal doubles as the Edit Template modal — set
+  // whenever openEditTemplateModal opens it, cleared whenever the modal
+  // opens fresh for a new template (open-create-template-modal's handler,
+  // below) or a submit succeeds. The submit handler branches on this to
+  // PUT instead of POST, and to send only the editable content fields
+  // (name/category/language are locked in edit mode — see
+  // openEditTemplateModal's own comment for why).
+  let editingTemplateId = null;
 
   function templateButtonCounts() {
     return {
@@ -2682,6 +2807,23 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
+  // Undoes openEditTemplateModal's lock-fields-and-relabel treatment —
+  // called whenever the modal opens fresh for a brand-new template, and
+  // after any submit (success or failure of a DIFFERENT kind than the ones
+  // that keep the modal open), so a previous edit's disabled/relabeled
+  // state never leaks into the next "Create Template" click.
+  function resetTemplateModalToCreateMode() {
+    editingTemplateId = null;
+    document.getElementById('new-template-name').disabled = false;
+    document.getElementById('new-template-category').disabled = false;
+    document.getElementById('new-template-language').disabled = false;
+    document.getElementById('new-template-header-type').disabled = false;
+    const modalTitle = document.querySelector('#modal-create-template .modal-title');
+    if (modalTitle) modalTitle.textContent = 'Create Template';
+    const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = 'Submit for Approval';
+  }
+
   document.getElementById('open-create-template-modal')?.addEventListener('click', async () => {
     // Reset unconditionally on open, not just after a successful submit.
     // templateButtons/header-type/etc. previously only got cleared by
@@ -2695,6 +2837,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('create-template-form')?.reset();
     templateButtons = [];
     renderTemplateButtonsList();
+    resetTemplateModalToCreateMode();
 
     // Checked fresh on every open rather than cached in state long-term —
     // connecting/disconnecting WhatsApp is rare, but this keeps the gate
@@ -2740,8 +2883,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('create-template-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('new-template-name').value.trim();
     const category = document.getElementById('new-template-category').value;
+
+    // Edit mode (openEditTemplateModal set this) — a completely separate
+    // path from create below: no name/category/language (fixed once a
+    // template exists — see routes/templates.js's PUT /:id), no media
+    // header support yet (that route's schema only accepts NONE/TEXT), so
+    // this never needs the FormData/headerFile branch create's path does.
+    if (editingTemplateId) {
+      const payload = {};
+      if (category === 'Authentication') {
+        const expiration = document.getElementById('new-template-auth-expiration').value;
+        if (expiration) payload.codeExpirationMinutes = Number(expiration);
+        payload.addSecurityDisclaimer = document.getElementById('new-template-auth-disclaimer').checked;
+        payload.otpButtonType = 'COPY_CODE';
+      } else {
+        const body = document.getElementById('new-template-body').value.trim();
+        if (!body) return;
+        payload.body = body;
+        payload.bodyParamExamples = getTemplateSampleValues();
+        const headerType = document.getElementById('new-template-header-type').value;
+        payload.header = headerType === 'TEXT'
+          ? { type: headerType, text: document.getElementById('new-template-header-text').value.trim() }
+          : { type: 'NONE' };
+        const footer = document.getElementById('new-template-footer').value.trim();
+        if (footer) payload.footer = footer;
+        if (templateButtons.length > 0) {
+          payload.buttons = templateButtons.map((b) => {
+            if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url };
+            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
+            return { type: 'QUICK_REPLY', text: b.text };
+          });
+        }
+      }
+
+      try {
+        await authFetch(`/api/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        await refreshTemplates();
+        renderTemplates();
+        e.target.reset();
+        templateButtons = [];
+        renderTemplateButtonsList();
+        resetTemplateModalToCreateMode();
+        syncTemplateFormUI();
+        document.getElementById('modal-create-template')?.classList.remove('open');
+        showToast('Template updated and resubmitted to Meta for review.');
+      } catch (err) {
+        const details = err.body && Array.isArray(err.body.details) && err.body.details.every((d) => typeof d === 'string')
+          ? err.body.details.join(' ')
+          : null;
+        showToast(details || err.message);
+      }
+      return;
+    }
+
+    const name = document.getElementById('new-template-name').value.trim();
     const language = document.getElementById('new-template-language').value;
     if (!name) return;
 

@@ -7,7 +7,7 @@ const metaClient = require('../utils/metaClient');
 const mediaHeaderService = require('../services/mediaHeaderService');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { uuid, messageTemplateCreateSchema } = require('../utils/validate');
+const { uuid, messageTemplateCreateSchema, messageTemplateUpdateSchema } = require('../utils/validate');
 const { validateTemplateText, validateHeaderText } = require('../utils/templateParams');
 const templateSyncService = require('../services/templateSyncService');
 
@@ -28,6 +28,43 @@ const uploadHeaderMedia = multer({
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
 }));
+
+// Shared between POST / (create) and PUT /:id (edit) — the same body/
+// sample-value/header-text rules apply to a brand-new template and an
+// edited one. Media-header file checks stay in POST only: PUT's own schema
+// (messageTemplateUpdateSchema) restricts header.type to NONE/TEXT, so a
+// media header never reaches this far via the edit path. Returns null when
+// valid, or the {status, body} to send as the response otherwise.
+function validateStandardTemplateFields(data) {
+  const bodyValidation = validateTemplateText(data.body, { label: 'Body' });
+  if (!bodyValidation.valid) {
+    return { status: 400, body: { error: 'Invalid template body', details: bodyValidation.errors } };
+  }
+
+  // Sample-value coverage is checked here, not in either schema — by this
+  // point bodyValidation.params is confirmed to be well-formed named
+  // parameters (not numbered, not mixed), so "missing" can only mean an
+  // actually-missing sample, not a numbered-param body producing a
+  // confusing "sample required for: 1". See validate.js's comment on why
+  // this moved out of messageTemplateCreateSchema's superRefine.
+  const examples = data.bodyParamExamples || {};
+  const missingSamples = bodyValidation.params.filter((p) => !String(examples[p] || '').trim());
+  if (missingSamples.length > 0) {
+    return {
+      status: 400,
+      body: { error: 'Missing sample values', details: [`Sample value required for: ${missingSamples.join(', ')} — Meta rejects templates without one.`] },
+    };
+  }
+
+  if (data.header?.type === 'TEXT') {
+    const headerValidation = validateHeaderText(data.header.text || '');
+    if (!headerValidation.valid) {
+      return { status: 400, body: { error: 'Invalid template header', details: headerValidation.errors } };
+    }
+  }
+
+  return null;
+}
 
 // Manual "Sync" button on the templates page — reconciles against Meta's
 // real template list on demand, not just automatically once after
@@ -84,32 +121,8 @@ router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req
   // body/header (messageTemplateCreateSchema's superRefine already rejects
   // one being present), so there's nothing here to check for it.
   if (data.category !== 'Authentication') {
-    const bodyValidation = validateTemplateText(data.body, { label: 'Body' });
-    if (!bodyValidation.valid) {
-      return res.status(400).json({ error: 'Invalid template body', details: bodyValidation.errors });
-    }
-
-    // Sample-value coverage is checked here, not in the schema — by this
-    // point bodyValidation.params is confirmed to be well-formed named
-    // parameters (not numbered, not mixed), so "missing" can only mean an
-    // actually-missing sample, not a numbered-param body producing a
-    // confusing "sample required for: 1". See validate.js's comment on why
-    // this moved out of messageTemplateCreateSchema's superRefine.
-    const examples = data.bodyParamExamples || {};
-    const missingSamples = bodyValidation.params.filter((p) => !String(examples[p] || '').trim());
-    if (missingSamples.length > 0) {
-      return res.status(400).json({
-        error: 'Missing sample values',
-        details: [`Sample value required for: ${missingSamples.join(', ')} — Meta rejects templates without one.`],
-      });
-    }
-
-    if (data.header?.type === 'TEXT') {
-      const headerValidation = validateHeaderText(data.header.text || '');
-      if (!headerValidation.valid) {
-        return res.status(400).json({ error: 'Invalid template header', details: headerValidation.errors });
-      }
-    }
+    const validationError = validateStandardTemplateFields(data);
+    if (validationError) return res.status(validationError.status).json(validationError.body);
 
     if (isMediaHeader) {
       const limits = MEDIA_HEADER_LIMITS[data.header.type];
@@ -299,6 +312,92 @@ router.post('/:id/header-media', uploadHeaderMedia.single('file'), asyncHandler(
   const filename = template.header_type === 'DOCUMENT' ? (req.file.originalname || null) : null;
   const asset = await templateMediaCacheRepo.insertAsset(req.db, req.clientId, template.id, { mediaId: uploaded.id, filename });
   res.status(201).json({ id: asset.id, filename: asset.filename });
+}));
+
+// Edits an existing template's content — body/header[NONE|TEXT only]/
+// footer/buttons/samples, or auth_options for Authentication. name/
+// category/language are fixed once a template exists (Meta's own edit
+// endpoint doesn't accept them either — they're what identifies the
+// template in the first place). Two real states this acts on:
+//  - meta_template_id set, not orphaned: the template is live on Meta —
+//    this calls Meta's real "edit message template" endpoint, which
+//    re-reviews the NEW content while the OLD approved content keeps
+//    sending in the meantime (Meta's own documented behavior) — unlike
+//    delete + recreate, there's no gap where the template is unsendable.
+//  - no meta_template_id at all (a draft never submitted): pure local
+//    edit, no Meta call — same as editing any other not-yet-submitted
+//    draft would be.
+// An orphaned row (was live, Meta no longer has it — see markOrphaned's
+// comment) is rejected: there's nothing left on Meta to edit, and quietly
+// re-creating it here would blur this route with POST /'s own job.
+// Delete + recreate (DELETE /:id, then POST /) is still the path for that
+// case, and for changing a template's media header — both explicitly out
+// of scope for this route for now.
+router.put('/:id', asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
+  if (!template) return res.status(404).json({ error: 'Not found' });
+
+  if (template.orphaned_at) {
+    return res.status(400).json({
+      error: 'Cannot edit — no longer on Meta',
+      detail: 'This template is no longer live on Meta (see the "not found on Meta" note on its card) — there\'s nothing there to edit. Delete it and create a fresh one instead.',
+    });
+  }
+
+  const data = messageTemplateUpdateSchema.parse(req.body);
+
+  if (template.category === 'Authentication') {
+    if (data.body || data.header || data.footer || data.buttons) {
+      return res.status(400).json({
+        error: 'Authentication templates cannot have a custom body, header, footer, or buttons — Meta generates that text automatically.',
+      });
+    }
+  } else {
+    if (!data.body) {
+      return res.status(400).json({ error: 'Invalid template body', details: ['Body is required.'] });
+    }
+    const validationError = validateStandardTemplateFields(data);
+    if (validationError) return res.status(validationError.status).json(validationError.body);
+  }
+
+  // buildTemplateCreatePayload (used by metaClient.updateMessageTemplate)
+  // needs the full shape it already validates for create — name/category/
+  // language come from the existing row since the edit schema doesn't
+  // carry them at all.
+  const templateData = { ...data, name: template.name, category: template.category, language: template.language };
+
+  if (template.meta_template_id) {
+    const waba = await wabasRepo.findByClientId(req.clientId);
+    if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
+      return res.status(400).json({
+        error: 'Cannot edit on Meta',
+        detail: 'This template is live on Meta, but WhatsApp isn\'t connected right now — reconnect before editing.',
+      });
+    }
+
+    let accessToken;
+    try {
+      accessToken = decrypt(waba.access_token_encrypted);
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Could not decrypt this WABA\'s access token',
+        detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token.',
+      });
+    }
+
+    try {
+      await metaClient.updateMessageTemplate(template.meta_template_id, accessToken, templateData);
+    } catch (err) {
+      if (err instanceof metaClient.TemplateValidationError) {
+        return res.status(400).json({ error: 'Invalid template', details: err.errors });
+      }
+      return res.status(502).json({ error: 'Meta rejected this edit', detail: err.message });
+    }
+  }
+
+  const updated = await messageTemplatesRepo.updateContent(req.db, req.clientId, template.id, templateData);
+  res.json(updated);
 }));
 
 // Deletes a template — on Meta first (when it was ever submitted there),

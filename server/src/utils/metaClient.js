@@ -518,6 +518,26 @@ async function createMessageTemplate(wabaId, accessToken, templateData) {
   return data; // { id, status, category }
 }
 
+// Edits an ALREADY-SUBMITTED template in place. Unlike createMessageTemplate,
+// this targets the template's own numeric id (not the WABA) — Meta re-
+// reviews the new content while the CURRENTLY-APPROVED content keeps
+// sending until that review resolves (Meta's own documented "Edit Message
+// Templates" behavior), so there's no sendability gap the way there would
+// be with delete + recreate. name/language can't be changed this way (the
+// id already identifies both); the destructure below just discards the two
+// fields Meta's edit endpoint doesn't accept, reusing the exact same
+// category/components builder createMessageTemplate uses so create and
+// edit can never validate a template's content differently.
+async function updateMessageTemplate(templateId, accessToken, templateData) {
+  const { name, language, ...editPayload } = buildTemplateCreatePayload(templateData);
+  const data = await graphFetch(`/${templateId}`, {
+    method: 'POST',
+    accessToken,
+    body: editPayload,
+  });
+  return data;
+}
+
 // Fetches every template on a WABA, not just the first page — Meta
 // paginates this endpoint, and a client with 30+ templates would silently
 // lose the tail on a naive single fetch (see services/templateSyncService.js).
@@ -659,6 +679,7 @@ module.exports = {
   buildNamedBodyComponents,
   buildTemplateCreatePayload,
   createMessageTemplate,
+  updateMessageTemplate,
   deleteMessageTemplate,
   listTemplates,
   parseTemplateComponents,

@@ -1445,6 +1445,27 @@
     </div>
   </div>
 
+  <!-- ===================== TEMPLATE CHAT PREVIEW MODAL ===================== -->
+  <!-- Read-only — shows a saved/approved template exactly as it'll render in
+       a WhatsApp chat, using its own saved sample values, without going
+       through the Create/Edit form or the send-to-a-contact flow. Opened
+       from the Templates view's per-card preview button. -->
+  <div id="modal-template-chat-preview" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Preview: <span id="template-chat-preview-name"></span></h3>
+        <button class="close-modal-btn" data-close-modal="modal-template-chat-preview"><i data-lucide="x"></i></button>
+      </div>
+      <p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 0.75rem;">How this template renders in a WhatsApp chat, using its saved sample values.</p>
+      <div class="template-preview-frame">
+        <div class="template-preview-bubble msg-bubble msg-out" id="template-chat-preview-bubble"></div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+        <button type="button" class="btn-secondary" data-close-modal="modal-template-chat-preview">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-add-tag" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">

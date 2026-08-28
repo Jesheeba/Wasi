@@ -170,6 +170,43 @@ async function markOrphaned(db, id) {
   return rows[0] || null;
 }
 
+// Applied after a successful Meta edit (routes/templates.js's PUT /:id) —
+// content fields only; name/category/language/meta_template_id never
+// change here (Meta's edit endpoint doesn't accept the first two either,
+// and the template id — the third — is exactly what identifies which
+// template got edited). status resets to 'pending' and rejection_reason
+// clears since an edit puts the template back into Meta review — this row
+// now describes the NEW pending content, even though the OLD approved
+// content is what's still actually sending on Meta's side until that
+// review resolves (Meta's behavior, not tracked as a separate state here).
+async function updateContent(db, clientId, id, {
+  body, header, footer, buttons, bodyParamExamples,
+  codeExpirationMinutes, addSecurityDisclaimer, otpButtonType, category,
+}) {
+  const authOptions = category === 'Authentication'
+    ? { codeExpirationMinutes, addSecurityDisclaimer, otpButtonType }
+    : null;
+  const { rows } = await db.query(
+    `update message_templates
+     set body = $3, header_type = $4, header_content = $5, footer_text = $6,
+         buttons = $7, body_param_examples = $8, auth_options = $9,
+         status = 'pending', rejection_reason = null, updated_at = now()
+     where client_id = $1 and id = $2
+     returning *`,
+    [
+      clientId, id,
+      body || null,
+      header?.type && header.type !== 'NONE' ? header.type : null,
+      header?.text || null,
+      footer || null,
+      buttons ? JSON.stringify(buttons) : null,
+      bodyParamExamples ? JSON.stringify(bodyParamExamples) : null,
+      authOptions ? JSON.stringify(authOptions) : null,
+    ]
+  );
+  return rows[0] || null;
+}
+
 // A real delete, unlike markOrphaned above — used by routes/templates.js's
 // DELETE /:id, which deletes on Meta first (when the row was ever submitted
 // there) and only removes the local row after that succeeds or the template
@@ -195,5 +232,6 @@ module.exports = {
   createFromMetaSync,
   updateFromMetaSync,
   markOrphaned,
+  updateContent,
   remove,
 };
