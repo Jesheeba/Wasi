@@ -94,14 +94,31 @@ async function claimBatch(db, broadcastId, limit) {
     [contactIds]
   );
   const byId = new Map(contacts.map((c) => [c.id, c]));
-  return rows
-    .map((r) => ({
-      ...r,
-      contact_name: byId.get(r.contact_id)?.name,
-      contact_phone: byId.get(r.contact_id)?.phone,
-      contact_tag_id: byId.get(r.contact_id)?.tag_id,
-    }))
-    .filter((r) => r.contact_phone); // contact deleted mid-flight (contact_id -> SET NULL) has nowhere to send
+  const withContact = rows.map((r) => ({
+    ...r,
+    contact_name: byId.get(r.contact_id)?.name,
+    contact_phone: byId.get(r.contact_id)?.phone,
+    contact_tag_id: byId.get(r.contact_id)?.tag_id,
+  }));
+
+  // Contact deleted mid-flight (contact_id -> SET NULL, migration 007) has
+  // nowhere to send — real, previously-silent bug found during Phase 3 QA:
+  // this row was claimed (status='sending') above but then simply filtered
+  // out of the returned batch, never resolved to a terminal status. Since
+  // hasPending() treats 'sending' as not-done, the parent broadcast could
+  // never reach 'Completed', and the >5-minute stuck-reclaim clause in this
+  // same function's WHERE clause would re-claim (and re-filter) it forever —
+  // an unbounded loop, not just a missed send. Resolved to 'failed' here,
+  // in the same transaction as the claim, so it's terminal immediately.
+  const orphaned = withContact.filter((r) => !r.contact_phone);
+  if (orphaned.length > 0) {
+    await db.query(
+      `update broadcast_recipients set status = 'failed', error_reason = 'Contact was deleted before this recipient could be sent.' where id = any($1::uuid[])`,
+      [orphaned.map((r) => r.id)]
+    );
+  }
+
+  return withContact.filter((r) => r.contact_phone);
 }
 
 async function markSent(db, id, messageId) {
