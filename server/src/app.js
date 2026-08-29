@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const { authLimiter, webhookLimiter, apiLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
@@ -64,6 +65,15 @@ function createApp() {
   // own. `1` trusts exactly one hop of X-Forwarded-For, matching both of
   // those single-proxy setups.
   app.set('trust proxy', 1);
+  // Cherry-picked from the unmerged origin/gap-fixes-a-e branch (see
+  // CLAUDE.md Known Gaps for why only this piece, not the rest of that
+  // branch, was brought in). CSP left off deliberately: the root/admin/
+  // marketing static pages (no build step) rely on inline scripts/styles,
+  // and a default CSP would break them without a real audit of every
+  // inline block first — a separate, riskier follow-up. Every other helmet
+  // default (HSTS, X-Content-Type-Options, X-Frame-Options, X-Powered-By
+  // removal, etc.) is safe to enable immediately.
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({
     origin(origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
