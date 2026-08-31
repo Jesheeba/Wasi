@@ -12,6 +12,7 @@ const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
 const messageStatusForwardsRepo = require('../repositories/messageStatusForwardsRepo');
 const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo');
 const flowEngine = require('../services/flowEngine');
+const forwardRunner = require('../services/forwardRunner');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -77,7 +78,7 @@ async function enqueueForwards(waba, event, payload) {
   const envelopeData = { ...payload, waba_id: waba.waba_id, enqueued_at: new Date().toISOString() };
 
   if (waba.forward_to_url && waba.forward_events?.includes(event)) {
-    await webhookDeliveriesRepo.enqueue(pool, {
+    const delivery = await webhookDeliveriesRepo.enqueue(pool, {
       clientId: waba.client_id,
       wabaId: waba.id,
       event,
@@ -85,6 +86,7 @@ async function enqueueForwards(waba, event, payload) {
       targetUrl: waba.forward_to_url,
       targetSecret: waba.forward_secret,
     });
+    forwardRunner.attemptImmediately(delivery);
   }
 
   let clientWebhook;
@@ -95,7 +97,7 @@ async function enqueueForwards(waba, event, payload) {
     clientWebhook = null;
   }
   if (clientWebhook && clientWebhook.events?.includes(event)) {
-    await webhookDeliveriesRepo.enqueue(pool, {
+    const delivery = await webhookDeliveriesRepo.enqueue(pool, {
       clientId: waba.client_id,
       wabaId: waba.id,
       event,
@@ -103,6 +105,7 @@ async function enqueueForwards(waba, event, payload) {
       targetUrl: clientWebhook.callback_url,
       targetSecret: clientWebhook.secret,
     });
+    forwardRunner.attemptImmediately(delivery);
   }
 
   // Zapier's "New WhatsApp Message Received" trigger (build plan Phase 4,
@@ -118,7 +121,7 @@ async function enqueueForwards(waba, event, payload) {
     zapierSubscriptions = [];
   }
   for (const subscription of zapierSubscriptions) {
-    await webhookDeliveriesRepo.enqueue(pool, {
+    const delivery = await webhookDeliveriesRepo.enqueue(pool, {
       clientId: waba.client_id,
       wabaId: waba.id,
       event,
@@ -126,6 +129,7 @@ async function enqueueForwards(waba, event, payload) {
       targetUrl: subscription.target_url,
       targetSecret: subscription.secret,
     });
+    forwardRunner.attemptImmediately(delivery);
   }
 }
 

@@ -97,4 +97,30 @@ function stop() {
   timer = null;
 }
 
-module.exports = { start, stop, tick, deliverOne };
+// Called from routes/metaWebhook.js right after webhookDeliveriesRepo.
+// enqueue() resolves, on the row it just returned — real production data
+// (2026-08-31) showed ~99% of deliveries succeed on the first attempt, and
+// the ENTIRE latency on those was this runner's own TICK_MS poll wait
+// (median ~4s, p95 ~7.3s across 1,021 real deliveries; near-zero actual
+// delivery time on top). Firing the first attempt immediately instead of
+// waiting for the next tick collapses that to real network time.
+//
+// Safe to race the periodic tick because enqueue() already leases the row
+// (next_attempt_at pushed out, same window claimBatch itself uses) before
+// this ever runs — the tick's own query only picks up rows whose lease has
+// expired, so it can never grab this same row concurrently and double-
+// deliver the event. Fire-and-forget, same reasoning as this file's own
+// top-of-file comment on why delivery must never block metaWebhook.js's
+// response to Meta: deliverOne never throws (it catches its own errors
+// internally via markFailedAttempt), the .catch() here is only a backstop
+// for something failing before that point (e.g. a DB error inside
+// markFailedAttempt itself).
+function attemptImmediately(delivery) {
+  deliverOne(delivery).catch((err) => {
+    console.error('forwardRunner: immediate delivery attempt crashed unexpectedly:', {
+      deliveryId: delivery.id, clientId: delivery.client_id, event: delivery.event, error: err.message,
+    });
+  });
+}
+
+module.exports = { start, stop, tick, deliverOne, attemptImmediately };

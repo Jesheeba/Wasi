@@ -1,21 +1,37 @@
+// Shared by enqueue() and claimBatch() below — both lease a row by pushing
+// next_attempt_at forward by this window, so the periodic tick can never
+// re-claim (and double-deliver) a row that's already being worked, whether
+// that work is a claimed batch or forwardRunner.js's own immediate-dispatch
+// attempt right after enqueue.
+const LEASE_MINUTES = 2;
+
+// Leases the row at insert time (next_attempt_at pushed forward, same as
+// claimBatch's own lease below) rather than leaving it at the table's
+// default now() — forwardRunner.js's attemptImmediately() fires a delivery
+// attempt on the returned row right after this resolves, and without this
+// lease the next periodic tick could claim the same still-'pending' row
+// concurrently and deliver it a second time. If the immediate attempt
+// crashes before finishing, the lease simply expires like any other and
+// the row falls back to the normal tick/backoff path — no separate
+// cleanup needed, same self-healing behavior claimBatch already relies on.
 async function enqueue(db, { clientId, wabaId, event, payload, targetUrl, targetSecret }) {
-  await db.query(
-    `insert into webhook_deliveries (client_id, waba_id, event, payload, target_url, target_secret)
-     values ($1, $2, $3, $4, $5, $6)`,
+  const { rows } = await db.query(
+    `insert into webhook_deliveries (client_id, waba_id, event, payload, target_url, target_secret, next_attempt_at)
+     values ($1, $2, $3, $4, $5, $6, now() + interval '${LEASE_MINUTES} minutes')
+     returning *`,
     [clientId, wabaId, event, JSON.stringify(payload), targetUrl, targetSecret]
   );
+  return rows[0];
 }
 
 // Claims a batch of due deliveries for forwardRunner.js. No separate
-// 'sending' status — claiming just pushes next_attempt_at forward by a
-// short lease window (below), which does the same job broadcast_recipients'
-// status='sending' + claimed_at does (stop a second, overlapping tick from
-// re-claiming the same rows) without needing its own status value or its
-// own reclaim-if-stuck query. If the runner crashes mid-delivery, the lease
-// simply expires and the row becomes claimable again on its own — no
-// separate cleanup path needed.
-const LEASE_MINUTES = 2;
-
+// 'sending' status — claiming just pushes next_attempt_at forward by the
+// same short lease window enqueue() above uses, which does the same job
+// broadcast_recipients' status='sending' + claimed_at does (stop a second,
+// overlapping tick from re-claiming the same rows) without needing its own
+// status value or its own reclaim-if-stuck query. If the runner crashes
+// mid-delivery, the lease simply expires and the row becomes claimable
+// again on its own — no separate cleanup path needed.
 async function claimBatch(db, limit) {
   const { rows } = await db.query(
     `update webhook_deliveries

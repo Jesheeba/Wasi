@@ -16,7 +16,22 @@ const http = require('http');
 const { createApp } = require('../src/app');
 const { pool } = require('../src/db/pool');
 const wabasRepo = require('../src/repositories/wabasRepo');
-const forwardRunner = require('../src/services/forwardRunner');
+
+// metaWebhook.js's enqueueForwards now fires forwardRunner.attemptImmediately
+// on every row right after enqueue (fire-and-forget, not awaited by the
+// webhook request) — a real delivery attempt is already in flight the
+// moment signedMetaPost's response comes back, so the test below waits for
+// that automatic attempt to land instead of manually calling deliverOne
+// itself, which would now double-deliver on top of it.
+async function waitFor(check, { timeoutMs = 3000, intervalMs = 25 } = {}) {
+  const start = Date.now();
+  for (;;) {
+    const result = await check();
+    if (result) return result;
+    if (Date.now() - start >= timeoutMs) throw new Error('waitFor: condition not met within timeout');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
 
 let server;
 let baseUrl;
@@ -176,8 +191,7 @@ test('a real message.received event delivers to an active Zapier subscription th
   const delivery = rows[0];
   assert.equal(delivery.target_secret, subscribed.secret);
 
-  await forwardRunner.deliverOne(delivery);
-
+  await waitFor(() => receivedBody);
   assert.ok(receivedBody, 'forwardRunner must deliver to the Zapier subscription target, not just wabas/client_webhooks targets');
   const expectedSignature = 'sha256=' + crypto.createHmac('sha256', subscribed.secret).update(receivedBody).digest('hex');
   assert.equal(receivedSignature, expectedSignature);

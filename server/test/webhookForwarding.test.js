@@ -21,7 +21,6 @@ const http = require('http');
 const { createApp } = require('../src/app');
 const { pool } = require('../src/db/pool');
 const wabasRepo = require('../src/repositories/wabasRepo');
-const forwardRunner = require('../src/services/forwardRunner');
 
 let server;
 let baseUrl;
@@ -31,6 +30,22 @@ let clientToken;
 const SUITE_PREFIX = '__test_suite__forwarding_';
 const TEST_WABA_ID = 'test_suite_forwarding_waba_id';
 const FORWARD_SECRET = 'test-suite-forward-secret';
+
+// metaWebhook.js's enqueueForwards now fires forwardRunner.attemptImmediately
+// on every row right after enqueue (fire-and-forget, not awaited by the
+// webhook request) — a real delivery attempt is already in flight the
+// moment signedMetaPost's response comes back, so tests below wait for
+// that automatic attempt to land instead of manually calling deliverOne
+// themselves, which would now double-deliver on top of it.
+async function waitFor(check, { timeoutMs = 3000, intervalMs = 25 } = {}) {
+  const start = Date.now();
+  for (;;) {
+    const result = await check();
+    if (result) return result;
+    if (Date.now() - start >= timeoutMs) throw new Error('waitFor: condition not met within timeout');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
 
 function signedMetaPost(payload) {
   const body = JSON.stringify(payload);
@@ -119,11 +134,9 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
   );
   assert.equal(rows.length, 1, 'an inbound message on a waba with forward_to_url set must enqueue a delivery');
   const delivery = rows[0];
-  assert.equal(delivery.status, 'pending');
   assert.equal(delivery.target_url, targetUrl);
 
-  await forwardRunner.deliverOne(delivery);
-
+  await waitFor(() => receivedBody);
   assert.ok(receivedBody, 'forwardRunner must have actually POSTed to the target');
   const expectedSignature = 'sha256=' + crypto.createHmac('sha256', FORWARD_SECRET).update(receivedBody).digest('hex');
   assert.equal(receivedSignature, expectedSignature);
@@ -157,9 +170,11 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
   assert.equal(data.message.interactive, null, 'a plain text message must carry interactive: null, not an omitted key');
   assert.ok(!Number.isNaN(Date.parse(data.message.sent_at)), 'message.sent_at must be a valid ISO 8601 timestamp');
 
-  const { rows: after } = await pool.query('select status, delivered_at from webhook_deliveries where id = $1', [delivery.id]);
-  assert.equal(after[0].status, 'delivered');
-  assert.ok(after[0].delivered_at);
+  const after = await waitFor(async () => {
+    const { rows: r } = await pool.query('select status, delivered_at from webhook_deliveries where id = $1', [delivery.id]);
+    return r[0].status === 'delivered' ? r[0] : null;
+  });
+  assert.ok(after.delivered_at);
 
   await new Promise((resolve) => target.close(resolve));
 });
@@ -219,9 +234,8 @@ test('1b. a button_reply tap forwards both id and title in message.interactive, 
     [testClientId]
   );
   assert.equal(rows.length, 1);
-  await forwardRunner.deliverOne(rows[0]);
+  await waitFor(() => receivedBody);
 
-  assert.ok(receivedBody, 'forwardRunner must have actually POSTed to the target');
   const { data } = JSON.parse(receivedBody);
   assert.equal(data.message_type, 'interactive');
   assert.equal(data.message.body, 'Yes', 'body still carries the human-readable title, unchanged');
@@ -292,9 +306,8 @@ test('1c. a list_reply tap (synthetic — no real capture exists yet) forwards i
     [testClientId]
   );
   assert.equal(rows.length, 1);
-  await forwardRunner.deliverOne(rows[0]);
+  await waitFor(() => receivedBody);
 
-  assert.ok(receivedBody, 'forwardRunner must have actually POSTed to the target');
   const { data } = JSON.parse(receivedBody);
   assert.equal(data.message_type, 'interactive');
   assert.equal(data.message.body, 'Pricing', 'body carries the row title, not the old "[interactive]" placeholder');
@@ -329,16 +342,21 @@ test('2. a forward failure does not change the 200 Meta receives, and is retried
   );
   assert.equal(rows.length, 1);
   const delivery = rows[0];
-  assert.equal(delivery.attempt_count, 0, 'not yet attempted — only forwardRunner.deliverOne attempts it, not the webhook request');
 
-  await forwardRunner.deliverOne(delivery);
-
-  const { rows: after } = await pool.query('select * from webhook_deliveries where id = $1', [delivery.id]);
-  assert.equal(after[0].status, 'pending', 'a single failure must reschedule, not give up (MAX_ATTEMPTS is 5)');
-  assert.equal(after[0].attempt_count, 1);
-  assert.ok(after[0].last_error, 'the failure reason must be recorded, not silently dropped');
+  // The automatic immediate attempt (metaWebhook.js's enqueueForwards ->
+  // forwardRunner.attemptImmediately) is already in flight against deadUrl
+  // by now — wait for it to fail and reschedule, rather than asserting
+  // attempt_count === 0 and manually calling deliverOne, which was the old
+  // poll-only architecture's invariant.
+  const after = await waitFor(async () => {
+    const { rows: r } = await pool.query('select * from webhook_deliveries where id = $1', [delivery.id]);
+    return r[0].attempt_count > 0 ? r[0] : null;
+  });
+  assert.equal(after.status, 'pending', 'a single failure must reschedule, not give up (MAX_ATTEMPTS is 5)');
+  assert.equal(after.attempt_count, 1);
+  assert.ok(after.last_error, 'the failure reason must be recorded, not silently dropped');
   assert.ok(
-    new Date(after[0].next_attempt_at).getTime() > Date.now(),
+    new Date(after.next_attempt_at).getTime() > Date.now(),
     'next_attempt_at must be pushed into the future — a backoff, not an immediate retry'
   );
 });
@@ -387,14 +405,15 @@ test('3. client_webhooks (the client\'s own generic webhook) is delivered throug
   const delivery = rows[0];
   assert.equal(delivery.target_secret, configured.secret);
 
-  await forwardRunner.deliverOne(delivery);
-
-  assert.ok(receivedBody, 'forwardRunner must deliver client_webhooks targets too, not just wabas.forward_to_url');
+  await waitFor(() => receivedBody);
   const expectedSignature = 'sha256=' + crypto.createHmac('sha256', configured.secret).update(receivedBody).digest('hex');
   assert.equal(receivedSignature, expectedSignature);
 
-  const { rows: after } = await pool.query('select status from webhook_deliveries where id = $1', [delivery.id]);
-  assert.equal(after[0].status, 'delivered');
+  const after = await waitFor(async () => {
+    const { rows: r } = await pool.query('select status from webhook_deliveries where id = $1', [delivery.id]);
+    return r[0].status === 'delivered' ? r[0] : null;
+  });
+  assert.equal(after.status, 'delivered');
 
   await new Promise((resolve) => target.close(resolve));
 });
