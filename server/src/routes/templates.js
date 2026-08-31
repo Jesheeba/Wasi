@@ -13,6 +13,25 @@ const templateSyncService = require('../services/templateSyncService');
 
 const router = Router();
 
+// Meta's raw error object (metaClient.js's graphFetch attaches it to a
+// thrown error as err.metaError) often carries a more specific,
+// human-readable explanation in error_user_title/error_user_msg than the
+// flat err.message alone — e.g. a words-ratio rejection's flat message can
+// be as terse as "Invalid parameter", while error_user_msg spells out the
+// actual reason ("Params Words Ratio Exceeds Limit..."). Every route below
+// that surfaces a real Meta rejection uses this instead of err.message
+// directly, so app.js's toast (extractApiErrorDetail) shows the most
+// specific reason Meta actually gave, not a generic one — found live when
+// a client submitting a real template only saw a content-free rejection
+// popup because this route was passing along the terse message alone.
+function describeMetaError(err) {
+  const meta = err.metaError;
+  if (meta && (meta.error_user_title || meta.error_user_msg)) {
+    return [meta.error_user_title, meta.error_user_msg].filter(Boolean).join(' — ');
+  }
+  return err.message;
+}
+
 // Meta's own documented limits per header media type — now lives in
 // mediaHeaderService.js (resolveMediaIdFromUrl needs the same limits to
 // validate a CRM-supplied URL), imported here rather than duplicated.
@@ -230,7 +249,7 @@ router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req
       if (err instanceof metaClient.TemplateValidationError) {
         return res.status(400).json({ error: 'Invalid template', details: err.errors });
       }
-      return res.status(502).json({ error: 'Meta rejected this template', detail: err.message });
+      return res.status(502).json({ error: 'Meta rejected this template', detail: describeMetaError(err), metaError: err.metaError || undefined });
     }
   }
 
@@ -392,7 +411,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
       if (err instanceof metaClient.TemplateValidationError) {
         return res.status(400).json({ error: 'Invalid template', details: err.errors });
       }
-      return res.status(502).json({ error: 'Meta rejected this edit', detail: err.message });
+      return res.status(502).json({ error: 'Meta rejected this edit', detail: describeMetaError(err), metaError: err.metaError || undefined });
     }
   }
 
@@ -441,7 +460,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
       // no longer exists to delete.
       const alreadyGone = /does not exist|cannot be found|no longer exists/i.test(err.message || '');
       if (!alreadyGone) {
-        return res.status(502).json({ error: 'Could not delete template on Meta', detail: err.message });
+        return res.status(502).json({ error: 'Could not delete template on Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
       }
     }
   }

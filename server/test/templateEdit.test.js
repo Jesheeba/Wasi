@@ -216,7 +216,20 @@ test('PUT /api/templates/:id: a real Meta rejection (edit call fails) returns 50
     global.fetch = async (url, options) => {
       const urlStr = url.toString();
       if (urlStr.includes('graph.facebook.com') && urlStr.includes('meta_blocked_1')) {
-        return { ok: false, status: 500, json: async () => ({ error: { message: 'Unknown error from Meta' } }) };
+        // Shaped like a real Meta rejection: a terse top-level message plus
+        // the fuller, human-readable error_user_title/error_user_msg Meta
+        // often includes alongside it — routes/templates.js's
+        // describeMetaError() must prefer the fuller pair over the terse
+        // message when building the response's `detail`.
+        return {
+          ok: false, status: 500,
+          json: async () => ({ error: {
+            message: 'Invalid parameter',
+            error_subcode: 2388293,
+            error_user_title: 'Params Words Ratio Exceeds Limit',
+            error_user_msg: 'This message has too many variables for the amount of text.',
+          } }),
+        };
       }
       return originalFetch(url, options);
     };
@@ -227,6 +240,10 @@ test('PUT /api/templates/:id: a real Meta rejection (edit call fails) returns 50
       body: JSON.stringify({ body: 'edited body', header: { type: 'NONE' } }),
     });
     assert.equal(res.status, 502);
+    const body = await res.json();
+    assert.match(body.detail, /Params Words Ratio Exceeds Limit/);
+    assert.match(body.detail, /too many variables/);
+    assert.equal(body.metaError.error_subcode, 2388293);
 
     const fromDb = await messageTemplatesRepo.findById(pool, clientId, original.id);
     assert.equal(fromDb.body, 'original body', 'local content must survive when the Meta edit genuinely fails');

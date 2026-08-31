@@ -85,15 +85,30 @@ function isVariableAtStartOrEnd(text) {
 // 2388293, error_user_title "Params Words Ratio Exceeds Limit") but has
 // never published the exact formula — checked Meta's Template Overview,
 // Guidelines, and Error Codes reference pages directly; none state a
-// threshold. This rule is reverse-engineered, corroborated independently by
-// two BSPs (Mercuri, Syniverse docs): total words >= 3 * parameter count + 1.
-// Applied here with one extra word of safety margin (+2 total) since it's
-// unofficial and Meta could tighten it without notice. Validated against a
-// real rejection hit live during Phase 2 verification: "Hello
-// {{customer_name}}, thanks!" (3 whitespace tokens, 1 param) was rejected by
-// Meta with this exact subcode — this rule requires 5, correctly blocking it
-// locally instead of round-tripping to Meta for the same rejection.
-const MIN_WORDS_PER_PARAM = 3;
+// threshold. The coefficient below was raised from 3 to 7 on 2026-08-31
+// after real evidence showed the old one was too lenient, not just
+// under-margined: submitting real templates for Sirah Digital's WABA,
+// `1_hour_reminder` (18 words, 3 params, ratio 6.0) and `5_minute_reminder`
+// (15 words, 2 params, ratio 7.5) both passed the OLD formula (3*params+2 —
+// required only 11 and 8 words respectively) but were REJECTED live by
+// Meta. The same session's other four templates, all approved by Meta,
+// sat at ratios of 16.0-20.5+ (`booking_confirmation`, `no_show`,
+// `attended`) — see server/test/templateParams.test.js's regression tests
+// for the exact bodies. 7 is the MINIMUM coefficient that still catches
+// both confirmed-rejected cases (a coefficient of 6 lets the 7.5-ratio
+// case through) — deliberately not pushed any higher than that minimum:
+// 8 was tried first and correctly caught both real rejections too, but
+// also flagged 23 of the 36 Template Library seed entries
+// (templateLibraryContent.js) as newly invalid, several sitting at the
+// exact same ratio as the confirmed-rejected cases — a real, separate
+// finding (that content may never have been round-tripped against real
+// Meta and could be equally at risk), but a much bigger, shared-content
+// fix than this pass's scope. 7 still flags 19 of those 36 for the same
+// reason — not eliminated, just not pushed wider without a deliberate
+// decision to take that on. Still unofficial (Meta could tighten or
+// loosen it without notice) but now calibrated against real accept/reject
+// outcomes instead of third-party BSP docs alone.
+const MIN_WORDS_PER_PARAM = 7;
 const MIN_WORDS_SAFETY_MARGIN = 2;
 
 function countWords(text) {

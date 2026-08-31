@@ -60,7 +60,7 @@ test('validateTemplateText: plain text with no placeholders is valid, format "no
 });
 
 test('validateTemplateText: named parameters in the middle are valid', () => {
-  const result = validateTemplateText('Hi {{customer_name}}, your order #{{order_number}} has shipped and is on its way.');
+  const result = validateTemplateText('Hi {{customer_name}}, we wanted to let you know that your order #{{order_number}} has shipped and is now on its way to you.');
   assert.equal(result.valid, true);
   assert.equal(result.paramFormat, 'named');
   assert.deepEqual(result.params, ['customer_name', 'order_number']);
@@ -97,7 +97,7 @@ test('validateTemplateText: a variable at the end is rejected', () => {
 });
 
 test('validateTemplateText: duplicate param names collapse to one entry in params, but still count twice for the words ratio', () => {
-  const result = validateTemplateText('Hi {{customer_name}}, thanks so much {{customer_name}}, we appreciate you!');
+  const result = validateTemplateText('Hi {{customer_name}}, thanks so much for your business today, {{customer_name}} — we really do appreciate having you as part of our community!');
   assert.equal(result.valid, true);
   assert.deepEqual(result.params, ['customer_name']);
 });
@@ -119,11 +119,31 @@ test('validateTemplateText: words-ratio rejection message states the actual coun
   assert.match(result.errors[0], new RegExp(`needs at least ${minWordsRequired(3)}`));
 });
 
-test('countWords / minWordsRequired: formula matches the documented reverse-engineered rule (3 * params + 2)', () => {
+test('countWords / minWordsRequired: formula matches the documented reverse-engineered rule (7 * params + 2)', () => {
   assert.equal(countWords('Hello {{customer_name}}, thanks!'), 3);
-  assert.equal(minWordsRequired(1), 5);
-  assert.equal(minWordsRequired(2), 8);
+  assert.equal(minWordsRequired(1), 9);
+  assert.equal(minWordsRequired(2), 16);
   assert.equal(minWordsRequired(0), 2);
+});
+
+test('validateTemplateText: rejects a real body Meta rejected live for Sirah Digital (2026-08-31) that the OLD formula would have wrongly passed', () => {
+  // "1_hour_reminder" — 18 words, 3 params (ratio 6.0). The old formula
+  // (3*params+2=11) passed this locally; Meta's real server-side check
+  // rejected it anyway — the coefficient itself was too lenient, not just
+  // under-margined. See templateParams.js's MIN_WORDS_PER_PARAM comment.
+  const result = validateTemplateText('Hi {{name}}, a quick reminder: your call with Sirah Digital is in 1 hour, {{when}}.\nJoin here: {{meet_link}}.');
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /too few words/i);
+});
+
+test('validateTemplateText: still passes a real body Meta actually approved live for Sirah Digital (2026-08-31)', () => {
+  // "booking_confirmation" — 48 words, 3 params (ratio 16.0), real approved
+  // template — confirms the raised coefficient isn't overcorrecting into
+  // rejecting things Meta is fine with.
+  const result = validateTemplateText(
+    "Hi {{name}}, your 3D build call with Sirah Digital is confirmed for {{when}}.\nGoogle Meet: {{meet_link}}\nTap below to confirm you're joining — it takes a second and means I hold your slot.\nIf something changes, just message me here and we'll move it, no problem at all."
+  );
+  assert.equal(result.valid, true);
 });
 
 test('defaultExampleFor derives a readable placeholder from a snake_case name', () => {
@@ -148,7 +168,7 @@ test('buildTemplateCreatePayload: named variables -> parameter_format "named" + 
   const payload = buildTemplateCreatePayload({
     name: 'order_status_update',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, your order #{{order_number}} has shipped and is on its way.',
+    body: 'Hi {{customer_name}}, we wanted to let you know that your order #{{order_number}} has shipped and is now on its way to you.',
   });
   assert.equal(payload.parameter_format, 'named');
   assert.deepEqual(payload.components[0].example, {
@@ -240,7 +260,7 @@ test('buildTemplateCreatePayload: author-supplied bodyParamExamples wins over de
   const payload = buildTemplateCreatePayload({
     name: 'order_status_update',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, your order has shipped.',
+    body: 'Hi {{customer_name}}, your order has shipped and is now on its way to you.',
     bodyParamExamples: { customer_name: 'Riyaz' },
   });
   assert.deepEqual(payload.components[0].example.body_text_named_params, [
@@ -252,7 +272,7 @@ test('buildTemplateCreatePayload: TEXT header adds a HEADER component ahead of B
   const payload = buildTemplateCreatePayload({
     name: 'order_status_update',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, your order has shipped.',
+    body: 'Hi {{customer_name}}, your order has shipped and is now on its way to you.',
     bodyParamExamples: { customer_name: 'Riyaz' },
     header: { type: 'TEXT', text: 'Shipping Update' },
   });
@@ -265,7 +285,7 @@ test('buildTemplateCreatePayload: TEXT header adds a HEADER component ahead of B
 test('buildTemplateCreatePayload: throws for a media header type with no uploaded handle', () => {
   assert.throws(
     () => buildTemplateCreatePayload({
-      name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks for your order.',
+      name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks so much for placing your order with us today.',
       bodyParamExamples: { customer_name: 'Riyaz' },
       header: { type: 'IMAGE' },
     }),
@@ -275,7 +295,7 @@ test('buildTemplateCreatePayload: throws for a media header type with no uploade
 
 test('buildTemplateCreatePayload: a media header with a handle builds header_handle example, ahead of BODY', () => {
   const payload = buildTemplateCreatePayload({
-    name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks for your order.',
+    name: 'x', category: 'Utility', body: 'Hi {{customer_name}}, thanks so much for placing your order with us today.',
     bodyParamExamples: { customer_name: 'Riyaz' },
     header: { type: 'IMAGE', handle: 'upload:abc123' },
   });
@@ -289,7 +309,7 @@ test('buildTemplateCreatePayload: footer and buttons are appended after BODY', (
   const payload = buildTemplateCreatePayload({
     name: 'order_status_update',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, your order has shipped.',
+    body: 'Hi {{customer_name}}, your order has shipped and is now on its way to you.',
     bodyParamExamples: { customer_name: 'Riyaz' },
     footer: 'Reply STOP to unsubscribe',
     buttons: [{ type: 'URL', text: 'Track order', url: 'https://example.com/track' }],
@@ -334,7 +354,7 @@ test('messageTemplateCreateSchema: IMAGE/VIDEO/DOCUMENT header types are accepte
     const result = messageTemplateCreateSchema.safeParse({
       name: 'x',
       category: 'Utility',
-      body: 'Hi {{customer_name}}, your order has shipped.',
+      body: 'Hi {{customer_name}}, your order has shipped and is now on its way to you.',
       bodyParamExamples: { customer_name: 'Riyaz' },
       header: { type },
     });
@@ -346,7 +366,7 @@ test('messageTemplateCreateSchema: an unrecognized header type is still rejected
   const result = messageTemplateCreateSchema.safeParse({
     name: 'x',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, your order has shipped.',
+    body: 'Hi {{customer_name}}, your order has shipped and is now on its way to you.',
     bodyParamExamples: { customer_name: 'Riyaz' },
     header: { type: 'STICKER' },
   });
@@ -357,7 +377,7 @@ test('messageTemplateCreateSchema: more than 2 URL buttons is rejected', () => {
   const result = messageTemplateCreateSchema.safeParse({
     name: 'x',
     category: 'Utility',
-    body: 'Hi {{customer_name}}, your order has shipped.',
+    body: 'Hi {{customer_name}}, your order has shipped and is now on its way to you.',
     bodyParamExamples: { customer_name: 'Riyaz' },
     buttons: [
       { type: 'URL', text: 'a', url: 'https://example.com/1' },
