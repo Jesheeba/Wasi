@@ -102,7 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.removeItem('client_token');
       stopPolling();
       showAuthView();
-      throw new Error('Session expired, please log in again.');
+      const authErr = new Error('Session expired, please log in again.');
+      authErr.isAuthError = true;
+      throw authErr;
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -401,8 +403,22 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const client = await authFetch('/api/auth/me');
       showResumeConfirm(client);
-    } catch {
-      localStorage.removeItem('client_token');
+    } catch (err) {
+      // Only clear the token on a genuine auth failure (a real 401 — already
+      // handled/logged by authFetch itself above). This used to clear it on
+      // ANY failure, including a network error or the request simply timing
+      // out — both very possible on this very first request of the page
+      // (a cold-started server, a slow connection), and both had nothing to
+      // do with whether the token was actually still valid. That bug looked
+      // exactly like "automatically logged out" on first load: the token
+      // was gone before the user ever saw why, so even a manual reload
+      // could only start a fresh login, never actually resume. Leaving the
+      // token in place on a non-auth failure means a reload gets a clean
+      // second attempt and can resume normally once whatever was transient
+      // clears up.
+      if (err.isAuthError) {
+        localStorage.removeItem('client_token');
+      }
     }
   })();
 
