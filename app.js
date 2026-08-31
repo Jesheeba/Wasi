@@ -2804,6 +2804,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // Surfaces the most specific reason available in a thrown authFetch error
+  // — prefers a structured `details` array of strings (this app's own
+  // validation failures: numbered params, missing samples, malformed
+  // header, ...) over the generic top-level message, then falls back to a
+  // singular `detail` string. The singular case matters for real upstream
+  // rejections that only ever carry one — e.g. routes/templates.js's
+  // `{ error: 'Meta rejected this template', detail: err.message }` on a
+  // real Meta-side 502 — which previously fell all the way through both
+  // checks to the generic top-level `error` text, silently dropping the
+  // actual reason Meta gave for the rejection.
+  function extractApiErrorDetail(err) {
+    if (err.body && Array.isArray(err.body.details) && err.body.details.every((d) => typeof d === 'string')) {
+      return err.body.details.join(' ');
+    }
+    if (err.body && typeof err.body.detail === 'string' && err.body.detail) {
+      return err.body.detail;
+    }
+    return null;
+  }
+
   function getTemplateSampleValues() {
     const values = {};
     document.querySelectorAll('#template-sample-values-list [data-param-name]').forEach((input) => {
@@ -3141,10 +3161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modal-create-template')?.classList.remove('open');
         showToast('Template updated and resubmitted to Meta for review.');
       } catch (err) {
-        const details = err.body && Array.isArray(err.body.details) && err.body.details.every((d) => typeof d === 'string')
-          ? err.body.details.join(' ')
-          : null;
-        showToast(details || err.message);
+        showToast(extractApiErrorDetail(err) || err.message);
       }
       return;
     }
@@ -3221,16 +3238,7 @@ document.addEventListener('DOMContentLoaded', () => {
       syncTemplateFormUI();
       document.getElementById('modal-create-template')?.classList.remove('open');
     } catch (err) {
-      // Named-parameter validation failures (server/src/utils/templateParams.js)
-      // and other structured errors come back as { error, details: [string, ...] }
-      // — surface the specific reason (e.g. "numbered parameters not allowed",
-      // "sample value required for: ...") rather than the generic top-level
-      // message. (Zod's own 400s also have a `details` array, but of issue
-      // objects, not strings — the typeof check below skips those.)
-      const details = err.body && Array.isArray(err.body.details) && err.body.details.every((d) => typeof d === 'string')
-        ? err.body.details.join(' ')
-        : null;
-      showToast(details || err.message);
+      showToast(extractApiErrorDetail(err) || err.message);
     }
   });
 
