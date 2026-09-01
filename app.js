@@ -215,6 +215,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showAuthView() {
     state.user = null;
+    // Clears whichever view hash the previous session left behind — a
+    // fresh login (possibly a different account, on a shared browser)
+    // shouldn't inherit "go straight to Templates" from someone else's
+    // last session. enterApp reads the hash unconditionally, so this is
+    // the one place that needs to reset it, covering both an explicit
+    // logout and a session actually expiring mid-use (a real 401).
+    if (location.hash) location.hash = '';
     appShell.style.display = 'none';
     authView.style.display = 'flex';
   }
@@ -307,7 +314,15 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       showToast(err.message);
     }
-    switchView('chat');
+    // Restores whichever top-level view the URL hash names (kept in sync by
+    // switchView below) instead of always landing on Chat — a reload used to
+    // silently discard wherever the user actually was (Templates, Broadcasts,
+    // etc.), which after the session-resume confirmation card already felt
+    // like being logged out, this made it worse by also losing their place.
+    // Falls back to 'chat' for a missing/unrecognized hash (a fresh login,
+    // a stale/renamed view, or a hash left over from something else).
+    const requestedView = location.hash.slice(1);
+    switchView(VALID_VIEWS.has(requestedView) ? requestedView : 'chat');
     startPolling();
   }
 
@@ -425,9 +440,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Navigation Router ---
   const navItems = document.querySelectorAll('.nav-item');
   const viewContainers = document.querySelectorAll('.view-container');
+  // Every real top-level view a URL hash is allowed to name — derived from
+  // the nav markup itself so this can't drift out of sync with it.
+  const VALID_VIEWS = new Set(Array.from(navItems, (item) => item.dataset.view).filter(Boolean));
+  let isProgrammaticHashChange = false;
 
   const switchView = (targetView) => {
     state.currentView = targetView;
+    // Keeps the URL hash in sync with whatever view is showing, so a reload
+    // (or the browser's own back/forward) lands back here instead of always
+    // resetting to Chat — see enterApp's own comment for why this mattered.
+    // The isProgrammaticHashChange guard on the hashchange listener below
+    // stops this from re-triggering switchView on its own write.
+    if (location.hash.slice(1) !== targetView) {
+      isProgrammaticHashChange = true;
+      location.hash = targetView;
+    }
 
     navItems.forEach(item => {
       if (item.dataset.view === targetView) {
@@ -512,6 +540,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const view = item.dataset.view;
       if (view) switchView(view);
     });
+  });
+
+  // Lets the browser's own back/forward buttons move between views too,
+  // now that switchView keeps the hash in sync — a real side benefit of the
+  // fix, not the main point of it. Ignores the hashchange switchView's own
+  // `location.hash = ...` write fires (isProgrammaticHashChange), so this
+  // never re-runs switchView on a change it just caused itself, and ignores
+  // any change before the user is actually logged in (nothing to switch to
+  // yet — enterApp reads the hash directly once login/resume completes).
+  window.addEventListener('hashchange', () => {
+    if (isProgrammaticHashChange) { isProgrammaticHashChange = false; return; }
+    if (!state.user) return;
+    const requestedView = location.hash.slice(1);
+    if (VALID_VIEWS.has(requestedView) && requestedView !== state.currentView) {
+      switchView(requestedView);
+    }
   });
 
   // --- Chat View Handlers ---
