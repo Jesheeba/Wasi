@@ -378,46 +378,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Resumes a session on page load if a token is already stored (spec §3
   // step 7: don't force a returning user to re-type their password every
-  // refresh). This used to call enterApp(client) directly and silently —
-  // which meant a browser holding a stale-but-still-valid token from a
-  // DIFFERENT account (e.g. a shared device, or a demo/test login) landed
-  // straight in that account's dashboard with the login form never shown at
-  // all. showResumeConfirm names the account and requires one explicit
-  // click either way, so a mismatch is now always visible and one click
-  // from correct, instead of silently wrong.
-  function showResumeConfirm(client) {
-    const overlay = document.getElementById('modal-resume-session');
-    if (!overlay) { enterApp(client); return; } // markup missing — fail open to the old behavior rather than stranding the user
-    const nameEl = document.getElementById('resume-session-name');
-    const avatarEl = document.getElementById('resume-session-avatar');
-    const continueBtn = document.getElementById('resume-session-continue-btn');
-    const logoutBtn = document.getElementById('resume-session-logout-btn');
-    if (nameEl) nameEl.textContent = client.name || client.email || 'this account';
-    if (avatarEl) avatarEl.textContent = initialsFor(client.name || client.email);
-
-    const onContinue = () => { cleanup(); enterApp(client); };
-    const onLogout = () => {
-      cleanup();
-      stopPolling();
-      localStorage.removeItem('client_token');
-      showAuthView();
-    };
-    function cleanup() {
-      overlay.classList.remove('open');
-      continueBtn?.removeEventListener('click', onContinue);
-      logoutBtn?.removeEventListener('click', onLogout);
-    }
-    continueBtn?.addEventListener('click', onContinue);
-    logoutBtn?.addEventListener('click', onLogout);
-    overlay.classList.add('open');
-  }
-
+  // refresh). A reload must land the user straight back on the same page
+  // with no interruption — a "resume as {account}?" confirmation card was
+  // tried here previously as an anti-mismatch safeguard, but from the
+  // user's side a click-to-continue on every single reload reads exactly
+  // like a logout, which is the opposite of the goal. Straight back to a
+  // silent resume.
   (async () => {
     const token = localStorage.getItem('client_token');
     if (!token) return;
     try {
       const client = await authFetch('/api/auth/me');
-      showResumeConfirm(client);
+      await enterApp(client);
     } catch (err) {
       // Only clear the token on a genuine auth failure (a real 401 — already
       // handled/logged by authFetch itself above). This used to clear it on
