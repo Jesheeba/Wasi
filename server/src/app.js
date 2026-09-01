@@ -156,6 +156,14 @@ function createApp() {
   app.get('/breakpoints.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'breakpoints.css')));
   app.get('/app.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'app.js')));
   app.get('/embeddedSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'embeddedSignup.js')));
+  // Served as-is from its real location (server/src/utils/, not a
+  // frontend-owned file) so the Create/Edit Template modal's live "flag
+  // while typing" validation (app.js) runs the EXACT same functions
+  // routes/templates.js's validateStandardTemplateFields calls at submit
+  // time — one source of truth, not a hand-duplicated client-side copy
+  // that can drift. Safe to serve raw: pure validation logic, no secrets,
+  // no server-only code path.
+  app.get('/templateParams.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'templateParams.js')));
   app.use('/marketing', express.static(path.join(REPO_ROOT, 'marketing')));
   app.use('/admin', express.static(path.join(REPO_ROOT, 'admin')));
   // Postman collection + environment template for the admin panel's API

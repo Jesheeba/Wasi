@@ -222,7 +222,7 @@ function validateHeaderText(text) {
   return { valid: true, paramFormat: 'named', params: uniqueInOrder(namedMatches.map((m) => m.name)), errors: [] };
 }
 
-module.exports = {
+const templateParams = {
   extractPlaceholders,
   isPurelyNumeric,
   isVariableAtStartOrEnd,
@@ -233,3 +233,20 @@ module.exports = {
   validateHeaderText,
   defaultExampleFor,
 };
+
+// Dual CommonJS/browser export — this file is pure string/regex/array logic
+// with zero Node dependencies (confirmed deliberately, see this module's own
+// header comment), so it's served as-is as a static asset (server/src/app.js)
+// and loaded directly via <script src="/templateParams.js"> in index.html,
+// BEFORE app.js. That makes the live "flag while typing" template validation
+// in app.js's Create/Edit Template modal call these EXACT same functions the
+// server's own validateStandardTemplateFields (routes/templates.js) runs at
+// submit time — not a hand-duplicated copy that can drift from server truth,
+// which is what this file's own comments already flagged as a real risk for
+// the one rule (malformed placeholders) app.js had already ported by hand
+// before this shared-module approach existed.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = templateParams;
+} else if (typeof window !== 'undefined') {
+  window.templateParams = templateParams;
+}

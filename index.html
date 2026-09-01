@@ -1928,11 +1928,16 @@
 
   <div id="toast-container" class="toast-container"></div>
 
+  <!-- Same file server/src/utils/templateParams.js requires() server-side —
+       served raw so the Create/Edit Template modal's live validation
+       (app.js) can call the exact same functions the server checks at
+       submit time, not a hand-duplicated copy. Must load before app.js. -->
+  <script src="/templateParams.js"></script>
   <script src="/embeddedSignup.js"></script>
   <!-- Cache-busting query string — this file has been edited many times in a
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260824a"></script>
+  <script src="app.js?v=20260901a"></script>
 </body>
 </html>

@@ -2522,6 +2522,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const input = document.querySelector(`#template-sample-values-list [data-param-name="${name}"]`);
         if (input) input.value = value;
       });
+      // Re-checked after filling in the saved examples above, not just
+      // relying on syncTemplateFormUI's earlier call — that ran before
+      // these inputs had any value, so on its own it would have shown a
+      // "missing sample value" warning for a template that actually has
+      // one, and — since setting .value directly doesn't fire an input
+      // event — nothing would ever have cleared it.
+      updateTemplateSubmitGating();
       updateTemplatePreview();
     }
 
@@ -2802,55 +2809,114 @@ document.addEventListener('DOMContentLoaded', () => {
     ['tr', 'Turkish'], ['uk', 'Ukrainian'], ['ur', 'Urdu'], ['uz', 'Uzbek'], ['vi', 'Vietnamese'], ['zu', 'Zulu'],
   ];
 
-  // Mirrors server/src/utils/templateParams.js's extractPlaceholders/regex —
-  // duplicated, not imported, since this is a no-build-step page that can't
-  // require() a Node module. Kept intentionally minimal: this only drives
-  // the sample-value inputs and the live preview, not the actual validation
-  // rules (numbered-vs-named, words ratio, start/end position) — those stay
-  // server-side, single source of truth, surfaced via the existing
-  // err.body.details toast path below.
+  // Calls the REAL server/src/utils/templateParams.js — served raw as
+  // /templateParams.js (server/src/app.js) and loaded before this file
+  // (index.html), so this is the exact same function
+  // routes/templates.js's validateStandardTemplateFields runs at submit
+  // time, not a hand-duplicated copy that can drift from server truth
+  // (which this file's own history already hit once: the malformed-
+  // placeholder check below used to be duplicated by hand for exactly this
+  // reason, before templateParams.js was made shareable).
   function extractTemplateParams(text) {
-    const re = /\{\{\s*([a-z0-9_]+)\s*\}\}/g;
-    const names = [];
-    let m;
-    while ((m = re.exec(text || ''))) {
-      if (!names.includes(m[1])) names.push(m[1]);
-    }
-    return names;
+    return [...new Set(window.templateParams.extractPlaceholders(text).map((p) => p.name))];
   }
 
-  // Mirrors server/src/utils/templateParams.js's findMalformedPlaceholders —
-  // same duplication reasoning as extractTemplateParams above. Catches the
-  // trap that function alone can't: a {{...}} span whose inner content
-  // ISN'T a valid lowercase snake_case name (wrong case, a space, a symbol)
-  // silently matches nothing in extractTemplateParams, so an author who
-  // types {{Customer}} thinking they made a variable gets no sample-value
-  // prompt and, previously, no warning either — the mistake just sat there.
-  // This surfaces it live, as you type, not only on submit.
-  function findMalformedTemplateParams(text) {
-    const re = /\{\{\s*([^{}]*?)\s*\}\}/g;
-    const validName = /^[a-z0-9_]+$/;
-    const found = [];
-    let m;
-    while ((m = re.exec(text || ''))) {
-      if (!validName.test(m[1])) found.push(m[0]);
+  // Live "flag while typing" template validation — runs the FULL rule set
+  // (malformed placeholders, numbered/mixed parameters, a variable at the
+  // very start/end, the words-to-parameters ratio, and missing sample
+  // values), not just the one rule (malformed placeholders) this modal
+  // used to check live. Previously every other rule only surfaced after a
+  // failed submit, via the err.body.details toast — a client could type an
+  // obviously-doomed template (e.g. "{{name}}" alone, or three variables in
+  // six words) and get no feedback until Meta/the server rejected it.
+  //
+  // Returns { hasErrors } so callers (the input listeners, and
+  // updateTemplateSubmitGating below) can react without re-deriving it.
+  function updateTemplateBodyValidation() {
+    const field = document.getElementById('new-template-body');
+    const warning = document.getElementById('template-body-warning');
+    if (!field || !warning) return { hasErrors: false };
+
+    const result = window.templateParams.validateTemplateText(field.value, { label: 'Body' });
+    const errors = [...result.errors];
+
+    // The words-to-parameters ratio rule is shown like every other warning
+    // here, but must never by itself block Submit/Save — unlike the other
+    // rules, it's an explicitly unofficial heuristic (templateParams.js's
+    // own comment: calibrated against a small, real accept/reject sample,
+    // confirmed to over-flag real, already-Meta-approved content — 19 of
+    // 36 Template Library seed entries per this codebase's own tracked
+    // gaps). Confirmed live: opening Edit on a real existing template
+    // (invoice_document) that trips only this rule would otherwise disable
+    // Save for an edit that has nothing to do with the body at all.
+    // validateTemplateText returns EARLY per rule (never mixes the ratio
+    // message with a different rule's in one result), so checking for
+    // Meta's own named error string is a reliable, non-fragile way to tell
+    // "only the heuristic fired" apart from every unambiguous rule.
+    const isRatioOnly = errors.length > 0 && errors.every((e) => e.includes('Params Words Ratio Exceeds Limit'));
+    let hasBlockingError = errors.length > 0 && !isRatioOnly;
+
+    // Mirrors validateStandardTemplateFields's own missing-sample-value
+    // check exactly (server/src/routes/templates.js) — same wording, same
+    // "only checked once the body text itself is otherwise valid" order,
+    // so a client never sees this warning for a reason the body-text
+    // errors above already explain. Always a real, unambiguous rejection —
+    // no equivalent carve-out to the ratio rule's.
+    if (result.valid && result.params.length > 0) {
+      const samples = getTemplateSampleValues();
+      const missing = result.params.filter((p) => !String(samples[p] || '').trim());
+      if (missing.length > 0) {
+        errors.push(`Sample value required for: ${missing.join(', ')} — Meta rejects templates without one.`);
+        hasBlockingError = true;
+      }
     }
-    return found;
+
+    warning.style.display = errors.length ? '' : 'none';
+    warning.textContent = errors.join(' ');
+    return { hasErrors: hasBlockingError };
   }
 
-  function updateTemplateMalformedWarning(fieldId, warningId, label) {
-    const field = document.getElementById(fieldId);
-    const warning = document.getElementById(warningId);
-    if (!field || !warning) return;
-    const malformed = findMalformedTemplateParams(field.value);
-    if (malformed.length === 0) {
+  function updateTemplateHeaderValidation() {
+    const typeSelect = document.getElementById('new-template-header-type');
+    const field = document.getElementById('new-template-header-text');
+    const warning = document.getElementById('template-header-warning');
+    if (!field || !warning) return { hasErrors: false };
+
+    // Matches validateStandardTemplateFields's own gate exactly — a
+    // NONE/media header has no text for this rule set to apply to.
+    if (typeSelect?.value !== 'TEXT') {
       warning.style.display = 'none';
       warning.textContent = '';
+      return { hasErrors: false };
+    }
+
+    const result = window.templateParams.validateHeaderText(field.value);
+    warning.style.display = result.errors.length ? '' : 'none';
+    warning.textContent = result.errors.join(' ');
+    return { hasErrors: result.errors.length > 0 };
+  }
+
+  // Blocks submitting a template this modal's own live checks already know
+  // Meta (or the server, before ever reaching Meta) would reject — the
+  // direct fix for "the system doesn't flag anything until the template is
+  // rejected." Authentication templates have no author-supplied body/header
+  // at all (messageTemplateCreateSchema's own rule), so this never gates
+  // them — matches validateStandardTemplateFields's identical
+  // `data.category !== 'Authentication'` exemption server-side.
+  function updateTemplateSubmitGating() {
+    const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
+    if (!submitBtn) return;
+    const category = document.getElementById('new-template-category')?.value;
+    if (category === 'Authentication') {
+      submitBtn.disabled = false;
+      submitBtn.title = '';
       return;
     }
-    warning.style.display = '';
-    warning.textContent = `${label} contains ${malformed.join(', ')}, which isn't a valid parameter name — ` +
-      `parameter names must be lowercase letters, numbers, and underscores only (e.g. {{customer_name}}).`;
+    const bodyState = updateTemplateBodyValidation();
+    const headerState = updateTemplateHeaderValidation();
+    const hasErrors = bodyState.hasErrors || headerState.hasErrors;
+    submitBtn.disabled = hasErrors;
+    submitBtn.title = hasErrors ? 'Fix the highlighted body/header issues above before submitting.' : '';
   }
 
   function substituteTemplateParams(text, samples) {
@@ -2920,7 +2986,10 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `).join('');
     container.querySelectorAll('[data-param-name]').forEach((input) => {
-      input.addEventListener('input', updateTemplatePreview);
+      input.addEventListener('input', () => {
+        updateTemplateSubmitGating(); // clears/raises the "missing sample value" warning live
+        updateTemplatePreview();
+      });
     });
   }
 
@@ -3094,8 +3163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('template-body-charcount').textContent = body ? `${body.length}/1024` : '';
     const footer = document.getElementById('new-template-footer').value;
     document.getElementById('template-footer-charcount').textContent = footer ? `${footer.length}/60` : '';
-    updateTemplateMalformedWarning('new-template-body', 'template-body-warning', 'Body');
-    updateTemplateMalformedWarning('new-template-header-text', 'template-header-warning', 'Header');
+    updateTemplateSubmitGating();
     updateTemplatePreview();
   }
 
@@ -3148,11 +3216,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   renderTemplateLanguageOptions();
-  document.getElementById('new-template-category')?.addEventListener('change', updateTemplateCategoryFields);
-  document.getElementById('new-template-header-type')?.addEventListener('change', updateTemplateHeaderField);
+  document.getElementById('new-template-category')?.addEventListener('change', () => {
+    updateTemplateCategoryFields();
+    updateTemplateSubmitGating();
+  });
+  document.getElementById('new-template-header-type')?.addEventListener('change', () => {
+    updateTemplateHeaderField();
+    updateTemplateSubmitGating();
+    updateTemplatePreview();
+  });
   document.getElementById('new-template-header-file')?.addEventListener('change', updateTemplatePreview);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
-    updateTemplateMalformedWarning('new-template-header-text', 'template-header-warning', 'Header');
+    updateTemplateSubmitGating();
     updateTemplatePreview();
   });
   document.getElementById('new-template-footer')?.addEventListener('input', () => {
@@ -3165,7 +3240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const body = document.getElementById('new-template-body').value;
     document.getElementById('template-body-charcount').textContent = `${body.length}/1024`;
     renderTemplateSampleInputs();
-    updateTemplateMalformedWarning('new-template-body', 'template-body-warning', 'Body');
+    updateTemplateSubmitGating();
     updateTemplatePreview();
   });
   document.querySelectorAll('.template-add-button-btn').forEach((btn) => {
