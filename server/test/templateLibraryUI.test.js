@@ -114,20 +114,17 @@ test('browsing to Template Library renders all 36 real seeded cards', async () =
   assert.ok(count >= 36, `expected at least 36 rendered cards, got ${count}`);
 });
 
-test('the industry filter dropdown is populated from real data and actually filters the rendered grid', async () => {
-  const options = await page.$$eval('#library-filter-industry option', (els) => els.map((o) => o.value).filter(Boolean));
-  assert.ok(options.includes('Healthcare'));
-  assert.ok(options.includes('E-commerce'));
-  assert.ok(options.includes('General/Other'));
+test('templates render grouped into one always-visible section per industry, not behind a filter', async () => {
+  const industries = await page.$$eval('.library-industry-section', (els) => els.map((el) => el.dataset.industry));
+  assert.ok(industries.includes('Healthcare'));
+  assert.ok(industries.includes('E-commerce'));
+  assert.ok(industries.includes('General/Other'));
 
-  await setFilter('library-filter-industry', 'Healthcare');
-  const cards = await page.$$eval('#library-grid .library-template-card', (els) =>
-    els.map((el) => el.querySelector('div:last-child')?.textContent || '')
+  const healthcareCards = await page.$$eval(
+    '.library-industry-section[data-industry="Healthcare"] .library-template-card',
+    (els) => els.length
   );
-  assert.ok(cards.length >= 12);
-  assert.ok(cards.every((t) => t.includes('Healthcare')), 'every rendered card must be Healthcare after filtering');
-
-  await setFilter('library-filter-industry', '');
+  assert.ok(healthcareCards >= 12, 'the Healthcare section must list all of its own templates without any filter applied');
 });
 
 test('the category filter narrows to Authentication-only cards, each showing the AUTHENTICATION badge', async () => {
@@ -138,13 +135,14 @@ test('the category filter narrows to Authentication-only cards, each showing the
   await setFilter('library-filter-category', '');
 });
 
-test('combining industry + use_case filters narrows the grid to exactly one card', async () => {
-  await setFilter('library-filter-industry', 'E-commerce');
+test('the use-case filter narrows the grid to exactly one card, still shown inside its own industry section', async () => {
   await setFilter('library-filter-use-case', 'abandoned_cart');
   const count = await page.$$eval('#library-grid .library-template-card', (els) => els.length);
   assert.equal(count, 1);
   const title = await page.$eval('#library-grid .library-template-card', (el) => el.querySelector('span').textContent);
   assert.equal(title, 'Abandoned Cart Reminder');
+  const section = await page.$eval('.library-industry-section', (el) => el.dataset.industry);
+  assert.equal(section, 'E-commerce', 'the one remaining section shown must be the card\'s real industry');
 });
 
 test('selecting a card renders its live WhatsApp-style preview with real substituted sample values', async () => {
@@ -207,7 +205,6 @@ test('Authentication entries do not prefill body/header/footer/buttons — only 
   await page.click('[data-view="template-library"]');
   await page.waitForSelector('#library-grid .library-template-card', { timeout: 10000 });
 
-  await setFilter('library-filter-industry', '');
   await setFilter('library-filter-use-case', '');
   await setFilter('library-filter-category', 'Authentication');
 

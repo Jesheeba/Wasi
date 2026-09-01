@@ -2044,16 +2044,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function populateLibraryFilterOptions() {
-    const industries = [...new Set(state.libraryEntries.map((t) => t.industry))].sort();
     const useCases = [...new Set(state.libraryEntries.map((t) => t.use_case))].sort();
-
-    const industrySelect = document.getElementById('library-filter-industry');
-    if (industrySelect) {
-      const current = industrySelect.value;
-      industrySelect.innerHTML = '<option value="">All Industries</option>' +
-        industries.map((i) => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
-      industrySelect.value = current;
-    }
 
     const useCaseSelect = document.getElementById('library-filter-use-case');
     if (useCaseSelect) {
@@ -2065,16 +2056,37 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function filteredLibraryEntries() {
-    const industry = document.getElementById('library-filter-industry')?.value || '';
     const category = document.getElementById('library-filter-category')?.value || '';
     const useCase = document.getElementById('library-filter-use-case')?.value || '';
     return state.libraryEntries.filter((t) =>
-      (!industry || t.industry === industry) &&
       (!category || t.category === category) &&
       (!useCase || t.use_case === useCase)
     );
   }
 
+  function libraryTemplateCardHtml(t) {
+    const preview = t.category === 'Authentication'
+      ? 'Meta-generated verification message (code delivery, expiration notice).'
+      : escapeHtml((t.body || '').length > 90 ? `${t.body.slice(0, 90)}…` : (t.body || ''));
+    const selected = state.librarySelectedEntry?.id === t.id ? ' selected' : '';
+    return `
+      <div class="template-card library-template-card${selected}" data-library-id="${t.id}">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(t.title)}</span>
+            <span class="template-badge approved" style="flex-shrink: 0; white-space: nowrap;">${escapeHtml(t.category)}</span>
+          </div>
+          <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${preview}</p>
+        </div>
+        <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">${escapeHtml(t.use_case.replace(/_/g, ' '))}</div>
+      </div>
+    `;
+  }
+
+  // One section per industry, always visible (not gated behind a filter) —
+  // each section names its industry and lists its own templates below it,
+  // same layout for every industry. Category/use-case dropdowns still narrow
+  // which cards show up within each section.
   function renderLibraryGrid() {
     const grid = document.getElementById('library-grid');
     if (!grid) return;
@@ -2085,24 +2097,22 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    grid.innerHTML = entries.map((t) => {
-      const preview = t.category === 'Authentication'
-        ? 'Meta-generated verification message (code delivery, expiration notice).'
-        : escapeHtml((t.body || '').length > 90 ? `${t.body.slice(0, 90)}…` : (t.body || ''));
-      const selected = state.librarySelectedEntry?.id === t.id ? ' selected' : '';
-      return `
-        <div class="template-card library-template-card${selected}" data-library-id="${t.id}">
-          <div>
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(t.title)}</span>
-              <span class="template-badge approved" style="flex-shrink: 0; white-space: nowrap;">${escapeHtml(t.category)}</span>
-            </div>
-            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${preview}</p>
-          </div>
-          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">${escapeHtml(t.industry)} &middot; ${escapeHtml(t.use_case.replace(/_/g, ' '))}</div>
+    const industries = [...new Set(state.libraryEntries.map((t) => t.industry))];
+    const sections = industries
+      .map((industry) => ({ industry, items: entries.filter((t) => t.industry === industry) }))
+      .filter((section) => section.items.length > 0);
+
+    grid.innerHTML = sections.map(({ industry, items }) => `
+      <div class="library-industry-section" data-industry="${escapeHtml(industry)}" style="margin-bottom: 1.75rem;">
+        <h3 style="margin: 0 0 0.85rem; font-size: 1rem; display:flex; align-items:baseline; gap:0.5rem;">
+          ${escapeHtml(industry)}
+          <span style="font-weight: 400; color: #6B7280; font-size: 0.8rem;">${items.length} template${items.length === 1 ? '' : 's'}</span>
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+          ${items.map(libraryTemplateCardHtml).join('')}
         </div>
-      `;
-    }).join('');
+      </div>
+    `).join('');
 
     grid.querySelectorAll('[data-library-id]').forEach((card) => {
       card.addEventListener('click', () => selectLibraryEntry(card.dataset.libraryId));
@@ -2538,7 +2548,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (submitBtn) submitBtn.textContent = 'Save & Resubmit for Review';
   }
 
-  document.getElementById('library-filter-industry')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('library-filter-category')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('library-filter-use-case')?.addEventListener('change', renderLibraryGrid);
   document.getElementById('meta-library-filter-usecase')?.addEventListener('change', renderMetaLibraryGrid);

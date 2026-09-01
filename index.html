@@ -401,9 +401,6 @@
           <div id="library-source-wasi">
             <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
               <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
-                <select id="library-filter-industry" class="form-input" style="width: auto; min-width: 160px;">
-                  <option value="">All Industries</option>
-                </select>
                 <select id="library-filter-category" class="form-input" style="width: auto; min-width: 160px;">
                   <option value="">All Categories</option>
                   <option value="Marketing">Marketing</option>
@@ -417,7 +414,11 @@
             </div>
             <div class="library-layout">
               <div class="table-card" style="padding: 1.5rem;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;" id="library-grid"></div>
+                <!-- Grouped into one section per industry (not a filter — every
+                     industry's templates are always visible, sectioned with its
+                     own heading), same layout for every industry. Category/use-
+                     case dropdowns above still narrow within/across sections. -->
+                <div id="library-grid"></div>
               </div>
               <div class="table-card library-preview-card" style="padding: 1.5rem;" id="library-preview-panel">
                 <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
