@@ -61,4 +61,29 @@ const apiKeyCreationLimiter = rateLimit({
   message: { error: 'Too many API keys created recently. Try again later, or contact support if you need more.' },
 });
 
-module.exports = { authLimiter, webhookLimiter, apiLimiter, apiKeyCreationLimiter };
+// Client "who am I" session check (routes/auth.js's GET /me,
+// POST /verify-email/request) — called on every page load/reload to
+// resume a session. Fundamentally different risk profile from
+// /login /register /forgot-password /reset-password: it already requires
+// a valid signed JWT to do anything (requireClientAuth runs first), so
+// brute-forcing it isn't a meaningful attack the way guessing a password
+// is. Found live (2026-09-01): these routes used to share authLimiter's
+// 20-per-15-min bucket with /login and /register — a client who simply
+// reloaded the app repeatedly during completely normal use could exhaust
+// it purely from routine session checks, and land on a bare,
+// unexplained login screen for up to 15 minutes with no visible error
+// (the resume-check IIFE in app.js correctly doesn't wipe the token on a
+// non-401 failure — see that fix's own history — but a 429 here still
+// means neither the resume-confirmation card nor the app ever appears).
+// 60/min is generous enough that even reloading every few seconds
+// wouldn't hit it, while still bounding abuse of an authenticated
+// endpoint (e.g. reconnaissance with a stolen token).
+const sessionCheckLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again shortly.' },
+});
+
+module.exports = { authLimiter, webhookLimiter, apiLimiter, apiKeyCreationLimiter, sessionCheckLimiter };

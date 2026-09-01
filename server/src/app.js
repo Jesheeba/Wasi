@@ -91,7 +91,11 @@ function createApp() {
 
   app.use('/health', healthRouter);
 
-  app.use('/api/auth', authLimiter, authRouter);
+  // authLimiter is no longer applied blanket here — routes/auth.js applies
+  // it per-route now, since GET /me (called on every page load to resume a
+  // session) needs a much more generous limiter than /login /register do —
+  // see rateLimit.js's sessionCheckLimiter for why.
+  app.use('/api/auth', authRouter);
   app.use('/api/admin/auth', authLimiter, adminAuthRouter);
 
   // Tenant-scoped: real client JWT required. withTenantContext runs every

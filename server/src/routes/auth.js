@@ -9,12 +9,13 @@ const { sendEmail } = require('../utils/emailService');
 const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../utils/validate');
 const { requireClientAuth } = require('../middleware/requireClientAuth');
 const { withTenantContext } = require('../middleware/tenantContext');
+const { authLimiter, sessionCheckLimiter } = require('../middleware/rateLimit');
 
 const router = Router();
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
-router.post('/register', asyncHandler(async (req, res) => {
+router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   const { businessName, email, password } = registerSchema.parse(req.body);
 
   const existing = await clientsRepo.findByEmail(pool, email);
@@ -48,7 +49,7 @@ router.post('/register', asyncHandler(async (req, res) => {
   res.status(201).json({ token: signedToken, client: safeClient });
 }));
 
-router.post('/login', asyncHandler(async (req, res) => {
+router.post('/login', authLimiter, asyncHandler(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
   const client = await clientsRepo.findByEmail(pool, email);
@@ -64,7 +65,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   res.json({ token, client: safeClient });
 }));
 
-router.get('/me', requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {
+router.get('/me', sessionCheckLimiter, requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {
   const client = await clientsRepo.findById(req.db, req.clientId);
   if (!client) return res.status(404).json({ error: 'Not found' });
   res.json(client);
@@ -72,7 +73,7 @@ router.get('/me', requireClientAuth, withTenantContext, asyncHandler(async (req,
 
 // Always 200 regardless of whether the email exists — a differing response
 // would let an attacker enumerate registered accounts.
-router.post('/forgot-password', asyncHandler(async (req, res) => {
+router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
   const { email } = forgotPasswordSchema.parse(req.body);
   const client = await clientsRepo.findByEmail(pool, email);
   if (client) {
@@ -86,7 +87,7 @@ router.post('/forgot-password', asyncHandler(async (req, res) => {
   res.json({ message: 'If that email is registered, a reset link has been sent.' });
 }));
 
-router.post('/reset-password', asyncHandler(async (req, res) => {
+router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   const { token, password } = resetPasswordSchema.parse(req.body);
   const consumed = await authTokensRepo.consume(token, 'password_reset');
   if (!consumed || consumed.subject_type !== 'client') {
@@ -97,7 +98,7 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
   res.json({ message: 'Password updated — you can log in now.' });
 }));
 
-router.post('/verify-email/request', requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {
+router.post('/verify-email/request', sessionCheckLimiter, requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {
   const client = await clientsRepo.findById(req.db, req.clientId);
   if (!client) return res.status(404).json({ error: 'Not found' });
   if (client.email_verified) return res.json({ message: 'Already verified.' });
@@ -111,7 +112,7 @@ router.post('/verify-email/request', requireClientAuth, withTenantContext, async
   res.json({ message: 'Verification email sent.' });
 }));
 
-router.post('/verify-email', asyncHandler(async (req, res) => {
+router.post('/verify-email', authLimiter, asyncHandler(async (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'token is required' });
   const consumed = await authTokensRepo.consume(token, 'email_verification');
