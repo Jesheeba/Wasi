@@ -2,12 +2,59 @@
 // wizard (marketing/signup.js) and the logged-in app's Settings > WhatsApp
 // screen (app.js), so the FB SDK loading + postMessage handshake only exists
 // once. See meta-tech-provider-platform-spec.md §3 step 3 for the flow this
-// implements; the postMessage payload shape and FB.login() config come from
-// Meta's public Embedded Signup docs (best-effort — re-verify against a real
-// Meta App before going live, same caveat as the original signup.js note).
+// implements.
+//
+// 2026-09-05: 3 real clients lost their entire Coexistence signup attempt
+// with zero trace anywhere in Wasi (see CLAUDE.md Known Gaps for the full
+// investigation). Root cause confirmed against Meta's current published docs
+// (developers.facebook.com/documentation/business-messaging/whatsapp/
+// embedded-signup/onboarding-business-app-users/), not assumed: Meta spreads
+// a Coexistence completion's identifying fields across MULTIPLE postMessage
+// events — the terminal FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING event's own
+// `data` only ever carries `waba_id`, never `phone_number_id` — but this
+// file used to keep a single `lastMessage` variable, overwritten on every
+// event, so the terminal message always clobbered an earlier session-log
+// message that actually had the phone_number_id. Fixed by accumulating
+// fields across every message instead of overwriting (see `sessionData`
+// below). Diagnostic console logging is kept in deliberately, on top of the
+// fix: this merge behavior is built from Meta's documented shape, not yet
+// confirmed against a real live Coexistence attempt — do not remove the
+// logging until that's verified.
 (function () {
   let sdkReady = false;
-  let lastMessage = null;
+
+  // Meta spreads a Coexistence completion's identifying fields across
+  // MULTIPLE postMessage events, not one: sessionInfoVersion: '3' (below)
+  // makes Meta fire session-log messages carrying phone_number_id as the
+  // user progresses through the flow, but the terminal
+  // FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING event's own `data` only ever
+  // carries `waba_id` (confirmed 2026-09-05 against Meta's current published
+  // docs — see CLAUDE.md Known Gaps for the investigation). The previous
+  // version of this file kept a single `lastMessage` variable, overwritten on
+  // every event, so the terminal message always clobbered an earlier one that
+  // had the phone_number_id — silently losing it on every real Coexistence
+  // completion. `sessionData` accumulates every message's `data` fields
+  // instead (a later message's fields augment, never clear, the running
+  // total); `terminalEvent` separately tracks the most recent
+  // FINISH/CANCEL/ERROR event name, since that's what actually decides when
+  // to resolve/reject — it's a different concern from which fields have
+  // arrived so far.
+  let sessionData = {};
+  let terminalEvent = null;
+
+  // Coexistence completions fire a distinct event name, not plain FINISH —
+  // per Meta's "Onboard WhatsApp Business app users" doc. Which one fired is
+  // the only reliable signal for which path the business took, so it's
+  // captured explicitly here and threaded through as via_coexistence rather
+  // than left for the backend to infer from waba_id/phone_number_id shape
+  // (nothing in that data reliably distinguishes the two paths). Hoisted to
+  // module scope (was local to connect()) so the message listener below —
+  // which needs to recognize a terminal event the moment it arrives, not
+  // just when connect()'s polling loop next checks — can reference it too.
+  const FINISH_EVENTS = {
+    FINISH: false,
+    FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
+  };
 
   function loadSdk(appId) {
     return new Promise((resolve, reject) => {
@@ -31,7 +78,29 @@
 
   window.addEventListener('message', (event) => {
     if (!event.origin || !event.origin.endsWith('facebook.com')) return;
-    try { lastMessage = JSON.parse(event.data); } catch (_) { /* not ours */ }
+    // Diagnostic logging kept in deliberately (per direct instruction,
+    // 2026-09-05) — the merge fix below is built on Meta's *documented*
+    // shape, not yet confirmed against a real live attempt. Every raw
+    // message, parsed or not, is logged so the next real Coexistence
+    // completion can confirm phone_number_id really does arrive on an
+    // earlier session-log message before this logging is ever removed.
+    console.log('[WasiEmbeddedSignup] postMessage received from', event.origin, '— raw event.data:', event.data);
+    let parsed;
+    try {
+      parsed = JSON.parse(event.data);
+      console.log('[WasiEmbeddedSignup] parsed message:', JSON.stringify(parsed));
+    } catch (err) {
+      console.log('[WasiEmbeddedSignup] JSON.parse failed on this message (kept as a log only, not necessarily an error — could be an unrelated facebook.com message):', err.message);
+      return;
+    }
+    if (parsed?.type !== 'WA_EMBEDDED_SIGNUP') return;
+    // Merge, never replace — see sessionData's declaration above for why.
+    if (parsed.data && typeof parsed.data === 'object') {
+      Object.assign(sessionData, parsed.data);
+    }
+    if (parsed.event === 'CANCEL' || parsed.event === 'ERROR' || Object.prototype.hasOwnProperty.call(FINISH_EVENTS, parsed.event)) {
+      terminalEvent = parsed.event;
+    }
   });
 
   // How long to wait for the FB.login popup to hand back a code before
@@ -52,11 +121,15 @@
   ];
 
   // Runs the full FB.login() + postMessage handshake, resolves
-  // { code, waba_id, phone_number_id }. Rejects with a message safe to show
-  // the user directly (cancelled / error / timeout are all distinguished).
+  // { code, waba_id, phone_number_id, via_coexistence }. waba_id/
+  // phone_number_id can legitimately come back undefined on a genuine FINISH
+  // (see the resolve branch below for why that's intentional, not a bug here).
+  // Rejects with a message safe to show the user directly (cancelled / error
+  // / no FINISH ever arriving are all distinguished).
   async function connect({ appId, configId, onProgress }) {
     await loadSdk(appId);
-    lastMessage = null;
+    sessionData = {};
+    terminalEvent = null;
 
     const timers = [];
     if (onProgress) {
@@ -95,29 +168,27 @@
       timers.forEach(clearTimeout);
     }
 
-    // Coexistence completions fire a distinct event name, not plain FINISH —
-    // per Meta's "Onboard WhatsApp Business app users" doc. Which one fired
-    // is the only reliable signal for which path the business took, so it's
-    // captured explicitly here and threaded through as via_coexistence
-    // rather than left for the backend to infer from waba_id/phone_number_id
-    // shape (nothing in that data reliably distinguishes the two paths).
-    const FINISH_EVENTS = {
-      FINISH: false,
-      FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
-    };
-
     for (let attemptsLeft = 10; attemptsLeft > 0; attemptsLeft--) {
-      if (lastMessage?.type === 'WA_EMBEDDED_SIGNUP') {
-        if (Object.prototype.hasOwnProperty.call(FINISH_EVENTS, lastMessage.event) && lastMessage.data) {
-          return {
-            code,
-            waba_id: lastMessage.data.waba_id,
-            phone_number_id: lastMessage.data.phone_number_id,
-            via_coexistence: FINISH_EVENTS[lastMessage.event],
-          };
-        }
-        if (lastMessage.event === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
-        if (lastMessage.event === 'ERROR') throw new Error(`Facebook reported an error: ${lastMessage.data?.error_message || 'unknown error'}`);
+      if (terminalEvent === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
+      if (terminalEvent === 'ERROR') throw new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`);
+      if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)) {
+        // Resolve on FINISH even if waba_id/phone_number_id never showed up
+        // in any message's data — deliberately NOT thrown here. Meta's own
+        // FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING payload only guarantees
+        // waba_id, and this file has no way to write an audit trail of a
+        // failure this far into the flow (no backend access from the
+        // browser). The caller sends whatever it gets to
+        // POST /whatsapp/connect regardless, and THAT route is what checks
+        // for a missing phone_number_id, fails with a specific message, and
+        // records it — the same audited failure path every other connect
+        // error already goes through, so this class of failure is never
+        // silent again (see onboarding.js and CLAUDE.md Known Gaps, 2026-09-05).
+        return {
+          code,
+          waba_id: sessionData.waba_id,
+          phone_number_id: sessionData.phone_number_id,
+          via_coexistence: FINISH_EVENTS[terminalEvent],
+        };
       }
       await new Promise((r) => setTimeout(r, 300));
     }

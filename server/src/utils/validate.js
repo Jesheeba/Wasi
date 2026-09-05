@@ -94,7 +94,17 @@ const checkoutSchema = z.object({
 const wabaConnectSchema = z.object({
   code: z.string().min(1),
   waba_id: z.string().min(1),
-  phone_number_id: z.string().min(1),
+  // Deliberately optional, not required — found 2026-09-05: Meta's real
+  // Coexistence FINISH event doesn't always deliver phone_number_id to
+  // embeddedSignup.js (see that file's header comment and CLAUDE.md Known
+  // Gaps). A required field here meant Zod's own .parse() threw before the
+  // route's first DB write ever ran, so 3 real clients' attempts left zero
+  // trace anywhere — no wabas row, no audit_log entry, nothing. The route
+  // below now always performs the initial "connecting" write regardless,
+  // then explicitly checks for a missing phone_number_id itself and fails
+  // through the same audited path every other connect failure already uses
+  // — a deliberate, visible rejection instead of a silent one.
+  phone_number_id: z.string().min(1).optional(),
   // Set by embeddedSignup.js from which FINISH_* event Meta actually fired —
   // the one reliable signal for whether the business took the Coexistence
   // path (keeps their WhatsApp Business app) vs plain migration. Trusted as

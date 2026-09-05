@@ -4376,7 +4376,14 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();
       } catch (err) {
-        showToast(err.message);
+        // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason
+        // in body.detail, with a generic body.error as the top-level
+        // summary (see that route's catch block) — authFetch's err.message
+        // is only ever the generic one, so a real rejection (e.g. the new
+        // missing-phone_number_id case, 2026-09-05) used to show as a
+        // content-free "WhatsApp connection failed" toast. Preferring
+        // err.body?.detail here surfaces the actual reason instead.
+        showToast(err.body?.detail || err.message);
       } finally {
         btn.disabled = false;
         btn.textContent = 'Connect WhatsApp';

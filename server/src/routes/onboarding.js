@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { ZodError } = require('zod');
 const crypto = require('crypto');
 const multer = require('multer');
 const clientsRepo = require('../repositories/clientsRepo');
@@ -155,16 +156,50 @@ router.post('/whatsapp/business-profile/picture', uploadProfilePicture.single('f
 // registration, default template creation. All of it degrades to a clear error
 // (not a crash) when META_APP_ID/SECRET aren't configured for this environment.
 router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
-  const { code, waba_id, phone_number_id, via_coexistence } = wabaConnectSchema.parse(req.body);
+  // clientId comes from the JWT (requireClientAuth), never the body, so it's
+  // always known even if req.body fails validation entirely — this is what
+  // makes a guaranteed audit trail possible below regardless of what broke.
   const clientId = req.clientId;
-
-  await wabasRepo.upsertForClient(clientId, {
-    waba_id,
-    phone_number_id,
-    status: 'connecting',
-  });
+  let waba_id, phone_number_id, code, via_coexistence;
 
   try {
+    // wabaConnectSchema.parse used to run OUTSIDE this try, before ANY
+    // write — found 2026-09-05: 4 real clients (a missing/malformed
+    // phone_number_id or, in principle, any other required field) failed
+    // with literally zero trace anywhere, because a Zod throw here
+    // propagated straight past this whole route with no audit_log entry and
+    // no wabas row ever written. Moving it inside the try/catch below is
+    // the actual fix for "this class of failure must never be silent
+    // again" — not just the phone_number_id case specifically, ANY
+    // validation failure on this route now guarantees a write.
+    ({ code, waba_id, phone_number_id, via_coexistence } = wabaConnectSchema.parse(req.body));
+
+    // phone_number_id can be undefined here (see wabaConnectSchema's
+    // comment) — `|| null` so a real DB null lands in the column instead of
+    // pg rejecting an undefined bound parameter. This write must succeed
+    // regardless of whether phone_number_id showed up, so a genuine attempt
+    // is never invisible even before the explicit check below runs.
+    await wabasRepo.upsertForClient(clientId, {
+      waba_id,
+      phone_number_id: phone_number_id || null,
+      status: 'connecting',
+    });
+
+    // Found 2026-09-05 (see wabaConnectSchema's comment + CLAUDE.md Known
+    // Gaps): Meta's real Coexistence FINISH event doesn't always deliver
+    // phone_number_id to the frontend. Failing here — inside the try, so it
+    // hits the same catch block as every other connect failure below — means
+    // this now gets a real wabas.status='failed' row, a real
+    // whatsapp_connect_failed audit_log entry with this exact message, and a
+    // specific 502 back to the client, instead of the silent pre-write Zod
+    // rejection this class of failure used to produce.
+    if (!phone_number_id) {
+      throw new Error(
+        `WhatsApp signup finished on Facebook's side, but Meta never sent a phone number ID for this WhatsApp Business Account (waba_id: ${waba_id}). ` +
+        'This can happen on a Coexistence (QR code) connection — please try connecting again. If it keeps happening, contact support with this exact message.'
+      );
+    }
+
     const shortLivedToken = await metaClient.exchangeCodeForToken(code);
     const accessToken = await metaClient.exchangeForLongLivedToken(shortLivedToken);
     await metaClient.subscribeAppToWaba(waba_id, accessToken);
@@ -227,17 +262,38 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     const { access_token_encrypted, ...safeWaba } = waba;
     res.json({ connected: true, waba: safeWaba, templateSync });
   } catch (err) {
-    await wabasRepo.upsertForClient(clientId, { status: 'failed' });
+    // Guaranteed trail for EVERY failure this route can produce, including
+    // one that happens before waba_id/phone_number_id are even known (a Zod
+    // validation failure) — this is the direct fix for "4 clients failed
+    // with zero trace," not scoped to the phone_number_id case alone. Zod's
+    // own .message is a raw JSON dump of .issues; formatted here into
+    // something a human reads in the audit log without decoding it.
+    const isValidationError = err instanceof ZodError;
+    const message = isValidationError
+      ? `Invalid request: ${err.issues.map((i) => `${i.path.join('.') || '(body)'} — ${i.message}`).join('; ')}`
+      : err.message;
+
+    // Best-effort, deliberately never allowed to throw past this point — a
+    // request that failed validation may never have reached the first
+    // upsertForClient call above, so this could be inserting the very first
+    // wabas row for this client (upsertForClient handles that fine, scoped
+    // by clientId alone: client_id + status, everything else left null).
+    // Swallowing a failure here must never suppress the audit_log write
+    // below it, which is the actual guarantee this fix is about.
+    await wabasRepo.upsertForClient(clientId, { status: 'failed' }).catch((e) => {
+      console.error('onboarding: failed to record wabas status=failed after a connect failure (non-fatal, audit log write still proceeds):', e.message);
+    });
+
     await auditLogRepo.record({
       actor_type: 'client',
       actor_id: clientId,
       action: 'whatsapp_connect_failed',
-      target: `${clientId}: ${err.message}`,
+      target: `${clientId}: ${message}`,
     });
-    res.status(502).json({
+    res.status(isValidationError ? 400 : 502).json({
       error: 'WhatsApp connection failed',
-      detail: err.message,
-      hint: 'This usually means META_APP_ID/META_APP_SECRET/META_CONFIG_ID are not configured for a real Meta app yet.',
+      detail: message,
+      hint: isValidationError ? undefined : 'This usually means META_APP_ID/META_APP_SECRET/META_CONFIG_ID are not configured for a real Meta app yet.',
     });
   }
 }));

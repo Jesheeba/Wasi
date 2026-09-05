@@ -424,9 +424,14 @@
       statusEl.innerHTML = `<div class="status-pill success">Connected: ${(data.waba && data.waba.display_name) || phone_number_id}</div>`;
       document.getElementById('step3-next-btn').hidden = false;
     } catch (err) {
-      // Expected failure mode in this dev environment: 502 because
-      // META_APP_ID/META_APP_SECRET aren't set for a real Meta app.
-      statusEl.innerHTML = `<div class="status-pill error">${(err.body && err.body.error) || err.message}${err.body && err.body.hint ? ` — ${err.body.hint}` : ''}</div>`;
+      // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason in
+      // body.detail, with a generic body.error as the top-level summary (see
+      // that route's catch block) — this used to show only the generic
+      // string, so a real rejection (e.g. the new missing-phone_number_id
+      // case, 2026-09-05) read as a content-free "WhatsApp connection
+      // failed" with no way to tell what actually happened. Preferring
+      // body.detail surfaces the actual reason instead.
+      statusEl.innerHTML = `<div class="status-pill error">${(err.body && (err.body.detail || err.body.error)) || err.message}${err.body && err.body.hint ? ` — ${err.body.hint}` : ''}</div>`;
     }
   }
 
