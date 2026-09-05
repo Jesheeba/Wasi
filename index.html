@@ -1924,11 +1924,21 @@
        (app.js) can call the exact same functions the server checks at
        submit time, not a hand-duplicated copy. Must load before app.js. -->
   <script src="/templateParams.js"></script>
-  <script src="/embeddedSignup.js"></script>
+  <!-- Cache-busting query string, added 2026-09-05 — embeddedSignup.js had
+       NONE at all until a real deploy served stale (pre-fix) code to a real
+       client despite a plain refresh: it's served via a bare res.sendFile()
+       (server/src/app.js) with no maxAge, so caching behavior anywhere
+       between the browser and this app (browser heuristics, an intermediate
+       proxy/CDN cache) is outside this app's control unless the URL itself
+       changes. A query-string bump is the only cache-busting mechanism that
+       works regardless of what's caching it, since it's a categorically
+       different URL, not a conditional-request negotiation. Bump the value
+       whenever embeddedSignup.js changes — same discipline as app.js below. -->
+  <script src="/embeddedSignup.js?v=20260905a"></script>
   <!-- Cache-busting query string — this file has been edited many times in a
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260901a"></script>
+  <script src="app.js?v=20260905a"></script>
 </body>
 </html>

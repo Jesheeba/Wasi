@@ -187,7 +187,12 @@
     </main>
   </div>
 
-  <script src="/embeddedSignup.js"></script>
-  <script src="/marketing/signup.js"></script>
+  <!-- Cache-busting query strings, added 2026-09-05 — see index.html's
+       identical comment on its own embeddedSignup.js tag for the full
+       reasoning (a real deploy served stale code to a real client despite a
+       plain refresh; neither file had ANY cache-busting before this). Bump
+       both values whenever the corresponding file changes. -->
+  <script src="/embeddedSignup.js?v=20260905a"></script>
+  <script src="/marketing/signup.js?v=20260905a"></script>
 </body>
 </html>
