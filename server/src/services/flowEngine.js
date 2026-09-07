@@ -190,13 +190,32 @@ async function executeNode(db, clientId, contact, chat, node) {
 // surfaces as a normal 'stalled' state via runToRest's catch, not a crash.
 async function executeSendTemplate(db, clientId, contact, chat, node) {
   const template = await messageTemplatesRepo.findByNameAndClient(db, clientId, node.config.templateName);
-  const templateComponents = template
-    ? buildTemplateComponents(template, resolveParamValues(node.config.paramMappings, contact))
-    : [];
+  // Real bug, fixed (same fix as apiV1Messages.js/broadcastRunner.js): this
+  // used to prefer node.config.templateLanguage, falling back to a
+  // hardcoded 'en_US' — but no flow-builder UI (root app or the standalone
+  // flow-editor) has ever written templateLanguage into a node's config
+  // (confirmed by reading both editors' Send Template node config
+  // builders), so the fallback fired unconditionally in every real flow,
+  // same silent-failure class a read-only production check confirmed for
+  // Sirah Digital and Wasi Demo Client's non-en_US templates. `template`
+  // is already fetched right above for templateComponents — its real
+  // `language` column is what should have been used all along, not a
+  // config field nothing ever populates.
+  if (!template) {
+    // No local row at all (e.g. the template was deleted after this flow
+    // was built) — there is no reasonable language to guess, and sending
+    // one anyway would just reproduce the exact silent-failure class this
+    // fix closes. Throwing here surfaces as a real, clear 'stalled' state
+    // via runToRest's existing catch (same mechanism this function's own
+    // header comment already documents for an unmapped-param send Meta
+    // rejects), not a crash — better than a vague Meta-side rejection later.
+    throw new Error(`Template "${node.config.templateName}" not found locally — cannot determine its real approved language to send correctly.`);
+  }
+  const templateComponents = buildTemplateComponents(template, resolveParamValues(node.config.paramMappings, contact));
   await messagingService.sendChatMessage(db, clientId, chat, {
     type: 'template',
     templateName: node.config.templateName,
-    templateLanguage: node.config.templateLanguage || 'en_US',
+    templateLanguage: template.language,
     templateComponents,
     headerMediaAssetId: node.config.headerMediaAssetId,
   });

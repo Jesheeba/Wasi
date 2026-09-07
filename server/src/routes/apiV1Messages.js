@@ -11,6 +11,7 @@ const { Router } = require('express');
 const { pool } = require('../db/pool');
 const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const messagingService = require('../services/messagingService');
 const metaClient = require('../utils/metaClient');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -51,12 +52,34 @@ router.post('/', asyncHandler(async (req, res) => {
   const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone: data.to });
   const chat = await chatsRepo.findOrCreateByContact(pool, req.clientId, contact);
 
+  // Real bug, fixed: this used to hardcode 'en_US' for every template send
+  // regardless of what language the template was actually approved under —
+  // Meta rejects a send whose language doesn't match the approved
+  // (name, language) pair, so any client with a non-en_US template (e.g.
+  // plain 'en', or any other locale) had every Hub API template send
+  // silently fail. The real approved language lives on the local
+  // message_templates row (synced from Meta) — same lookup
+  // routes/broadcasts.js already uses for this exact purpose. If no local
+  // row exists, this fails clearly (400) rather than guessing a language
+  // and risking the identical class of silent Meta rejection this fix is
+  // closing — a client with a missing/unsynced template should sync it
+  // first (POST /api/templates/sync), not have this endpoint guess for them.
+  let templateLanguage;
+  if (data.type === 'template') {
+    const template = await messageTemplatesRepo.findByNameAndClient(pool, req.clientId, data.template);
+    if (!template) {
+      return sendApiError(res, 404, 'template_not_found',
+        `No local record of template "${data.template}" — sync templates (POST /api/templates/sync) so its real approved language can be resolved, then retry.`);
+    }
+    templateLanguage = template.language;
+  }
+
   try {
     const message = await messagingService.sendChatMessage(pool, req.clientId, chat, {
       type: data.type,
       body: data.body,
       templateName: data.template,
-      templateLanguage: 'en_US',
+      templateLanguage,
       templateComponents: data.type === 'template' ? metaClient.buildNamedBodyComponents(data.params) : [],
       headerMediaUrl: data.headerMediaUrl,
       // interactive (type: 'interactive') only — buttons routes through

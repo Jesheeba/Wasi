@@ -63,6 +63,32 @@ async function runWithConcurrency(items, limit, worker) {
 }
 
 async function sendOneRecipient(broadcast, recipient, template) {
+  // Real bug, fixed (same fix as apiV1Messages.js): this used to hardcode
+  // templateLanguage: 'en_US' for every campaign send regardless of what
+  // language the template was actually approved under — confirmed live via
+  // a read-only production check that Sirah Digital and Wasi Demo Client
+  // both have an 'en'-language approved template, meaning every broadcast
+  // against either has been silently failing against real Meta
+  // (error 132001, "template name does not exist in the translation").
+  // `template` is already fetched once per batch by processBroadcast
+  // (messageTemplatesRepo.findByNameAndClient) — this just uses its real
+  // `language` column instead of guessing.
+  //
+  // template is null when this template has no local row at all (deleted
+  // locally between broadcast creation and send time, the same edge case
+  // the pre-existing templateComponents check already handled). Unlike
+  // that case — which still attempts a best-effort send with no params,
+  // an existing tradeoff this fix doesn't revisit — there is no reasonable
+  // language to guess here: sending with a wrong one just reproduces the
+  // exact silent-failure class this fix closes, so this fails the
+  // recipient immediately with a clear local reason instead of attempting
+  // a send that would fail against Meta anyway, less specifically and
+  // slower (a real round trip).
+  if (!template) {
+    await broadcastRecipientsRepo.markFailed(pool, recipient.id, 'Template not found locally — cannot determine its real approved language to send correctly.');
+    return;
+  }
+
   const contact = {
     id: recipient.contact_id,
     name: recipient.contact_name,
@@ -71,18 +97,11 @@ async function sendOneRecipient(broadcast, recipient, template) {
   };
   try {
     const chat = await chatsRepo.findOrCreateByContact(pool, broadcast.client_id, contact);
-    // template is null when this template has no local row (see
-    // routes/broadcasts.js's requiredParamNames comment — param validation
-    // is skipped in that case, same reasoning applies here: nothing to
-    // resolve components against, so send with none, same as before this
-    // fix for that one edge case).
-    const templateComponents = template
-      ? buildTemplateComponents(template, resolveParamValues(broadcast.param_mappings, contact))
-      : [];
+    const templateComponents = buildTemplateComponents(template, resolveParamValues(broadcast.param_mappings, contact));
     const message = await messagingService.sendChatMessage(pool, broadcast.client_id, chat, {
       type: 'template',
       templateName: broadcast.template_name,
-      templateLanguage: 'en_US',
+      templateLanguage: template.language,
       templateComponents,
       headerMediaAssetId: broadcast.header_media_asset_id,
     });
