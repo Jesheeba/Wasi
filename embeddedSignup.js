@@ -170,6 +170,22 @@
           window.FB.login((response) => {
             const elapsedMs = Date.now() - connectStartedAt;
             if (!response?.authResponse?.code) {
+              // Found live 2026-09-07 (see CLAUDE.md Known Gaps): with
+              // response_type: 'code' genuinely honored, authResponse should
+              // contain ONLY { code }. accessToken/userID/expiresIn is the
+              // shape of a PLAIN Facebook Login response — getting that shape
+              // back means FB.login() short-circuited on a cached fbsr_
+              // <APP_ID> cookie (set on THIS site's own domain, survives a
+              // facebook.com logout) before ever reaching the embedded-signup
+              // dialog. auth_type: 'reauthenticate' below is meant to prevent
+              // this; this check exists so a future occurrence — e.g. a
+              // browser where reauthenticate doesn't hold — is named
+              // explicitly in the log instead of silently falling into the
+              // same generic message a real cancelled/failed attempt gets.
+              if (response?.authResponse?.accessToken) {
+                console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with a CACHED-SESSION SHORT-CIRCUIT — accessToken present but no code, meaning auth_type: reauthenticate did not force a fresh dialog in this browser. response:', JSON.stringify(response));
+                return reject(new Error('WhatsApp connection could not start a fresh signup — your browser reused a cached Facebook session instead of opening the dialog. Try again in a private/incognito window, or clear this site\'s cookies for Facebook, then retry.'));
+              }
               console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with NO code — response:', JSON.stringify(response));
               return reject(new Error('WhatsApp connection was not completed.'));
             }
@@ -179,6 +195,18 @@
             config_id: configId,
             response_type: 'code',
             override_default_response_type: true,
+            // Found live 2026-09-07: without this, FB.login() can resolve
+            // immediately from a cached fbsr_<APP_ID> cookie on THIS site's
+            // own domain (set by a prior successful login) rather than
+            // opening the signup dialog — reproduced twice, including after
+            // fully logging out of facebook.com itself, which ruled out a
+            // live Facebook session and confirmed it's this site-local
+            // cache. Not in Meta's own Embedded Signup example code or docs
+            // (checked directly, not assumed) — auth_type is a general FB
+            // Login SDK option whose documented purpose is forcing the
+            // dialog to show even when an existing session/cache would
+            // otherwise resolve it. See CLAUDE.md Known Gaps.
+            auth_type: 'reauthenticate',
             // featureType enables the Coexistence sub-flow (business keeps
             // using the WhatsApp Business app on their phone; Meta syncs
             // history to the Cloud API connection instead of migrating the
