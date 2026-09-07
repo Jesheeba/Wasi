@@ -138,9 +138,18 @@ async function debugToken(inputToken) {
 // server-side discovery once a candidate WABA id is known (from
 // debugToken's granular_scopes above). Uses the ordinary per-client token,
 // unlike debugToken itself.
+// is_on_biz_app/platform_type added 2026-09-07 (see CLAUDE.md Known Gaps) —
+// Meta's Coexistence doc specifically calls these out for confirming which
+// number under a WABA is the one linked via the WhatsApp Business app,
+// needed so wabaConnectionService.js's discovery can auto-resolve a
+// multi-number WABA to the right candidate instead of always deferring to
+// manual resolution the moment there's more than one. Explicit `fields`
+// REPLACES the default field set on this endpoint, not adds to it — the
+// pre-existing default fields are listed out alongside the two new ones so
+// nothing already relied on (display name, quality rating) is silently lost.
 async function listPhoneNumbers(wabaId, accessToken) {
-  const data = await graphFetch(`/${wabaId}/phone_numbers`, { accessToken });
-  return data.data || []; // [{ id, display_phone_number, verified_name, quality_rating }, ...]
+  const data = await graphFetch(`/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type`, { accessToken });
+  return data.data || []; // [{ id, display_phone_number, verified_name, quality_rating, is_on_biz_app, platform_type }, ...]
 }
 
 async function subscribeAppToWaba(wabaId, accessToken) {

@@ -101,6 +101,57 @@ test('discovery: resolves a single WABA and phone number when the popup supplied
   assert.equal(rows[0].status, 'connected');
 });
 
+test('discovery: multiple phone numbers, exactly one is_on_biz_app, auto-resolves to it', async () => {
+  // Added 2026-09-07 (see CLAUDE.md Known Gaps) — a WABA with more than one
+  // number used to always defer to manual resolution; is_on_biz_app is
+  // Meta's own documented signal for the Coexistence-connected number, so a
+  // single unambiguous match should now resolve automatically.
+  stubMetaClient({
+    debugToken: async () => ({ granular_scopes: [{ scope: 'whatsapp_business_management', target_ids: ['waba-multi'] }] }),
+    listPhoneNumbers: async () => [
+      { id: 'phone-not-biz-app', display_phone_number: '+1 555 0111', is_on_biz_app: false },
+      { id: 'phone-is-biz-app', display_phone_number: '+1 555 0122', is_on_biz_app: true },
+    ],
+  });
+
+  const res = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
+    method: 'POST',
+    headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: 'fake' }),
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.connected, true);
+
+  const { rows } = await pool.query('select waba_id, phone_number_id, status from wabas where client_id = $1', [testClientId]);
+  assert.equal(rows[0].waba_id, 'waba-multi');
+  assert.equal(rows[0].phone_number_id, 'phone-is-biz-app');
+  assert.equal(rows[0].status, 'connected');
+});
+
+test('discovery: multiple phone numbers, none (or more than one) is_on_biz_app, still defers to manual resolution', async () => {
+  stubMetaClient({
+    debugToken: async () => ({ granular_scopes: [{ scope: 'whatsapp_business_management', target_ids: ['waba-multi-ambiguous'] }] }),
+    listPhoneNumbers: async () => [
+      { id: 'phone-ambiguous-1', display_phone_number: '+1 555 0133', is_on_biz_app: false },
+      { id: 'phone-ambiguous-2', display_phone_number: '+1 555 0144', is_on_biz_app: false },
+    ],
+  });
+
+  const res = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
+    method: 'POST',
+    headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: 'fake' }),
+  });
+  assert.equal(res.status, 409);
+  const data = await res.json();
+  assert.equal(data.code, 'needs_manual_resolution');
+
+  const { rows } = await pool.query('select status, connect_diagnostics from wabas where client_id = $1', [testClientId]);
+  assert.equal(rows[0].status, 'needs_manual_resolution');
+  assert.equal(rows[0].connect_diagnostics.reason, 'multiple_phone_numbers');
+});
+
 test('discovery: multiple WABAs records needs_manual_resolution, does not guess', async () => {
   stubMetaClient({
     debugToken: async () => ({ granular_scopes: [{ scope: 'whatsapp_business_management', target_ids: ['waba-A', 'waba-B'] }] }),
@@ -120,8 +171,13 @@ test('discovery: multiple WABAs records needs_manual_resolution, does not guess'
   assert.equal(rows[0].connect_diagnostics.reason, 'multiple_wabas');
   assert.deepEqual(rows[0].connect_diagnostics.wabaTargetIds, ['waba-A', 'waba-B']);
 
+  // Scoped to this test's own scenario (target ilike '%multiple_wabas%'),
+  // not just actor_id — this file's shared disposable test client now also
+  // produces a 'multiple_phone_numbers' needs_manual_resolution audit row
+  // in the still-defers test above; an unscoped count here would double-
+  // count across tests rather than verifying THIS scenario was audited.
   const { rows: audit } = await pool.query(
-    `select action from audit_log where actor_id = $1 and action = 'whatsapp_connect_needs_manual_resolution'`,
+    `select action from audit_log where actor_id = $1 and action = 'whatsapp_connect_needs_manual_resolution' and target ilike '%multiple_wabas%'`,
     [testClientId]
   );
   assert.equal(audit.length, 1, 'the ambiguity must be audited, not just recorded silently');

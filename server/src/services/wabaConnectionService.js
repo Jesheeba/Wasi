@@ -60,12 +60,31 @@ async function discoverWabaAndPhoneNumber({ accessToken, knownWabaId }) {
 
   const phoneNumbers = await metaClient.listPhoneNumbers(wabaId, accessToken);
   diagnostics.wabaId = wabaId;
-  diagnostics.candidatePhoneNumbers = phoneNumbers.map((p) => ({ id: p.id, display_phone_number: p.display_phone_number }));
+  diagnostics.candidatePhoneNumbers = phoneNumbers.map((p) => ({
+    id: p.id,
+    display_phone_number: p.display_phone_number,
+    is_on_biz_app: p.is_on_biz_app,
+    platform_type: p.platform_type,
+  }));
 
   if (phoneNumbers.length === 0) {
     throw new Error(`No phone numbers are registered under WhatsApp Business Account ${wabaId} yet.`);
   }
   if (phoneNumbers.length > 1) {
+    // Added 2026-09-07 (see CLAUDE.md Known Gaps): a WABA with more than one
+    // number used to always defer to manual resolution, even when exactly
+    // one of them is unambiguously the Coexistence-connected one —
+    // is_on_biz_app is Meta's own documented signal for "this number is
+    // linked via the WhatsApp Business app." Only auto-resolves on a CLEAR
+    // single match; zero or more than one still defers, same as before —
+    // this must never guess between two genuinely ambiguous candidates
+    // (see this function's own top comment on why guessing is worse than
+    // surfacing it).
+    const onBizApp = phoneNumbers.filter((p) => p.is_on_biz_app === true);
+    if (onBizApp.length === 1) {
+      diagnostics.autoResolvedVia = 'is_on_biz_app';
+      return { wabaId, phoneNumberId: onBizApp[0].id, diagnostics };
+    }
     diagnostics.reason = 'multiple_phone_numbers';
     return { needsManualResolution: true, reason: 'multiple_phone_numbers', wabaId, diagnostics };
   }

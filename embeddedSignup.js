@@ -6,39 +6,40 @@
 //
 // 2026-09-05: 3 real clients lost their entire Coexistence signup attempt
 // with zero trace anywhere in Wasi (see CLAUDE.md Known Gaps for the full
-// investigation). Root cause confirmed against Meta's current published docs
-// (developers.facebook.com/documentation/business-messaging/whatsapp/
-// embedded-signup/onboarding-business-app-users/), not assumed: Meta spreads
-// a Coexistence completion's identifying fields across MULTIPLE postMessage
-// events — the terminal FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING event's own
-// `data` only ever carries `waba_id`, never `phone_number_id` — but this
-// file used to keep a single `lastMessage` variable, overwritten on every
-// event, so the terminal message always clobbered an earlier session-log
-// message that actually had the phone_number_id. Fixed by accumulating
-// fields across every message instead of overwriting (see `sessionData`
-// below). Diagnostic console logging is kept in deliberately, on top of the
-// fix: this merge behavior is built from Meta's documented shape, not yet
-// confirmed against a real live Coexistence attempt — do not remove the
-// logging until that's verified.
+// investigation). Original root cause theory: Meta spreads a Coexistence
+// completion's identifying fields across MULTIPLE postMessage events, with
+// an earlier "session-log" message carrying phone_number_id ahead of the
+// terminal FINISH event. Fixed at the time by accumulating fields across
+// every message instead of overwriting (see `sessionData` below), rather
+// than keeping a single `lastMessage` that the terminal event would clobber.
+//
+// CORRECTED 2026-09-07 (see CLAUDE.md Known Gaps — this session's Embedded
+// Signup v4 migration): re-verified directly against Meta's CURRENT
+// Coexistence doc and found the original theory was never quite right —
+// there is no session-log event, and no message-spreading. Under v4,
+// FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING is the ONLY event this flow ever
+// fires, and its `data` deliberately carries `waba_id` alone —
+// `phone_number_id` is never sent via postMessage at all, by design (the
+// number is already registered on the WhatsApp Business app; Meta's own
+// docs say to fetch it server-side afterward via a follow-up API call, not
+// wait for it here). `sessionData`'s accumulate-never-overwrite behavior is
+// left in as harmless, still-correct defensive code — nothing in the
+// current docs rules out a future multi-message shape — but the mechanism
+// this app now actually depends on for phone_number_id is server-side
+// discovery (see `wabaConnectionService.js`, PLAN.md item 25), not anything
+// arriving through this listener.
 (function () {
   let sdkReady = false;
 
-  // Meta spreads a Coexistence completion's identifying fields across
-  // MULTIPLE postMessage events, not one: sessionInfoVersion: '3' (below)
-  // makes Meta fire session-log messages carrying phone_number_id as the
-  // user progresses through the flow, but the terminal
-  // FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING event's own `data` only ever
-  // carries `waba_id` (confirmed 2026-09-05 against Meta's current published
-  // docs — see CLAUDE.md Known Gaps for the investigation). The previous
-  // version of this file kept a single `lastMessage` variable, overwritten on
-  // every event, so the terminal message always clobbered an earlier one that
-  // had the phone_number_id — silently losing it on every real Coexistence
-  // completion. `sessionData` accumulates every message's `data` fields
-  // instead (a later message's fields augment, never clear, the running
-  // total); `terminalEvent` separately tracks the most recent
-  // FINISH/CANCEL/ERROR event name, since that's what actually decides when
-  // to resolve/reject — it's a different concern from which fields have
-  // arrived so far.
+  // Corrected 2026-09-07 (see top-of-file comment): FINISH_WHATSAPP_BUSINESS_
+  // APP_ONBOARDING is the only event this flow fires, carrying `waba_id`
+  // alone — there's no earlier session-log message to rescue anything from.
+  // `sessionData` still accumulates every message's `data` fields (a later
+  // message's fields augment, never clear, the running total) as harmless
+  // defensive code, not because a real message sequence needs it today.
+  // `terminalEvent` separately tracks the most recent FINISH/CANCEL/ERROR
+  // event name, since that's what actually decides when to resolve/reject —
+  // a different concern from which fields have arrived so far.
   let sessionData = {};
   let terminalEvent = null;
 
@@ -71,7 +72,15 @@
     return new Promise((resolve, reject) => {
       if (sdkReady && window.FB) return resolve();
       window.fbAsyncInit = function fbAsyncInit() {
-        window.FB.init({ appId, autoLogAppEvents: true, xfbml: true, version: 'v20.0' });
+        // Bumped 2026-09-07 from v20.0 — set the same day as the rest of
+        // this file's original Embedded Signup setup (2026-08-17) and never
+        // revisited since. Meta's current implementation doc explicitly
+        // says to set this to "the latest API version" and shows v25.0 as
+        // that value today; a stale version here was found to be one of
+        // three concrete gaps (alongside the config_id and sessionInfoVersion
+        // below) between this integration and Meta's current v4 docs — see
+        // CLAUDE.md Known Gaps.
+        window.FB.init({ appId, autoLogAppEvents: true, xfbml: true, version: 'v25.0' });
         sdkReady = true;
         resolve();
       };
@@ -278,8 +287,28 @@
             // number off the app). An empty string here forces the plain
             // migration flow for everyone, even businesses who need to keep
             // their app — see FINISH_* handling below for why the two paths
-            // can't be told apart after the fact.
-            extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+            // can't be told apart after the fact. Meta's docs confirm
+            // 'coexistence' itself (an earlier, now-invalid value seen in
+            // some third-party examples) is no longer accepted — this value
+            // is current, unchanged.
+            //
+            // sessionInfoVersion DROPPED 2026-09-07 — re-verified directly
+            // against Meta's current Coexistence doc (searched the live page
+            // text specifically) and it appears nowhere anymore, in prose or
+            // example code; Meta's general implementation doc's own current
+            // FB.login() example only ever shows `extras: { setup: {} }`.
+            // This was one of three concrete gaps found between this
+            // integration (built 2026-08-17, unrevisited since) and Meta's
+            // current v4 docs — see CLAUDE.md Known Gaps. Its removal does
+            // NOT reintroduce the original 2026-09-05 phone_number_id loss:
+            // that fix's actual justification no longer holds either (see
+            // this file's top-of-file comment) — under v4,
+            // phone_number_id is never expected to arrive here at all, by
+            // design; `wabaConnectionService.js`'s server-side discovery
+            // (PLAN.md item 25) is Meta's own documented mechanism for it,
+            // already built and already triggered whenever this flow
+            // resolves without one (see routes/onboarding.js).
+            extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding' },
           });
         });
       } catch (codeErr) {
