@@ -73,7 +73,43 @@ function createApp() {
   // inline block first — a separate, riskier follow-up. Every other helmet
   // default (HSTS, X-Content-Type-Options, X-Frame-Options, X-Powered-By
   // removal, etc.) is safe to enable immediately.
-  app.use(helmet({ contentSecurityPolicy: false }));
+  //
+  // crossOriginOpenerPolicy overridden 2026-09-07 — DO NOT REMOVE OR REVERT
+  // TO HELMET'S DEFAULT ('same-origin'). This is the confirmed root cause of
+  // a 4-day WhatsApp Embedded Signup outage (12+ real onboarding attempts
+  // across multiple clients/browsers/machines, escalated to Meta support,
+  // who confirmed our app config was correct — the actual bug was here the
+  // whole time). This line was introduced 2026-08-29 (git log -S "helmet(" --
+  // exactly one commit), squarely between the last confirmed successful
+  // Coexistence connection (2026-08-24) and the first confirmed failure
+  // (early September) — closing the "what changed" question definitively.
+  // Mechanism, confirmed against MDN's own COOP reference: with the
+  // default 'same-origin', a cross-origin popup this page opens (Meta's
+  // FB.login() dialog, window.open() to facebook.com) is placed in a NEW
+  // browsing context group — window.opener is severed from the popup's own
+  // side, silently blocking every postMessage the popup tries to send back
+  // (window.opener.postMessage(...) has nothing to send to). This explains
+  // every symptom that made this look like a Meta-side issue: the popup
+  // itself renders and completes normally (its own UI never touches
+  // window.opener), while zero WA_EMBEDDED_SIGNUP postMessages ever arrive,
+  // on every browser and machine, identically, because it's a header on
+  // OUR origin, not anything account- or browser-specific.
+  // 'same-origin-allow-popups' is MDN's own documented fix for this exact
+  // class of integration ("when using a cross-origin service for OAuth or
+  // payments") — it keeps this page cross-origin-isolated from things that
+  // open IT, while still letting it retain window.opener with things IT
+  // opens, which is exactly what Embedded Signup's popup needs.
+  // Cross-Origin-Embedder-Policy and Cross-Origin-Resource-Policy were
+  // checked and ruled out as contributing factors: COEP isn't sent by
+  // helmet's defaults at all (confirmed via live response headers, not
+  // assumed), and CORP governs only whether OTHER origins can load THIS
+  // origin's subresources (images/scripts/fetches) — it has no effect on
+  // window.open() or postMessage (confirmed against MDN's CORP reference)
+  // — so leaving CORP at its default here is unrelated and safe.
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  }));
   app.use(cors({
     origin(origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
