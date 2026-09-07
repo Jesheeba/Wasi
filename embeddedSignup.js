@@ -256,8 +256,20 @@
               // this callback again.
               console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with NO code — status:', JSON.stringify(response?.status), '— NOT rejecting; waiting for a postMessage or the hard timeout instead. response:', JSON.stringify(response));
               if (response?.status === 'not_authorized' && onProgress) {
+                // BSP-conflict wording added 2026-09-07 — a real client
+                // (TNPSC Mentors) hit this exact not_authorized case for a
+                // reason unrelated to admin access at all: Meta support
+                // confirmed the WABA was still managed by another BSP, which
+                // fails Coexistence's eligibility check silently. Named here
+                // alongside the existing admin-access note so the next
+                // client in this situation gets pointed at the fix
+                // immediately instead of costing a support escalation —
+                // shared by both app.js and marketing/signup.js, since both
+                // just display whatever onProgress hands them.
                 onProgress(
-                  'Facebook says this account isn\'t authorized to connect this WhatsApp number — this usually means the Facebook account being used isn\'t a full Admin on the Meta Business Manager that owns the number. If you\'re still in the popup, an Admin account may be needed to finish. Still waiting in case this resolves…'
+                  'Facebook says this account isn\'t authorized to connect this WhatsApp number — this usually means the Facebook account being used isn\'t a full Admin on the Meta Business Manager that owns the number. If you\'re still in the popup, an Admin account may be needed to finish. ' +
+                  'We couldn\'t complete the connection. If this number was previously used with another WhatsApp API provider (AiSensy, Wati, Interakt, Gupshup or similar), that provider needs to release it first — the client can check under Business Settings → WhatsApp Accounts → Partners in their Meta Business Manager and remove any existing provider, then try again. ' +
+                  'Still waiting in case this resolves…'
                 );
               }
               return;
