@@ -1,15 +1,14 @@
 const { Router } = require('express');
 const { ZodError } = require('zod');
-const crypto = require('crypto');
 const multer = require('multer');
 const clientsRepo = require('../repositories/clientsRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const metaClient = require('../utils/metaClient');
-const templateSyncService = require('../services/templateSyncService');
+const { discoverWabaAndPhoneNumber, completeWabaConnection } = require('../services/wabaConnectionService');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { wabaConnectSchema, businessProfileUpdateSchema } = require('../utils/validate');
+const { wabaConnectSchema, wabaConnectIncompleteSchema, businessProfileUpdateSchema } = require('../utils/validate');
 
 const router = Router();
 
@@ -174,83 +173,95 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     // validation failure on this route now guarantees a write.
     ({ code, waba_id, phone_number_id, via_coexistence } = wabaConnectSchema.parse(req.body));
 
-    // phone_number_id can be undefined here (see wabaConnectSchema's
-    // comment) — `|| null` so a real DB null lands in the column instead of
-    // pg rejecting an undefined bound parameter. This write must succeed
-    // regardless of whether phone_number_id showed up, so a genuine attempt
-    // is never invisible even before the explicit check below runs.
+    // waba_id/phone_number_id can both be undefined here (see
+    // wabaConnectSchema's comment) — `|| null` so a real DB null lands in
+    // the column instead of pg rejecting an undefined bound parameter. This
+    // write must succeed regardless of whether either showed up, so a
+    // genuine attempt is never invisible even before discovery runs below.
     await wabasRepo.upsertForClient(clientId, {
-      waba_id,
+      waba_id: waba_id || null,
       phone_number_id: phone_number_id || null,
       status: 'connecting',
     });
 
-    // Found 2026-09-05 (see wabaConnectSchema's comment + CLAUDE.md Known
-    // Gaps): Meta's real Coexistence FINISH event doesn't always deliver
-    // phone_number_id to the frontend. Failing here — inside the try, so it
-    // hits the same catch block as every other connect failure below — means
-    // this now gets a real wabas.status='failed' row, a real
-    // whatsapp_connect_failed audit_log entry with this exact message, and a
-    // specific 502 back to the client, instead of the silent pre-write Zod
-    // rejection this class of failure used to produce.
-    if (!phone_number_id) {
+    const shortLivedToken = await metaClient.exchangeCodeForToken(code);
+    const accessToken = await metaClient.exchangeForLongLivedToken(shortLivedToken);
+
+    // Server-side discovery (PLAN.md item 25, Part A) — only runs when the
+    // popup didn't already supply both ids; when it did, this whole block
+    // is skipped and behavior is byte-for-byte unchanged from before this
+    // item. Wrapped so a discovery-mechanism failure itself (a transient
+    // debug_token/phone_numbers error) falls back to the existing audited
+    // failure below rather than becoming a new, different crash.
+    if (!waba_id || !phone_number_id) {
+      let discovery;
+      try {
+        discovery = await discoverWabaAndPhoneNumber({ accessToken, knownWabaId: waba_id });
+      } catch (discoveryErr) {
+        console.error('onboarding: server-side discovery failed (falling back to the existing failure path):', discoveryErr.message);
+        discovery = null;
+      }
+
+      if (discovery?.needsManualResolution) {
+        // Distinct status, not lumped into 'failed' — per your explicit
+        // instruction, a recorded ambiguity nobody can see is the same
+        // invisible-failure pattern already hit 4 times. Admin's Client
+        // Detail page (see PLAN.md item 25 Part A) is what makes this
+        // actually visible, not just present in the DB.
+        //
+        // The access token is persisted here too, encrypted — not just the
+        // diagnostics. Without this, admin resolving the ambiguity later
+        // would have nothing to complete the connection with, and the
+        // client would need to redo signup anyway even though Meta already
+        // linked something real. POST /clients/:id/resolve-waba (admin.js)
+        // is what uses this token once a human picks the right candidate.
+        await wabasRepo.upsertForClient(clientId, {
+          waba_id: discovery.wabaId || waba_id || null,
+          status: 'needs_manual_resolution',
+          // Explicit JSON.stringify — pg does NOT auto-serialize a raw JS
+          // object/array for a jsonb column, it applies Postgres-array-
+          // literal serialization instead, which Postgres then rejects as
+          // invalid JSON. This exact mistake (documented in CLAUDE.md) once
+          // wiped the production template-library cache; not repeating it here.
+          connect_diagnostics: JSON.stringify(discovery.diagnostics),
+          access_token_encrypted: encrypt(accessToken),
+        });
+        await auditLogRepo.record({
+          actor_type: 'client',
+          actor_id: clientId,
+          action: 'whatsapp_connect_needs_manual_resolution',
+          target: `${clientId}: ${discovery.reason} — ${JSON.stringify(discovery.diagnostics)}`,
+        });
+        return res.status(409).json({
+          error: 'Your Meta Business account has more than one WhatsApp number or account, and we could not tell which one to connect automatically.',
+          detail: 'Our support team has been notified and will help you finish connecting the right one. No further action is needed from you right now.',
+          code: 'needs_manual_resolution',
+        });
+      }
+
+      if (discovery) {
+        waba_id = discovery.wabaId || waba_id;
+        phone_number_id = discovery.phoneNumberId || phone_number_id;
+      }
+    }
+
+    // Found 2026-09-05, widened 2026-09-07 once discovery above was built:
+    // failing here — inside the try, so it hits the same catch block as
+    // every other connect failure — means this still gets a real
+    // wabas.status='failed' row, a real whatsapp_connect_failed audit_log
+    // entry with this exact message, and a specific 502 back to the client,
+    // instead of ever silently rejecting before the first write the way the
+    // old pre-write Zod validation used to.
+    if (!waba_id || !phone_number_id) {
       throw new Error(
-        `WhatsApp signup finished on Facebook's side, but Meta never sent a phone number ID for this WhatsApp Business Account (waba_id: ${waba_id}). ` +
+        `WhatsApp signup finished on Facebook's side, but Meta never sent a ${!waba_id ? 'WhatsApp Business Account' : 'phone number'} ID, and server-side discovery could not resolve it either (waba_id: ${waba_id || 'unknown'}). ` +
         'This can happen on a Coexistence (QR code) connection — please try connecting again. If it keeps happening, contact support with this exact message.'
       );
     }
 
-    const shortLivedToken = await metaClient.exchangeCodeForToken(code);
-    const accessToken = await metaClient.exchangeForLongLivedToken(shortLivedToken);
-    await metaClient.subscribeAppToWaba(waba_id, accessToken);
-
-    // Coexistence-onboarded numbers are already registered on the WhatsApp
-    // Business app on the owner's phone — calling register-with-PIN again
-    // would re-register a number that's actively in use there. Plain
-    // migration connects still need it: that's how an unregistered number
-    // gets activated on the Cloud API in the first place. Same config_id
-    // serves both flows now, so this must branch per-request, not be
-    // skipped globally.
-    if (!via_coexistence) {
-      const pin = String(crypto.randomInt(100000, 999999));
-      await metaClient.registerPhoneNumber(phone_number_id, accessToken, pin);
-    }
-
-    const details = await metaClient.getPhoneNumberDetails(phone_number_id, accessToken);
-
-    const waba = await wabasRepo.upsertForClient(clientId, {
-      waba_id,
-      phone_number_id,
-      display_name: details.verified_name || null,
-      display_phone_number: details.display_phone_number || null,
-      quality_rating: details.quality_rating || null,
-      access_token_encrypted: encrypt(accessToken),
-      verified_at: new Date().toISOString(),
-      status: 'connected',
+    const { waba, templateSync } = await completeWabaConnection(req.db, clientId, {
+      waba_id, phone_number_id, accessToken, via_coexistence,
     });
-
-    // Pulls in any templates that already exist on this WABA — Embedded
-    // Signup connects an EXISTING number, it doesn't provision a fresh
-    // one, so a client can easily already have approved templates on
-    // Meta the moment they connect. Best-effort: a sync failure here
-    // shouldn't fail the whole connect flow, since the WABA connection
-    // itself already succeeded — see templateSyncService.js.
-    //
-    // This replaces the old auto-created "welcome_message" stub, which
-    // used {{1}} (numbered params — this app's own validator rejects that
-    // format) and was never actually submitted to Meta at all, so every
-    // new client got a permanently pending template that went nowhere.
-    let templateSync = { inserted: 0, updated: 0, orphaned: 0 };
-    try {
-      templateSync = await templateSyncService.syncTemplates(req.db, clientId);
-    } catch (err) {
-      console.error('onboarding: template sync after connect failed (non-fatal):', err.message);
-    }
-
-    const client = await clientsRepo.findById(req.db, clientId);
-    if (client && client.status === 'payment_confirmed') {
-      await clientsRepo.update(req.db, clientId, { status: 'active' });
-    }
 
     await auditLogRepo.record({
       actor_type: 'client',
@@ -296,6 +307,31 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       hint: isValidationError ? undefined : 'This usually means META_APP_ID/META_APP_SECRET/META_CONFIG_ID are not configured for a real Meta app yet.',
     });
   }
+}));
+
+// PLAN.md item 25, Part B — records the "Meta linked it, we never got the
+// code" state embeddedSignup.js's connect() now distinguishes (see that
+// file's incompleteErr handling). Deliberately takes no `code` field at
+// all — there isn't one to send, and none is accepted, so this route is
+// structurally impossible to confuse with a real connect attempt. Nothing
+// downstream of this (token exchange, WABA subscription, phone
+// registration) can run without a code, so this can only ever record the
+// state, never complete a connection.
+router.post('/whatsapp/connect-incomplete', asyncHandler(async (req, res) => {
+  const clientId = req.clientId;
+  const { waba_id } = wabaConnectIncompleteSchema.parse(req.body);
+
+  await wabasRepo.upsertForClient(clientId, {
+    waba_id,
+    status: 'incomplete_meta_linked',
+  });
+  await auditLogRepo.record({
+    actor_type: 'client',
+    actor_id: clientId,
+    action: 'whatsapp_connect_incomplete',
+    target: `${clientId}: waba_id ${waba_id}`,
+  });
+  res.json({ recorded: true });
 }));
 
 module.exports = router;

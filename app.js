@@ -4376,6 +4376,23 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();
       } catch (err) {
+        // PLAN.md item 25, Part B — embeddedSignup.js marks this specific
+        // race (FINISH arrived, the OAuth code never did) with err.incomplete
+        // instead of a plain rejection. Record it as its own state rather
+        // than showing the same generic failure a real non-attempt would —
+        // Meta really did link the account on its side.
+        if (err.incomplete) {
+          try {
+            await authFetch('/api/onboarding/whatsapp/connect-incomplete', {
+              method: 'POST',
+              body: JSON.stringify({ waba_id: err.waba_id }),
+            });
+          } catch (recordErr) {
+            console.error('Failed to record incomplete WhatsApp connection:', recordErr.message);
+          }
+          showToast(err.message);
+          return;
+        }
         // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason
         // in body.detail, with a generic body.error as the top-level
         // summary (see that route's catch block) — authFetch's err.message

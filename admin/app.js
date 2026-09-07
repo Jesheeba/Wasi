@@ -737,6 +737,54 @@ const HUB_FORWARD_EVENTS = ['message.received', 'message.status', 'message_templ
 // on `waba` itself and never written into a DOM attribute, so it can't leak
 // via inspectable HTML and disappears the moment the user navigates away or
 // the view re-renders from a plain GET (which never carries the raw value).
+// PLAN.md item 25, Part A — renders the needs_manual_resolution state with
+// a REAL picker, not just a status badge. Two sub-states share this one
+// function since they're the same underlying problem (Meta returned more
+// than one of something, discovery can't guess which) at two different
+// points in the chain: connect_diagnostics.reason distinguishes them.
+function renderWabaResolutionHtml(waba) {
+  const diag = waba.connect_diagnostics || {};
+  if (diag.reason === 'multiple_wabas') {
+    const options = (diag.wabaTargetIds || [])
+      .map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`)
+      .join('');
+    return `
+      <div class="empty-state" style="color:#B45309; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:0.6rem 0.75rem; margin-bottom:0.6rem;">
+        <strong>This Meta Business account has more than one WhatsApp Business Account.</strong> Server-side discovery couldn't tell which one the client meant to connect — pick one below.
+      </div>
+      <select id="resolve-waba-select" class="form-input" style="margin-bottom:0.5rem;">
+        <option value="">Select a WhatsApp Business Account…</option>
+        ${options}
+      </select>
+      <div id="resolve-waba-result"></div>
+      <button class="btn-primary btn-sm" id="resolve-waba-btn" style="width:100%; justify-content:center;" disabled>
+        <i data-lucide="check" style="width:14px;"></i> Look Up Phone Numbers
+      </button>
+    `;
+  }
+  if (diag.reason === 'multiple_phone_numbers') {
+    const options = (diag.candidatePhoneNumbers || [])
+      .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.display_phone_number || p.id)}</option>`)
+      .join('');
+    return `
+      <div class="empty-state" style="color:#B45309; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:0.6rem 0.75rem; margin-bottom:0.6rem;">
+        <strong>WhatsApp Business Account ${escapeHtml(diag.wabaId || waba.waba_id || 'unknown')} has more than one phone number.</strong> Pick which one the client meant to connect.
+      </div>
+      <select id="resolve-phone-select" class="form-input" style="margin-bottom:0.5rem;">
+        <option value="">Select a phone number…</option>
+        ${options}
+      </select>
+      <div id="resolve-waba-result"></div>
+      <button class="btn-primary btn-sm" id="resolve-waba-btn" data-waba-id="${escapeHtml(diag.wabaId || waba.waba_id || '')}" style="width:100%; justify-content:center;" disabled>
+        <i data-lucide="check" style="width:14px;"></i> Connect This Number
+      </button>
+    `;
+  }
+  // Fallback — should never happen (these two reasons are the only ones
+  // this app produces), but don't render a broken/blank panel if it does.
+  return `<div class="empty-state">This WhatsApp connection needs manual resolution, but the specific reason wasn't recorded. Check connect_diagnostics directly: <code>${escapeHtml(JSON.stringify(diag))}</code></div>`;
+}
+
 function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   const { client, subscription, waba, templates, auditTrail } = detail;
 
@@ -752,7 +800,20 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
     `
     : `<div class="empty-state">No subscription on record for this client.</div>`;
 
-  const wabaHtml = waba
+  // PLAN.md item 25 — two states distinct from both "connected" and "no
+  // WABA at all," each needing its own visible treatment, not lumped into
+  // the generic empty-state. A recorded ambiguity nobody in the admin UI
+  // can see is the same invisible-failure pattern already hit 4 times.
+  const wabaHtml = waba?.status === 'incomplete_meta_linked'
+    ? `
+      <div class="empty-state" style="color:#B45309; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:0.6rem 0.75rem;">
+        <strong>Meta linked this account, but the authorization code never reached us.</strong><br>
+        WABA ID on file: <code>${escapeHtml(waba.waba_id || 'unknown')}</code>. There is nothing to retry from admin — the client needs to reconnect via Settings &gt; WhatsApp in the CRM. If it keeps happening for the same client, that's worth escalating.
+      </div>
+    `
+    : waba?.status === 'needs_manual_resolution'
+    ? renderWabaResolutionHtml(waba)
+    : waba
     ? `
       <div class="detail-row"><span class="detail-row-label">WABA ID</span><span class="detail-row-value">${escapeHtml(waba.waba_id || '—')}</span></div>
       <div class="detail-row"><span class="detail-row-label">Phone Number ID</span><span class="detail-row-value">${escapeHtml(waba.phone_number_id || '—')}</span></div>
@@ -901,11 +962,28 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   });
 
   document.getElementById('status-editor-save-btn').addEventListener('click', () => saveClientStatus(client.id));
-  document.getElementById('retry-provisioning-btn').addEventListener('click', () => retryProvisioning(client.id));
+  // Not rendered for the two needs_manual_resolution/incomplete_meta_linked
+  // states (see renderWabaResolutionHtml/wabaHtml above) — optional-chained
+  // rather than assumed present, unlike the other buttons on this page.
+  document.getElementById('retry-provisioning-btn')?.addEventListener('click', () => retryProvisioning(client.id));
   document.getElementById('delete-client-btn').addEventListener('click', () => confirmDeleteClient(client));
   document.getElementById('reset-client-password-btn').addEventListener('click', () => confirmResetClientPassword(client));
   const hubForwardBtn = document.getElementById('hub-forward-save-btn');
   if (hubForwardBtn) hubForwardBtn.addEventListener('click', () => saveHubForward(client.id));
+
+  // PLAN.md item 25, Part A — the resolve-waba picker. Whichever select is
+  // present (WABA or phone number, never both at once — see
+  // renderWabaResolutionHtml) enables the button once something is chosen;
+  // the button starts disabled so a resolve can't fire against an empty
+  // selection.
+  const resolveWabaBtn = document.getElementById('resolve-waba-btn');
+  if (resolveWabaBtn) {
+    const resolveSelect = document.getElementById('resolve-waba-select') || document.getElementById('resolve-phone-select');
+    resolveSelect?.addEventListener('change', () => {
+      resolveWabaBtn.disabled = !resolveSelect.value;
+    });
+    resolveWabaBtn.addEventListener('click', () => resolveWaba(client.id));
+  }
 
   const copyForwardSecretBtn = document.getElementById('copy-forward-secret-btn');
   if (copyForwardSecretBtn && revealedForwardSecret) {
@@ -1000,6 +1078,51 @@ async function saveClientStatus(clientId) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Save';
+  }
+}
+
+// PLAN.md item 25, Part A — completes a needs_manual_resolution WABA using
+// admin's picked candidate(s). A 409 with the "still ambiguous" shape (the
+// multiple_wabas -> multiple_phone_numbers second round-trip) means the
+// backend already persisted the next step's diagnostics — reload picks up
+// renderWabaResolutionHtml's phone-number picker automatically, no manual
+// DOM patching needed.
+async function resolveWaba(clientId) {
+  const btn = document.getElementById('resolve-waba-btn');
+  const resultEl = document.getElementById('resolve-waba-result');
+  const wabaSelect = document.getElementById('resolve-waba-select');
+  const phoneSelect = document.getElementById('resolve-phone-select');
+  // multiple_wabas state: wabaId comes from the picker itself. Already past
+  // that (multiple_phone_numbers state, only a phone picker is rendered):
+  // wabaId was already resolved server-side and threaded onto the button's
+  // own data attribute by renderWabaResolutionHtml, not re-picked here.
+  const wabaId = wabaSelect ? wabaSelect.value : btn.getAttribute('data-waba-id');
+  const phoneNumberId = phoneSelect ? phoneSelect.value : undefined;
+  if (!wabaId) return;
+
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:14px;"></i> Resolving…';
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const body = phoneNumberId ? { wabaId, phoneNumberId } : { wabaId };
+    await apiFetch(`/api/admin/clients/${clientId}/resolve-waba`, { method: 'POST', body: JSON.stringify(body) });
+    showToast('WhatsApp connection resolved.', 'success');
+    loadClientDetail(clientId);
+  } catch (err) {
+    if (err.status === 401) return;
+    if (err.status === 409) {
+      // Still ambiguous, one level deeper (WABA picked, phone numbers under
+      // it are ambiguous too) — the backend already saved that state.
+      loadClientDetail(clientId);
+      return;
+    }
+    resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.75rem; margin-bottom:0;">${escapeHtml(err.message)}</div>`;
+    showToast('Failed to resolve: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (window.lucide) lucide.createIcons();
   }
 }
 

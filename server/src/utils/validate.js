@@ -93,7 +93,12 @@ const checkoutSchema = z.object({
 
 const wabaConnectSchema = z.object({
   code: z.string().min(1),
-  waba_id: z.string().min(1),
+  // Deliberately optional, not required, widened 2026-09-07 (PLAN.md item
+  // 25, Part A) alongside phone_number_id below — server-side discovery
+  // (routes/onboarding.js's discoverWabaAndPhoneNumber, via Meta's
+  // debug_token/granular_scopes) can resolve a missing waba_id from the
+  // access token itself, the same way it already resolves phone_number_id.
+  waba_id: z.string().min(1).optional(),
   // Deliberately optional, not required — found 2026-09-05: Meta's real
   // Coexistence FINISH event doesn't always deliver phone_number_id to
   // embeddedSignup.js (see that file's header comment and CLAUDE.md Known
@@ -111,6 +116,27 @@ const wabaConnectSchema = z.object({
   // sent, not re-derived here, since nothing else in this payload
   // distinguishes the two paths.
   via_coexistence: z.boolean().optional().default(false),
+});
+
+// PLAN.md item 25, Part B — deliberately has no `code` field at all (and
+// none is accepted if sent): this route only ever runs when embeddedSignup.js
+// has confirmed there isn't one to send, so the schema itself makes it
+// structurally impossible to confuse with a real connect attempt.
+const wabaConnectIncompleteSchema = z.object({
+  waba_id: z.string().min(1),
+});
+
+// PLAN.md item 25, Part A — admin picks a candidate WABA out of the
+// connect_diagnostics a needs_manual_resolution row recorded (admin.js's
+// resolve-waba route). phoneNumberId is optional, not always known yet:
+// when the ambiguity was "multiple WABAs," admin has only picked a WABA so
+// far — phone numbers under it haven't been enumerated. The route
+// enumerates them itself and either completes (exactly one) or returns a
+// fresh needs_manual_resolution response for a second round-trip once
+// admin also picks a phone number.
+const resolveWabaSchema = z.object({
+  wabaId: z.string().min(1),
+  phoneNumberId: z.string().min(1).optional(),
 });
 
 // Partial update, deliberately — every field is optional and the route
@@ -614,6 +640,8 @@ module.exports = {
   resetPasswordSchema,
   checkoutSchema,
   wabaConnectSchema,
+  wabaConnectIncompleteSchema,
+  resolveWabaSchema,
   businessProfileUpdateSchema,
   broadcastCreateSchema,
   contactListCreateSchema,

@@ -14,11 +14,12 @@ const apiKeysRepo = require('../repositories/apiKeysRepo');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
 const metaClient = require('../utils/metaClient');
+const { completeWabaConnection } = require('../services/wabaConnectionService');
 const { decrypt } = require('../utils/encryption');
 const { hashPassword } = require('../utils/auth');
 const { sendEmail } = require('../utils/emailService');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { templateStatusUpdateSchema, ticketStatusUpdateSchema, hubForwardConfigSchema } = require('../utils/validate');
+const { templateStatusUpdateSchema, ticketStatusUpdateSchema, hubForwardConfigSchema, resolveWabaSchema } = require('../utils/validate');
 const { z } = require('zod');
 
 const router = Router();
@@ -104,6 +105,26 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
 router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
+
+  // PLAN.md item 25, Part B/A — these two states are structurally different
+  // from both "never attempted" and "connected": Meta linked *something*
+  // real on its side, but this route's own mechanism (re-pull details for
+  // an already-connected number) can't act on either. Distinct, honest
+  // messages instead of the generic one, which used to read identically for
+  // "never even started" and "Meta actually linked it" — precisely the
+  // invisible-failure pattern this item exists to close.
+  if (waba?.status === 'incomplete_meta_linked') {
+    return res.status(400).json({
+      error: 'Meta linked this account but never handed back an authorization code to this app — there is nothing to retry from admin.',
+      detail: `WABA id on file: ${waba.waba_id || 'unknown'}. The client needs to reconnect via Settings > WhatsApp.`,
+    });
+  }
+  if (waba?.status === 'needs_manual_resolution') {
+    return res.status(400).json({
+      error: 'This connection needs manual resolution (multiple WhatsApp accounts or numbers were found), not a retry.',
+      detail: 'Use "Resolve" on this Client Detail page to pick the correct one.',
+    });
+  }
   if (!waba || !waba.access_token_encrypted) {
     return res.status(400).json({ error: 'No WhatsApp connection to retry — client must complete Embedded Signup first' });
   }
@@ -120,6 +141,94 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
     res.json({ retried: true, waba: maskWaba(updated) });
   } catch (err) {
     res.status(502).json({ error: 'Retry failed', detail: err.message });
+  }
+}));
+
+// --- Resolve a needs_manual_resolution WABA (PLAN.md item 25, Part A) ---
+// The access token from the original discovery attempt was persisted
+// (encrypted) specifically so this doesn't require the client to redo
+// signup — admin picks the correct candidate from connect_diagnostics,
+// this route completes the connection with the SAME completion logic the
+// normal client-facing route uses (wabaConnectionService.completeWabaConnection),
+// just fed admin-chosen ids instead of discovered/popup-supplied ones.
+router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const { wabaId, phoneNumberId } = resolveWabaSchema.parse(req.body);
+
+  const waba = await wabasRepo.findByClientId(id);
+  if (!waba || waba.status !== 'needs_manual_resolution' || !waba.access_token_encrypted) {
+    return res.status(400).json({ error: 'This client has no pending ambiguous WhatsApp connection to resolve.' });
+  }
+
+  const accessToken = decrypt(waba.access_token_encrypted);
+
+  // phoneNumberId not yet known (the "multiple WABAs" case — admin has only
+  // picked a WABA so far, phone numbers under it were never enumerated).
+  // Look them up now: exactly one resolves immediately below; still more
+  // than one means a second round-trip, same shape as the original
+  // discovery response so the admin UI can reuse its own picker for it.
+  let resolvedPhoneNumberId = phoneNumberId;
+  if (!resolvedPhoneNumberId) {
+    let phoneNumbers;
+    try {
+      phoneNumbers = await metaClient.listPhoneNumbers(wabaId, accessToken);
+    } catch (err) {
+      return res.status(502).json({ error: 'Could not look up phone numbers for this WhatsApp Business Account', detail: err.message });
+    }
+    if (phoneNumbers.length === 0) {
+      return res.status(400).json({ error: `No phone numbers are registered under WhatsApp Business Account ${wabaId} yet.` });
+    }
+    if (phoneNumbers.length > 1) {
+      const diagnostics = {
+        ...waba.connect_diagnostics,
+        reason: 'multiple_phone_numbers',
+        wabaId,
+        candidatePhoneNumbers: phoneNumbers.map((p) => ({ id: p.id, display_phone_number: p.display_phone_number })),
+      };
+      // Explicit JSON.stringify — pg does NOT auto-serialize a raw JS object
+      // for a jsonb column (it applies Postgres-array-literal serialization
+      // instead, which Postgres rejects as invalid JSON). This exact mistake
+      // is documented in CLAUDE.md as having once wiped the production
+      // template-library cache; not repeating it here. (waba.connect_diagnostics,
+      // spread above, IS already a parsed object — pg's jsonb type parser
+      // auto-parses on SELECT — this only applies to the outbound write.)
+      await wabasRepo.upsertForClient(id, { waba_id: wabaId, status: 'needs_manual_resolution', connect_diagnostics: JSON.stringify(diagnostics) });
+      return res.status(409).json({
+        error: 'This WhatsApp Business Account has more than one phone number — pick one to finish.',
+        code: 'needs_manual_resolution',
+        reason: 'multiple_phone_numbers',
+        wabaId,
+        candidatePhoneNumbers: diagnostics.candidatePhoneNumbers,
+      });
+    }
+    resolvedPhoneNumberId = phoneNumbers[0].id;
+  }
+
+  try {
+    // via_coexistence isn't recoverable from connect_diagnostics (Meta's
+    // FINISH event is the only signal for it, and by definition this state
+    // means we never confidently resolved past that point) — defaulting to
+    // false (plain migration, calls registerPhoneNumber) is the safer
+    // failure mode: registering an already-registered Coexistence number is
+    // a real Meta-side error admin will see immediately and can re-run
+    // without it, versus silently skipping registration for a number that
+    // genuinely needed it, which would leave the number unusable with no
+    // error at all.
+    const { waba: updated, templateSync } = await completeWabaConnection(pool, id, {
+      waba_id: wabaId,
+      phone_number_id: resolvedPhoneNumberId,
+      accessToken,
+      via_coexistence: false,
+    });
+    await auditLogRepo.record({
+      actor_type: 'admin',
+      actor_id: req.adminId,
+      action: 'whatsapp_resolve_waba',
+      target: `${id}: waba_id ${wabaId}, phone_number_id ${resolvedPhoneNumberId}`,
+    });
+    res.json({ resolved: true, waba: maskWaba(updated), templateSync });
+  } catch (err) {
+    res.status(502).json({ error: 'Resolve failed', detail: err.message });
   }
 }));
 

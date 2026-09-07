@@ -109,6 +109,40 @@ async function exchangeForLongLivedToken(shortLivedToken) {
   return data.access_token;
 }
 
+// Server-side WABA/phone discovery (PLAN.md item 25) — the fallback when
+// Embedded Signup's postMessage never delivered waba_id/phone_number_id
+// (confirmed 2026-09-05/07: Meta's real Coexistence FINISH event routinely
+// omits phone_number_id, and the two return channels — FB.login's callback
+// and the postMessage — are independent and can arrive one without the
+// other). debug_token's own access_token is the APP's credential
+// ({id}|{secret}), not the user token being inspected — same app-level auth
+// shape exchangeCodeForToken/exchangeForLongLivedToken above already use,
+// bypassing graphFetch for the same reason those two do: it needs its own
+// two-parameter query construction (input_token + a different access_token),
+// not graphFetch's single-token-only signature.
+async function debugToken(inputToken) {
+  assertConfigured();
+  const url = new URL(`${GRAPH_BASE}/debug_token`);
+  url.searchParams.set('input_token', inputToken);
+  url.searchParams.set('access_token', `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`);
+
+  const res = await fetchWithTimeout(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `debug_token failed (${res.status})`);
+  }
+  return data.data; // { granular_scopes: [{ scope, target_ids }], ... }
+}
+
+// Real, officially-documented enumeration endpoint — the second half of
+// server-side discovery once a candidate WABA id is known (from
+// debugToken's granular_scopes above). Uses the ordinary per-client token,
+// unlike debugToken itself.
+async function listPhoneNumbers(wabaId, accessToken) {
+  const data = await graphFetch(`/${wabaId}/phone_numbers`, { accessToken });
+  return data.data || []; // [{ id, display_phone_number, verified_name, quality_rating }, ...]
+}
+
 async function subscribeAppToWaba(wabaId, accessToken) {
   return graphFetch(`/${wabaId}/subscribed_apps`, { method: 'POST', accessToken });
 }
@@ -737,6 +771,8 @@ function parseTemplateComponents(components) {
 module.exports = {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
+  debugToken,
+  listPhoneNumbers,
   subscribeAppToWaba,
   registerPhoneNumber,
   getPhoneNumberDetails,
