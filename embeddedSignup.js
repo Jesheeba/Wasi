@@ -77,14 +77,23 @@
   }
 
   window.addEventListener('message', (event) => {
-    if (!event.origin || !event.origin.endsWith('facebook.com')) return;
-    // Diagnostic logging kept in deliberately (per direct instruction,
-    // 2026-09-05) — the merge fix below is built on Meta's *documented*
-    // shape, not yet confirmed against a real live attempt. Every raw
-    // message, parsed or not, is logged so the next real Coexistence
-    // completion can confirm phone_number_id really does arrive on an
-    // earlier session-log message before this logging is ever removed.
-    console.log('[WasiEmbeddedSignup] postMessage received from', event.origin, '— raw event.data:', event.data);
+    // Fixed 2026-09-07 — a real attempt produced ZERO [WasiEmbeddedSignup]
+    // lines despite reportedly completing, and this logging used to sit
+    // AFTER the origin filter below. That meant the one thing most worth
+    // seeing — whether a message arrived at all, and from what origin — was
+    // exactly what the filter could silently hide. Every message this
+    // listener is invoked with is now logged unconditionally, before any
+    // filtering, so a wrong assumption about the origin can never again
+    // produce silent zero output. The filter itself is unchanged and still
+    // gates BEHAVIOR below (Meta's own implementation example uses this
+    // exact same `endsWith('facebook.com')` check, confirmed directly
+    // against developers.facebook.com — not a guess) — it now just doesn't
+    // gate visibility too.
+    console.log('[WasiEmbeddedSignup] message event fired — origin:', JSON.stringify(event.origin), 'raw event.data:', event.data);
+    if (!event.origin || !event.origin.endsWith('facebook.com')) {
+      console.log('[WasiEmbeddedSignup] origin did not match facebook.com — filtered out, not processed.');
+      return;
+    }
     let parsed;
     try {
       parsed = JSON.parse(event.data);
@@ -127,6 +136,15 @@
   // Rejects with a message safe to show the user directly (cancelled / error
   // / no FINISH ever arriving are all distinguished).
   async function connect({ appId, configId, onProgress }) {
+    // Timing/elapsed logging added 2026-09-07 — per direct instruction, so a
+    // single real attempt tells us definitively which of 3 scenarios
+    // happened (hard timeout with no FINISH ever seen; hard timeout with a
+    // FINISH already captured, i.e. the incomplete-state path; or
+    // FB.login's callback genuinely never firing for some other reason) —
+    // instead of the DB's identical-empty-result-for-all-three ambiguity.
+    const connectStartedAt = Date.now();
+    console.log('[WasiEmbeddedSignup] connect() started at', new Date(connectStartedAt).toISOString());
+
     await loadSdk(appId);
     sessionData = {};
     terminalEvent = null;
@@ -140,30 +158,61 @@
 
     let code;
     try {
-      code = await new Promise((resolve, reject) => {
-        const hardTimeout = setTimeout(() => {
-          reject(new Error('Still not connected after 10 minutes. Please close the Facebook popup and try again — check that your phone has a stable internet connection.'));
-        }, LOGIN_TIMEOUT_MS);
-        timers.push(hardTimeout);
+      try {
+        code = await new Promise((resolve, reject) => {
+          const hardTimeout = setTimeout(() => {
+            const elapsedMs = Date.now() - connectStartedAt;
+            console.log('[WasiEmbeddedSignup] HARD TIMEOUT fired after', elapsedMs, 'ms — terminalEvent at this moment:', terminalEvent, '— sessionData at this moment:', JSON.stringify(sessionData));
+            reject(new Error('Still not connected after 10 minutes. Please close the Facebook popup and try again — check that your phone has a stable internet connection.'));
+          }, LOGIN_TIMEOUT_MS);
+          timers.push(hardTimeout);
 
-        window.FB.login((response) => {
-          if (!response?.authResponse?.code) {
-            return reject(new Error('WhatsApp connection was not completed.'));
-          }
-          resolve(response.authResponse.code);
-        }, {
-          config_id: configId,
-          response_type: 'code',
-          override_default_response_type: true,
-          // featureType enables the Coexistence sub-flow (business keeps using
-          // the WhatsApp Business app on their phone; Meta syncs history to the
-          // Cloud API connection instead of migrating the number off the app).
-          // An empty string here forces the plain migration flow for everyone,
-          // even businesses who need to keep their app — see FINISH_* handling
-          // below for why the two paths can't be told apart after the fact.
-          extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+          window.FB.login((response) => {
+            const elapsedMs = Date.now() - connectStartedAt;
+            if (!response?.authResponse?.code) {
+              console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with NO code — response:', JSON.stringify(response));
+              return reject(new Error('WhatsApp connection was not completed.'));
+            }
+            console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms WITH a code.');
+            resolve(response.authResponse.code);
+          }, {
+            config_id: configId,
+            response_type: 'code',
+            override_default_response_type: true,
+            // featureType enables the Coexistence sub-flow (business keeps
+            // using the WhatsApp Business app on their phone; Meta syncs
+            // history to the Cloud API connection instead of migrating the
+            // number off the app). An empty string here forces the plain
+            // migration flow for everyone, even businesses who need to keep
+            // their app — see FINISH_* handling below for why the two paths
+            // can't be told apart after the fact.
+            extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+          });
         });
-      });
+      } catch (codeErr) {
+        console.log('[WasiEmbeddedSignup] code-acquisition promise REJECTED after', Date.now() - connectStartedAt, 'ms — reason:', codeErr.message, '— terminalEvent:', terminalEvent, '— sessionData:', JSON.stringify(sessionData));
+        // PLAN.md item 25, Part B — FB.login's callback (the OAuth `code`)
+        // and the postMessage FINISH event are two independent return
+        // channels that can arrive out of order, or one without the other
+        // (confirmed 2026-09-07 against Meta's own documented architecture
+        // plus an independently-corroborated integration guide). If code
+        // acquisition failed (timeout or a genuine non-completion) but a
+        // FINISH-type postMessage already arrived — Meta really did link the
+        // account — that must not collapse into the same generic "nothing
+        // happened" error a real non-attempt produces. Marked distinctly so
+        // the caller can report it to the backend instead of just a toast.
+        if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent) && sessionData.waba_id) {
+          console.log('[WasiEmbeddedSignup] -> routing to the INCOMPLETE state (FINISH was already seen).');
+          const incompleteErr = new Error(
+            'Meta finished linking your WhatsApp account, but this browser never received the authorization code needed to complete the connection.'
+          );
+          incompleteErr.incomplete = true;
+          incompleteErr.waba_id = sessionData.waba_id;
+          throw incompleteErr;
+        }
+        console.log('[WasiEmbeddedSignup] -> no FINISH was ever seen either. Genuine "nothing happened" rejection.');
+        throw codeErr;
+      }
     } finally {
       timers.forEach(clearTimeout);
     }

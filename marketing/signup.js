@@ -407,6 +407,33 @@
       });
       await completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence });
     } catch (err) {
+      // PLAN.md item 25, Part B — embeddedSignup.js marks the "FINISH
+      // arrived, the OAuth code never did" race with err.incomplete instead
+      // of a plain rejection. Record it as its own state rather than
+      // showing the same generic failure a real non-attempt would — Meta
+      // really did link the account on its side.
+      if (err.incomplete) {
+        try {
+          await api('/api/onboarding/whatsapp/connect-incomplete', {
+            method: 'POST',
+            body: { waba_id: err.waba_id },
+          });
+          statusEl.innerHTML = `<div class="status-pill error">${err.message}</div>`;
+        } catch (recordErr) {
+          // Fixed 2026-09-07 — this used to be console.error'd into
+          // silence. This is the worst case in the whole flow: Meta linked
+          // the account AND we failed to even record that fact — if this is
+          // swallowed too, there is zero trace anywhere, browser or server,
+          // exactly the failure class this item exists to close. Unlike
+          // app.js's toast (which auto-dismisses in 2.2s), this status pill
+          // stays on screen until the user navigates away, so it's loud
+          // enough here without needing a blocking alert() too — but the
+          // WABA ID must actually be in it for a support contact to be useful.
+          console.error('Failed to record incomplete WhatsApp connection:', recordErr.message);
+          statusEl.innerHTML = `<div class="status-pill error">Meta linked your WhatsApp account, but we also failed to record that on our end — nothing was saved automatically. Please contact support with this WhatsApp Business Account ID: <strong>${err.waba_id}</strong></div>`;
+        }
+        return;
+      }
       statusEl.innerHTML = `<div class="status-pill error">${err.message}</div>`;
     }
   }

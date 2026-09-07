@@ -4387,10 +4387,23 @@ document.addEventListener('DOMContentLoaded', () => {
               method: 'POST',
               body: JSON.stringify({ waba_id: err.waba_id }),
             });
+            showToast(err.message);
           } catch (recordErr) {
+            // Fixed 2026-09-07 — this used to be console.error'd into
+            // silence. This is the worst case in the whole flow: Meta
+            // linked the account AND we failed to even record that fact —
+            // if this is swallowed too, there is zero trace anywhere,
+            // browser or server, exactly the failure class this item exists
+            // to close. showToast() auto-dismisses after 2.2s — nowhere
+            // near enough time to read and copy down a WABA ID — so this
+            // one deliberately uses a blocking alert() instead, the one
+            // case in this app where that's the right call over a toast.
             console.error('Failed to record incomplete WhatsApp connection:', recordErr.message);
+            window.alert(
+              `Meta linked your WhatsApp account, but we also failed to record that on our end — nothing was saved automatically.\n\n` +
+              `Please contact support with this WhatsApp Business Account ID:\n\n${err.waba_id}`
+            );
           }
-          showToast(err.message);
           return;
         }
         // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason
