@@ -42,6 +42,17 @@
   let sessionData = {};
   let terminalEvent = null;
 
+  // Found live 2026-09-07 (5 real attempts, see CLAUDE.md Known Gaps): a
+  // reject function registered by connect() while it's waiting for a code,
+  // so a terminal postMessage arriving on THIS channel — not just
+  // FB.login's own callback below — can end that wait too. Needed because
+  // FB.login's callback was found to fire in 1-5 seconds with no code while
+  // the user was still genuinely mid-wizard (business selection, QR scan,
+  // Finish); a codeless callback no longer rejects by itself, so without
+  // this, connect() would have no way to notice a real FINISH/CANCEL/ERROR
+  // arriving afterward and would just sit until the 10-minute hard timeout.
+  let pendingCodeReject = null;
+
   // Coexistence completions fire a distinct event name, not plain FINISH —
   // per Meta's "Onboard WhatsApp Business app users" doc. Which one fired is
   // the only reliable signal for which path the business took, so it's
@@ -109,6 +120,27 @@
     }
     if (parsed.event === 'CANCEL' || parsed.event === 'ERROR' || Object.prototype.hasOwnProperty.call(FINISH_EVENTS, parsed.event)) {
       terminalEvent = parsed.event;
+      // Found live 2026-09-07 — see CLAUDE.md Known Gaps: FB.login's own
+      // callback can no longer be relied on to end connect()'s wait (it can
+      // fire early, with no code, while the popup is still genuinely in
+      // progress) — so THIS terminal postMessage is now what ends it, if
+      // connect() is still waiting. Rejects either way (even on a real
+      // FINISH) so the existing catch block below decides the outcome from
+      // terminalEvent/sessionData exactly as it already does for the
+      // hard-timeout-with-FINISH-already-seen case — no new branching logic
+      // duplicated here.
+      if (pendingCodeReject) {
+        const reject = pendingCodeReject;
+        pendingCodeReject = null;
+        console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') is ending connect()\'s wait for a code — FB.login\'s callback never delivered one.');
+        if (parsed.event === 'CANCEL') {
+          reject(new Error('Signup was cancelled in the Facebook popup.'));
+        } else if (parsed.event === 'ERROR') {
+          reject(new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`));
+        } else {
+          reject(new Error('Meta reported the WhatsApp signup finished, but this browser did not receive the authorization code.'));
+        }
+      }
     }
   });
 
@@ -148,6 +180,7 @@
     await loadSdk(appId);
     sessionData = {};
     terminalEvent = null;
+    pendingCodeReject = null;
 
     const timers = [];
     if (onProgress) {
@@ -163,9 +196,15 @@
           const hardTimeout = setTimeout(() => {
             const elapsedMs = Date.now() - connectStartedAt;
             console.log('[WasiEmbeddedSignup] HARD TIMEOUT fired after', elapsedMs, 'ms — terminalEvent at this moment:', terminalEvent, '— sessionData at this moment:', JSON.stringify(sessionData));
+            pendingCodeReject = null;
             reject(new Error('Still not connected after 10 minutes. Please close the Facebook popup and try again — check that your phone has a stable internet connection.'));
           }, LOGIN_TIMEOUT_MS);
           timers.push(hardTimeout);
+
+          // Registered so the message listener above can end this wait on a
+          // real terminal postMessage too, not just FB.login's own callback
+          // below or the hard timeout — see this variable's declaration.
+          pendingCodeReject = reject;
 
           window.FB.login((response) => {
             const elapsedMs = Date.now() - connectStartedAt;
@@ -182,14 +221,40 @@
               // browser where reauthenticate doesn't hold — is named
               // explicitly in the log instead of silently falling into the
               // same generic message a real cancelled/failed attempt gets.
+              // This specific case DOES reject immediately (unlike the
+              // generic codeless case below) — we know for certain no dialog
+              // ever opened, so there is nothing left to wait for.
               if (response?.authResponse?.accessToken) {
                 console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with a CACHED-SESSION SHORT-CIRCUIT — accessToken present but no code, meaning auth_type: reauthenticate did not force a fresh dialog in this browser. response:', JSON.stringify(response));
+                pendingCodeReject = null;
                 return reject(new Error('WhatsApp connection could not start a fresh signup — your browser reused a cached Facebook session instead of opening the dialog. Try again in a private/incognito window, or clear this site\'s cookies for Facebook, then retry.'));
               }
-              console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with NO code — response:', JSON.stringify(response));
-              return reject(new Error('WhatsApp connection was not completed.'));
+              // Found live 2026-09-07 (5 real attempts, all identical — see
+              // CLAUDE.md Known Gaps): this callback can fire in 1-5 seconds
+              // with status 'not_authorized' while the user was still
+              // actively completing the popup's wizard (business selection,
+              // QR scan, Finish) — proof this callback tracks only the
+              // initial OAuth/permission-grant step, a separate and much
+              // earlier stage than the wizard itself, per Meta's own
+              // Coexistence doc (the wizard's own completion is reported
+              // only via the FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING
+              // postMessage). A codeless response here is therefore NOT
+              // treated as the flow's outcome anymore — only named and
+              // logged. pendingCodeReject stays registered: the real outcome
+              // is left for a genuine terminal postMessage (see the message
+              // listener above) or the hard timeout to decide, so a flow
+              // that's still genuinely in progress is never killed early by
+              // this callback again.
+              console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms with NO code — status:', JSON.stringify(response?.status), '— NOT rejecting; waiting for a postMessage or the hard timeout instead. response:', JSON.stringify(response));
+              if (response?.status === 'not_authorized' && onProgress) {
+                onProgress(
+                  'Facebook says this account isn\'t authorized to connect this WhatsApp number — this usually means the Facebook account being used isn\'t a full Admin on the Meta Business Manager that owns the number. If you\'re still in the popup, an Admin account may be needed to finish. Still waiting in case this resolves…'
+                );
+              }
+              return;
             }
             console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms WITH a code.');
+            pendingCodeReject = null;
             resolve(response.authResponse.code);
           }, {
             config_id: configId,
@@ -243,6 +308,7 @@
       }
     } finally {
       timers.forEach(clearTimeout);
+      pendingCodeReject = null;
     }
 
     for (let attemptsLeft = 10; attemptsLeft > 0; attemptsLeft--) {
