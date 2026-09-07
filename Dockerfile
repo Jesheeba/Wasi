@@ -36,7 +36,7 @@ RUN cd server && npm ci --omit=dev
 
 # App code.
 COPY server ./server
-COPY index.html index.css app.js embeddedSignup.js ./
+COPY index.html index.css breakpoints.css app.js embeddedSignup.js ./
 COPY marketing ./marketing
 COPY admin ./admin
 COPY --from=flow-editor-build /build/dist ./flow-editor/dist
