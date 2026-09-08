@@ -440,17 +440,28 @@
 
   async function completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence }) {
     const statusEl = document.getElementById('step3-status');
+    // Real progress instead of a silent "Finishing setup…" the whole time —
+    // 2026-09-08: server-side discovery (debug_token, phone number
+    // enumeration, webhook subscription, registration, template sync) is
+    // now the primary path and can genuinely take several seconds.
     statusEl.innerHTML = '<div class="status-pill pending">Finishing setup on our side…</div>';
+    const serverProgressTimers = [
+      setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Verifying your account with Meta…</div>'; }, 3000),
+      setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Finding your WhatsApp number…</div>'; }, 8000),
+      setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Still working — almost done…</div>'; }, 15000),
+    ];
     try {
       const data = await api('/api/onboarding/whatsapp/connect', {
         method: 'POST',
         body: { code, waba_id, phone_number_id, via_coexistence },
         timeoutMs: 90_000,
       });
+      serverProgressTimers.forEach(clearTimeout);
       state.wabaConnected = true;
       statusEl.innerHTML = `<div class="status-pill success">Connected: ${(data.waba && data.waba.display_name) || phone_number_id}</div>`;
       document.getElementById('step3-next-btn').hidden = false;
     } catch (err) {
+      serverProgressTimers.forEach(clearTimeout);
       // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason in
       // body.detail, with a generic body.error as the top-level summary (see
       // that route's catch block) — this used to show only the generic
