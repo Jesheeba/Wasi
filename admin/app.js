@@ -1118,8 +1118,16 @@ async function resolveWaba(clientId) {
       loadClientDetail(clientId);
       return;
     }
-    resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.75rem; margin-bottom:0;">${escapeHtml(err.message)}</div>`;
-    showToast('Failed to resolve: ' + err.message, 'error');
+    // Fixed 2026-09-08 — a real resolve failure (WABA 998094716164113,
+    // TNPSC Mentors) was invisible without opening DevTools' Network tab:
+    // apiFetch's ApiError.message is only ever the generic top-level
+    // `error` string ("Could not look up phone numbers..."), never the
+    // specific `detail` field the backend also sends (e.g. Meta's actual
+    // rejection reason). retryProvisioning below already does this
+    // preference correctly — matching that precedent here.
+    const explanation = (err.data && err.data.detail) ? `${err.message}: ${err.data.detail}` : err.message;
+    resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.75rem; margin-bottom:0;">${escapeHtml(explanation)}</div>`;
+    showToast('Failed to resolve: ' + explanation, 'error');
     btn.disabled = false;
     btn.innerHTML = originalHtml;
     if (window.lucide) lucide.createIcons();

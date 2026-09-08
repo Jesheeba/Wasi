@@ -108,7 +108,34 @@ async function completeWabaConnection(db, clientId, { waba_id, phone_number_id, 
   // gets activated on the Cloud API in the first place. Same config_id
   // serves both flows now, so this must branch per-request, not be
   // skipped globally.
-  if (!via_coexistence) {
+  //
+  // Found live 2026-09-08 (WABA 998094716164113, TNPSC Mentors, via admin
+  // resolve-waba): the caller-supplied `via_coexistence` flag is a
+  // BROWSER-REPORTED signal (from embeddedSignup.js's FINISH postMessage),
+  // and that signal has already proven unreliable twice this session — most
+  // recently, phase 2's 5s grace window means FINISH now routinely never
+  // arrives at all, so `via_coexistence` defaults to a guess (`true`) that
+  // the caller can also override to `false` (admin.js's resolve route does
+  // exactly this, since it has no FINISH to go on at all). Calling
+  // registerPhoneNumber on a number Meta already has live on the WhatsApp
+  // Business App fails with "Register endpoint is not available for SMB
+  // businesses" — confirmed live for this exact WABA (Meta: phone
+  // +91 96777 79808, status Connected, marked "WhatsApp Business App").
+  //
+  // Fixed by checking Meta's own `is_on_biz_app` field for THIS phone
+  // number, right now, instead of trusting a stale/guessed browser flag —
+  // the same real-time signal `discoverWabaAndPhoneNumber` already uses to
+  // disambiguate a multi-phone WABA. This is ground truth from Meta at the
+  // moment of the decision, not a report of what happened in a browser
+  // popup possibly minutes or hours earlier. `via_coexistence` is kept only
+  // as a fallback for the (should-never-happen) case where this phone
+  // number isn't found in its own WABA's phone list.
+  const phoneNumbers = await metaClient.listPhoneNumbers(waba_id, accessToken);
+  const thisNumber = phoneNumbers.find((p) => p.id === phone_number_id);
+  const isOnBizApp = thisNumber ? thisNumber.is_on_biz_app === true : null;
+  const shouldRegister = isOnBizApp === null ? !via_coexistence : !isOnBizApp;
+
+  if (shouldRegister) {
     const pin = String(crypto.randomInt(100000, 999999));
     await metaClient.registerPhoneNumber(phone_number_id, accessToken, pin);
   }

@@ -207,13 +207,18 @@ router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
   try {
     // via_coexistence isn't recoverable from connect_diagnostics (Meta's
     // FINISH event is the only signal for it, and by definition this state
-    // means we never confidently resolved past that point) — defaulting to
-    // false (plain migration, calls registerPhoneNumber) is the safer
-    // failure mode: registering an already-registered Coexistence number is
-    // a real Meta-side error admin will see immediately and can re-run
-    // without it, versus silently skipping registration for a number that
-    // genuinely needed it, which would leave the number unusable with no
-    // error at all.
+    // means we never confidently resolved past that point) — passing
+    // `false` here used to matter a lot (see git history), but as of
+    // 2026-09-08 completeWabaConnection no longer trusts this flag as its
+    // primary signal: it checks Meta's own `is_on_biz_app` for the resolved
+    // phone number directly and only falls back to this flag if that
+    // number can't be found in its WABA's own phone list at all (shouldn't
+    // happen in practice). Confirmed live: this exact "admin resolves an
+    // ambiguous Coexistence WABA" path used to hard-fail every time with
+    // "Register endpoint is not available for SMB businesses" (WABA
+    // 998094716164113, TNPSC Mentors) because of this hardcoded `false` —
+    // that's now fixed at the source, so `false` here is inert in the
+    // common case, only a defensive fallback.
     const { waba: updated, templateSync } = await completeWabaConnection(pool, id, {
       waba_id: wabaId,
       phone_number_id: resolvedPhoneNumberId,
