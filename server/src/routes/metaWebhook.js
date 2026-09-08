@@ -206,10 +206,16 @@ async function handleInboundMessages(waba, value) {
 
     const contact = await contactsRepo.upsertByPhone(pool, clientId, { phone, name, wa_id: phone });
     const chat = await chatsRepo.findOrCreateByContact(pool, clientId, contact);
+    // PLAN.md item 14 — msg.referral (Meta's documented CTWA ad-click
+    // object, §6.2) is present only when this inbound message originated
+    // from a Click-to-WhatsApp ad; undefined/absent for every organic
+    // message. Parsing an already-arrived inbound webhook payload, not a
+    // call to Meta.
     const inserted = await chatsRepo.insertInbound(pool, clientId, chat.id, {
       metaMessageId: msg.id,
       body,
       sentAt: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null,
+      referral: msg.referral || null,
     });
 
     if (inserted) {
@@ -281,10 +287,26 @@ async function handleInboundMessages(waba, value) {
       // the event name itself. error_reason/meta_error_code are dropped —
       // both columns are shared with outbound-send-failure rows in this same
       // messages table and are always null on an inbound row; forwarding
-      // them here would just be two guaranteed-null fields.
+      // them here would just be two guaranteed-null fields. referral is
+      // dropped too — a real regression, caught by this file's own key-set
+      // test (webhookForwarding.test.js:168): PLAN.md item 14 added
+      // messages.referral, and without this exclusion it leaked into every
+      // message.received delivery (as `referral: null` on every ordinary
+      // message, not just CTWA-sourced ones), silently widening this
+      // external wire contract. CTWA attribution was only ever meant to
+      // land in item 14's own surfaces (the Contact 360 timeline, GET
+      // /api/analytics/ctwa) — a receiving CRM getting it via forwarding too
+      // is a real, separate scope decision, not a byproduct of adding a
+      // column. See CLAUDE.md's webhook-contract note: every future
+      // migration adding a `messages` column must be checked against this
+      // destructure, since a new column's default behavior is to leak here
+      // silently — this exact test only caught it because someone happened
+      // to write a key-set assertion, not because the destructure itself
+      // guards against it.
       const {
         id, client_id, chat_id: _chatId, meta_message_id, status: _hardcodedStatus,
         direction: _direction, error_reason: _errorReason, meta_error_code: _metaErrorCode,
+        referral: _referral,
         ...forwardableMessage
       } = inserted;
       await enqueueForwards(waba, 'message.received', {
