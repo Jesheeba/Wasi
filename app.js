@@ -5433,12 +5433,26 @@ document.addEventListener('DOMContentLoaded', () => {
           configId: config.configId,
           onProgress: (message) => { btn.textContent = message; },
         });
+        // Real progress instead of a silent "Finishing setup…" the whole
+        // time — 2026-09-08: server-side discovery (debug_token, phone
+        // number enumeration, webhook subscription, registration, template
+        // sync) is now the primary path and can genuinely take several
+        // seconds, no longer just a fallback that rarely ran.
         btn.textContent = 'Finishing setup…';
-        await authFetch('/api/onboarding/whatsapp/connect', {
-          method: 'POST',
-          body: JSON.stringify({ code, waba_id, phone_number_id, via_coexistence }),
-          timeoutMs: 90_000,
-        });
+        const serverProgressTimers = [
+          setTimeout(() => { btn.textContent = 'Verifying your account with Meta…'; }, 3000),
+          setTimeout(() => { btn.textContent = 'Finding your WhatsApp number…'; }, 8000),
+          setTimeout(() => { btn.textContent = 'Still working — almost done…'; }, 15000),
+        ];
+        try {
+          await authFetch('/api/onboarding/whatsapp/connect', {
+            method: 'POST',
+            body: JSON.stringify({ code, waba_id, phone_number_id, via_coexistence }),
+            timeoutMs: 90_000,
+          });
+        } finally {
+          serverProgressTimers.forEach(clearTimeout);
+        }
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();
       } catch (err) {
