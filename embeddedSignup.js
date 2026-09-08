@@ -54,6 +54,18 @@
   // arriving afterward and would just sit until the 10-minute hard timeout.
   let pendingCodeReject = null;
 
+  // Found live 2026-09-08: phase 2 (after a code is already in hand, still
+  // waiting on terminalEvent to become FINISH-type for waba_id/
+  // phone_number_id) used to poll for a fixed 3 seconds and give up — wrong,
+  // since a real flow can take 51-112+ seconds just to deliver the code, and
+  // nothing guarantees FINISH arrives before or soon after it. Mirrors
+  // pendingCodeReject's shape exactly, for the second phase: a wake
+  // function registered while connect() is in phase 2, called by the
+  // message listener the moment a real terminal event arrives, so this
+  // phase waits properly (up to the same hard timeout) instead of a short
+  // fixed poll.
+  let pendingTerminalWake = null;
+
   // Coexistence completions fire a distinct event name, not plain FINISH —
   // per Meta's "Onboard WhatsApp Business app users" doc. Which one fired is
   // the only reliable signal for which path the business took, so it's
@@ -114,12 +126,24 @@
       console.log('[WasiEmbeddedSignup] origin did not match facebook.com — filtered out, not processed.');
       return;
     }
+    // Found live 2026-09-08 — Facebook's own SDK sends non-JSON, URL-
+    // encoded internal messages (its own XD/iframe comms machinery) from a
+    // facebook.com-ending origin too, which used to hit JSON.parse and log
+    // as a caught failure every time — harmless, but reads exactly like an
+    // error in the console. Every real WA_EMBEDDED_SIGNUP message is a JSON
+    // object, so it always starts with '{'; anything that doesn't is
+    // skipped before ever attempting to parse it, logged as an explicitly
+    // expected non-JSON message instead of a caught exception.
+    if (typeof event.data !== 'string' || !event.data.trim().startsWith('{')) {
+      console.log('[WasiEmbeddedSignup] non-JSON message from facebook.com (expected — the SDK\'s own internal comms, not embedded-signup-related) — ignored.');
+      return;
+    }
     let parsed;
     try {
       parsed = JSON.parse(event.data);
       console.log('[WasiEmbeddedSignup] parsed message:', JSON.stringify(parsed));
     } catch (err) {
-      console.log('[WasiEmbeddedSignup] JSON.parse failed on this message (kept as a log only, not necessarily an error — could be an unrelated facebook.com message):', err.message);
+      console.log('[WasiEmbeddedSignup] JSON.parse failed on this message despite looking JSON-shaped (kept as a log only, not necessarily an error):', err.message);
       return;
     }
     if (parsed?.type !== 'WA_EMBEDDED_SIGNUP') return;
@@ -149,6 +173,20 @@
         } else {
           reject(new Error('Meta reported the WhatsApp signup finished, but this browser did not receive the authorization code.'));
         }
+      } else if (pendingTerminalWake) {
+        // Found live 2026-09-08 — a real flow took 51-112 seconds just to
+        // deliver the code, disproving phase 2's old assumption that FINISH
+        // would always arrive within a few seconds of it. Mirrors
+        // pendingCodeReject exactly, just for the code-already-in-hand
+        // phase: wakes connect()'s phase-2 wait the moment a real terminal
+        // event arrives, instead of a fixed short poll. Only resolve() is
+        // needed here (never reject) — the code right after the await
+        // re-checks terminalEvent itself and throws the specific message
+        // for CANCEL/ERROR, exactly like the immediate pre-wait check does.
+        const wake = pendingTerminalWake;
+        pendingTerminalWake = null;
+        console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') is ending connect()\'s phase-2 wait for WhatsApp account details.');
+        wake();
       }
     }
   });
@@ -190,6 +228,7 @@
     sessionData = {};
     terminalEvent = null;
     pendingCodeReject = null;
+    pendingTerminalWake = null;
 
     const timers = [];
     if (onProgress) {
@@ -352,31 +391,87 @@
       pendingCodeReject = null;
     }
 
-    for (let attemptsLeft = 10; attemptsLeft > 0; attemptsLeft--) {
-      if (terminalEvent === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
-      if (terminalEvent === 'ERROR') throw new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`);
-      if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)) {
-        // Resolve on FINISH even if waba_id/phone_number_id never showed up
-        // in any message's data — deliberately NOT thrown here. Meta's own
-        // FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING payload only guarantees
-        // waba_id, and this file has no way to write an audit trail of a
-        // failure this far into the flow (no backend access from the
-        // browser). The caller sends whatever it gets to
-        // POST /whatsapp/connect regardless, and THAT route is what checks
-        // for a missing phone_number_id, fails with a specific message, and
-        // records it — the same audited failure path every other connect
-        // error already goes through, so this class of failure is never
-        // silent again (see onboarding.js and CLAUDE.md Known Gaps, 2026-09-05).
-        return {
-          code,
-          waba_id: sessionData.waba_id,
-          phone_number_id: sessionData.phone_number_id,
-          via_coexistence: FINISH_EVENTS[terminalEvent],
-        };
-      }
-      await new Promise((r) => setTimeout(r, 300));
+    // PHASE 2: waba_id/phone_number_id, via terminalEvent. Checked
+    // immediately first — FINISH may already have arrived before or during
+    // phase 1 (e.g. the postMessage beat the FB.login callback), same as
+    // the old code's own first-iteration check.
+    if (terminalEvent === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
+    if (terminalEvent === 'ERROR') throw new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`);
+    if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)) {
+      return {
+        code,
+        waba_id: sessionData.waba_id,
+        phone_number_id: sessionData.phone_number_id,
+        via_coexistence: FINISH_EVENTS[terminalEvent],
+      };
     }
-    throw new Error('Got a login code from Facebook but no WhatsApp account details arrived. Please try again.');
+
+    // Found live 2026-09-08: this used to poll for a fixed 3 seconds (10 x
+    // 300ms) before giving up — wrong. A real flow is now confirmed to take
+    // 51-112 seconds just to deliver the code (the COOP fix's own first
+    // live success), and nothing guarantees FINISH arrives before or soon
+    // after it — it can legitimately still be minutes away here. Restructured
+    // to the exact same wait-until-woken-or-hard-timeout shape as phase 1
+    // (pendingTerminalWake, see its declaration) instead of a short fixed
+    // poll, with its own onProgress timers so a long phase-2 wait isn't
+    // silent — phase 1's timers were already cleared the moment the code
+    // arrived, so without this a long phase 2 would show nothing at all.
+    const phase2Timers = [];
+    if (onProgress) {
+      for (const step of PROGRESS_STEPS) {
+        phase2Timers.push(setTimeout(() => onProgress(step.message), step.atMs));
+      }
+    }
+    try {
+      await new Promise((resolve) => {
+        const hardTimeout = setTimeout(resolve, LOGIN_TIMEOUT_MS);
+        phase2Timers.push(hardTimeout);
+        pendingTerminalWake = resolve;
+      });
+    } finally {
+      phase2Timers.forEach(clearTimeout);
+      pendingTerminalWake = null;
+    }
+
+    if (terminalEvent === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
+    if (terminalEvent === 'ERROR') throw new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`);
+    if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)) {
+      return {
+        code,
+        waba_id: sessionData.waba_id,
+        phone_number_id: sessionData.phone_number_id,
+        via_coexistence: FINISH_EVENTS[terminalEvent],
+      };
+    }
+
+    // Found live 2026-09-08, per direct instruction: reaching here means the
+    // full hard timeout elapsed with a code in hand but no terminal event
+    // ever seen — Meta linked *something* without this browser ever
+    // confirming what. Resolving here (not throwing) rather than inventing
+    // a second, weaker "incomplete" record: unlike Part B's
+    // incomplete_meta_linked state (a waba_id with no code — the OPPOSITE
+    // gap, and that endpoint deliberately takes no code field at all), this
+    // attempt already has everything /whatsapp/connect's server-side
+    // discovery (PLAN.md item 25, Part A) needs — it resolves waba_id/
+    // phone_number_id from the access token itself via debug_token, exactly
+    // the case it exists for. Sending this through the normal path means
+    // the backend's own try/catch guarantees a real audited row either way
+    // — connected on a successful discovery, failed with a specific reason
+    // otherwise — never silent, without a separate stub state for a case
+    // that already has a real chance of completing for real.
+    // via_coexistence defaults true deliberately: this app's FB.login call
+    // is unconditionally Coexistence-enabled (featureType is never empty),
+    // so this attempt was always one regardless of whether FINISH itself
+    // ever confirmed it — defaulting false would risk the backend trying to
+    // register-with-PIN a number that's already active on the WhatsApp
+    // Business app.
+    console.log('[WasiEmbeddedSignup] PHASE 2 HARD TIMEOUT fired after', Date.now() - connectStartedAt, 'ms — code was obtained but no terminal event ever arrived. Resolving with the code alone so the backend\'s own server-side discovery can still complete the connection.');
+    return {
+      code,
+      waba_id: sessionData.waba_id,
+      phone_number_id: sessionData.phone_number_id,
+      via_coexistence: true,
+    };
   }
 
   window.WasiEmbeddedSignup = { connect };
