@@ -20,12 +20,17 @@
 // (simulated Meta rejection) to a 400 (this app's own validation) — an
 // earlier, clearer failure, not a regression.
 //
-// RUN THIS FILE SEPARATELY from metaTemplateLibrary.test.js — see that
-// file's own header comment for why: both trigger real admin refreshes
+// This file races with metaTemplateLibrary.test.js — see that file's own
+// header comment for why: both trigger real admin refreshes
 // (metaTemplateLibraryRepo.pruneMissing) against fake, mutually-exclusive
 // partial catalogs on the SAME shared cache table; run concurrently, each
 // one's prune step deletes the other's rows. Confirmed live while fixing
 // the "stale entries never pruned" defect this file itself found.
+//
+// FIXED at the runner level, 2026-09-03: `npm test` now passes
+// `--test-concurrency=1`, so this can no longer happen — see that file's
+// header for detail. This file no longer needs its own separate
+// invocation.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
