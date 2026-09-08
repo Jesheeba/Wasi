@@ -50,6 +50,20 @@ const chatCreateSchema = z.object({
 
 const chatUpdateSchema = chatCreateSchema.partial();
 
+const chatAssignSchema = z.object({
+  teamMemberId: uuid,
+});
+
+const chatNoteCreateSchema = z.object({
+  body: z.string().min(1),
+  mentions: z.array(uuid).optional(),
+});
+
+const cannedResponseCreateSchema = z.object({
+  shortcut: z.string().min(1),
+  body: z.string().min(1),
+});
+
 // Outbound sends only — inbound messages arrive exclusively via the Meta
 // webhook now (server/src/routes/metaWebhook.js), never through this route.
 const messageSendSchema = z.object({
@@ -201,6 +215,10 @@ const broadcastCreateSchema = z.object({
   // broadcasts_audience_not_both CHECK constraint (migration 039) as a
   // second, storage-level guarantee.
   contact_list_id: uuid.optional(),
+  // PLAN.md item 9 — a third alternative audience source, mutually
+  // exclusive with both of the above (enforced below and by the DB's
+  // broadcasts_audience_at_most_one CHECK, migration 051).
+  segment_id: uuid.optional(),
   templateName: z.string().min(1),
   scheduled_date: z.string().optional(),
   // Keyed by parameter name (e.g. "customer_name"). Coverage against the
@@ -214,12 +232,16 @@ const broadcastCreateSchema = z.object({
   // template's approval-time default sample. Omitted -> that default.
   headerMediaAssetId: uuid.optional(),
   pacingConfig: pacingConfigSchema,
+  // PLAN.md item 12 — Smart Sending. Omitted/undefined disables it, same
+  // nullable-means-off convention as pacing_config above.
+  smartSendingHours: z.number().int().min(1).optional(),
 }).superRefine((val, ctx) => {
-  if (val.tag_id && val.contact_list_id) {
+  const audienceCount = [val.tag_id, val.contact_list_id, val.segment_id].filter(Boolean).length;
+  if (audienceCount > 1) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ['contact_list_id'],
-      message: 'A broadcast targets its audience by tag OR by contact list, not both.',
+      path: ['segment_id'],
+      message: 'A broadcast targets its audience by tag, by contact list, OR by segment — not more than one.',
     });
   }
 });
@@ -441,9 +463,77 @@ const teamMemberCreateSchema = z.object({
   role: z.string().optional(),
 });
 
+const teamAcceptInviteSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
+const teamLoginSchema = z.object({
+  tenantSlug: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
 const contactAttributeCreateSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['text', 'number', 'date', 'boolean']).optional(),
+});
+
+// PLAN.md item 7 — the request body itself is always a plain string
+// (matches contact_attribute_values.value's own text column); the
+// per-type format check (number/date/boolean) is a separate step in
+// routes/contacts.js run against the attribute's declared type, since that
+// isn't known statically here.
+const contactAttributeValueSetSchema = z.object({
+  value: z.string(),
+});
+
+// Write-time validation per item 7's casting strategy: contact_attribute_values.value
+// stays text always, but must match its attribute's declared type's format
+// before being written, so item 9's query-time comparisons can generally
+// assume clean data (item 9 still applies its own defensive regex guard
+// before casting, per that item's own note, as belt-and-suspenders against
+// a row written before this validation existed).
+const CONTACT_ATTRIBUTE_VALUE_VALIDATORS = {
+  text: () => true,
+  number: (v) => /^-?\d+(\.\d+)?$/.test(v),
+  boolean: (v) => v === 'true' || v === 'false',
+  date: (v) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  },
+};
+function validateContactAttributeValue(type, value) {
+  const validator = CONTACT_ATTRIBUTE_VALUE_VALIDATORS[type] || CONTACT_ATTRIBUTE_VALUE_VALIDATORS.text;
+  return validator(value);
+}
+
+// PLAN.md item 8 — multi-tag contacts.
+const contactTagAddSchema = z.object({
+  tagId: uuid,
+});
+
+// PLAN.md item 9 — AND/OR audience segment builder. Shape validation only;
+// an 'attribute' condition's op/value are further checked against that
+// attribute's real declared type by utils/segmentFilter.js (the client
+// can't be trusted to state the type correctly), not here — this schema
+// can't know a specific attributeId's type without a DB lookup.
+const segmentConditionSchema = z.discriminatedUnion('field', [
+  z.object({ field: z.literal('tag'), op: z.literal('eq'), value: uuid }),
+  z.object({ field: z.literal('opt_in_status'), op: z.literal('eq'), value: z.enum(['unknown', 'opted_in', 'opted_out']) }),
+  z.object({ field: z.literal('attribute'), attributeId: uuid, op: z.enum(['eq', 'gt', 'lt', 'contains']), value: z.string() }),
+]);
+const segmentFilterSchema = z.object({
+  combinator: z.enum(['AND', 'OR']),
+  conditions: z.array(segmentConditionSchema).min(1, 'A segment needs at least one condition.'),
+});
+const contactSegmentCreateSchema = z.object({
+  name: z.string().min(1),
+  filterJson: segmentFilterSchema,
+});
+const contactSegmentPreviewSchema = z.object({
+  filterJson: segmentFilterSchema,
 });
 
 const paymentLinkCreateSchema = z.object({
@@ -625,14 +715,42 @@ const consentEventCreateSchema = z.object({
   evidence: z.record(z.any()).optional(),
 });
 
+// PLAN.md item 15 — Meta conversation pricing / cost calculator. category
+// matches Meta's real conversation-category constants (uppercase,
+// including SERVICE — a conversation category, unlike a message template's
+// own category, which never includes SERVICE) — deliberately a separate
+// enum from messageTemplateCreateSchema's Marketing/Utility/Authentication.
+const conversationPricingUpsertSchema = z.object({
+  category: z.enum(['MARKETING', 'UTILITY', 'AUTHENTICATION', 'SERVICE']),
+  countryCode: z.string().min(1),
+  rateInr: z.coerce.number().positive(),
+});
+
+// GET /api/analytics/cost-estimate — an explicit what-if calculator, not a
+// real cost breakdown: usage_logs.conversations_billed has no category or
+// country dimension (see CLAUDE.md's Known Gaps), so category/countryCode
+// are REQUIRED here — the caller states which single rate to apply against
+// the month's total billed count, rather than this endpoint guessing or
+// fabricating a per-category split with no real data behind it.
+const costEstimateQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+  category: z.enum(['MARKETING', 'UTILITY', 'AUTHENTICATION', 'SERVICE']),
+  countryCode: z.string().min(1),
+});
+
 module.exports = {
   uuid,
+  conversationPricingUpsertSchema,
+  costEstimateQuerySchema,
   clientCreateSchema,
   clientUpdateSchema,
   contactCreateSchema,
   contactUpdateSchema,
   chatCreateSchema,
   chatUpdateSchema,
+  chatAssignSchema,
+  chatNoteCreateSchema,
+  cannedResponseCreateSchema,
   messageSendSchema,
   registerSchema,
   loginSchema,
@@ -660,7 +778,15 @@ module.exports = {
   ticketStatusUpdateSchema,
   tagCreateSchema,
   teamMemberCreateSchema,
+  teamAcceptInviteSchema,
+  teamLoginSchema,
   contactAttributeCreateSchema,
+  contactAttributeValueSetSchema,
+  validateContactAttributeValue,
+  contactTagAddSchema,
+  segmentFilterSchema,
+  contactSegmentCreateSchema,
+  contactSegmentPreviewSchema,
   paymentLinkCreateSchema,
   walletRechargeSchema,
   clientWebhookSchema,

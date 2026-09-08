@@ -4,10 +4,11 @@
 // between what the webhook knows and what this list shows.
 async function list(db, clientId) {
   const { rows } = await db.query(
-    `select b.id, b.client_id, b.title, b.tag_id, b.contact_list_id, b.pacing_config, b.status, b.template_name, b.scheduled_date, b.created_at,
+    `select b.id, b.client_id, b.title, b.tag_id, b.contact_list_id, b.segment_id, b.pacing_config, b.status, b.template_name, b.scheduled_date, b.created_at,
             coalesce(rc.total, 0)::int as recipient_count,
             coalesce(rc.sent, 0)::int as delivered_count,
-            coalesce(rc.skipped, 0)::int as skipped_consent_count,
+            coalesce(rc.consent_skipped, 0)::int as skipped_consent_count,
+            coalesce(rc.smart_sending_skipped, 0)::int as skipped_smart_sending_count,
             case when coalesce(rc.sent, 0) = 0 then 0
                  else round((coalesce(rc.delivered, 0)::numeric / rc.sent) * 100, 2)
             end as delivered_rate,
@@ -18,7 +19,17 @@ async function list(db, clientId) {
      left join lateral (
        select count(*) as total,
               count(*) filter (where br.status = 'sent') as sent,
-              count(*) filter (where br.status = 'skipped') as skipped,
+              -- Real bug, fixed: a plain status = 'skipped' count lumped
+              -- every skip reason into one bucket literally named
+              -- skipped_consent_count, which the UI then labeled
+              -- unconditionally as "not opted in for marketing" -- wrong
+              -- and actively misleading for item 12's smart_sending_window
+              -- skips (a different reason, unrelated to consent). Split by
+              -- the exact reason string broadcastRunner.js's Smart Sending
+              -- check writes (markSkipped with 'smart_sending_window') so
+              -- each gets its own accurate count/label downstream.
+              count(*) filter (where br.status = 'skipped' and br.error_reason = 'smart_sending_window') as smart_sending_skipped,
+              count(*) filter (where br.status = 'skipped' and (br.error_reason is null or br.error_reason <> 'smart_sending_window')) as consent_skipped,
               count(*) filter (where m.status in ('delivered', 'read')) as delivered,
               count(*) filter (where m.status = 'read') as read
        from broadcast_recipients br
@@ -38,22 +49,24 @@ async function findById(db, clientId, id) {
 }
 
 async function create(db, clientId, {
-  title, tag_id, contact_list_id, template_name, scheduled_date, param_mappings, header_media_asset_id, pacing_config,
+  title, tag_id, contact_list_id, segment_id, template_name, scheduled_date, param_mappings, header_media_asset_id, pacing_config,
+  smart_sending_hours,
 }) {
   // No scheduled_date (or one that's today/past) -> ready to send now.
   const isFuture = scheduled_date && new Date(scheduled_date) > new Date(new Date().toDateString());
   const status = isFuture ? 'Scheduled' : 'Sending';
   const { rows } = await db.query(
     `insert into broadcasts (
-       client_id, title, tag_id, contact_list_id, template_name, scheduled_date, status,
-       param_mappings, header_media_asset_id, pacing_config
+       client_id, title, tag_id, contact_list_id, segment_id, template_name, scheduled_date, status,
+       param_mappings, header_media_asset_id, pacing_config, smart_sending_hours
      )
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      returning *`,
     [
-      clientId, title, tag_id || null, contact_list_id || null, template_name, scheduled_date || null, status,
+      clientId, title, tag_id || null, contact_list_id || null, segment_id || null, template_name, scheduled_date || null, status,
       JSON.stringify(param_mappings || {}), header_media_asset_id || null,
       pacing_config ? JSON.stringify(pacing_config) : null,
+      smart_sending_hours || null,
     ]
   );
   return rows[0];

@@ -10,6 +10,7 @@ const contactListsRepo = require('../repositories/contactListsRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, contactListCreateSchema } = require('../utils/validate');
 const { parseContactsCsv } = require('../utils/csvContacts');
+const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
 
@@ -21,11 +22,11 @@ const uploadCsv = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   res.json(await contactListsRepo.listByClientId(req.db, req.clientId));
 }));
 
-router.post('/', asyncHandler(async (req, res) => {
+router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   const { name } = contactListCreateSchema.parse(req.body);
   const list = await contactListsRepo.create(req.db, req.clientId, { name, source: 'manual' });
   res.status(201).json(list);
@@ -38,7 +39,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // routes/broadcasts.js's param-mapping validation and the Hub API's error
 // shape, rather than inventing a new error-reporting pattern for CSV
 // specifically.
-router.post('/:id/import', uploadCsv.single('file'), asyncHandler(async (req, res) => {
+router.post('/:id/import', requireRole('Admin', 'Manager'), uploadCsv.single('file'), asyncHandler(async (req, res) => {
   const id = uuid.parse(req.params.id);
   const list = await contactListsRepo.findById(req.db, req.clientId, id);
   if (!list) return res.status(404).json({ error: 'Not found' });
@@ -50,12 +51,17 @@ router.post('/:id/import', uploadCsv.single('file'), asyncHandler(async (req, re
   const { validRows, errors } = parseContactsCsv(req.file.buffer.toString('utf8'));
   const added = await contactListsRepo.addMembersFromRows(req.db, req.clientId, id, validRows);
 
+  // Same reasoning as contacts.js's import route: a header-level
+  // 'unrecognized_column' notice isn't a rejected data row, so it's kept
+  // out of rows_in_file/rejected (both row-count fields) while still
+  // appearing in errors.
+  const rowErrors = errors.filter((e) => e.type !== 'unrecognized_column');
   res.json({
     list_id: id,
-    rows_in_file: validRows.length + errors.length,
+    rows_in_file: validRows.length + rowErrors.length,
     imported: added,
     already_in_list: validRows.length - added,
-    rejected: errors.length,
+    rejected: rowErrors.length,
     errors,
   });
 }));

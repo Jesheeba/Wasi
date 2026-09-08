@@ -15,8 +15,11 @@ const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid } = require('../utils/validate');
+const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
+
+router.use(requireRole('Admin', 'Manager'));
 
 const listQuerySchema = z.object({
   industry: z.string().min(1).optional(),

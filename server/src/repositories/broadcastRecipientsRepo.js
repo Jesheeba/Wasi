@@ -3,6 +3,19 @@
 // stamped directly onto each recipient row (not just reachable via
 // broadcast_id -> broadcasts.client_id) so it can carry its own RLS policy
 // like every other tenant table, instead of needing a join-based one.
+//
+// Real bug, fixed (Option B, per explicit review): this used to match ONLY
+// contacts.tag_id (the single "primary tag"), which no contact-editing UI
+// has ever written — items 8/8.5's multi-tag chip picker only ever writes
+// the separate, additive contact_tags table. A contact tagged VIP via that
+// picker silently matched zero recipients when "VIP" was picked as a
+// broadcast audience. Fixed by matching EITHER source — never REPLACING
+// tag_id with contact_tags only (Option A), since contacts.tag_id has one
+// other real, live write path (the Automation Flow Builder's "Assign Tag"
+// action node, flowEngine.js) that this fix must not regress. The OR is
+// scoped to the ONE tag being targeted, so this can never over-match: a
+// contact tagged X via one mechanism and Y via the other still only
+// matches an audience of X or an audience of Y, never both from one pick.
 async function createFromAudience(db, broadcastId, clientId, tagId) {
   // Joins back to contacts.opt_in_status in the same statement — the
   // caller (routes/broadcasts.js) needs it immediately, to warn before any
@@ -10,7 +23,11 @@ async function createFromAudience(db, broadcastId, clientId, tagId) {
   const { rows } = await db.query(
     `with inserted as (
        insert into broadcast_recipients (broadcast_id, client_id, contact_id)
-       select $1, $2, id from contacts where client_id = $2 and ($3::uuid is null or tag_id = $3)
+       select $1, $2, id from contacts
+       where client_id = $2
+         and ($3::uuid is null or tag_id = $3 or exists (
+           select 1 from contact_tags ct where ct.contact_id = contacts.id and ct.tag_id = $3
+         ))
        returning *
      )
      select inserted.*, contacts.opt_in_status
@@ -39,6 +56,28 @@ async function createFromList(db, broadcastId, clientId, contactListId) {
      from inserted
      join contacts on contacts.id = inserted.contact_id`,
     [broadcastId, clientId, contactListId]
+  );
+  return rows;
+}
+
+// PLAN.md item 9 — a third audience source alongside createFromAudience
+// (tag_id) and createFromList (contact_list_id) above. filterSql/
+// filterParams come from utils/segmentFilter.js's compileFilter, called by
+// the caller (routes/broadcasts.js) with paramOffset: 2 ($1/$2 are
+// broadcastId/clientId here, so the filter's own placeholders continue
+// from $3). Same shape and same "returns opt_in_status immediately for the
+// caller's pre-send consent warning" reasoning as the two functions above.
+async function createFromSegment(db, broadcastId, clientId, filterSql, filterParams) {
+  const { rows } = await db.query(
+    `with inserted as (
+       insert into broadcast_recipients (broadcast_id, client_id, contact_id)
+       select $1, $2, id from contacts where client_id = $2 and (${filterSql})
+       returning *
+     )
+     select inserted.*, contacts.opt_in_status
+     from inserted
+     join contacts on contacts.id = inserted.contact_id`,
+    [broadcastId, clientId, ...filterParams]
   );
   return rows;
 }
@@ -162,4 +201,28 @@ async function hasPending(db, broadcastId) {
   return rows.length > 0;
 }
 
-module.exports = { createFromAudience, createFromList, claimBatch, markSent, markFailed, markSkipped, hasPending };
+// PLAN.md item 12 — Smart Sending. Called from broadcastRunner.js
+// (privileged `pool`, not req.db — same as claimBatch above) before a send
+// actually goes out, against ANY of this contact's OTHER broadcast sends
+// client-wide, not just this one broadcast — "already received another
+// broadcast recently" is the point, not "sent twice by the same campaign"
+// (a single campaign never targets one contact twice to begin with).
+// broadcast_recipients has no send timestamp of its own (created_at is row
+// creation, not send time) — the real send time is only reachable via the
+// linked message's sent_at, same join shape as item 10's timeline query.
+// `hours` is bound as a number multiplying a fixed interval literal, never
+// concatenated into the query text.
+async function hasRecentSend(db, clientId, contactId, hours) {
+  const { rows } = await db.query(
+    `select exists (
+       select 1 from broadcast_recipients br
+       join messages m on m.id = br.message_id
+       where br.client_id = $1 and br.contact_id = $2 and br.status = 'sent'
+         and m.sent_at > now() - ($3::numeric * interval '1 hour')
+     ) as has_recent`,
+    [clientId, contactId, hours]
+  );
+  return rows[0].has_recent;
+}
+
+module.exports = { createFromAudience, createFromList, createFromSegment, claimBatch, markSent, markFailed, markSkipped, hasPending, hasRecentSend };
