@@ -1,4 +1,5 @@
 const { ZodError } = require('zod');
+const multer = require('multer');
 
 function notFoundHandler(req, res) {
   res.status(404).json({ error: 'Not found' });
@@ -22,6 +23,23 @@ function formatZodIssues(err) {
 
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
+  // multer's upload middleware (contacts.js, contactLists.js, templates.js,
+  // onboarding.js all use it) throws synchronously and calls next(err)
+  // directly, bypassing asyncHandler — it lands here uncaught, and without
+  // this check fell all the way through to the generic 500 below, even
+  // though every MulterError (a file over the configured size limit, an
+  // unexpected field name, etc.) is a client mistake, never a server bug.
+  // Fixed centrally rather than per-route, matching this file's own
+  // ZodError handling above and this codebase's established
+  // one-shared-helper convention for a class of error every route sharing
+  // it needs handled the same way.
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large — it exceeds this upload\'s size limit.' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+
   if (err instanceof ZodError) {
     return res.status(400).json({ error: 'Validation failed', details: formatZodIssues(err) });
   }

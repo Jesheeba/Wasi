@@ -78,4 +78,41 @@ async function upsertByPhone(db, clientId, { phone, name, wa_id }) {
   return rows[0];
 }
 
-module.exports = { list, findById, create, update, remove, findByPhone, upsertByPhone };
+// PLAN.md item 6 — general contacts CSV import (unlocks the Contacts view's
+// already-present-but-disabled Import button). Same atomic
+// `INSERT ... ON CONFLICT (client_id, phone) DO UPDATE` pattern
+// contactListsRepo.addMembersFromRows already established and its own
+// comment documents as the fix for a real TOCTOU race a SELECT-then-INSERT
+// approach had (two concurrent imports creating the same new phone could
+// both pass a SELECT, then the second INSERT would hit the unique
+// constraint uncaught) — deliberately NOT reusing upsertByPhone below,
+// which still has that older SELECT-then-conditional-write shape (fine for
+// its own single-message-at-a-time inbound-webhook caller, not something
+// worth carrying into a new bulk-import path). The DO UPDATE clause is a
+// no-op (sets a column to its own existing value), purely so this never
+// errors on a re-imported/overlapping file — every valid CSV row always
+// succeeds, whether it creates a new contact or matches an existing one by
+// phone, which is why the route can just report validRows.length as the
+// import count rather than needing this to report per-row new-vs-matched.
+//
+// Returns [{id, phone}] for every row (new or matched) — item 8's
+// tag-on-import wiring (routes/contacts.js) needs the real contact id per
+// row to attach that row's parsed `tags`, which lives in the CALLING route
+// (not here) since tag find-or-create/attach is a separate repo
+// (tagsRepo/contactTagsRepo) and this function stays single-purpose.
+async function importFromRows(db, clientId, rows) {
+  const results = [];
+  for (const row of rows) {
+    const { rows: [contact] } = await db.query(
+      `insert into contacts (client_id, name, phone, status)
+       values ($1, $2, $3, 'Active')
+       on conflict (client_id, phone) do update set phone = contacts.phone
+       returning id, phone`,
+      [clientId, row.name, row.phone]
+    );
+    results.push(contact);
+  }
+  return results;
+}
+
+module.exports = { list, findById, create, update, remove, findByPhone, upsertByPhone, importFromRows };
