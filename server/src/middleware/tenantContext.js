@@ -17,12 +17,29 @@ const { pool } = require('../db/pool');
 // for a write that then fails to commit). Route handlers in this codebase
 // only ever finish a request via res.json(...) or res.status(n).send(...),
 // so those two are wrapped to await commit/rollback first.
+// PLAN.md item 10.5 — every client-authenticated request gets a 15s
+// statement_timeout by default, so the next unbounded query someone adds
+// inherits protection automatically instead of depending on them knowing
+// to add it themselves (this is exactly how item 9's two segment routes
+// got their own protection — opt-in, not inherited, until now). Same
+// SET LOCAL mechanism as ROLE/current_client_id above — reverts
+// automatically at COMMIT/ROLLBACK, no leak onto the next pooled request.
+// A route needing a different bound (item 9's two routes keep their own
+// tighter 5s override) just runs its own SET LOCAL statement_timeout after
+// this one — the later value wins within the same transaction, standard
+// Postgres behavior, verified in server/test/statementTimeout.test.js.
+// Background workers (broadcastRunner, forwardRunner, flowRunner,
+// alertRunner) use the privileged `pool` directly, never this function —
+// deliberately untouched, a separate decision.
+const DEFAULT_STATEMENT_TIMEOUT_MS = 15000;
+
 async function acquireTenantConnection(clientId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query('SET LOCAL ROLE wasi_app');
     await client.query(`select set_config('app.current_client_id', $1, true)`, [clientId]);
+    await client.query(`set local statement_timeout = '${DEFAULT_STATEMENT_TIMEOUT_MS}ms'`);
   } catch (err) {
     client.release();
     throw err;
@@ -93,4 +110,4 @@ async function withTenantContext(req, res, next) {
   next();
 }
 
-module.exports = { withTenantContext };
+module.exports = { withTenantContext, acquireTenantConnection, DEFAULT_STATEMENT_TIMEOUT_MS };
