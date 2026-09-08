@@ -17,6 +17,17 @@ function signAdminToken(admin) {
   return jwt.sign({ type: 'admin', sub: admin.id, role: admin.role }, JWT_SECRET, { expiresIn: '1d' });
 }
 
+// clientId carried in the payload (not looked up from the DB on every
+// request) is what lets requireClientOrTeamAuth resolve req.clientId
+// identically for an owner or a team member without an extra query.
+function signTeamMemberToken(teamMember) {
+  return jwt.sign(
+    { type: 'team_member', sub: teamMember.id, clientId: teamMember.client_id, role: teamMember.role },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+
 function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
@@ -26,5 +37,6 @@ module.exports = {
   comparePassword,
   signClientToken,
   signAdminToken,
+  signTeamMemberToken,
   verifyToken,
 };
