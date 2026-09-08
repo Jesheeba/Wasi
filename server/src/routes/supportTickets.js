@@ -2,8 +2,11 @@ const { Router } = require('express');
 const supportTicketsRepo = require('../repositories/supportTicketsRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { supportTicketCreateSchema } = require('../utils/validate');
+const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
+
+router.use(requireRole('Admin', 'Manager', 'Agent'));
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await supportTicketsRepo.listByClientId(req.db, req.clientId));

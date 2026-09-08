@@ -6,11 +6,13 @@ const { authLimiter, webhookLimiter, apiLimiter } = require('./middleware/rateLi
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { apiV1NotFoundHandler, apiV1ErrorHandler } = require('./middleware/apiV1ErrorHandler');
 const { requireClientAuth } = require('./middleware/requireClientAuth');
+const { requireClientOrTeamAuth } = require('./middleware/requireClientOrTeamAuth');
 const { requireAdminAuth } = require('./middleware/requireAdminAuth');
 const { withTenantContext } = require('./middleware/tenantContext');
 
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
+const authTeamRouter = require('./routes/authTeam');
 const adminAuthRouter = require('./routes/adminAuth');
 const clientsRouter = require('./routes/clients');
 const contactsRouter = require('./routes/contacts');
@@ -36,12 +38,15 @@ const clientWebhookRouter = require('./routes/clientWebhook');
 const apiKeysRouter = require('./routes/apiKeys');
 const templateLibraryRouter = require('./routes/templateLibrary');
 const contactListsRouter = require('./routes/contactLists');
+const contactSegmentsRouter = require('./routes/contactSegments');
+const cannedResponsesRouter = require('./routes/cannedResponses');
 const apiV1MessagesRouter = require('./routes/apiV1Messages');
 const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 const apiV1ConversationsRouter = require('./routes/apiV1Conversations');
 const apiV1ContactsRouter = require('./routes/apiV1Contacts');
 const apiV1AccountRouter = require('./routes/apiV1Account');
 const apiV1SubscriptionsRouter = require('./routes/apiV1Subscriptions');
+const conversationPricingRouter = require('./routes/conversationPricing');
 
 // Same-origin static pages (this app.js, admin/, marketing/) never send an
 // Origin header Express sees as cross-site, so this allowlist only matters
@@ -132,6 +137,10 @@ function createApp() {
   // session) needs a much more generous limiter than /login /register do —
   // see rateLimit.js's sessionCheckLimiter for why.
   app.use('/api/auth', authRouter);
+  // Team-member login/accept-invite (PLAN.md item 1) — issues its own JWT
+  // type ('team_member'), no auth required to reach these two handlers
+  // themselves, same as /api/auth's own /login and /register.
+  app.use('/api/auth/team', authTeamRouter);
   app.use('/api/admin/auth', authLimiter, adminAuthRouter);
 
   // Tenant-scoped: real client JWT required. withTenantContext runs every
@@ -139,25 +148,40 @@ function createApp() {
   // with app.current_client_id set (migration 013_tenant_isolation.js) —
   // RLS is the actual enforcement, this just makes the connection subject
   // to it.
-  app.use('/api/contacts', requireClientAuth, withTenantContext, contactsRouter);
-  app.use('/api/chats', requireClientAuth, withTenantContext, chatsRouter);
-  app.use('/api/tags', requireClientAuth, withTenantContext, tagsRouter);
+  //
+  // Two auth middlewares are deliberately in play here, not one (PLAN.md
+  // item 1): requireClientAuth accepts ONLY a `type: 'client'` (owner) JWT —
+  // a team_member token is rejected at the JWT-type check itself, before
+  // any role logic runs. requireClientOrTeamAuth additionally accepts a
+  // `type: 'team_member'` JWT, paired with requireRole(...) at each
+  // individual route inside that router (never router-wide) to gate exactly
+  // which team roles reach it. Routers kept on requireClientAuth
+  // (onboarding, billing, wallet, client-webhook, api-keys, payment-links)
+  // are the highest-blast-radius actions — Meta token, billing, wallet,
+  // Hub API credentials, integration secrets — and stay unreachable by any
+  // team-member role at all, including one titled Admin (a deliberate,
+  // stricter-than-the-reference-spec choice, not an oversight).
+  app.use('/api/contacts', requireClientOrTeamAuth, withTenantContext, contactsRouter);
+  app.use('/api/chats', requireClientOrTeamAuth, withTenantContext, chatsRouter);
+  app.use('/api/tags', requireClientOrTeamAuth, withTenantContext, tagsRouter);
   app.use('/api/onboarding', requireClientAuth, withTenantContext, onboardingRouter);
   app.use('/api/billing', requireClientAuth, withTenantContext, billingRouter);
-  app.use('/api/broadcasts', requireClientAuth, withTenantContext, broadcastsRouter);
-  app.use('/api/contact-lists', requireClientAuth, withTenantContext, contactListsRouter);
-  app.use('/api/automation-rules', requireClientAuth, withTenantContext, automationRulesRouter);
-  app.use('/api/automation-flows', requireClientAuth, withTenantContext, automationFlowsRouter);
-  app.use('/api/templates', requireClientAuth, withTenantContext, templatesRouter);
-  app.use('/api/support-tickets', requireClientAuth, withTenantContext, supportTicketsRouter);
-  app.use('/api/analytics', requireClientAuth, withTenantContext, analyticsRouter);
-  app.use('/api/team-members', requireClientAuth, withTenantContext, teamMembersRouter);
-  app.use('/api/contact-attributes', requireClientAuth, withTenantContext, contactAttributesRouter);
+  app.use('/api/broadcasts', requireClientOrTeamAuth, withTenantContext, broadcastsRouter);
+  app.use('/api/contact-lists', requireClientOrTeamAuth, withTenantContext, contactListsRouter);
+  app.use('/api/contact-segments', requireClientOrTeamAuth, withTenantContext, contactSegmentsRouter);
+  app.use('/api/automation-rules', requireClientOrTeamAuth, withTenantContext, automationRulesRouter);
+  app.use('/api/automation-flows', requireClientOrTeamAuth, withTenantContext, automationFlowsRouter);
+  app.use('/api/templates', requireClientOrTeamAuth, withTenantContext, templatesRouter);
+  app.use('/api/support-tickets', requireClientOrTeamAuth, withTenantContext, supportTicketsRouter);
+  app.use('/api/analytics', requireClientOrTeamAuth, withTenantContext, analyticsRouter);
+  app.use('/api/team-members', requireClientOrTeamAuth, withTenantContext, teamMembersRouter);
+  app.use('/api/contact-attributes', requireClientOrTeamAuth, withTenantContext, contactAttributesRouter);
   app.use('/api/payment-links', requireClientAuth, withTenantContext, paymentLinksRouter);
   app.use('/api/wallet', requireClientAuth, withTenantContext, walletRouter);
   app.use('/api/client-webhook', requireClientAuth, withTenantContext, clientWebhookRouter);
   app.use('/api/api-keys', requireClientAuth, withTenantContext, apiKeysRouter);
-  app.use('/api/template-library', requireClientAuth, withTenantContext, templateLibraryRouter);
+  app.use('/api/template-library', requireClientOrTeamAuth, withTenantContext, templateLibraryRouter);
+  app.use('/api/canned-responses', requireClientOrTeamAuth, withTenantContext, cannedResponsesRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);
@@ -166,6 +190,9 @@ function createApp() {
 
   // Admin-only: internal team, gated by admin JWT.
   app.use('/api/clients', requireAdminAuth(), clientsRouter);
+  // Mounted before the broader /api/admin below — Express matches in
+  // registration order, and this is the more specific prefix.
+  app.use('/api/admin/conversation-pricing', requireAdminAuth(), conversationPricingRouter);
   app.use('/api/admin', requireAdminAuth(), adminRouter);
 
   // Hub API (build plan Phase 5): other Sirah applications, authenticated by

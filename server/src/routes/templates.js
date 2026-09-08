@@ -10,6 +10,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, messageTemplateCreateSchema, messageTemplateUpdateSchema } = require('../utils/validate');
 const { validateTemplateText, validateHeaderText } = require('../utils/templateParams');
 const templateSyncService = require('../services/templateSyncService');
+const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
 
@@ -44,7 +45,7 @@ const uploadHeaderMedia = multer({
   limits: { fileSize: MEDIA_HEADER_LIMITS.DOCUMENT.maxBytes },
 });
 
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
 }));
 
@@ -89,7 +90,7 @@ function validateStandardTemplateFields(data) {
 // real template list on demand, not just automatically once after
 // Embedded Signup (onboarding.js). Returns counts rather than the app
 // silently re-fetching, so the UI can show what actually changed.
-router.post('/sync', asyncHandler(async (req, res) => {
+router.post('/sync', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   try {
     const result = await templateSyncService.syncTemplates(req.db, req.clientId);
     res.json(result);
@@ -122,7 +123,7 @@ router.post('/sync', asyncHandler(async (req, res) => {
 // payload as a 'data' form field (JSON.stringify'd, since a template's
 // buttons/bodyParamExamples don't fit as flat multipart fields) alongside
 // the file — see app.js's createTemplate submit handler.
-router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req, res) => {
+router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('headerFile'), asyncHandler(async (req, res) => {
   let rawBody = req.body;
   if (req.file) {
     try {
@@ -273,7 +274,7 @@ router.post('/', uploadHeaderMedia.single('headerFile'), asyncHandler(async (req
 // Reused by the chat send-template modal, the broadcast-creation modal, and
 // the flow editor's Send Template node — all three just need { id, filename }
 // back to attach to their own send/create call as headerMediaAssetId.
-router.post('/:id/header-media', uploadHeaderMedia.single('file'), asyncHandler(async (req, res) => {
+router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('file'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
   if (!template) return res.status(404).json({ error: 'Not found' });
@@ -352,7 +353,7 @@ router.post('/:id/header-media', uploadHeaderMedia.single('file'), asyncHandler(
 // Delete + recreate (DELETE /:id, then POST /) is still the path for that
 // case, and for changing a template's media header — both explicitly out
 // of scope for this route for now.
-router.put('/:id', asyncHandler(async (req, res) => {
+router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
   if (!template) return res.status(404).json({ error: 'Not found' });
@@ -427,7 +428,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
 // case. orphaned_at means Meta already doesn't have it (confirmed by a
 // prior sync — see templateSyncService.js), so the Meta call is skipped
 // there too rather than erroring on a template that's already gone.
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
   if (!template) return res.status(404).json({ error: 'Not found' });
