@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accept Team Invite — Wasi CRM</title>
+  <link rel="stylesheet" href="/breakpoints.css" />
+  <link rel="stylesheet" href="/marketing/marketing.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <header class="site-nav">
+    <div class="container">
+      <a href="/marketing/index.html" class="nav-logo">
+        <svg width="112" height="34" viewBox="0 0 130 40" fill="none">
+          <rect width="130" height="40" rx="8" fill="#43B751" fill-opacity="0.15"/>
+          <text x="22" y="27" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#304742">wasi</text>
+          <circle cx="98" cy="18" r="4" fill="#4AC959"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <section class="section-tight">
+    <div class="container" style="max-width: 420px;">
+      <h1 style="margin-bottom: 0.5rem;">Set your password</h1>
+      <p id="invite-intro" style="color: var(--text-muted); margin-bottom: 1.5rem;">You've been invited to join a team on Wasi CRM. Choose a password to activate your account.</p>
+
+      <form id="invite-form">
+        <div class="form-group">
+          <label class="form-label" for="new-password">Password</label>
+          <input type="password" id="new-password" class="form-input" minlength="8" required placeholder="At least 8 characters" />
+        </div>
+        <div id="invite-error" class="banner" style="display:none;color:#B91C1C;background:#FEE2E2;padding:10px 14px;border-radius:8px;margin-bottom:1rem;font-size:0.875rem;"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="invite-submit">Activate account</button>
+      </form>
+
+      <div id="invite-success" style="display:none;text-align:center;">
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">Your account is active — taking you in now.</p>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      // Same API_BASE snippet as reset-password.html/index.html — not
+      // shared via a common file, matching this repo's existing convention
+      // of each static page carrying its own copy (no build step to share it).
+      const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '4000')
+        ? 'http://localhost:4000'
+        : '';
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token');
+      const form = document.getElementById('invite-form');
+      const errorEl = document.getElementById('invite-error');
+
+      if (!token) {
+        document.getElementById('invite-intro').textContent = 'This invite link is missing a token — ask whoever invited you to resend it.';
+        form.style.display = 'none';
+        return;
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.style.display = 'none';
+        const password = document.getElementById('new-password').value;
+        const submitBtn = document.getElementById('invite-submit');
+        submitBtn.disabled = true;
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/team/accept-invite`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, password }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Could not activate this account');
+
+          // Unlike reset-password, this endpoint returns a working JWT
+          // directly — auto-login straight into the real app rather than
+          // making someone who just set a password type it again immediately.
+          localStorage.setItem('client_token', data.token);
+          localStorage.setItem('actor_type', 'team_member');
+          form.style.display = 'none';
+          document.getElementById('invite-success').style.display = 'block';
+          setTimeout(() => { window.location.href = '/index.html'; }, 1200);
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.style.display = 'block';
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
