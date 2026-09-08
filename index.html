@@ -42,8 +42,7 @@
     </div>
 
     <div class="auth-card-container">
-      <!-- Owner login (unchanged) -->
-      <div class="auth-card" id="owner-login-card">
+      <div class="auth-card">
         <h3 class="auth-title">Log In</h3>
         <form id="login-form">
           <div class="form-group">
@@ -65,34 +64,6 @@
           <button type="submit" class="btn-primary">Login</button>
           <div style="text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-main);">
             New to Wasi? <a href="#" style="color: var(--color-primary-600); font-weight: 600; text-decoration: none;">Signup</a>
-          </div>
-          <div style="text-align: center; margin-top: 0.75rem; font-size: 0.8rem;">
-            <a href="#" id="show-team-login-link" style="color: var(--text-main); font-weight: 600; text-decoration: none;">Log in as a team member</a>
-          </div>
-        </form>
-      </div>
-
-      <!-- Team-member login (PLAN.md item 1 / item 5.5) — POST /api/auth/team/login,
-           needs a tenantSlug alongside email+password since a team member's
-           email is only unique per client, not globally. -->
-      <div class="auth-card" id="team-login-card" style="display: none;">
-        <h3 class="auth-title">Team Member Login</h3>
-        <form id="team-login-form">
-          <div class="form-group">
-            <label class="form-label">Organization ID</label>
-            <input type="text" id="team-login-tenant-slug" class="form-input" placeholder="your-company" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" id="team-login-email" class="form-input" placeholder="you@example.com" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Password</label>
-            <input type="password" id="team-login-password" class="form-input" placeholder="Password" required />
-          </div>
-          <button type="submit" class="btn-primary">Login</button>
-          <div style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem;">
-            <a href="#" id="show-owner-login-link" style="color: var(--text-main); font-weight: 600; text-decoration: none;">Back to owner login</a>
           </div>
         </form>
       </div>
@@ -219,17 +190,6 @@
                 </div>
               </div>
 
-              <!-- item 2/5.5 — queue tabs, independent of the tag filter
-                   above (both apply together in renderChatList). Default
-                   'All' keeps existing single-owner behavior unchanged for
-                   an account with no team members yet. -->
-              <div id="chat-queue-tabs" style="display: flex; gap: 4px; padding: 0 1rem 0.5rem; border-bottom: 1px solid var(--border-light); overflow-x: auto;">
-                <button class="queue-tab-btn" data-queue-filter="unassigned" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">Unassigned</button>
-                <button class="queue-tab-btn" data-queue-filter="mine" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">Mine</button>
-                <button class="queue-tab-btn active" data-queue-filter="all" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">All</button>
-                <button class="queue-tab-btn" data-queue-filter="resolved" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">Resolved</button>
-              </div>
-
               <div class="chat-list" id="inbox-chat-list" style="flex: 1; overflow-y: auto;">
                 <!-- Chat list items populated by JS -->
               </div>
@@ -273,23 +233,6 @@
                   <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
                 </div>
 
-                <!-- item 2/5.5 — assignment + status controls. select#chat-assign-select
-                     lists the client's real team roster (state.teamMembers);
-                     resolve/reopen are separate buttons since only one is ever
-                     relevant to a given chat's current status. -->
-                <div id="chat-action-bar" style="display: flex; align-items: center; gap: 8px; padding: 8px 1.25rem; border-top: 1px solid var(--border-light); flex-wrap: wrap;">
-                  <span id="chat-status-badge" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;"></span>
-                  <select id="chat-assign-select" class="form-input" style="height: 30px; font-size: 0.78rem; padding: 0 8px; width: auto; max-width: 180px;">
-                    <option value="">Assign to…</option>
-                  </select>
-                  <button type="button" id="chat-unassign-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px; display:none;">Unassign</button>
-                  <button type="button" id="chat-resolve-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px;">Resolve</button>
-                  <button type="button" id="chat-reopen-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px; display:none;">Reopen</button>
-                  <button type="button" id="chat-notes-toggle-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px; margin-left: auto;">
-                    <i data-lucide="sticky-note" style="width:13px;"></i> Notes
-                  </button>
-                </div>
-
                 <div class="chat-messages" id="chat-messages-container"></div>
 
                 <!-- Session-window state — the 24h WhatsApp customer-service window
@@ -318,7 +261,15 @@
                    openActiveChat, app.js). A contact has exactly one tag
                    (contacts.tag_id, a single FK), so this never showed two
                    real tags — the "Lead" + "High Intent" pair here was
-                   always fake, for every contact. -->
+                   always fake, for every contact. The Attributes section
+                   below was the same: fabricated City/Lead Score/Source
+                   values with no backing per-contact storage anywhere in
+                   the schema (contact_attributes defines attribute TYPES
+                   for the account, e.g. via Settings > Attributes, not
+                   per-contact VALUES) — left as an honest static note
+                   instead of inventing fake specifics; wiring real
+                   per-contact attribute values is a real feature, not part
+                   of this cleanup. -->
               <div class="contact-details-sidebar">
                 <div class="details-card-header">
                   <div class="avatar" id="drawer-contact-avatar" style="width: 56px; height: 56px; font-size: 1.25rem; background: var(--color-primary-100); color: var(--color-primary-900); margin-bottom: 8px;"></div>
@@ -329,45 +280,11 @@
                 <div>
                   <div class="details-section-title">Tags</div>
                   <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="drawer-contact-tags"></div>
-                  <!-- PLAN.md item 8 — additive multi-tags (contact_tags),
-                       separate from the single primary tag above
-                       (contacts.tag_id, untouched by this section). Item
-                       8.5 generalized the render/event logic behind this
-                       markup (renderContactTagsInto, app.js) so the exact
-                       same wrapper shape also drives the Contacts-view
-                       detail panel below — data-contact-id is set on the
-                       wrapper at render time, read by one shared delegated
-                       listener instead of a per-surface one. -->
-                  <div class="contact-tags-wrapper" id="drawer-contact-tags-wrapper">
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;" class="contact-tags-chips" id="drawer-contact-extra-tags"></div>
-                    <select id="drawer-add-tag-select" class="form-input contact-tags-select" style="font-size: 0.75rem; padding: 3px 6px; height: auto; margin-top: 6px;">
-                      <option value="">+ Add tag…</option>
-                    </select>
-                  </div>
                 </div>
 
-                <!-- PLAN.md item 7 — real per-contact custom attribute
-                     values (contact_attribute_values), replacing the old
-                     honest "not tracked yet" placeholder. Item 8.5
-                     generalized this container's render logic
-                     (renderContactAttributesInto, app.js) to also drive the
-                     Contacts-view detail panel below. -->
                 <div>
                   <div class="details-section-title">Attributes</div>
-                  <div id="drawer-contact-attributes" style="font-size: 0.825rem; color: #9CA3AF;">Per-contact attributes aren't tracked yet.</div>
-                </div>
-
-                <!-- item 3/5.5 — internal notes, toggled by #chat-notes-toggle-btn.
-                     Collapsed by default so it doesn't clutter the drawer for
-                     every chat open — most chats won't have notes. -->
-                <div id="chat-notes-section" style="display: none;">
-                  <div class="details-section-title">Internal Notes</div>
-                  <div id="chat-notes-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; max-height: 220px; overflow-y: auto;"></div>
-                  <div style="position: relative;">
-                    <div id="note-mention-picker" style="display: none; position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 6px; background: white; border: 1px solid var(--border-light); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto; z-index: 30;"></div>
-                    <textarea id="chat-note-input" class="form-input" placeholder="Add an internal note — type @ to mention a teammate" style="min-height: 56px; font-size: 0.82rem; resize: vertical;"></textarea>
-                  </div>
-                  <button type="button" id="chat-note-submit-btn" class="btn-primary" style="height: 32px; font-size: 0.78rem; margin-top: 6px;">Add Note</button>
+                  <div style="font-size: 0.825rem; color: #9CA3AF;">Per-contact attributes aren't tracked yet.</div>
                 </div>
               </div>
             </div>
@@ -392,11 +309,12 @@
                 <i data-lucide="search" style="width: 16px; color: var(--text-muted);"></i>
                 <input type="text" id="contact-search" placeholder="Search contacts..." />
               </div>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="file" id="import-contacts-csv-file" accept=".csv" style="display:none;" />
-                <button class="btn-secondary" id="import-contacts-csv-btn"><i data-lucide="upload"></i> Import CSV</button>
+              <div style="display: flex; gap: 8px;">
+                <!-- Disabled, not removed — bulk import needs a parser/mapping UI
+                     and a new backend bulk-create endpoint, neither of which
+                     exists yet. Export (real, below) needed neither. -->
+                <button class="btn-secondary" disabled title="Bulk import — coming soon"><i data-lucide="upload"></i> Import CSV</button>
                 <button class="btn-secondary" id="export-contacts-csv-btn"><i data-lucide="download"></i> Export CSV</button>
-                <span id="import-contacts-csv-status" style="font-size: 0.78rem;"></span>
               </div>
             </div>
             <table class="data-table">
@@ -437,8 +355,6 @@
                   <th>Read Rate</th>
                   <th>Skipped</th>
                   <th>Date</th>
-                  <!-- PLAN.md item 11 — pause/resume. -->
-                  <th></th>
                 </tr>
               </thead>
               <tbody id="broadcasts-table-body"></tbody>
@@ -804,12 +720,6 @@
                 <a class="sec-nav-item" data-rep-view="campaign">
                   <span>Campaign</span>
                 </a>
-                <!-- item 5/5.5 — Admin/Manager only (hidden for Agent by
-                     applyRoleGating, app.js), matching GET /api/analytics/sla's
-                     own server-side role gate. -->
-                <a class="sec-nav-item" data-rep-view="sla">
-                  <span>Team / SLA</span>
-                </a>
                 <!-- Flow / API / Live Chat / Operator Stats sub-tabs removed
                      — no backend behind any of them, just hardcoded stat
                      cards presented as real reporting data. -->
@@ -932,19 +842,6 @@
                   <table class="data-table">
                     <thead><tr><th>Campaign Name</th><th>Sent</th><th>Delivered Rate</th><th>Read Rate</th></tr></thead>
                     <tbody id="campaign-analytics-tbody">
-                      <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Sub-page 3b: SLA / FIRST RESPONSE TIME (item 5/5.5) -->
-              <div id="rep-view-sla" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Team Response Time</h2>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Team Member</th><th>Avg. First Response</th><th>Avg. Resolution Time</th><th>Replies Tracked</th></tr></thead>
-                    <tbody id="sla-analytics-tbody">
                       <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
                     </tbody>
                   </table>
@@ -1074,10 +971,6 @@
                   <a class="sec-nav-item" data-sec-view="tags">
                     <i data-lucide="tag"></i>
                     <span>Tag Manager</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="canned-responses">
-                    <i data-lucide="message-circle"></i>
-                    <span>Canned Responses</span>
                   </a>
                   <a class="sec-nav-item" data-sec-view="attributes">
                     <i data-lucide="sliders"></i>
@@ -1310,21 +1203,6 @@
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;" id="tags-manager-list"></div>
               </div>
 
-              <!-- Sub-page 8b: CANNED RESPONSES (item 4/5.5) -->
-              <div id="sec-view-canned-responses" class="sec-content-view" style="display: none;">
-                <div class="page-title-bar">
-                  <h2 style="font-size: 1.25rem; font-weight: 700;">Canned Responses</h2>
-                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-canned-response-modal"><i data-lucide="plus"></i> Add Canned Response</button>
-                </div>
-                <p style="font-size: 0.85rem; color: #6B7280; margin-bottom: 1rem;">Type <code>/</code> in the chat composer to insert one of these instantly.</p>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Shortcut</th><th>Message</th><th></th></tr></thead>
-                    <tbody id="canned-responses-table-body"></tbody>
-                  </table>
-                </div>
-              </div>
-
               <!-- Sub-page 9: ATTRIBUTES (Fixes the exact screenshot issue!) -->
               <div id="sec-view-attributes" class="sec-content-view" style="display: none;">
                 <div class="page-title-bar">
@@ -1416,46 +1294,6 @@
     </div>
   </div>
 
-  <!-- PLAN.md item 8.5 — Contacts-view contact detail panel. Reuses the
-       exact same tags/attributes markup shape (and JS render functions,
-       renderContactTagsInto/renderContactAttributesInto in app.js) as the
-       Chat view's contact-details drawer above, so a contact's tags and
-       attribute values can be seen/edited from either surface without a
-       second implementation. contacts.tag_id (the primary tag) has no UI
-       here either, by explicit decision — this panel only ever shows what
-       items 7/8 already built. -->
-  <div id="modal-contact-detail" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 class="modal-title" id="contact-detail-name">Contact</h3>
-        <button class="close-modal-btn" data-close-modal="modal-contact-detail"><i data-lucide="x"></i></button>
-      </div>
-      <div style="font-size: 0.8rem; color: #6B7280; margin: -8px 0 14px;" id="contact-detail-phone"></div>
-
-      <div>
-        <div class="details-section-title">Tags</div>
-        <div class="contact-tags-wrapper" id="contact-detail-tags-wrapper">
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;" class="contact-tags-chips" id="contact-detail-tags-chips"></div>
-          <select class="form-input contact-tags-select" id="contact-detail-tags-select" style="font-size: 0.75rem; padding: 3px 6px; height: auto; margin-top: 6px;">
-            <option value="">+ Add tag…</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-top: 14px;">
-        <div class="details-section-title">Attributes</div>
-        <div id="contact-detail-attributes" style="font-size: 0.825rem; color: #9CA3AF;"></div>
-      </div>
-
-      <!-- PLAN.md item 10 — Contact 360 activity timeline. Read-only,
-           merges messages/broadcast sends/flow entries/consent events. -->
-      <div style="margin-top: 14px;">
-        <div class="details-section-title">Activity</div>
-        <div id="contact-detail-timeline" style="font-size: 0.8rem; color: #9CA3AF; max-height: 260px; overflow-y: auto;"></div>
-      </div>
-    </div>
-  </div>
-
   <div id="modal-create-ticket" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
@@ -1492,11 +1330,9 @@
         </div>
         <div class="form-group">
           <label class="form-label">Audience</label>
-          <div style="display:flex; gap:1rem; margin-bottom:0.5rem; font-size:0.85rem; flex-wrap:wrap;">
+          <div style="display:flex; gap:1rem; margin-bottom:0.5rem; font-size:0.85rem;">
             <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-tag" value="tag" checked /> By Tag</label>
             <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-list" value="list" /> By Contact List</label>
-            <!-- PLAN.md item 9 — AND/OR audience segment builder. -->
-            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-segment" value="segment" /> By Segment</label>
           </div>
           <select id="new-campaign-tag" class="form-input"></select>
           <div id="campaign-audience-list-section" style="display:none;">
@@ -1508,30 +1344,6 @@
               <button type="button" class="btn-secondary" id="import-campaign-list-btn" style="width:auto; padding:0 12px; white-space:nowrap;">Import</button>
             </div>
             <div id="campaign-list-import-status" style="font-size:0.78rem; margin-top:0.35rem;"></div>
-          </div>
-
-          <!-- PLAN.md item 9 — segment audience section. Pick an existing
-               segment, or build+save a new one inline (flat AND/OR
-               conditions on tag/attribute/opt-in status), with a live,
-               debounced match-count preview against POST
-               /api/contact-segments/preview. -->
-          <div id="campaign-audience-segment-section" style="display:none;">
-            <select id="new-campaign-segment" class="form-input" style="margin-bottom:0.5rem;"></select>
-            <button type="button" class="btn-secondary" id="toggle-new-segment-builder-btn" style="width:auto; padding:0 10px; font-size:0.78rem;">+ Build a new segment</button>
-
-            <div id="segment-builder" style="display:none; margin-top:10px; padding:10px; border:1px solid var(--border-light); border-radius:8px;">
-              <div style="display:flex; gap:1rem; margin-bottom:8px; font-size:0.8rem;">
-                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="segment-combinator" id="segment-combinator-and" value="AND" checked /> Match ALL (AND)</label>
-                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="radio" name="segment-combinator" id="segment-combinator-or" value="OR" /> Match ANY (OR)</label>
-              </div>
-              <div id="segment-conditions-list"></div>
-              <button type="button" class="btn-secondary" id="add-segment-condition-btn" style="width:auto; padding:0 10px; font-size:0.78rem; margin-top:4px;">+ Add condition</button>
-              <div id="segment-preview-status" style="font-size:0.78rem; margin-top:8px; color:var(--text-muted);"></div>
-              <div style="display:flex; gap:6px; margin-top:8px;">
-                <input type="text" class="form-input" id="new-segment-name" placeholder="Segment name" style="flex:1; font-size:0.8rem;" />
-                <button type="button" class="btn-primary" id="save-segment-btn" style="width:auto; padding:0 12px; font-size:0.8rem;">Save Segment</button>
-              </div>
-            </div>
           </div>
         </div>
         <div class="form-group">
@@ -1552,17 +1364,6 @@
             <option value="120">Fast — 120 messages/min</option>
           </select>
           <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Slows this campaign's own send rate — useful for protecting a fresh or lower-tier number's quality rating. Well under WhatsApp's real throughput limits either way.</div>
-        </div>
-        <!-- PLAN.md item 12 — Smart Sending. -->
-        <div class="form-group">
-          <label class="form-label">Smart Sending</label>
-          <select id="new-campaign-smart-sending" class="form-input">
-            <option value="">Off — always send to everyone in the audience</option>
-            <option value="24">Skip contacts messaged by another campaign in the last 24 hours</option>
-            <option value="72">Skip contacts messaged by another campaign in the last 3 days</option>
-            <option value="168">Skip contacts messaged by another campaign in the last 7 days</option>
-          </select>
-          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Avoids messaging the same contact twice in a short window across DIFFERENT campaigns — the contact's real primary tag/opt-in status are unaffected either way.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-campaign">Cancel</button>
@@ -1739,30 +1540,6 @@
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-tag">Cancel</button>
           <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Tag</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- item 4/5.5 -->
-  <div id="modal-add-canned-response" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 class="modal-title">Add Canned Response</h3>
-        <button class="close-modal-btn" data-close-modal="modal-add-canned-response"><i data-lucide="x"></i></button>
-      </div>
-      <form id="add-canned-response-form">
-        <div class="form-group">
-          <label class="form-label">Shortcut</label>
-          <input type="text" id="new-canned-shortcut" class="form-input" placeholder="/refund" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Message</label>
-          <textarea id="new-canned-body" class="form-input" style="min-height: 90px;" placeholder="Your refund has been processed." required></textarea>
-        </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
-          <button type="button" class="btn-secondary" data-close-modal="modal-add-canned-response">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save</button>
         </div>
       </form>
     </div>
@@ -2157,11 +1934,11 @@
        works regardless of what's caching it, since it's a categorically
        different URL, not a conditional-request negotiation. Bump the value
        whenever embeddedSignup.js changes — same discipline as app.js below. -->
-  <script src="/embeddedSignup.js?v=20260908b"></script>
+  <script src="/embeddedSignup.js?v=20260908a"></script>
   <!-- Cache-busting query string — this file has been edited many times in a
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
-  <script src="app.js?v=20260908b"></script>
+  <script src="app.js?v=20260907a"></script>
 </body>
 </html>

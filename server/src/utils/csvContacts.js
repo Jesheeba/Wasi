@@ -59,37 +59,13 @@ function isValidPhone(normalized) {
   return /^[0-9]{10,15}$/.test(normalized);
 }
 
-// Only name/phone are ever read by default — a column like "tags" is not
-// silently dropped: see the unrecognized-column check below. `tags` becomes
-// a third known/read column, but ONLY for a caller that opts in via
-// `{ includeTags: true }` (routes/contacts.js, since item 8's contact_tags
-// table gives it somewhere real to go) — routes/contactLists.js's campaign-
-// audience import calls this with no options and still gets an honest
-// "ignored" notice for a tags column, since that path genuinely doesn't
-// wire tags through.
-const KNOWN_COLUMNS = new Set(['name', 'phone']);
-const TAGS_COLUMN = 'tags';
-
-// A cell like "VIP;Repeat Customer" — semicolon-separated since comma is
-// this parser's field delimiter. Free-text names, no format validation
-// (unlike contact_attribute_values): tagsRepo.findOrCreateByName makes any
-// non-empty name usable.
-function parseTagNames(raw) {
-  return (raw || '')
-    .split(';')
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
-// Returns { validRows: [{name, phone, tags?}], errors: [{row, reason}] } —
-// every row is accounted for in exactly one of the two arrays, never
-// silently dropped. `row` in an error is the 1-indexed line number as it
-// appears in the uploaded file (including the header line, matching what a
-// person looking at the file in a spreadsheet app would call "row N"), so a
-// client can find and fix the actual bad line. `tags` is present on each
-// row only when `includeTags` is true; omitted entirely otherwise, so a
-// caller that doesn't want it never sees the field at all.
-function parseContactsCsv(text, { includeTags = false } = {}) {
+// Returns { validRows: [{name, phone}], errors: [{row, reason}] } — every
+// row is accounted for in exactly one of the two arrays, never silently
+// dropped. `row` in an error is the 1-indexed line number as it appears in
+// the uploaded file (including the header line, matching what a person
+// looking at the file in a spreadsheet app would call "row N"), so a
+// client can find and fix the actual bad line.
+function parseContactsCsv(text) {
   const lines = (text || '').split(/\r\n|\r|\n/).filter((line, i, arr) => !(i === arr.length - 1 && line === ''));
   if (lines.length === 0) {
     return { validRows: [], errors: [{ row: 1, reason: 'File is empty.' }] };
@@ -98,7 +74,6 @@ function parseContactsCsv(text, { includeTags = false } = {}) {
   const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
   const nameIdx = header.indexOf('name');
   const phoneIdx = header.indexOf('phone');
-  const tagsIdx = includeTags ? header.indexOf(TAGS_COLUMN) : -1;
   if (phoneIdx === -1) {
     return {
       validRows: [],
@@ -109,23 +84,6 @@ function parseContactsCsv(text, { includeTags = false } = {}) {
   const validRows = [];
   const errors = [];
   const seenInFile = new Set();
-  const knownColumns = includeTags ? new Set([...KNOWN_COLUMNS, TAGS_COLUMN]) : KNOWN_COLUMNS;
-
-  // Report, never silently ignore, any column this parser doesn't read.
-  // This is a header-level (not per-row) problem, reported once at row 1
-  // alongside the "no phone column" case above, and does NOT block the
-  // import — name/phone (and tags, when included) still proceed. Tagged
-  // with type: 'unrecognized_column' (unlike every other entry this
-  // function pushes) so callers can keep it out of their numeric
-  // failed/rejected row counts while still surfacing it in the errors array
-  // itself; it does not correspond to any one failed data row.
-  for (const col of new Set(header.filter((h) => h && !knownColumns.has(h)))) {
-    errors.push({
-      row: 1,
-      reason: `Column "${col}" is not imported yet — only "name"${includeTags ? ', "phone", and "tags"' : ' and "phone"'} are read. Contacts were still imported from those columns; "${col}" was ignored for every row.`,
-      type: 'unrecognized_column',
-    });
-  }
 
   for (let i = 1; i < lines.length; i++) {
     const rowNum = i + 1; // 1-indexed, header is row 1
@@ -150,9 +108,7 @@ function parseContactsCsv(text, { includeTags = false } = {}) {
       continue;
     }
     seenInFile.add(phone);
-    const row = { name: name || phone, phone };
-    if (includeTags) row.tags = tagsIdx !== -1 ? parseTagNames(fields[tagsIdx]) : [];
-    validRows.push(row);
+    validRows.push({ name: name || phone, phone });
   }
 
   return { validRows, errors };

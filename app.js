@@ -13,15 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const state = {
     user: null,
-    // actorType/actorRole/actorId — item 5.5 (PLAN.md). 'owner' + 'Owner' is
-    // the default because every session used to BE the owner; a team-member
-    // login/resume overwrites these three in enterApp. Nothing outside the
-    // items-1-5 UI added this pass reads actorRole yet (see this session's
-    // report on scope: pre-existing nav items like Broadcasts/Automation
-    // aren't role-gated here, deliberately, per the agreed UI-pass scope).
-    actorType: 'owner',
-    actorRole: 'Owner',
-    actorId: null,
     currentView: 'chat',
     activeChatId: null,
     chats: [],
@@ -39,17 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     libraryEntries: [],
     librarySelectedEntry: null,
     metaLibraryEntries: [],
-    metaLibrarySelectedEntry: null,
-    teamMembers: [],
-    cannedResponses: [],
-    chatQueueFilter: 'all',
-    activeChatNotes: [],
-    contactAttributes: [],
-    // item 8.5 — which contact (if any) the Contacts-view detail panel
-    // currently has open; the staleness guard for
-    // renderContactAttributesInto/renderContactTagsInto calls made from
-    // that panel, parallel to activeChatId's role for the Chat drawer.
-    activeContactDetailId: null
+    metaLibrarySelectedEntry: null
   };
 
   const refreshIcons = () => {
@@ -168,32 +149,19 @@ document.addEventListener('DOMContentLoaded', () => {
       phone: c.phone,
       tag: state.tagsById[c.tag_id]?.name || '—',
       time: timeLabel(c.last_message_at),
-      count: c.unread_count,
-      // item 2/5.5 — previously dropped by this adapter entirely, so no
-      // renderer could see them even though the API already returns both.
-      status: c.status || 'open',
-      assignedTeamMemberId: c.assigned_team_member_id || null,
-      // item 7 — the linked contact record, if any (chats.contact_id),
-      // needed to fetch/save its per-contact attribute values.
-      contactId: c.contact_id || null
+      count: c.unread_count
     };
   }
 
   function adaptBroadcast(b) {
     return {
-      id: b.id,
       title: b.title,
       tag: state.tagsById[b.tag_id]?.name || '—',
       status: b.status,
       delivered: String(b.delivered_count),
       readRate: `${Number(b.read_rate).toFixed(1)}%`,
       date: (b.scheduled_date || b.created_at || '').toString().slice(0, 10),
-      skippedConsent: b.skipped_consent_count || 0,
-      // item 12 follow-up — kept separate from skippedConsent above: the
-      // two are different reasons a recipient never got sent to, and
-      // showing one undifferentiated "N skipped" badge labeled as a
-      // consent issue was actively wrong (not just vague) for this reason.
-      skippedSmartSending: b.skipped_smart_sending_count || 0
+      skippedConsent: b.skipped_consent_count || 0
     };
   }
 
@@ -224,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadInitialData() {
-    const [tags, contacts, chats, broadcasts, automationRules, flows, templates, tickets, teamMembers, cannedResponses, contactAttributes] = await Promise.all([
+    const [tags, contacts, chats, broadcasts, automationRules, flows, templates, tickets] = await Promise.all([
       authFetch('/api/tags'),
       authFetch('/api/contacts'),
       authFetch('/api/chats'),
@@ -232,16 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
       authFetch('/api/automation-rules'),
       authFetch('/api/automation-flows'),
       authFetch('/api/templates'),
-      authFetch('/api/support-tickets'),
-      // item 5.5 — team roster (assign/@mention pickers) and canned
-      // responses (composer autocomplete) both need to be available the
-      // moment the Chat view opens, not fetched lazily per-chat.
-      authFetch('/api/team-members'),
-      authFetch('/api/canned-responses'),
-      // item 7 — attribute type DEFINITIONS (not per-contact values, those
-      // are fetched per-chat in openActiveChat) needed to render the Chat
-      // drawer's Attributes section for whichever contact is open.
-      authFetch('/api/contact-attributes')
+      authFetch('/api/support-tickets')
     ]);
 
     state.tagsById = Object.fromEntries(tags.map(t => [t.id, t]));
@@ -252,9 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
     state.flows = flows;
     state.templates = templates;
     state.tickets = tickets;
-    state.teamMembers = teamMembers;
-    state.cannedResponses = cannedResponses;
-    state.contactAttributes = contactAttributes;
   }
 
   function showAuthView() {
@@ -334,50 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
     pollTimer = null;
   }
 
-  // item 5.5 (+ this follow-up) — deliberately narrow scope: hides/disables
-  // only the surfaces whose backing API an Agent's token is actually
-  // rejected from. Not the broader gating initiative (that would also
-  // cover Settings sub-tabs like Wallet/Billing/Developer/Webhook, which
-  // are owner-only for EVERY team role, not Agent-specific — flagged
-  // separately, not done here since it's a different, larger scope than
-  // "hide what Agent specifically can't reach"). Safe to call every time
-  // enterApp runs, including on a plain owner session (Owner always sees
-  // everything — every check below is a no-op for actorRole 'Owner').
-  //
-  // Top-level nav items hidden for Agent, and why (matches item 1's real
-  // route-level requireRole grants, not a guess):
-  //   Campaigns          -> /api/broadcasts is Admin/Manager only
-  //   Template Library   -> /api/template-library is Admin/Manager only
-  //   Automation         -> /api/automation-rules + /api/automation-flows are Admin/Manager only
-  //   Analytics          -> /api/analytics is Admin/Manager only (not just the SLA sub-tab)
-  // Template itself stays visible — GET /api/templates is Agent-reachable
-  // (an Agent needs to pick an approved template when the 24h window is
-  // closed), only create/edit/delete are Admin/Manager, and those controls
-  // already live inside the Template view itself, not the nav.
-  function applyRoleGating() {
-    const isAgent = state.actorRole === 'Agent';
-    const slaNavItem = document.querySelector('[data-rep-view="sla"]');
-    if (slaNavItem) slaNavItem.style.display = isAgent ? 'none' : '';
-    const inviteBtn = document.getElementById('open-invite-member-modal');
-    if (inviteBtn) inviteBtn.style.display = isAgent ? 'none' : '';
-    const addCannedBtn = document.getElementById('open-add-canned-response-modal');
-    if (addCannedBtn) addCannedBtn.style.display = isAgent ? 'none' : '';
-
-    const agentHiddenViews = ['campaigns', 'template-library', 'automation', 'analytics'];
-    agentHiddenViews.forEach((view) => {
-      const navEl = document.querySelector(`.nav-item[data-view="${view}"]`);
-      if (navEl) navEl.style.display = isAgent ? 'none' : '';
-    });
-  }
-
-  // actor — item 5.5: { type: 'owner'|'team_member', role, id }. Defaults to
-  // an owner session so every pre-existing call site (nothing before this
-  // pass ever passed a second argument) keeps working unchanged.
-  async function enterApp(client, actor) {
+  async function enterApp(client) {
     state.user = client;
-    state.actorType = actor?.type || 'owner';
-    state.actorRole = actor?.role || 'Owner';
-    state.actorId = actor?.id || client?.id || null;
     authView.style.display = 'none';
     appShell.style.display = 'flex';
 
@@ -391,16 +305,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (profileItem) {
       const nameEl = profileItem.querySelector('.nav-text');
       const avatarEl = profileItem.querySelector('.avatar');
-      // A team member sees their own name + role (there's no separate "who
-      // am I" indicator elsewhere), not the client account's name — that
-      // would read as impersonating the owner.
-      const label = state.actorType === 'team_member'
-        ? `${client.name || 'Team member'} (${state.actorRole})`
-        : (client.name || client.email || 'Account');
-      if (nameEl) nameEl.textContent = label;
-      if (avatarEl) avatarEl.textContent = initialsFor(client.name || client.email || state.actorRole);
+      if (nameEl) nameEl.textContent = client.name || client.email || 'Account';
+      if (avatarEl) avatarEl.textContent = initialsFor(client.name || client.email);
     }
-    applyRoleGating();
 
     try {
       await loadInitialData();
@@ -436,62 +343,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error(data.error || 'Login failed');
 
       localStorage.setItem('client_token', data.token);
-      localStorage.setItem('actor_type', 'owner');
-      await enterApp(data.client, { type: 'owner', role: 'Owner', id: data.client.id });
+      await enterApp(data.client);
     } catch (err) {
       showToast(err.message);
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
-  });
-
-  // item 5.5 — team-member login (PLAN.md item 1's other login surface).
-  // Reuses the SAME localStorage['client_token'] key as the owner flow, not
-  // a second key — authFetch already sends whatever's there with no
-  // awareness of token type, so there's no reason to fork that mechanism;
-  // only the resume/logout paths need to know which endpoint to re-validate
-  // against, tracked via the small 'actor_type' key below.
-  const teamLoginForm = document.getElementById('team-login-form');
-  teamLoginForm?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const tenantSlug = document.getElementById('team-login-tenant-slug').value.trim();
-    const email = document.getElementById('team-login-email').value.trim();
-    const password = document.getElementById('team-login-password').value;
-    const submitBtn = teamLoginForm.querySelector('button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/team/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantSlug, email, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
-
-      localStorage.setItem('client_token', data.token);
-      localStorage.setItem('actor_type', 'team_member');
-      // The login response only carries {id, name, role} — no email/avatar
-      // seed exists for a team member the way the owner's own client row
-      // provides one, so `client` here is just enough to satisfy enterApp's
-      // shape, not a full profile.
-      await enterApp({ name: data.teamMember.name }, { type: 'team_member', role: data.teamMember.role, id: data.teamMember.id });
-    } catch (err) {
-      showToast(err.message);
-    } finally {
-      if (submitBtn) submitBtn.disabled = false;
-    }
-  });
-
-  document.getElementById('show-team-login-link')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.getElementById('owner-login-card').style.display = 'none';
-    document.getElementById('team-login-card').style.display = '';
-  });
-  document.getElementById('show-owner-login-link')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.getElementById('team-login-card').style.display = 'none';
-    document.getElementById('owner-login-card').style.display = '';
   });
 
   document.getElementById('forgot-password-link')?.addEventListener('click', async (e) => {
@@ -515,7 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirm('Do you want to log out?')) {
       stopPolling();
       localStorage.removeItem('client_token');
-      localStorage.removeItem('actor_type');
       showAuthView();
     }
   });
@@ -531,19 +387,9 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     const token = localStorage.getItem('client_token');
     if (!token) return;
-    // item 5.5 — a team-member session needs its own re-validation endpoint
-    // (GET /api/auth/team/me), since /api/auth/me is owner-only and would
-    // 403 a team_member token. Defaults to 'owner' for a token stored
-    // before this pass existed, or if the marker is ever missing/corrupted.
-    const actorType = localStorage.getItem('actor_type') || 'owner';
     try {
-      if (actorType === 'team_member') {
-        const me = await authFetch('/api/auth/team/me');
-        await enterApp({ name: me.name, email: me.email }, { type: 'team_member', role: me.role, id: me.id });
-      } else {
-        const client = await authFetch('/api/auth/me');
-        await enterApp(client, { type: 'owner', role: 'Owner', id: client.id });
-      }
+      const client = await authFetch('/api/auth/me');
+      await enterApp(client);
     } catch (err) {
       // Only clear the token on a genuine auth failure (a real 401 — already
       // handled/logged by authFetch itself above). This used to clear it on
@@ -559,7 +405,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // clears up.
       if (err.isAuthError) {
         localStorage.removeItem('client_token');
-        localStorage.removeItem('actor_type');
       }
     }
   })();
@@ -611,21 +456,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.chats = chats.map(adaptChat);
         if (state.currentView === 'chat') renderChatList(state.chatTagFilter);
       }).catch(() => {});
-
-      // teamMembers/cannedResponses/contactAttributes only otherwise load
-      // once at session start (loadInitialData) — an agent's tab can stay
-      // open on Chat all day while another admin invites someone, adds a
-      // canned response, or defines a new attribute elsewhere. Each of
-      // those Settings mutations already refreshes state.X for the tab
-      // that made the change (renderTeamTable/renderCannedResponsesTable/
-      // renderAttributesTable); this covers every OTHER open tab, the same
-      // staleness fix as chats/contacts/templates above, refetched every
-      // time Chat becomes the active view since that's where all three are
-      // actually consumed (assign/@mention pickers, the "/" canned-response
-      // autocomplete, the contact drawer's Attributes section).
-      authFetch('/api/team-members').then(teamMembers => { state.teamMembers = teamMembers; }).catch(() => {});
-      authFetch('/api/canned-responses').then(cannedResponses => { state.cannedResponses = cannedResponses; }).catch(() => {});
-      authFetch('/api/contact-attributes').then(contactAttributes => { state.contactAttributes = contactAttributes; }).catch(() => {});
     }
     if (targetView === 'contacts') {
       // Same staleness fix as the chat view above: state.contacts is only
@@ -853,9 +683,6 @@ document.addEventListener('DOMContentLoaded', () => {
       ? `<span class="tag-badge">${escapeHtml(chat.tag)}</span>`
       : '<span style="font-size:0.8rem;color:#9CA3AF;">No tag assigned</span>';
 
-    renderContactAttributesInto(document.getElementById('drawer-contact-attributes'), chat.contactId, () => state.activeChatId !== chat.id);
-    renderContactTagsInto(document.getElementById('drawer-contact-tags-wrapper'), chat.contactId, () => state.activeChatId !== chat.id);
-
     try {
       await refreshActiveChatMessages();
     } catch (err) {
@@ -878,436 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // just re-show the count if this write didn't stick.
       }
     }
-
-    renderChatActionBar(chat);
-    // Notes are lazy-loaded only if the panel is already open (a prior
-    // chat's session left it toggled on) — most chat-opens never touch
-    // notes, so this avoids a GET /:id/notes round trip on every single
-    // chat click.
-    document.getElementById('chat-notes-section').style.display = 'none';
-    state.activeChatNotes = [];
   }
-
-  /* ---------------------------------------------------------------
-     item 2/5.5 — assign/unassign/resolve/reopen action bar
-     --------------------------------------------------------------- */
-  function renderChatActionBar(chat) {
-    const statusBadge = document.getElementById('chat-status-badge');
-    const isResolved = chat.status === 'resolved';
-    statusBadge.textContent = isResolved ? 'Resolved' : 'Open';
-    statusBadge.style.background = isResolved ? '#F1F5F9' : '#DCFCE7';
-    statusBadge.style.color = isResolved ? '#475569' : '#166534';
-
-    const select = document.getElementById('chat-assign-select');
-    select.innerHTML = '<option value="">Assign to…</option>' +
-      state.teamMembers.map(m => `<option value="${m.id}" ${m.id === chat.assignedTeamMemberId ? 'selected' : ''}>${escapeHtml(m.name)} (${escapeHtml(m.role)})</option>`).join('');
-
-    document.getElementById('chat-unassign-btn').style.display = chat.assignedTeamMemberId ? '' : 'none';
-    document.getElementById('chat-resolve-btn').style.display = isResolved ? 'none' : '';
-    document.getElementById('chat-reopen-btn').style.display = isResolved ? '' : 'none';
-
-    // Agent role: per PLAN.md item 2, may only assign a chat to THEMSELVES,
-    // never resolve/reopen (Admin/Manager only per requireRole on those
-    // routes — matching that server-side gate here so an Agent doesn't see
-    // controls that would just 403). The select itself stays usable for an
-    // Agent so they can still claim an unassigned chat.
-    const isAgent = state.actorRole === 'Agent';
-    document.getElementById('chat-resolve-btn').disabled = isAgent;
-    document.getElementById('chat-reopen-btn').disabled = isAgent;
-    if (isAgent) {
-      Array.from(select.options).forEach(opt => {
-        if (opt.value && opt.value !== state.actorId) opt.disabled = true;
-      });
-    }
-  }
-
-  async function refreshActiveChatFromServer() {
-    const updated = await authFetch(`/api/chats/${state.activeChatId}`);
-    const idx = state.chats.findIndex(c => c.id === updated.id);
-    const adapted = adaptChat(updated);
-    if (idx >= 0) state.chats[idx] = { ...state.chats[idx], ...adapted };
-    renderChatActionBar(adapted);
-    renderChatList(state.chatTagFilter);
-  }
-
-  document.getElementById('chat-assign-select')?.addEventListener('change', async (e) => {
-    const teamMemberId = e.target.value;
-    if (!teamMemberId || !state.activeChatId) return;
-    try {
-      await authFetch(`/api/chats/${state.activeChatId}/assign`, { method: 'POST', body: JSON.stringify({ teamMemberId }) });
-      await refreshActiveChatFromServer();
-      showToast('Chat assigned.');
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
-
-  document.getElementById('chat-unassign-btn')?.addEventListener('click', async () => {
-    if (!state.activeChatId) return;
-    try {
-      await authFetch(`/api/chats/${state.activeChatId}/unassign`, { method: 'POST' });
-      await refreshActiveChatFromServer();
-      showToast('Chat unassigned.');
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
-
-  document.getElementById('chat-resolve-btn')?.addEventListener('click', async () => {
-    if (!state.activeChatId) return;
-    try {
-      await authFetch(`/api/chats/${state.activeChatId}/resolve`, { method: 'POST' });
-      await refreshActiveChatFromServer();
-      showToast('Chat marked resolved.');
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
-
-  document.getElementById('chat-reopen-btn')?.addEventListener('click', async () => {
-    if (!state.activeChatId) return;
-    try {
-      await authFetch(`/api/chats/${state.activeChatId}/reopen`, { method: 'POST' });
-      await refreshActiveChatFromServer();
-      showToast('Chat reopened.');
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
-
-  /* ---------------------------------------------------------------
-     item 3/5.5 — internal notes with @mention
-     --------------------------------------------------------------- */
-  async function renderChatNotes() {
-    const list = document.getElementById('chat-notes-list');
-    if (!state.activeChatId) return;
-    try {
-      state.activeChatNotes = await authFetch(`/api/chats/${state.activeChatId}/notes`);
-    } catch (err) {
-      showToast(err.message);
-      return;
-    }
-    if (!state.activeChatNotes.length) {
-      list.innerHTML = '<div style="font-size:0.78rem; color:#9CA3AF;">No internal notes on this chat yet.</div>';
-      return;
-    }
-    list.innerHTML = state.activeChatNotes.map(n => `
-      <div style="background:#F8FAFC; border:1px solid var(--border-light); border-radius:8px; padding:8px 10px;">
-        <div style="font-size:0.72rem; font-weight:700; color:#475569;">${escapeHtml(n.author ? n.author.name : 'You')}</div>
-        <div style="font-size:0.8rem; color:#1F2937; white-space:pre-wrap;">${escapeHtml(n.body)}</div>
-        ${n.mentions && n.mentions.length ? `<div style="font-size:0.7rem; color:#16A34A; margin-top:4px;">${n.mentions.map(m => '@' + escapeHtml(m.name)).join(' ')}</div>` : ''}
-      </div>
-    `).join('');
-  }
-
-  document.getElementById('chat-notes-toggle-btn')?.addEventListener('click', async () => {
-    const section = document.getElementById('chat-notes-section');
-    const nowVisible = section.style.display === 'none';
-    section.style.display = nowVisible ? '' : 'none';
-    if (nowVisible) await renderChatNotes();
-  });
-
-  // @mention autocomplete — same slash-picker mechanism templates already
-  // use (see renderSlashPicker below), reused for team members instead of
-  // templates since the interaction (type a trigger character, filter a
-  // list, click/select to insert) is identical.
-  const noteInput = document.getElementById('chat-note-input');
-  const mentionPicker = document.getElementById('note-mention-picker');
-  let pendingNoteMentions = [];
-
-  function closeMentionPicker() {
-    if (mentionPicker) mentionPicker.style.display = 'none';
-  }
-
-  function renderMentionPicker(filterText) {
-    if (!mentionPicker) return;
-    const matches = state.teamMembers.filter(m => m.name.toLowerCase().includes(filterText.toLowerCase()));
-    if (!matches.length) { closeMentionPicker(); return; }
-    mentionPicker.innerHTML = matches.map(m => `
-      <div class="mention-picker-item" data-member-id="${m.id}" data-member-name="${escapeHtml(m.name)}" style="padding:8px 12px; cursor:pointer; font-size:0.8rem;">${escapeHtml(m.name)} <span style="color:#9CA3AF;">(${escapeHtml(m.role)})</span></div>
-    `).join('');
-    mentionPicker.style.display = '';
-    mentionPicker.querySelectorAll('.mention-picker-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const id = item.dataset.memberId;
-        const name = item.dataset.memberName;
-        if (!pendingNoteMentions.includes(id)) pendingNoteMentions.push(id);
-        // Replace the trailing "@partial" the user was typing with the full name.
-        noteInput.value = noteInput.value.replace(/@[^@]*$/, `@${name} `);
-        closeMentionPicker();
-        noteInput.focus();
-      });
-    });
-  }
-
-  noteInput?.addEventListener('input', () => {
-    const val = noteInput.value;
-    const match = val.match(/@([^@\s]*)$/);
-    if (match) renderMentionPicker(match[1]);
-    else closeMentionPicker();
-  });
-
-  document.getElementById('chat-note-submit-btn')?.addEventListener('click', async () => {
-    const body = noteInput.value.trim();
-    if (!body || !state.activeChatId) return;
-    try {
-      await authFetch(`/api/chats/${state.activeChatId}/notes`, {
-        method: 'POST',
-        body: JSON.stringify({ body, mentions: pendingNoteMentions }),
-      });
-      noteInput.value = '';
-      pendingNoteMentions = [];
-      closeMentionPicker();
-      await renderChatNotes();
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
-
-  // --- Per-contact custom attribute values (item 7) + additive multi-tags
-  // (item 8) — generalized (item 8.5) to render into ANY container/wrapper
-  // for ANY contactId, not just the Chat drawer. Both the drawer
-  // (openActiveChat, above) and the Contacts-view detail panel
-  // (openContactDetailPanel, below) call these same two functions; neither
-  // has its own copy of the fetch/render/save logic. `isStale()` is a
-  // caller-supplied check (run after the async fetch returns) so a late
-  // response from an abandoned chat-switch or panel-close never paints
-  // into what's now showing something else — each caller knows what
-  // "still relevant" means for its own surface (state.activeChatId for the
-  // drawer, state.activeContactDetailId for the panel).
-  //
-  // attr.type picks the input kind (boolean -> select, so a user can't
-  // type "yes" and get a 400; date -> a real date picker) — real
-  // validation still happens server-side (validateContactAttributeValue),
-  // this just steers most users away from a value that would fail it.
-  async function renderContactAttributesInto(container, contactId, isStale) {
-    if (!container) return;
-    container.dataset.contactId = contactId || '';
-    if (!contactId) {
-      container.innerHTML = '<span style="font-size:0.8rem;color:#9CA3AF;">No linked contact record.</span>';
-      return;
-    }
-    if (!state.contactAttributes.length) {
-      container.innerHTML = '<span style="font-size:0.8rem;color:#9CA3AF;">No custom attributes defined yet — add one in Settings &gt; Attributes.</span>';
-      return;
-    }
-    container.innerHTML = '<span style="font-size:0.8rem;color:#9CA3AF;">Loading…</span>';
-    let values;
-    try {
-      values = (await authFetch(`/api/contacts/${contactId}/attributes`)).values;
-    } catch (err) {
-      container.innerHTML = `<span style="font-size:0.8rem;color:#B91C1C;">${escapeHtml(err.message)}</span>`;
-      return;
-    }
-    if (isStale()) return;
-
-    const valueByAttrId = Object.fromEntries(values.map(v => [v.attributeId, v.value]));
-    container.innerHTML = state.contactAttributes.map(attr => {
-      const current = valueByAttrId[attr.id] ?? '';
-      const inputHtml = attr.type === 'boolean'
-        ? `<select class="form-input contact-attr-input" data-attribute-id="${attr.id}" style="font-size:0.78rem; padding:4px 6px; height:auto;">
-             <option value=""${current === '' ? ' selected' : ''}>—</option>
-             <option value="true"${current === 'true' ? ' selected' : ''}>True</option>
-             <option value="false"${current === 'false' ? ' selected' : ''}>False</option>
-           </select>`
-        : `<input type="${attr.type === 'number' ? 'number' : attr.type === 'date' ? 'date' : 'text'}" class="form-input contact-attr-input" data-attribute-id="${attr.id}" value="${escapeHtml(current)}" style="font-size:0.78rem; padding:4px 6px; height:auto;" />`;
-      return `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:0.72rem; color:#6B7280; margin-bottom:2px;">${escapeHtml(attr.name)}</div>
-          ${inputHtml}
-          <div class="contact-attr-status" data-attribute-id="${attr.id}" style="font-size:0.7rem; margin-top:2px;"></div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  // One delegated listener (not one per surface) — reads the target
-  // contactId from the closest ancestor's data-contact-id, set above at
-  // render time, so this works for every container that ever calls
-  // renderContactAttributesInto, present or future.
-  document.addEventListener('change', async (e) => {
-    const input = e.target.closest('.contact-attr-input');
-    if (!input) return;
-    const container = input.closest('[data-contact-id]');
-    const contactId = container?.dataset.contactId;
-    if (!contactId) return;
-    const attributeId = input.dataset.attributeId;
-    const status = container.querySelector(`.contact-attr-status[data-attribute-id="${attributeId}"]`);
-    const value = input.value;
-    if (value === '') { if (status) status.textContent = ''; return; }
-
-    if (status) { status.textContent = 'Saving…'; status.style.color = 'var(--text-muted)'; }
-    try {
-      await authFetch(`/api/contacts/${contactId}/attributes/${attributeId}`, {
-        method: 'PUT', body: JSON.stringify({ value }),
-      });
-      if (status) {
-        status.style.color = '#166534';
-        status.textContent = 'Saved';
-        setTimeout(() => { if (status.textContent === 'Saved') status.textContent = ''; }, 1500);
-      }
-    } catch (err) {
-      if (status) { status.style.color = '#B91C1C'; status.textContent = err.message; }
-    }
-  });
-
-  // Additive multi-tags — separate from the single primary tag
-  // (contacts.tag_id, rendered directly from chat.tag/adaptContact
-  // wherever each surface shows it) — this section never touches it.
-  // `wrapper` is the .contact-tags-wrapper element containing a
-  // .contact-tags-chips container and a .contact-tags-select picker
-  // (index.html — both the Chat drawer and the Contacts detail panel use
-  // this exact same shape).
-  async function renderContactTagsInto(wrapper, contactId, isStale) {
-    if (!wrapper) return;
-    const chipsContainer = wrapper.querySelector('.contact-tags-chips');
-    const select = wrapper.querySelector('.contact-tags-select');
-    if (!chipsContainer || !select) return;
-    wrapper.dataset.contactId = contactId || '';
-    if (!contactId) {
-      chipsContainer.innerHTML = '';
-      select.style.display = 'none';
-      return;
-    }
-    select.style.display = '';
-    let tags;
-    try {
-      tags = (await authFetch(`/api/contacts/${contactId}/tags`)).tags;
-    } catch (err) {
-      chipsContainer.innerHTML = `<span style="font-size:0.78rem;color:#B91C1C;">${escapeHtml(err.message)}</span>`;
-      return;
-    }
-    if (isStale()) return;
-
-    chipsContainer.innerHTML = tags.map(t => `
-      <span class="tag-badge" data-tag-id="${t.id}" style="display:inline-flex; align-items:center; gap:4px;">
-        ${escapeHtml(t.name)}
-        <span class="drawer-remove-extra-tag-btn" data-tag-id="${t.id}" style="cursor:pointer; font-weight:700;" title="Remove tag">&times;</span>
-      </span>
-    `).join('');
-
-    const attachedIds = new Set(tags.map(t => t.id));
-    const available = Object.values(state.tagsById).filter(t => !attachedIds.has(t.id));
-    select.innerHTML = '<option value="">+ Add tag…</option>' + available.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-  }
-
-  // Two delegated listeners (remove-chip click, add-tag select change),
-  // each shared across every .contact-tags-wrapper — re-renders by finding
-  // the SAME wrapper's chips/select again via closest(), no per-surface
-  // wiring needed.
-  document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.drawer-remove-extra-tag-btn');
-    if (!btn) return;
-    const wrapper = btn.closest('.contact-tags-wrapper');
-    const contactId = wrapper?.dataset.contactId;
-    if (!contactId) return;
-    try {
-      await authFetch(`/api/contacts/${contactId}/tags/${btn.dataset.tagId}`, { method: 'DELETE' });
-      renderContactTagsInto(wrapper, contactId, () => wrapper.dataset.contactId !== contactId);
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
-
-  document.addEventListener('change', async (e) => {
-    const select = e.target.closest('.contact-tags-select');
-    if (!select) return;
-    const tagId = select.value;
-    if (!tagId) return;
-    const wrapper = select.closest('.contact-tags-wrapper');
-    const contactId = wrapper?.dataset.contactId;
-    if (!contactId) { select.value = ''; return; }
-    try {
-      await authFetch(`/api/contacts/${contactId}/tags`, { method: 'POST', body: JSON.stringify({ tagId }) });
-      renderContactTagsInto(wrapper, contactId, () => wrapper.dataset.contactId !== contactId);
-    } catch (err) {
-      showToast(err.message);
-      select.value = '';
-    }
-  });
-
-  // --- Contacts-view contact detail panel (item 8.5) ---
-  // The second caller of the two generalized functions above — opens on a
-  // Contacts-table row click (see the delegated listener on
-  // #contacts-table-body, wired alongside renderContacts), shows the same
-  // tags/attributes sections the Chat drawer already has. No primary-tag
-  // (contacts.tag_id) UI here, by explicit decision — this panel only
-  // surfaces what items 7/8 already built.
-  // PLAN.md item 10 — Contact 360 activity timeline. Read-only; the
-  // endpoint already merges all 4 sources server-side (contactTimelineRepo.js),
-  // this just labels each event type for display.
-  const TIMELINE_EVENT_LABELS = {
-    message_in: 'Message received',
-    message_out: 'Message sent',
-    broadcast_sent: 'Campaign sent',
-    flow_entered: 'Entered flow',
-    consent_changed: 'Consent changed',
-  };
-  function timelineEventDetailText(event) {
-    const d = event.detail || {};
-    switch (event.type) {
-      case 'message_in':
-      case 'message_out':
-        return d.body || '';
-      case 'broadcast_sent':
-        return d.title || d.templateName || '';
-      case 'flow_entered':
-        return d.flowName || '';
-      case 'consent_changed':
-        return `${d.event || ''}${d.source ? ` via ${d.source}` : ''}`;
-      default:
-        return '';
-    }
-  }
-  async function renderContactTimeline(container, contactId, isStale) {
-    if (!container) return;
-    if (!contactId) { container.innerHTML = ''; return; }
-    container.innerHTML = '<span>Loading…</span>';
-    let events;
-    try {
-      events = (await authFetch(`/api/contacts/${contactId}/timeline`)).events;
-    } catch (err) {
-      container.innerHTML = `<span style="color:#B91C1C;">${escapeHtml(err.message)}</span>`;
-      return;
-    }
-    if (isStale()) return;
-    container.innerHTML = events.length
-      ? events.map(e => `
-        <div style="padding:6px 0; border-bottom:1px solid var(--border-light);">
-          <div style="font-weight:600; color:#1F2937; font-size:0.78rem;">${escapeHtml(TIMELINE_EVENT_LABELS[e.type] || e.type)}</div>
-          <div style="color:#6B7280; font-size:0.76rem;">${escapeHtml(timelineEventDetailText(e))}</div>
-          <div style="color:#9CA3AF; font-size:0.7rem; margin-top:2px;">${escapeHtml(new Date(e.at).toLocaleString())}</div>
-        </div>
-      `).join('')
-      : '<span>No activity yet.</span>';
-  }
-
-  function openContactDetailPanel(contactId) {
-    const contact = state.contacts.find(c => c.id === contactId);
-    if (!contact) return;
-    state.activeContactDetailId = contactId;
-    document.getElementById('contact-detail-name').textContent = contact.name;
-    document.getElementById('contact-detail-phone').textContent = contact.phone;
-    document.getElementById('modal-contact-detail')?.classList.add('open');
-    renderContactAttributesInto(document.getElementById('contact-detail-attributes'), contactId, () => state.activeContactDetailId !== contactId);
-    renderContactTagsInto(document.getElementById('contact-detail-tags-wrapper'), contactId, () => state.activeContactDetailId !== contactId);
-    renderContactTimeline(document.getElementById('contact-detail-timeline'), contactId, () => state.activeContactDetailId !== contactId);
-  }
-
-  document.getElementById('contacts-table-body')?.addEventListener('click', (e) => {
-    const row = e.target.closest('tr[data-contact-id]');
-    if (!row) return;
-    openContactDetailPanel(row.dataset.contactId);
-  });
-
-  // The shared [data-close-modal] handler (below, in --- Modals ---) only
-  // ever removes the 'open' class — it doesn't know about this panel's own
-  // staleness-guard state, so clearing activeContactDetailId needs its own
-  // listener: without it, a fetch still in flight when the panel is closed
-  // would find isStale() still false and paint into a hidden modal.
-  document.querySelector('#modal-contact-detail [data-close-modal]')?.addEventListener('click', () => {
-    state.activeContactDetailId = null;
-  });
 
   /* ---------------------------------------------------------------
      New Conversation — the only way to originate a chat with a contact
@@ -1522,66 +920,37 @@ document.addEventListener('DOMContentLoaded', () => {
     if (slashPicker) slashPicker.style.display = 'none';
   }
 
-  // item 4/5.5 — canned responses share this exact picker with templates
-  // (same trigger character, same filter-as-you-type interaction), listed
-  // first since picking a canned response is a plain text insert (no modal),
-  // the faster of the two paths. Matched against shortcut minus its leading
-  // '/' (chatMessageInput's value already has that stripped by the caller —
-  // see the 'input' listener below), so typing "/ref" matches a "/refund"
-  // shortcut the same way "/ship" would match a "shipping_update" template.
   function renderSlashPicker(filterText) {
     if (!slashPicker) return;
-    const cannedMatches = (state.cannedResponses || [])
-      .filter(c => c.shortcut.replace(/^\//, '').toLowerCase().includes(filterText.toLowerCase()));
     const approved = (state.templates || []).filter(t => t.status === 'approved');
-    const templateMatches = approved.filter(t => t.name.toLowerCase().includes(filterText.toLowerCase()));
+    const matches = approved.filter(t => t.name.toLowerCase().includes(filterText.toLowerCase()));
 
-    if (!cannedMatches.length && !templateMatches.length) {
-      slashPicker.innerHTML = approved.length || (state.cannedResponses || []).length
-        ? '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No matches.</div>'
-        : '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No approved templates or canned responses on this account yet.</div>';
+    if (!matches.length) {
+      slashPicker.innerHTML = approved.length
+        ? '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No approved templates match.</div>'
+        : '<div style="padding:12px 16px; font-size:0.85rem; color:var(--text-muted);">No approved templates on this account yet.</div>';
       slashPicker.style.display = '';
       return;
     }
 
     slashHighlightIndex = 0;
-    let index = 0;
-    const cannedHTML = cannedMatches.map((c) => {
-      const html = `
-        <div class="slash-picker-item" data-kind="canned" data-canned-id="${c.id}" data-index="${index}"
-             style="padding:10px 16px; cursor:pointer; ${index === 0 ? 'background:var(--color-primary-50, #F0FDF4);' : ''}">
-          <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(c.shortcut)}</div>
-          <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml((c.body || '').slice(0, 60))}</div>
-        </div>`;
-      index += 1;
-      return html;
-    }).join('');
-    const templateHTML = templateMatches.map((t) => {
-      const html = `
-        <div class="slash-picker-item" data-kind="template" data-template-name="${escapeHtml(t.name)}" data-index="${index}"
-             style="padding:10px 16px; cursor:pointer; ${index === 0 ? 'background:var(--color-primary-50, #F0FDF4);' : ''}">
-          <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t.name)}</div>
-          <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(t.category)} &middot; ${escapeHtml((t.body || '').slice(0, 60))}</div>
-        </div>`;
-      index += 1;
-      return html;
-    }).join('');
-    slashPicker.innerHTML = cannedHTML + templateHTML;
+    slashPicker.innerHTML = matches.map((t, i) => `
+      <div class="slash-picker-item" data-template-name="${escapeHtml(t.name)}" data-index="${i}"
+           style="padding:10px 16px; cursor:pointer; ${i === 0 ? 'background:var(--color-primary-50, #F0FDF4);' : ''}">
+        <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t.name)}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(t.category)} &middot; ${escapeHtml((t.body || '').slice(0, 60))}</div>
+      </div>
+    `).join('');
     slashPicker.style.display = '';
 
-    slashPicker.querySelectorAll('.slash-picker-item[data-kind="canned"]').forEach(item => {
-      item.addEventListener('click', () => selectSlashCannedResponse(item.dataset.cannedId));
-    });
-    slashPicker.querySelectorAll('.slash-picker-item[data-kind="template"]').forEach(item => {
+    slashPicker.querySelectorAll('.slash-picker-item').forEach(item => {
       item.addEventListener('click', () => selectSlashTemplate(item.dataset.templateName));
     });
   }
 
   function selectHighlightedSlashItem() {
     const highlighted = slashPicker?.querySelector(`.slash-picker-item[data-index="${slashHighlightIndex}"]`);
-    if (!highlighted) return;
-    if (highlighted.dataset.kind === 'canned') selectSlashCannedResponse(highlighted.dataset.cannedId);
-    else selectSlashTemplate(highlighted.dataset.templateName);
+    if (highlighted) selectSlashTemplate(highlighted.dataset.templateName);
   }
 
   function selectSlashTemplate(templateName) {
@@ -1589,17 +958,6 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSlashPicker();
     chatMessageInput.value = '';
     if (template) openSendTemplateModal(template);
-  }
-
-  // Unlike a template (which opens a modal — variables/preview/send are a
-  // real multi-step flow), a canned response is a plain body of text with
-  // no variables — inserting it directly into the composer, still editable
-  // before send, is the whole feature.
-  function selectSlashCannedResponse(cannedId) {
-    const canned = (state.cannedResponses || []).find(c => c.id === cannedId);
-    closeSlashPicker();
-    if (canned) chatMessageInput.value = canned.body;
-    chatMessageInput.focus();
   }
 
   chatMessageInput?.addEventListener('input', () => {
@@ -1858,44 +1216,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // exists) — used to insert a fake sent-message bubble here with no
   // network call at all. Removed along with it, not left as dead code.
 
-  // item 2/5.5 — queue filter (status/assignedTo) is independent of, and
-  // combines with, the pre-existing tag filter. Applied client-side against
-  // the already-fetched state.chats (adaptChat now passes status/
-  // assignedTeamMemberId through — see that function) rather than
-  // refetching per filter change, matching this function's existing
-  // client-side-tag-filter convention.
-  function matchesQueueFilter(chat, queueFilter) {
-    if (queueFilter === 'unassigned') return !chat.assignedTeamMemberId && chat.status !== 'resolved';
-    if (queueFilter === 'mine') return chat.assignedTeamMemberId === state.actorId && chat.status !== 'resolved';
-    if (queueFilter === 'resolved') return chat.status === 'resolved';
-    return chat.status !== 'resolved'; // 'all' — matches the pre-5.5 behavior of showing every chat, minus resolved noise
-  }
-
   function renderChatList(tagFilter) {
     const inboxChatList = document.getElementById('inbox-chat-list');
     if (!inboxChatList) return;
 
     const filter = tagFilter || state.chatTagFilter || 'all';
     state.chatTagFilter = filter;
-    const queueFilter = state.chatQueueFilter || 'all';
-
-    document.querySelectorAll('.queue-tab-btn').forEach((btn) => {
-      const active = btn.dataset.queueFilter === queueFilter;
-      btn.classList.toggle('active', active);
-      btn.style.background = active ? 'var(--color-primary-600, #16A34A)' : '#fff';
-      btn.style.color = active ? '#fff' : '#475569';
-      btn.style.borderColor = active ? 'var(--color-primary-600, #16A34A)' : 'var(--border-light)';
-    });
 
     inboxChatList.innerHTML = '';
-    state.chats
-      .filter(c => filter === 'all' || c.tag === filter)
-      .filter(c => matchesQueueFilter(c, queueFilter))
-      .forEach(chat => {
-      const assignee = state.teamMembers.find(m => m.id === chat.assignedTeamMemberId);
-      const assignBadge = chat.status === 'resolved'
-        ? '<span style="font-size:0.62rem; font-weight:700; color:#6B7280; background:#F1F5F9; border-radius:8px; padding:1px 6px;">RESOLVED</span>'
-        : (assignee ? `<span style="font-size:0.62rem; font-weight:700; color:#166534; background:#DCFCE7; border-radius:8px; padding:1px 6px;">${escapeHtml(assignee.name)}</span>` : '');
+    state.chats.filter(c => filter === 'all' || c.tag === filter).forEach(chat => {
       const itemHTML = `
         <div class="chat-item" data-chat-id="${chat.id}" style="padding: 12px 16px; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -1904,7 +1233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div>
               <div style="font-size: 0.85rem; font-weight: 600; color: #1F2937;">${chat.name}</div>
-              <div style="font-size: 0.75rem; color: #6B7280; display:flex; align-items:center; gap:6px;">WhatsApp ${assignBadge}</div>
+              <div style="font-size: 0.75rem; color: #6B7280;">WhatsApp</div>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
@@ -1926,13 +1255,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     refreshIcons();
   }
-
-  document.querySelectorAll('.queue-tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.chatQueueFilter = btn.dataset.queueFilter;
-      renderChatList(state.chatTagFilter);
-    });
-  });
 
   // --- Contacts Table ---
   const OPT_IN_BADGE = {
@@ -1956,11 +1278,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const detail = c.optInSource
         ? `${c.optInSource}${c.optInAt ? ' · ' + c.optInAt.slice(0, 10) : ''}`
         : '—';
-      // PLAN.md item 8.5 — data-contact-id + cursor:pointer make the whole
-      // row open the contact detail panel (see the delegated click
-      // listener near openContactDetailPanel below).
       const tr = `
-        <tr data-contact-id="${c.id}" style="cursor: pointer;">
+        <tr>
           <td style="font-weight: 600;">${c.name}</td>
           <td>${c.phone}</td>
           <td><span class="tag-badge">${c.tag}</span></td>
@@ -1983,30 +1302,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     broadcastsTableBody.innerHTML = '';
     state.broadcasts.forEach(b => {
-      // Real bug, fixed: this used to show ONE combined "N skipped" badge,
-      // unconditionally labeled "not opted in for marketing" — wrong, not
-      // just vague, whenever any of the N were actually item 12's Smart
-      // Sending skips (a different, unrelated reason). Two separate
-      // badges now, each shown only when its own count is nonzero, each
-      // with an accurate reason.
-      const badges = [];
-      if (b.skippedConsent > 0) {
-        badges.push(`<span class="status-badge" style="background: #FEF3C7; color: #B45309;" title="Contacts not opted in for marketing — skipped, not sent">${b.skippedConsent} skipped (consent)</span>`);
-      }
-      if (b.skippedSmartSending > 0) {
-        badges.push(`<span class="status-badge" style="background: #E0E7FF; color: #4338CA;" title="Contacts already messaged by another campaign within this broadcast's Smart Sending window — skipped, not sent">${b.skippedSmartSending} skipped (smart sending)</span>`);
-      }
-      const skippedCell = badges.length ? badges.join(' ') : '—';
-      // PLAN.md item 11 — pause/resume only makes sense for a broadcast
-      // actively Sending or already Paused; any other status (Completed,
-      // Scheduled) gets no button here rather than a disabled one, since
-      // routes/broadcasts.js's own 400 message already explains why for
-      // anyone who reaches this via the API directly.
-      const actionBtn = b.status === 'Sending'
-        ? `<button type="button" class="btn-secondary broadcast-pause-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">Pause</button>`
-        : b.status === 'Paused'
-          ? `<button type="button" class="btn-secondary broadcast-resume-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">Resume</button>`
-          : '';
+      const skippedCell = b.skippedConsent > 0
+        ? `<span class="status-badge" style="background: #FEF3C7; color: #B45309;" title="Contacts not opted in for marketing — skipped, not sent">${b.skippedConsent} skipped</span>`
+        : '—';
       const tr = `
         <tr>
           <td style="font-weight: 600;">${b.title}</td>
@@ -2016,27 +1314,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${b.readRate}</td>
           <td>${skippedCell}</td>
           <td>${b.date}</td>
-          <td>${actionBtn}</td>
         </tr>
       `;
       broadcastsTableBody.innerHTML += tr;
     });
   }
-
-  document.getElementById('broadcasts-table-body')?.addEventListener('click', async (e) => {
-    const pauseBtn = e.target.closest('.broadcast-pause-btn');
-    const resumeBtn = e.target.closest('.broadcast-resume-btn');
-    const btn = pauseBtn || resumeBtn;
-    if (!btn) return;
-    const action = pauseBtn ? 'pause' : 'resume';
-    try {
-      await authFetch(`/api/broadcasts/${btn.dataset.broadcastId}/${action}`, { method: 'POST' });
-      await refreshBroadcasts();
-      renderBroadcasts();
-    } catch (err) {
-      showToast(err.message);
-    }
-  });
 
   // --- Automation Rules ---
   function renderAutomation() {
@@ -2597,18 +1879,7 @@ document.addEventListener('DOMContentLoaded', () => {
           paramMappings[param] = { source: 'contact_field', field };
         }
       });
-      // Real bug, fixed: this config never included templateLanguage, so
-      // flowEngine.js's executeSendTemplate always fell through to a
-      // hardcoded 'en_US' default — flowEngine.js now reads the template's
-      // real language from its own stored record directly instead of
-      // trusting this config field, so this is no longer load-bearing for
-      // correctness there, but it's included anyway so the flow's saved
-      // config accurately reflects what the node will actually send,
-      // matching the Chat send-template modal's own established pattern
-      // (app.js's sendTemplateTarget.language) of always carrying the
-      // real language alongside a template selection.
-      const selectedTemplate = state.templates.find(t => t.name === templateName);
-      return { templateName, paramMappings, templateLanguage: selectedTemplate?.language };
+      return { templateName, paramMappings };
     }
     if (type === 'delay') {
       return { duration_minutes: Number(document.getElementById('new-bot-flow-node-duration').value) };
@@ -3283,7 +2554,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- New Campaign Modal ---
   let newCampaignHeaderMediaAssetId = null; // set once a new header file has been uploaded for this campaign
   let campaignContactLists = []; // fetched fresh each time the modal opens
-  let campaignSegments = []; // item 9 — same "fetched fresh each time the modal opens" pattern
 
   function updateNewCampaignMediaField() {
     const templateName = document.getElementById('new-campaign-template').value;
@@ -3299,19 +2569,10 @@ document.addEventListener('DOMContentLoaded', () => {
       : '<option value="">No contact lists yet — import one below</option>';
   }
 
-  function populateSegmentSelect(selectEl) {
-    if (!selectEl) return;
-    selectEl.innerHTML = campaignSegments.length
-      ? campaignSegments.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
-      : '<option value="">No segments yet — build one below</option>';
-  }
-
   function updateCampaignAudienceModeUI() {
     const isList = document.getElementById('campaign-audience-mode-list').checked;
-    const isSegment = document.getElementById('campaign-audience-mode-segment').checked;
-    document.getElementById('new-campaign-tag').style.display = (isList || isSegment) ? 'none' : '';
+    document.getElementById('new-campaign-tag').style.display = isList ? 'none' : '';
     document.getElementById('campaign-audience-list-section').style.display = isList ? '' : 'none';
-    document.getElementById('campaign-audience-segment-section').style.display = isSegment ? '' : 'none';
   }
 
   document.getElementById('open-create-broadcast-modal')?.addEventListener('click', async () => {
@@ -3324,12 +2585,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-campaign-list-file').value = '';
     document.getElementById('campaign-list-import-status').textContent = '';
     document.getElementById('new-campaign-pace').value = '';
-    document.getElementById('new-campaign-smart-sending').value = '';
     document.getElementById('campaign-audience-mode-tag').checked = true;
-    document.getElementById('segment-builder').style.display = 'none';
-    document.getElementById('segment-conditions-list').innerHTML = '';
-    document.getElementById('segment-preview-status').textContent = '';
-    document.getElementById('new-segment-name').value = '';
     updateCampaignAudienceModeUI();
     updateNewCampaignMediaField();
     document.getElementById('modal-create-campaign')?.classList.add('open');
@@ -3340,192 +2596,10 @@ document.addEventListener('DOMContentLoaded', () => {
       campaignContactLists = [];
     }
     populateContactListSelect(document.getElementById('new-campaign-contact-list'));
-
-    try {
-      campaignSegments = await authFetch('/api/contact-segments');
-    } catch (err) {
-      campaignSegments = [];
-    }
-    populateSegmentSelect(document.getElementById('new-campaign-segment'));
   });
 
   document.getElementById('campaign-audience-mode-tag')?.addEventListener('change', updateCampaignAudienceModeUI);
   document.getElementById('campaign-audience-mode-list')?.addEventListener('change', updateCampaignAudienceModeUI);
-  document.getElementById('campaign-audience-mode-segment')?.addEventListener('change', updateCampaignAudienceModeUI);
-
-  // --- Segment builder (item 9) ---
-  // Ops offered per field mirror utils/segmentFilter.js's server-side
-  // validity exactly (tag/opt_in_status: eq only; attribute: depends on
-  // its real type) — this is a UI convenience so most users never hit the
-  // server's 400 in the first place, not a substitute for it (the server
-  // re-validates independently, same "flag while typing, server is still
-  // authoritative" precedent as the Template modal's live validation).
-  const SEGMENT_ATTR_OPS = {
-    text: [['eq', 'is exactly'], ['contains', 'contains']],
-    number: [['eq', '='], ['gt', '>'], ['lt', '<']],
-    date: [['eq', 'on'], ['gt', 'after'], ['lt', 'before']],
-    boolean: [['eq', 'is']],
-  };
-
-  function segmentConditionTargetHtml(field) {
-    if (field === 'tag') {
-      const options = (state.tagsById ? Object.values(state.tagsById) : [])
-        .map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-      return `<select class="form-input segment-cond-tag" style="flex:2;"><option value="">Choose a tag…</option>${options}</select>`;
-    }
-    if (field === 'opt_in_status') {
-      return `<select class="form-input segment-cond-value" style="flex:2;">
-        <option value="opted_in">Opted in</option>
-        <option value="opted_out">Opted out</option>
-        <option value="unknown">Unknown</option>
-      </select>`;
-    }
-    // attribute
-    const attrOptions = state.contactAttributes.map(a => `<option value="${a.id}" data-type="${a.type}">${escapeHtml(a.name)}</option>`).join('');
-    return `
-      <select class="form-input segment-cond-attribute" style="flex:1;"><option value="">Choose an attribute…</option>${attrOptions}</select>
-      <select class="form-input segment-cond-op" style="flex:1;"></select>
-      <span class="segment-cond-value-wrap" style="flex:1;"></span>
-    `;
-  }
-
-  function segmentAttrValueInputHtml(type) {
-    if (type === 'boolean') {
-      return `<select class="form-input segment-cond-value"><option value="true">True</option><option value="false">False</option></select>`;
-    }
-    if (type === 'date') return `<input type="date" class="form-input segment-cond-value" />`;
-    if (type === 'number') return `<input type="number" class="form-input segment-cond-value" />`;
-    return `<input type="text" class="form-input segment-cond-value" />`;
-  }
-
-  function updateSegmentConditionOps(row) {
-    const attrSelect = row.querySelector('.segment-cond-attribute');
-    const opSelect = row.querySelector('.segment-cond-op');
-    const valueWrap = row.querySelector('.segment-cond-value-wrap');
-    if (!attrSelect || !opSelect || !valueWrap) return;
-    const type = attrSelect.selectedOptions[0]?.dataset.type;
-    const ops = SEGMENT_ATTR_OPS[type] || [];
-    opSelect.innerHTML = ops.map(([val, label]) => `<option value="${val}">${label}</option>`).join('');
-    valueWrap.innerHTML = type ? segmentAttrValueInputHtml(type) : '';
-  }
-
-  function addSegmentConditionRow() {
-    const list = document.getElementById('segment-conditions-list');
-    const row = document.createElement('div');
-    row.className = 'segment-condition-row';
-    row.style.cssText = 'display:flex; gap:6px; align-items:center; margin-bottom:6px;';
-    row.innerHTML = `
-      <select class="form-input segment-cond-field" style="flex:1;">
-        <option value="tag">Tag</option>
-        <option value="attribute">Attribute</option>
-        <option value="opt_in_status">Opt-in status</option>
-      </select>
-      <span class="segment-cond-target-wrap" style="flex:2; display:flex; gap:6px;">${segmentConditionTargetHtml('tag')}</span>
-      <button type="button" class="btn-secondary segment-cond-remove-btn" style="width:auto; padding:0 8px;">&times;</button>
-    `;
-    list.appendChild(row);
-  }
-
-  document.getElementById('toggle-new-segment-builder-btn')?.addEventListener('click', () => {
-    const builder = document.getElementById('segment-builder');
-    const opening = builder.style.display === 'none';
-    builder.style.display = opening ? '' : 'none';
-    if (opening && !document.getElementById('segment-conditions-list').children.length) {
-      addSegmentConditionRow();
-    }
-  });
-
-  document.getElementById('add-segment-condition-btn')?.addEventListener('click', addSegmentConditionRow);
-
-  document.getElementById('segment-conditions-list')?.addEventListener('click', (e) => {
-    if (e.target.closest('.segment-cond-remove-btn')) {
-      e.target.closest('.segment-condition-row').remove();
-      debouncedPreviewSegment();
-    }
-  });
-
-  document.getElementById('segment-conditions-list')?.addEventListener('change', (e) => {
-    if (e.target.classList.contains('segment-cond-field')) {
-      const wrap = e.target.closest('.segment-condition-row').querySelector('.segment-cond-target-wrap');
-      wrap.innerHTML = segmentConditionTargetHtml(e.target.value);
-      if (e.target.value === 'attribute') updateSegmentConditionOps(e.target.closest('.segment-condition-row'));
-    } else if (e.target.classList.contains('segment-cond-attribute')) {
-      updateSegmentConditionOps(e.target.closest('.segment-condition-row'));
-    }
-    debouncedPreviewSegment();
-  });
-  document.getElementById('segment-combinator-and')?.addEventListener('change', debouncedPreviewSegment);
-  document.getElementById('segment-combinator-or')?.addEventListener('change', debouncedPreviewSegment);
-
-  // Reads the builder's current DOM state into { combinator, conditions } —
-  // rows with no value chosen yet are simply skipped (not sent as
-  // incomplete conditions), so a half-filled builder never 400s while
-  // still being typed into.
-  function collectSegmentFilterFromUI() {
-    const combinator = document.getElementById('segment-combinator-or').checked ? 'OR' : 'AND';
-    const conditions = [];
-    document.querySelectorAll('#segment-conditions-list .segment-condition-row').forEach(row => {
-      const field = row.querySelector('.segment-cond-field').value;
-      if (field === 'tag') {
-        const tagId = row.querySelector('.segment-cond-tag')?.value;
-        if (tagId) conditions.push({ field: 'tag', op: 'eq', value: tagId });
-      } else if (field === 'opt_in_status') {
-        const value = row.querySelector('.segment-cond-value')?.value;
-        if (value) conditions.push({ field: 'opt_in_status', op: 'eq', value });
-      } else if (field === 'attribute') {
-        const attributeId = row.querySelector('.segment-cond-attribute')?.value;
-        const op = row.querySelector('.segment-cond-op')?.value;
-        const value = row.querySelector('.segment-cond-value')?.value;
-        if (attributeId && op && value) conditions.push({ field: 'attribute', attributeId, op, value });
-      }
-    });
-    return { combinator, conditions };
-  }
-
-  let segmentPreviewDebounceTimer = null;
-  function debouncedPreviewSegment() {
-    clearTimeout(segmentPreviewDebounceTimer);
-    const status = document.getElementById('segment-preview-status');
-    segmentPreviewDebounceTimer = setTimeout(async () => {
-      const filterJson = collectSegmentFilterFromUI();
-      if (!filterJson.conditions.length) { status.textContent = ''; return; }
-      status.style.color = 'var(--text-muted)';
-      status.textContent = 'Checking…';
-      try {
-        const { matchingCount } = await authFetch('/api/contact-segments/preview', {
-          method: 'POST', body: JSON.stringify({ filterJson }),
-        });
-        status.style.color = '#166534';
-        status.textContent = `Matches ${matchingCount} contact${matchingCount === 1 ? '' : 's'}.`;
-      } catch (err) {
-        status.style.color = '#B91C1C';
-        status.textContent = err.message;
-      }
-    }, 400);
-  }
-
-  document.getElementById('save-segment-btn')?.addEventListener('click', async () => {
-    const nameInput = document.getElementById('new-segment-name');
-    const status = document.getElementById('segment-preview-status');
-    const name = nameInput.value.trim();
-    const filterJson = collectSegmentFilterFromUI();
-    if (!name) { status.style.color = '#B91C1C'; status.textContent = 'Give the segment a name first.'; return; }
-    if (!filterJson.conditions.length) { status.style.color = '#B91C1C'; status.textContent = 'Add at least one condition first.'; return; }
-    try {
-      const segment = await authFetch('/api/contact-segments', { method: 'POST', body: JSON.stringify({ name, filterJson }) });
-      campaignSegments = await authFetch('/api/contact-segments');
-      const select = document.getElementById('new-campaign-segment');
-      populateSegmentSelect(select);
-      select.value = segment.id;
-      document.getElementById('segment-builder').style.display = 'none';
-      status.style.color = '#166534';
-      status.textContent = `Saved "${escapeHtml(name)}".`;
-      nameInput.value = '';
-    } catch (err) {
-      status.style.color = '#B91C1C';
-      status.textContent = err.message;
-    }
-  });
 
   document.getElementById('import-campaign-list-btn')?.addEventListener('click', async () => {
     const nameInput = document.getElementById('new-campaign-list-name');
@@ -3549,15 +2623,10 @@ document.addEventListener('DOMContentLoaded', () => {
       select.value = list.id;
       nameInput.value = '';
       fileInput.value = '';
-      // report.errors can be non-empty (e.g. an ignored "tags" column) even
-      // when rejected is 0 — every row succeeded, but still worth showing.
-      const summary = report.rejected > 0
-        ? `Imported ${report.imported} of ${report.rows_in_file} rows — ${report.rejected} rejected`
-        : `Imported all ${report.imported} contacts into "${escapeHtml(name)}"`;
-      status.style.color = (report.rejected > 0 || report.errors.length) ? '#B45309' : '#166534';
-      status.textContent = report.errors.length
-        ? `${summary}: ${report.errors.slice(0, 3).map(e => `row ${e.row}: ${e.reason}`).join('; ')}${report.errors.length > 3 ? '…' : ''}`
-        : `${summary}.`;
+      status.style.color = report.rejected > 0 ? '#B45309' : '#166534';
+      status.textContent = report.rejected > 0
+        ? `Imported ${report.imported} of ${report.rows_in_file} rows — ${report.rejected} rejected: ${report.errors.slice(0, 3).map(e => `row ${e.row}: ${e.reason}`).join('; ')}${report.errors.length > 3 ? '…' : ''}`
+        : `Imported all ${report.imported} contacts into "${escapeHtml(name)}".`;
     } catch (err) {
       status.style.color = '#B91C1C';
       status.textContent = `Import failed: ${err.message}`;
@@ -3596,13 +2665,10 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const title = document.getElementById('new-campaign-name').value.trim();
     const isListMode = document.getElementById('campaign-audience-mode-list').checked;
-    const isSegmentMode = document.getElementById('campaign-audience-mode-segment').checked;
-    const tagId = (isListMode || isSegmentMode) ? null : document.getElementById('new-campaign-tag').value;
+    const tagId = isListMode ? null : document.getElementById('new-campaign-tag').value;
     const contactListId = isListMode ? document.getElementById('new-campaign-contact-list').value : null;
-    const segmentId = isSegmentMode ? document.getElementById('new-campaign-segment').value : null;
     const templateName = document.getElementById('new-campaign-template').value;
     const paceValue = document.getElementById('new-campaign-pace').value;
-    const smartSendingValue = document.getElementById('new-campaign-smart-sending').value;
     if (!title) return;
     if (!templateName) {
       showToast('Create a message template first — campaigns send via an approved template.');
@@ -3612,19 +2678,14 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Select a contact list, or import one, before launching.');
       return;
     }
-    if (isSegmentMode && !segmentId) {
-      showToast('Select a segment, or build and save one, before launching.');
-      return;
-    }
 
     try {
       const created = await authFetch('/api/broadcasts', {
         method: 'POST',
         body: JSON.stringify({
-          title, tag_id: tagId || undefined, contact_list_id: contactListId || undefined, segment_id: segmentId || undefined, templateName,
+          title, tag_id: tagId || undefined, contact_list_id: contactListId || undefined, templateName,
           headerMediaAssetId: newCampaignHeaderMediaAssetId || undefined,
           pacingConfig: paceValue ? { messages_per_minute: Number(paceValue) } : undefined,
-          smartSendingHours: smartSendingValue ? Number(smartSendingValue) : undefined,
         })
       });
       await refreshBroadcasts();
@@ -4355,18 +3416,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById('team-table-body');
     if (!tbody) return;
     try {
-      // Keeps state.teamMembers (the assign-picker/@mention-picker source
-      // of truth in Chat) in sync with this table's own render, same fix
-      // as canned responses below — otherwise a newly-invited member never
-      // shows up in either picker until the next full session refresh.
-      state.teamMembers = await authFetch('/api/team-members');
+      const members = await authFetch('/api/team-members');
+      tbody.innerHTML = members.length ? members.map(m => `
+        <tr><td>${m.name}</td><td>${m.email}</td><td>${m.role}</td><td><span class="status-badge ${m.status === 'active' ? 'active' : ''}">${m.status === 'active' ? 'Active' : 'Invited'}</span></td><td>—</td></tr>
+      `).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No team members yet</td></tr>';
     } catch (err) {
       showToast(err.message);
-      return;
     }
-    tbody.innerHTML = state.teamMembers.length ? state.teamMembers.map(m => `
-      <tr><td>${m.name}</td><td>${m.email}</td><td>${m.role}</td><td><span class="status-badge ${m.status === 'active' ? 'active' : ''}">${m.status === 'active' ? 'Active' : 'Invited'}</span></td><td>—</td></tr>
-    `).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No team members yet</td></tr>';
   }
 
   document.getElementById('open-invite-member-modal')?.addEventListener('click', () => {
@@ -4381,14 +3437,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name || !email) return;
 
     try {
-      // item 5.5 — found while building this: this used to only create the
-      // roster row (POST /api/team-members) and show "Invite sent to..."
-      // without ever actually sending anything. The real invite endpoint
-      // (POST /api/team-members/:id/invite, item 1) needs the row's id
-      // first, so it's a real second call, not something the create route
-      // itself does.
-      const created = await authFetch('/api/team-members', { method: 'POST', body: JSON.stringify({ name, email, role }) });
-      await authFetch(`/api/team-members/${created.id}/invite`, { method: 'POST' });
+      await authFetch('/api/team-members', { method: 'POST', body: JSON.stringify({ name, email, role }) });
       await renderTeamTable();
       e.target.reset();
       document.getElementById('modal-invite-member')?.classList.remove('open');
@@ -4398,67 +3447,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- Canned Responses (item 4/5.5) ---
-  async function renderCannedResponsesTable() {
-    const tbody = document.getElementById('canned-responses-table-body');
-    if (!tbody) return;
-    try {
-      state.cannedResponses = await authFetch('/api/canned-responses');
-    } catch (err) {
-      showToast(err.message);
-      return;
-    }
-    tbody.innerHTML = state.cannedResponses.length ? state.cannedResponses.map(c => `
-      <tr>
-        <td style="font-weight:600;">${escapeHtml(c.shortcut)}</td>
-        <td style="color:#6B7280;">${escapeHtml((c.body || '').slice(0, 80))}</td>
-        <td><button type="button" class="btn-secondary delete-canned-response-btn" data-canned-id="${c.id}" style="width:auto; height:28px; padding:0 10px; font-size:0.75rem;">Delete</button></td>
-      </tr>
-    `).join('') : '<tr><td colspan="3" style="text-align:center;color:#9CA3AF;">No canned responses yet</td></tr>';
-
-    tbody.querySelectorAll('.delete-canned-response-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Delete this canned response?')) return;
-        try {
-          await authFetch(`/api/canned-responses/${btn.dataset.cannedId}`, { method: 'DELETE' });
-          await renderCannedResponsesTable();
-        } catch (err) {
-          showToast(err.message);
-        }
-      });
-    });
-  }
-
-  document.getElementById('open-add-canned-response-modal')?.addEventListener('click', () => {
-    document.getElementById('modal-add-canned-response')?.classList.add('open');
-  });
-
-  document.getElementById('add-canned-response-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const shortcut = document.getElementById('new-canned-shortcut').value.trim();
-    const body = document.getElementById('new-canned-body').value.trim();
-    if (!shortcut || !body) return;
-    try {
-      await authFetch('/api/canned-responses', { method: 'POST', body: JSON.stringify({ shortcut, body }) });
-      await renderCannedResponsesTable();
-    } catch (err) {
-      showToast(err.message);
-      return;
-    }
-    e.target.reset();
-    document.getElementById('modal-add-canned-response')?.classList.remove('open');
-  });
-
   // --- Custom Contact Attributes ---
   async function renderAttributesTable() {
     const tbody = document.getElementById('attributes-table-body');
     if (!tbody) return;
     try {
-      // Same fix as renderTeamTable above — state.contactAttributes (the
-      // Chat drawer's Attributes section, item 7) needs to see a
-      // newly-defined attribute without waiting for a full session refresh.
-      state.contactAttributes = await authFetch('/api/contact-attributes');
-      tbody.innerHTML = state.contactAttributes.length ? state.contactAttributes.map(a => `
+      const attrs = await authFetch('/api/contact-attributes');
+      tbody.innerHTML = attrs.length ? attrs.map(a => `
         <tr><td style="font-weight:600;">${a.name}</td><td>${a.name.toLowerCase().replace(/\s+/g, '_')}</td><td>${a.type}</td><td>—</td></tr>
       `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No custom attributes yet</td></tr>';
     } catch (err) {
@@ -4945,7 +3940,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeRepKey = document.querySelector('[data-rep-view].active')?.dataset.repView;
     if (activeRepKey === 'tags') await renderTagAnalytics();
     else if (activeRepKey === 'campaign') await renderCampaignAnalytics();
-    else if (activeRepKey === 'sla') await renderSlaAnalytics();
     else await renderMessageAnalytics();
     showToast('Report data refreshed');
   });
@@ -5174,46 +4168,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- Contacts Import CSV ---
-  // PLAN.md item 6 — reuses the campaign audience list's own
-  // pick-file/authFetch(FormData)/report-back pattern (see
-  // import-campaign-list-btn above); no separate modal, since there's no
-  // mapping step (name/phone columns only, same as that flow).
-  document.getElementById('import-contacts-csv-btn')?.addEventListener('click', () => {
-    document.getElementById('import-contacts-csv-file').click();
-  });
-  document.getElementById('import-contacts-csv-file')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    const status = document.getElementById('import-contacts-csv-status');
-    if (!file) return;
-    status.style.color = 'var(--text-muted)';
-    status.textContent = 'Importing…';
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const report = await authFetch('/api/contacts/import', { method: 'POST', body: form });
-      await refreshContacts();
-      renderContacts();
-      // report.errors can be non-empty (e.g. an ignored "tags" column) even
-      // when failedCount is 0 — every row succeeded, but there's still
-      // something the user should see, not silently dropped either place.
-      const summary = `Imported ${report.importedCount} contact${report.importedCount === 1 ? '' : 's'}` +
-        (report.failedCount > 0 ? `, ${report.failedCount} rejected` : '') + '.';
-      status.style.color = report.failedCount > 0 ? '#B45309' : (report.errors.length ? '#B45309' : '#166534');
-      status.textContent = report.errors.length
-        ? `${summary} ${report.errors.slice(0, 3).map(e => `row ${e.row}: ${e.reason}`).join('; ')}${report.errors.length > 3 ? '…' : ''}`
-        : summary;
-    } catch (err) {
-      status.style.color = '#B91C1C';
-      status.textContent = `Import failed: ${err.message}`;
-    } finally {
-      e.target.value = '';
-    }
-  });
-
   // --- Contacts Export CSV ---
   // Real, not disabled — state.contacts is already loaded client-side, so
-  // this needed no backend work.
+  // this needed no backend work, unlike Import (a parser/mapping UI and a
+  // bulk-create endpoint neither of which exist yet).
   function csvField(value) {
     const s = String(value ?? '');
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -5260,7 +4218,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (repKey === 'message') renderMessageAnalytics();
       if (repKey === 'tags') renderTagAnalytics();
       if (repKey === 'campaign') renderCampaignAnalytics();
-      if (repKey === 'sla') renderSlaAnalytics();
       refreshIcons();
     });
   });
@@ -5317,28 +4274,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // item 5/5.5 — GET /api/analytics/sla is Admin/Manager only server-side;
-  // an Agent never sees this tab at all (applyRoleGating hides the nav
-  // item), but if they somehow land here directly the request just 403s
-  // and shows a toast, same as any other role-gated fetch in this app.
-  async function renderSlaAnalytics() {
-    const tbody = document.getElementById('sla-analytics-tbody');
-    if (!tbody) return;
-    try {
-      const { byTeamMember } = await authFetch('/api/analytics/sla');
-      tbody.innerHTML = byTeamMember.length ? byTeamMember.map(r => `
-        <tr>
-          <td style="font-weight:600;">${escapeHtml(r.teamMemberName || 'Owner')}</td>
-          <td>${r.avgFirstResponseSeconds != null ? Math.round(r.avgFirstResponseSeconds / 60) + ' min' : '—'}</td>
-          <td>${r.avgResolutionSeconds != null ? Math.round(r.avgResolutionSeconds / 60) + ' min' : '—'}</td>
-          <td>${r.firstResponseCount}</td>
-        </tr>
-      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No tracked replies yet</td></tr>';
-    } catch (err) {
-      showToast(err.message);
-    }
-  }
-
   // --- Secondary Sidebar Navigation inside Account Settings ---
   const secNavItems = document.querySelectorAll('.sec-nav-item');
   const secViews = document.querySelectorAll('.sec-content-view');
@@ -5359,7 +4294,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       if (secKey === 'tags') renderTagsManager();
-      if (secKey === 'canned-responses') renderCannedResponsesTable();
       if (secKey === 'whatsapp') renderWhatsAppSettings();
       if (secKey === 'team') renderTeamTable();
       if (secKey === 'attributes') renderAttributesTable();
@@ -5433,26 +4367,12 @@ document.addEventListener('DOMContentLoaded', () => {
           configId: config.configId,
           onProgress: (message) => { btn.textContent = message; },
         });
-        // Real progress instead of a silent "Finishing setup…" the whole
-        // time — 2026-09-08: server-side discovery (debug_token, phone
-        // number enumeration, webhook subscription, registration, template
-        // sync) is now the primary path and can genuinely take several
-        // seconds, no longer just a fallback that rarely ran.
         btn.textContent = 'Finishing setup…';
-        const serverProgressTimers = [
-          setTimeout(() => { btn.textContent = 'Verifying your account with Meta…'; }, 3000),
-          setTimeout(() => { btn.textContent = 'Finding your WhatsApp number…'; }, 8000),
-          setTimeout(() => { btn.textContent = 'Still working — almost done…'; }, 15000),
-        ];
-        try {
-          await authFetch('/api/onboarding/whatsapp/connect', {
-            method: 'POST',
-            body: JSON.stringify({ code, waba_id, phone_number_id, via_coexistence }),
-            timeoutMs: 90_000,
-          });
-        } finally {
-          serverProgressTimers.forEach(clearTimeout);
-        }
+        await authFetch('/api/onboarding/whatsapp/connect', {
+          method: 'POST',
+          body: JSON.stringify({ code, waba_id, phone_number_id, via_coexistence }),
+          timeoutMs: 90_000,
+        });
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();
       } catch (err) {

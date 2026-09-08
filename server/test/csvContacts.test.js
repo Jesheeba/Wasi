@@ -113,51 +113,6 @@ test('parseContactsCsv: empty file is rejected with a clear error', () => {
   assert.match(errors[0].reason, /empty/i);
 });
 
-test('parseContactsCsv: an unrecognized column (e.g. "tags") is reported, not silently dropped — import still proceeds', () => {
-  const csv = 'name,phone,tags\nPriya,919876543210,VIP;Repeat\nRavi,919812345678,New';
-  const { validRows, errors } = parseContactsCsv(csv);
-  assert.equal(validRows.length, 2, 'name/phone still import even though tags is unrecognized');
-  assert.deepEqual(validRows, [
-    { name: 'Priya', phone: '919876543210' },
-    { name: 'Ravi', phone: '919812345678' },
-  ]);
-  assert.equal(errors.length, 1, 'exactly one header-level warning, not one per data row');
-  assert.equal(errors[0].row, 1);
-  assert.match(errors[0].reason, /"tags".*not imported/i);
-});
-
-test('parseContactsCsv: an unrecognized column is reported exactly once even if it repeats in the header', () => {
-  const csv = 'name,phone,tags,tags\nPriya,919876543210,VIP,Repeat';
-  const { errors } = parseContactsCsv(csv);
-  assert.equal(errors.filter((e) => /tags/i.test(e.reason)).length, 1);
-});
-
-test('parseContactsCsv({ includeTags: true }): PLAN.md item 8 — a "tags" column is read, semicolon-separated, and no longer reported as unrecognized', () => {
-  const csv = 'name,phone,tags\nPriya,919876543210,VIP;Repeat Customer\nRavi,919812345678,';
-  const { validRows, errors } = parseContactsCsv(csv, { includeTags: true });
-  assert.equal(errors.length, 0, '"tags" is a known column when includeTags is true');
-  assert.deepEqual(validRows, [
-    { name: 'Priya', phone: '919876543210', tags: ['VIP', 'Repeat Customer'] },
-    { name: 'Ravi', phone: '919812345678', tags: [] },
-  ]);
-});
-
-test('parseContactsCsv({ includeTags: true }): still reports a truly unrecognized column, and still without a "tags" column present', () => {
-  const withoutTagsColumn = parseContactsCsv('name,phone\nPriya,919876543210', { includeTags: true });
-  assert.deepEqual(withoutTagsColumn.validRows, [{ name: 'Priya', phone: '919876543210', tags: [] }]);
-  assert.equal(withoutTagsColumn.errors.length, 0);
-
-  const withNotesColumn = parseContactsCsv('name,phone,notes\nPriya,919876543210,hello', { includeTags: true });
-  assert.equal(withNotesColumn.errors.length, 1);
-  assert.match(withNotesColumn.errors[0].reason, /"notes".*not imported/i);
-});
-
-test('parseContactsCsv (default, includeTags omitted): validRows never carry a tags field at all', () => {
-  const { validRows } = parseContactsCsv('name,phone\nPriya,919876543210');
-  assert.deepEqual(validRows, [{ name: 'Priya', phone: '919876543210' }]);
-  assert.ok(!('tags' in validRows[0]));
-});
-
 test('parseContactsCsv: every input row is accounted for in exactly one of validRows/errors (no silent loss)', () => {
   const csv = [
     'name,phone',

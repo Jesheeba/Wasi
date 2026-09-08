@@ -62,21 +62,7 @@ async function runWithConcurrency(items, limit, worker) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
 }
 
-// PLAN.md item 12 — Smart Sending (spec §3.5/§10.1): skip a contact who
-// already received ANOTHER broadcast (any campaign, this client-wide, not
-// just this one) within broadcasts.smart_sending_hours — null/unset
-// disables it entirely, same nullable-means-off convention as
-// pacing_config. Checked first, before any consent check or Cloud API
-// call — a recently-messaged contact should never even reach those, not
-// just be skipped after attempting them.
 async function sendOneRecipient(broadcast, recipient, template) {
-  if (broadcast.smart_sending_hours) {
-    const recent = await broadcastRecipientsRepo.hasRecentSend(pool, broadcast.client_id, recipient.contact_id, broadcast.smart_sending_hours);
-    if (recent) {
-      await broadcastRecipientsRepo.markSkipped(pool, recipient.id, 'smart_sending_window');
-      return;
-    }
-  }
   // Real bug, fixed (same fix as apiV1Messages.js): this used to hardcode
   // templateLanguage: 'en_US' for every campaign send regardless of what
   // language the template was actually approved under — confirmed live via

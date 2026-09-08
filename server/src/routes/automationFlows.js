@@ -14,11 +14,8 @@ const {
 } = require('../utils/validate');
 const { isEdgeTypeLegalForNode } = require('../services/flowEngine');
 const { validateFlow } = require('../services/flowValidation');
-const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
-
-router.use(requireRole('Admin', 'Manager'));
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await automationFlowsRepo.list(req.db, req.clientId));

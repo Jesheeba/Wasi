@@ -12,30 +12,21 @@
 // against the real (shared dev/prod) database, dedicated disposable test
 // client, deleted in after().
 //
-// This file races with metaTemplateLibraryQA.test.js over the SAME shared
-// meta_template_library_cache table — found live while fixing the
-// Auditor/QA-reported "stale cache entries never pruned" bug:
+// RUN THIS FILE SEPARATELY from metaTemplateLibraryQA.test.js (never
+// combined in one `node --test` invocation with it) — found live while
+// fixing the Auditor/QA-reported "stale cache entries never pruned" bug:
 // metaTemplateLibraryRepo.pruneMissing (called by every real admin refresh,
-// including the ones both test files trigger) deletes any cache row NOT in
-// the fetch it just saw. Node's test runner isolates each file into its own
-// process by default, but both processes still race against the SAME
-// shared cache table — if this file's refresh (fake catalog:
-// shipping_confirmation/low_balance_warning) runs concurrently with the QA
-// file's refresh (fake catalog: entry_a/entry_b), each one's prune step
-// deletes the OTHER's just-inserted rows, since neither fake catalog
-// contains the other's entries. This mirrors CLAUDE.md's documented "live
-// background workers racing test data" hazard class, but from two TEST
-// processes colliding on a prune-on-refresh table, not a live production
-// runner.
-//
-// FIXED at the runner level, 2026-09-03: `npm test` (server/package.json)
-// now passes `--test-concurrency=1`, so node's test runner never starts
-// this file's process until the previous file's has fully exited — this
-// race (and the unrelated chatUiPass.test.js/templateLibraryUI.test.js
-// fixed-port-4000 collision) can no longer happen regardless of file order.
-// This file no longer needs to be run as its own separate `node --test`
-// invocation — a plain `npm test` covers the whole suite. Left as
-// documentation of why the hazard existed, not as a live instruction.
+// including the ones both test files trigger) deletes any
+// meta_template_library_cache row NOT in the fetch it just saw. Node's test
+// runner isolates each file into its own process by default, but both
+// processes still race against the SAME shared cache table — if this
+// file's refresh (fake catalog: shipping_confirmation/low_balance_warning)
+// runs concurrently with the QA file's refresh (fake catalog:
+// entry_a/entry_b), each one's prune step deletes the OTHER's just-inserted
+// rows, since neither fake catalog contains the other's entries. This
+// mirrors CLAUDE.md's documented "live background workers racing test
+// data" hazard class, but from two TEST processes colliding on a
+// prune-on-refresh table, not a live production runner.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');

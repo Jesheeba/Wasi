@@ -114,15 +114,6 @@ async function checkQualityRating() {
   }));
 }
 
-// TODO(messaging-tier): confirm the real Graph API field name against a
-// live connected WABA before implementing this fetch — do not guess from
-// the reference spec, which doesn't give a verified field name either.
-// Follow this codebase's own established practice (see CLAUDE.md's Meta
-// Official Template Library history: "real Phase 0 API research, not
-// assumed"). wabas.messaging_tier (migration 053) exists and is nullable,
-// waiting on this — no fetch/populate code written yet, deliberately, per
-// PLAN.md item 13's own scope.
-
 // 5. Any template paused or disabled.
 async function checkTemplatesPausedOrDisabled() {
   const { rows } = await pool.query(`

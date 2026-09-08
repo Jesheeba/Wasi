@@ -1,31 +1,14 @@
-// assignedTo (PLAN.md item 2's queue filters, resolved by the route layer
-// before this is called — 'me' is already translated to the caller's real
-// actorId, this function never needs to know what "me" means):
-//   'unassigned' -> assigned_team_member_id is null
-//   a uuid       -> assigned_team_member_id = that id
-//   undefined    -> no filter (matches every existing caller unchanged)
-async function list(db, clientId, { since, status, assignedTo } = {}) {
-  const conditions = ['client_id = $1'];
-  const params = [clientId];
-
+async function list(db, clientId, { since } = {}) {
   if (since) {
-    params.push(since);
-    conditions.push(`last_message_at > $${params.length}`);
+    const { rows } = await db.query(
+      'select * from chats where client_id = $1 and last_message_at > $2 order by last_message_at desc',
+      [clientId, since]
+    );
+    return rows;
   }
-  if (status) {
-    params.push(status);
-    conditions.push(`status = $${params.length}`);
-  }
-  if (assignedTo === 'unassigned') {
-    conditions.push('assigned_team_member_id is null');
-  } else if (assignedTo) {
-    params.push(assignedTo);
-    conditions.push(`assigned_team_member_id = $${params.length}`);
-  }
-
   const { rows } = await db.query(
-    `select * from chats where ${conditions.join(' and ')} order by last_message_at desc`,
-    params
+    'select * from chats where client_id = $1 order by last_message_at desc',
+    [clientId]
   );
   return rows;
 }
@@ -128,19 +111,6 @@ async function lastInboundAt(db, clientId, chatId) {
   return rows[0]?.last_in || null;
 }
 
-// PLAN.md item 5 — unlike lastInboundAt above (a timestamp only, for the
-// 24h session-window check), SLA tracking needs the inbound message's own
-// id to key chat_sla_logs' dedup-per-cycle mechanism. Returns null for a
-// chat with no inbound message at all (e.g. an owner-originated
-// conversation) — callers treat that as "nothing to measure," not an error.
-async function findLastInboundMessage(db, clientId, chatId) {
-  const { rows } = await db.query(
-    `select * from messages where client_id = $1 and chat_id = $2 and direction = 'in' order by sent_at desc limit 1`,
-    [clientId, chatId]
-  );
-  return rows[0] || null;
-}
-
 // Inserts the outbound row before the Cloud API call resolves (status
 // 'pending'); messagingService updates it to sent/failed right after.
 async function insertOutboundPending(db, clientId, chatId, body) {
@@ -180,41 +150,17 @@ async function markFailed(db, clientId, messageId, errorReason, metaErrorCode) {
 // Idempotent inbound insert — Meta redelivers webhook events on retry/ack
 // timeout, so a repeated meta_message_id is a no-op, not a duplicate message.
 // Only ever called from metaWebhook.js, on the privileged connection.
-//
-// A new inbound message reopens a resolved chat (PLAN.md item 2 follow-up,
-// found via direct question, not originally specified) — living here rather
-// than in a route means it applies to every inbound path, not just one.
-// assigned_team_member_id is deliberately left untouched on reopen, not
-// nulled: chats.assigned_team_member_id already has ON DELETE SET NULL
-// (migration 045), so a deleted assignee's reference is cleared the moment
-// they're deleted, independent of resolve/reopen state — there is no
-// "resolved chat holding a stale assignment" state to strand. There's also
-// no disabled-but-not-deleted team_members status in this schema (only
-// invited/active), so there's no other ghost-assignee case to guard
-// against. GET /api/chats?assignedTo=me carries no status filter unless the
-// caller adds one, so a reopened chat with its assignment intact
-// immediately reappears in the assignee's own queue, not just Admin/
-// Manager's unfiltered view.
-// PLAN.md item 14 — referral is Meta's documented CTWA (Click-to-WhatsApp
-// ad) object, present only on a message that originated from an ad click;
-// null for every organic inbound message. Stored verbatim (source_url,
-// source_type, source_id, headline, body, media_type, image_url/video_url,
-// ctwa_clid) — this app never edits or interprets its shape beyond reading
-// it back, so no per-field columns.
-async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt, referral }) {
+async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt }) {
   const { rows } = await db.query(
-    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at, referral)
-     values ($1, $2, 'in', $3, 'delivered', $4, coalesce($5, now()), $6)
+    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at)
+     values ($1, $2, 'in', $3, 'delivered', $4, coalesce($5, now()))
      on conflict (meta_message_id) do nothing
      returning *`,
-    [chatId, clientId, body, metaMessageId, sentAt || null, referral ? JSON.stringify(referral) : null]
+    [chatId, clientId, body, metaMessageId, sentAt || null]
   );
   if (rows[0]) {
     await db.query(
-      `update chats
-       set last_message_at = now(),
-           unread_count = unread_count + 1,
-           status = case when status = 'resolved' then 'open' else status end
+      `update chats set last_message_at = now(), unread_count = unread_count + 1
        where client_id = $1 and id = $2`,
       [clientId, chatId]
     );
@@ -246,7 +192,6 @@ module.exports = {
   findMessageById,
   findMessageByIdForClient,
   lastInboundAt,
-  findLastInboundMessage,
   insertOutboundPending,
   markSent,
   markFailed,

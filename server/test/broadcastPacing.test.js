@@ -86,19 +86,13 @@ test('mutual exclusivity: a broadcast cannot target both a tag and a contact lis
 });
 
 test('mutual exclusivity: also enforced at the DB level (CHECK constraint), a second independent guarantee', async () => {
-  // Constraint renamed by PLAN.md item 9 (migration 051): the original
-  // 2-column broadcasts_audience_not_both widened to the 3-column
-  // broadcasts_audience_at_most_one to also cover the new segment_id —
-  // byte-for-byte as restrictive as before for this tag_id/contact_list_id
-  // case specifically (still rejects the same 2-of-2 combination), just
-  // under its new name. See contactSegments.test.js for the 3-way version.
   await assert.rejects(
     pool.query(
       `insert into broadcasts (client_id, title, tag_id, contact_list_id, template_name)
        values ($1, 'x', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 't')`,
       [testClientId]
     ),
-    /broadcasts_audience_at_most_one/
+    /broadcasts_audience_not_both/
   );
 });
 

@@ -28,15 +28,6 @@
 // this app now actually depends on for phone_number_id is server-side
 // discovery (see `wabaConnectionService.js`, PLAN.md item 25), not anything
 // arriving through this listener.
-//
-// CHANGED AGAIN 2026-09-08, same day: FINISH was confirmed absent on 3 real
-// attempts in a row (see CLAUDE.md Known Gaps), so this file no longer waits
-// up to 10 minutes for it after a code is obtained. connect() now grants at
-// most FINISH_GRACE_MS (5s) as a free shortcut, then calls the backend with
-// whatever it has — server-side discovery is the primary mechanism now, not
-// a fallback behind a long wait. The listener keeps running indefinitely
-// either way, so a FINISH that does eventually arrive (even after connect()
-// has already returned) is still captured and logged, just never blocking.
 (function () {
   let sdkReady = false;
 
@@ -63,25 +54,16 @@
   // arriving afterward and would just sit until the 10-minute hard timeout.
   let pendingCodeReject = null;
 
-  // CHANGED AGAIN 2026-09-08, same day: the fix below (wait up to the full
-  // 10-minute hard timeout for FINISH) was itself wrong in the other
-  // direction. A live check of the client's actual 14:25 UTC attempt found
-  // FINISH never arrived at all — on this attempt or either of the two
-  // before it — and separately confirmed, server-to-server, that Meta DOES
-  // fully link the WABA and starts sending it real account_update webhooks
-  // even when the browser-side wizard never fires FINISH (see CLAUDE.md
-  // Known Gaps). Waiting 10 minutes on a signal that has never once arrived
-  // just means 10 minutes of silence before the thing that actually works
-  // (server-side discovery, PLAN.md item 25) ever gets a chance to run.
-  // pendingTerminalWake still exists for the same reason — a wake function
-  // the message listener calls the moment a real terminal event arrives —
-  // but connect() now only grants it a brief grace window
-  // (FINISH_GRACE_MS), not the full hard timeout, and proceeds to
-  // POST /whatsapp/connect with whatever it has either way. The listener
-  // itself keeps running indefinitely (module scope, never torn down), so a
-  // FINISH that arrives after this grace window — or after connect() has
-  // already returned — is still captured in sessionData/terminalEvent and
-  // logged; it just never blocks the connect call again.
+  // Found live 2026-09-08: phase 2 (after a code is already in hand, still
+  // waiting on terminalEvent to become FINISH-type for waba_id/
+  // phone_number_id) used to poll for a fixed 3 seconds and give up — wrong,
+  // since a real flow can take 51-112+ seconds just to deliver the code, and
+  // nothing guarantees FINISH arrives before or soon after it. Mirrors
+  // pendingCodeReject's shape exactly, for the second phase: a wake
+  // function registered while connect() is in phase 2, called by the
+  // message listener the moment a real terminal event arrives, so this
+  // phase waits properly (up to the same hard timeout) instead of a short
+  // fixed poll.
   let pendingTerminalWake = null;
 
   // Coexistence completions fire a distinct event name, not plain FINISH —
@@ -192,27 +174,19 @@
           reject(new Error('Meta reported the WhatsApp signup finished, but this browser did not receive the authorization code.'));
         }
       } else if (pendingTerminalWake) {
-        // Wakes connect()'s brief post-code grace wait the moment a real
-        // terminal event arrives, instead of sitting out the full window.
-        // Only resolve() is needed here (never reject) — the code right
-        // after the await re-checks terminalEvent itself and throws the
-        // specific message for CANCEL/ERROR, exactly like the immediate
-        // pre-wait check does.
+        // Found live 2026-09-08 — a real flow took 51-112 seconds just to
+        // deliver the code, disproving phase 2's old assumption that FINISH
+        // would always arrive within a few seconds of it. Mirrors
+        // pendingCodeReject exactly, just for the code-already-in-hand
+        // phase: wakes connect()'s phase-2 wait the moment a real terminal
+        // event arrives, instead of a fixed short poll. Only resolve() is
+        // needed here (never reject) — the code right after the await
+        // re-checks terminalEvent itself and throws the specific message
+        // for CANCEL/ERROR, exactly like the immediate pre-wait check does.
         const wake = pendingTerminalWake;
         pendingTerminalWake = null;
-        console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') is ending connect()\'s brief post-code wait.');
+        console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') is ending connect()\'s phase-2 wait for WhatsApp account details.');
         wake();
-      } else {
-        // Found live 2026-09-08: previously nothing was logged here at all —
-        // a terminal event arriving after connect() had already resolved
-        // (or after the grace window elapsed) fell through this if/else
-        // chain silently. Now that phase 2 no longer blocks for up to 10
-        // minutes, a late FINISH/CANCEL/ERROR is a real, expected case, not
-        // an edge case — it's still captured in sessionData/terminalEvent
-        // for anything that reads them later, and now explicitly logged too,
-        // so "the listener keeps running, it just never blocks" is
-        // observable in the console, not just true in theory.
-        console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') arrived with nothing waiting on it (connect() already moved on) — logged only, waba_id so far: ' + (sessionData.waba_id || 'none') + '.');
       }
     }
   });
@@ -225,19 +199,6 @@
   // Without this, a stalled popup left the caller's UI spinning forever with
   // no way to tell a real failure from normal (if slow) syncing.
   const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
-
-  // How long to wait for a FINISH postMessage AFTER a code is already in
-  // hand, before giving up on it and calling the backend anyway. Changed
-  // 2026-09-08 from "wait up to LOGIN_TIMEOUT_MS" (10 minutes) down to this
-  // — a live check of 3 real attempts (including the client's 14:25 UTC one)
-  // found FINISH never arrived on ANY of them, while a separate server-side
-  // check confirmed Meta fully links the WABA and starts sending real
-  // account_update webhooks regardless. Server-side discovery
-  // (wabaConnectionService.discoverWabaAndPhoneNumber, via debug_token) is
-  // now the primary mechanism for waba_id/phone_number_id, not a fallback
-  // behind a long wait — this window is only a free, cheap shortcut for the
-  // (currently unproven) case where FINISH happens to already be in transit.
-  const FINISH_GRACE_MS = 5000;
 
   // Reassures the user during the wait instead of leaving a bare spinner —
   // onProgress(message) is optional so callers without a status UI can omit it.
@@ -430,31 +391,13 @@
       pendingCodeReject = null;
     }
 
-    // PHASE 2, REWRITTEN 2026-09-08: server-side discovery is now the
-    // PRIMARY path for waba_id/phone_number_id, not a fallback sitting
-    // behind a long wait. A live check of the client's 14:25 UTC attempt
-    // (see CLAUDE.md Known Gaps) found FINISH had not arrived on any of the
-    // last 3 real attempts, while account_update webhooks confirmed Meta
-    // fully links the WABA regardless — so a long wait here was pure delay
-    // with no evidence it ever pays off. Two cases only:
-    //
-    // 1. FINISH already arrived (checked immediately — it may have beaten
-    //    the FB.login callback, same as before) — free shortcut, use it.
-    // 2. Otherwise, wait at most FINISH_GRACE_MS (5s) for one to still show
-    //    up, then call the backend with whatever's in hand regardless. The
-    //    code alone is enough — wabaConnectionService.discoverWabaAndPhone
-    //    Number resolves waba_id/phone_number_id server-side from the
-    //    access token via debug_token.
-    //
-    // CANCEL/ERROR are still treated as real, deliberate signals (not
-    // something to paper over by calling connect anyway) — but per the
-    // instruction that "the code alone is enough," a genuine FINISH-or-
-    // nothing outcome always proceeds to the backend now, never blocks
-    // further, and never invents a second "incomplete" record for it.
+    // PHASE 2: waba_id/phone_number_id, via terminalEvent. Checked
+    // immediately first — FINISH may already have arrived before or during
+    // phase 1 (e.g. the postMessage beat the FB.login callback), same as
+    // the old code's own first-iteration check.
     if (terminalEvent === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
     if (terminalEvent === 'ERROR') throw new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`);
     if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)) {
-      console.log('[WasiEmbeddedSignup] FINISH already seen before the grace wait — using it directly, no wait needed.');
       return {
         code,
         waba_id: sessionData.waba_id,
@@ -463,32 +406,71 @@
       };
     }
 
-    if (onProgress) onProgress('Talking to Meta to finish connecting your WhatsApp number…');
-    await new Promise((resolve) => {
-      const graceTimeout = setTimeout(resolve, FINISH_GRACE_MS);
-      pendingTerminalWake = () => { clearTimeout(graceTimeout); resolve(); };
-    });
-    pendingTerminalWake = null;
+    // Found live 2026-09-08: this used to poll for a fixed 3 seconds (10 x
+    // 300ms) before giving up — wrong. A real flow is now confirmed to take
+    // 51-112 seconds just to deliver the code (the COOP fix's own first
+    // live success), and nothing guarantees FINISH arrives before or soon
+    // after it — it can legitimately still be minutes away here. Restructured
+    // to the exact same wait-until-woken-or-hard-timeout shape as phase 1
+    // (pendingTerminalWake, see its declaration) instead of a short fixed
+    // poll, with its own onProgress timers so a long phase-2 wait isn't
+    // silent — phase 1's timers were already cleared the moment the code
+    // arrived, so without this a long phase 2 would show nothing at all.
+    const phase2Timers = [];
+    if (onProgress) {
+      for (const step of PROGRESS_STEPS) {
+        phase2Timers.push(setTimeout(() => onProgress(step.message), step.atMs));
+      }
+    }
+    try {
+      await new Promise((resolve) => {
+        const hardTimeout = setTimeout(resolve, LOGIN_TIMEOUT_MS);
+        phase2Timers.push(hardTimeout);
+        pendingTerminalWake = resolve;
+      });
+    } finally {
+      phase2Timers.forEach(clearTimeout);
+      pendingTerminalWake = null;
+    }
 
     if (terminalEvent === 'CANCEL') throw new Error('Signup was cancelled in the Facebook popup.');
     if (terminalEvent === 'ERROR') throw new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`);
-    console.log(
-      '[WasiEmbeddedSignup] proceeding to POST /whatsapp/connect after',
-      Date.now() - connectStartedAt,
-      'ms — terminalEvent:', terminalEvent, '— waba_id so far:', sessionData.waba_id || 'none (server-side discovery will resolve it)'
-    );
-    // via_coexistence defaults true deliberately, FINISH or not: this app's
-    // FB.login call is unconditionally Coexistence-enabled (featureType is
-    // never empty), so this attempt was always one — defaulting false would
-    // risk the backend trying to register-with-PIN a number that's already
-    // active on the WhatsApp Business app.
+    if (terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)) {
+      return {
+        code,
+        waba_id: sessionData.waba_id,
+        phone_number_id: sessionData.phone_number_id,
+        via_coexistence: FINISH_EVENTS[terminalEvent],
+      };
+    }
+
+    // Found live 2026-09-08, per direct instruction: reaching here means the
+    // full hard timeout elapsed with a code in hand but no terminal event
+    // ever seen — Meta linked *something* without this browser ever
+    // confirming what. Resolving here (not throwing) rather than inventing
+    // a second, weaker "incomplete" record: unlike Part B's
+    // incomplete_meta_linked state (a waba_id with no code — the OPPOSITE
+    // gap, and that endpoint deliberately takes no code field at all), this
+    // attempt already has everything /whatsapp/connect's server-side
+    // discovery (PLAN.md item 25, Part A) needs — it resolves waba_id/
+    // phone_number_id from the access token itself via debug_token, exactly
+    // the case it exists for. Sending this through the normal path means
+    // the backend's own try/catch guarantees a real audited row either way
+    // — connected on a successful discovery, failed with a specific reason
+    // otherwise — never silent, without a separate stub state for a case
+    // that already has a real chance of completing for real.
+    // via_coexistence defaults true deliberately: this app's FB.login call
+    // is unconditionally Coexistence-enabled (featureType is never empty),
+    // so this attempt was always one regardless of whether FINISH itself
+    // ever confirmed it — defaulting false would risk the backend trying to
+    // register-with-PIN a number that's already active on the WhatsApp
+    // Business app.
+    console.log('[WasiEmbeddedSignup] PHASE 2 HARD TIMEOUT fired after', Date.now() - connectStartedAt, 'ms — code was obtained but no terminal event ever arrived. Resolving with the code alone so the backend\'s own server-side discovery can still complete the connection.');
     return {
       code,
       waba_id: sessionData.waba_id,
       phone_number_id: sessionData.phone_number_id,
-      via_coexistence: terminalEvent && Object.prototype.hasOwnProperty.call(FINISH_EVENTS, terminalEvent)
-        ? FINISH_EVENTS[terminalEvent]
-        : true,
+      via_coexistence: true,
     };
   }
 

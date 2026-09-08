@@ -188,49 +188,6 @@ test('POST /:id/import: no file uploaded is rejected with a clear error, not a 5
   assert.equal(res.status, 400);
 });
 
-test('POST /:id/import: a file over the 5MB cap is a clean 400, not a 500', async () => {
-  const list = await fetch(`${baseUrl}/api/contact-lists`, {
-    method: 'POST',
-    headers: authed(clientToken),
-    body: JSON.stringify({ name: `${SUITE_PREFIX}oversized_target` }),
-  }).then((r) => r.json());
-
-  const oversized = 'name,phone\n' + 'x'.repeat(6 * 1024 * 1024);
-  const { body, contentType } = csvUploadBody('file', oversized);
-  const res = await fetch(`${baseUrl}/api/contact-lists/${list.id}/import`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': contentType },
-    body,
-  });
-  assert.equal(res.status, 400);
-  const data = await res.json();
-  assert.match(data.error, /too large/i);
-});
-
-test('POST /:id/import: an unrecognized column (e.g. "tags") is reported but does not count as rejected', async () => {
-  const list = await fetch(`${baseUrl}/api/contact-lists`, {
-    method: 'POST',
-    headers: authed(clientToken),
-    body: JSON.stringify({ name: `${SUITE_PREFIX}tags_target` }),
-  }).then((r) => r.json());
-
-  const phone = `9194${Date.now()}`.slice(0, 12);
-  const csv = `name,phone,tags\nTagged,${phone},VIP`;
-  const { body, contentType } = csvUploadBody('file', csv);
-  const res = await fetch(`${baseUrl}/api/contact-lists/${list.id}/import`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': contentType },
-    body,
-  });
-  assert.equal(res.status, 200);
-  const report = await res.json();
-  assert.equal(report.imported, 1);
-  assert.equal(report.rejected, 0, 'the ignored-column notice is not a rejected row');
-  assert.equal(report.rows_in_file, 1);
-  assert.equal(report.errors.length, 1, 'the notice still appears in errors, not silently dropped');
-  assert.match(report.errors[0].reason, /"tags".*not imported/i);
-});
-
 test('GET /api/contact-lists: shows real member counts', async () => {
   const res = await fetch(`${baseUrl}/api/contact-lists`, { headers: authed(clientToken) });
   assert.equal(res.status, 200);

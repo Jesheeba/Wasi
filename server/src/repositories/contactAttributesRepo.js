@@ -3,11 +3,6 @@ async function list(db, clientId) {
   return rows;
 }
 
-async function findById(db, clientId, id) {
-  const { rows } = await db.query('select * from contact_attributes where client_id = $1 and id = $2', [clientId, id]);
-  return rows[0] || null;
-}
-
 async function create(db, clientId, { name, type }) {
   const { rows } = await db.query(
     `insert into contact_attributes (client_id, name, type) values ($1, $2, coalesce($3, 'text')) returning *`,
@@ -21,4 +16,4 @@ async function remove(db, clientId, id) {
   return rowCount > 0;
 }
 
-module.exports = { list, findById, create, remove };
+module.exports = { list, create, remove };
