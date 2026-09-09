@@ -199,7 +199,10 @@ test('get_template_details: returns the full stored shape for one template, 404s
     body: JSON.stringify({
       name: `${SUITE_PREFIX}tpl_${Date.now()}`,
       category: 'Utility',
-      body: 'Hi {{customer_name}}, your order shipped!',
+      // 18 words / 1 param — clears MIN_WORDS_PER_PARAM's real 9-word floor
+      // (templateParams.js, tightened in 0fa3465 after this fixture was
+      // first written at 5 words, which then started 400ing here).
+      body: 'Hi {{customer_name}}, great news — your recent order has now shipped and is on its way to you.',
       bodyParamExamples: { customer_name: 'Asha' },
     }),
   }).then((r) => r.json());
@@ -208,7 +211,7 @@ test('get_template_details: returns the full stored shape for one template, 404s
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.equal(data.name, created.name);
-  assert.equal(data.body, 'Hi {{customer_name}}, your order shipped!');
+  assert.equal(data.body, 'Hi {{customer_name}}, great news — your recent order has now shipped and is on its way to you.');
 
   const notFound = await fetch(`${baseUrl}/api/v1/templates/00000000-0000-0000-0000-000000000099`, {
     headers: apiAuthed(apiKey),
