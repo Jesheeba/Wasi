@@ -54,7 +54,7 @@ exports.down = async (pgm) => {
   const [{ count }] = await pgm.db.select('select count(*)::int as count from chat_sla_logs');
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 048_chat_sla_logs: ${count} real SLA record(s) exist. ` +
+      `Cannot roll back 059_chat_sla_logs: ${count} real SLA record(s) exist. ` +
       `Export/back up first if they need to be kept, then retry this rollback.`
     );
   }

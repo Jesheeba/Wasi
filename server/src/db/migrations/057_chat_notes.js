@@ -48,7 +48,7 @@ exports.down = async (pgm) => {
   const [{ count }] = await pgm.db.select('select count(*)::int as count from chat_notes');
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 046_chat_notes: ${count} real internal note(s) exist. ` +
+      `Cannot roll back 057_chat_notes: ${count} real internal note(s) exist. ` +
       `Export/back up first if they need to be kept, then retry this rollback.`
     );
   }

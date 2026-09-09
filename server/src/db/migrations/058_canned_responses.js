@@ -36,7 +36,7 @@ exports.down = async (pgm) => {
   const [{ count }] = await pgm.db.select('select count(*)::int as count from canned_responses');
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 047_canned_responses: ${count} real canned response(s) exist. ` +
+      `Cannot roll back 058_canned_responses: ${count} real canned response(s) exist. ` +
       `Export/back up first if they need to be kept, then retry this rollback.`
     );
   }

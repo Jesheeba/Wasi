@@ -33,7 +33,7 @@ exports.down = async (pgm) => {
   const [{ count }] = await pgm.db.select('select count(*)::int as count from conversation_pricing');
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 056_conversation_pricing: conversation_pricing has ${count} real ` +
+      `Cannot roll back 066_conversation_pricing: conversation_pricing has ${count} real ` +
       `admin-entered rate(s). Export/back up this data first if it needs to be kept, then ` +
       `retry this rollback.`
     );
