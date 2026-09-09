@@ -16,7 +16,7 @@ exports.down = async (pgm) => {
   const [{ count }] = await pgm.db.select('select count(*)::int as count from messages where referral is not null');
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 054_message_referral: ${count} real message(s) carry referral (ad-attribution) data. ` +
+      `Cannot roll back 065_message_referral: ${count} real message(s) carry referral (ad-attribution) data. ` +
       `Export/back up first if it needs to be kept, then retry this rollback.`
     );
   }

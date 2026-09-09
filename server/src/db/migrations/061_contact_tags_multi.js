@@ -61,7 +61,7 @@ exports.down = async (pgm) => {
   `);
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 050_contact_tags_multi: ${count} real tag assignment(s) exist beyond ` +
+      `Cannot roll back 061_contact_tags_multi: ${count} real tag assignment(s) exist beyond ` +
       `what contacts.tag_id alone would reconstruct. Export/back up first if they need to be kept, then retry this rollback.`
     );
   }

@@ -39,7 +39,7 @@ exports.down = async (pgm) => {
   );
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 044_team_member_auth: ${count} team_member(s) have a real ` +
+      `Cannot roll back 056_team_member_auth: ${count} team_member(s) have a real ` +
       `password_hash set. A rollback would silently delete their login credential — ` +
       `if that's genuinely intended, clear password_hash for those rows first, then retry.`
     );

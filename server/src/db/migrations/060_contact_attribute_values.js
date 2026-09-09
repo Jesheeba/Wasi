@@ -50,7 +50,7 @@ exports.down = async (pgm) => {
   const [{ count }] = await pgm.db.select('select count(*)::int as count from contact_attribute_values');
   if (count > 0) {
     throw new Error(
-      `Cannot roll back 049_contact_attribute_values: ${count} real value(s) exist. ` +
+      `Cannot roll back 060_contact_attribute_values: ${count} real value(s) exist. ` +
       `Export/back up first if they need to be kept, then retry this rollback.`
     );
   }

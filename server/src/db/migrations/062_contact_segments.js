@@ -58,7 +58,7 @@ exports.down = async (pgm) => {
   const [{ count: usedCount }] = await pgm.db.select('select count(*)::int as count from broadcasts where segment_id is not null');
   if (segCount > 0 || usedCount > 0) {
     throw new Error(
-      `Cannot roll back 051_contact_segments: ${segCount} real segment(s) and ${usedCount} broadcast(s) referencing one exist. ` +
+      `Cannot roll back 062_contact_segments: ${segCount} real segment(s) and ${usedCount} broadcast(s) referencing one exist. ` +
       `Export/back up first if they need to be kept, then retry this rollback.`
     );
   }
