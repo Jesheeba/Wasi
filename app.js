@@ -3292,6 +3292,78 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaField.style.display = template && MEDIA_HEADER_TYPES.includes(template.header_type) ? '' : 'none';
   }
 
+  // One row per {{param}} in the selected template's body/TEXT header, same
+  // shape/behavior as the Bot Flow Editor's Send Template node
+  // (renderNewNodeTemplateParams/collectNewNodeConfig above) — ported here
+  // rather than shared as one function since the two live in different
+  // modals with different surrounding markup, plus a third source option
+  // (contact_attribute) this campaign modal supports and the flow node
+  // doesn't yet (broadcastParamMappingSchema/resolveParamValues only —
+  // see server/src/utils/validate.js and templateParamMapping.js).
+  // This is what routes/broadcasts.js's requiredParamNames check needs —
+  // without it, any template with a variable 400s with "has parameters
+  // with no value source" (confirmed live).
+  function renderNewCampaignParamMappings() {
+    const container = document.getElementById('new-campaign-param-mappings');
+    const name = document.getElementById('new-campaign-template')?.value;
+    const template = state.templates.find(t => t.name === name);
+    if (!container || !template) { if (container) container.innerHTML = ''; return; }
+    const params = extractTemplateParams(template.body || '');
+    if (template.header_type === 'TEXT' && template.header_content) {
+      extractTemplateParams(template.header_content).forEach(p => { if (!params.includes(p)) params.push(p); });
+    }
+    if (!params.length) { container.innerHTML = ''; return; }
+    const attrOptions = state.contactAttributes.map(a => `<option value="contact_attribute:${a.id}">Attribute: ${escapeHtml(a.name)}</option>`).join('');
+    container.innerHTML = `
+      <label class="form-label">Message Variables</label>
+      ${params.map(p => `
+        <div class="form-group param-map-row" data-param="${escapeHtml(p)}" style="margin-bottom:8px;">
+          <label class="form-label" style="font-size:0.8rem;">{{${escapeHtml(p)}}}</label>
+          <select class="form-input param-map-source">
+            <option value="contact_field:name">Contact Name</option>
+            <option value="contact_field:phone">Contact Phone</option>
+            ${attrOptions}
+            <option value="static">Static Value</option>
+          </select>
+          <input type="text" class="form-input param-map-static-value" placeholder="Value" style="display: none; margin-top: 6px;" />
+        </div>
+      `).join('')}
+    `;
+    container.querySelectorAll('.param-map-source').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const staticInput = e.target.closest('.param-map-row').querySelector('.param-map-static-value');
+        staticInput.style.display = e.target.value === 'static' ? '' : 'none';
+      });
+    });
+  }
+
+  // Mirrors collectNewNodeConfig's send_template branch (app.js above) —
+  // reads each .param-map-row back into broadcastParamMappingSchema's shape.
+  // Returns null (with a toast) if a required static value is missing,
+  // rather than letting an incomplete mapping reach the server as a 400.
+  function collectNewCampaignParamMappings() {
+    const paramMappings = {};
+    for (const row of document.querySelectorAll('#new-campaign-param-mappings .param-map-row')) {
+      const param = row.dataset.param;
+      const sourceVal = row.querySelector('.param-map-source').value;
+      if (sourceVal === 'static') {
+        const value = row.querySelector('.param-map-static-value').value.trim();
+        if (!value) {
+          showToast(`Set a value for "{{${param}}}" before launching this campaign.`);
+          return null;
+        }
+        paramMappings[param] = { source: 'static', value };
+      } else if (sourceVal.startsWith('contact_attribute:')) {
+        const [, attributeId] = sourceVal.split(':');
+        paramMappings[param] = { source: 'contact_attribute', attributeId };
+      } else {
+        const [, field] = sourceVal.split(':');
+        paramMappings[param] = { source: 'contact_field', field };
+      }
+    }
+    return paramMappings;
+  }
+
   function populateContactListSelect(selectEl) {
     if (!selectEl) return;
     selectEl.innerHTML = campaignContactLists.length
@@ -3332,6 +3404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-segment-name').value = '';
     updateCampaignAudienceModeUI();
     updateNewCampaignMediaField();
+    renderNewCampaignParamMappings();
     document.getElementById('modal-create-campaign')?.classList.add('open');
 
     try {
@@ -3569,6 +3642,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-campaign-media-file').value = '';
     document.getElementById('new-campaign-media-status').textContent = '';
     updateNewCampaignMediaField();
+    renderNewCampaignParamMappings();
   });
 
   // Same immediate-upload-on-choice pattern as the chat send-template modal
@@ -3588,7 +3662,7 @@ document.addEventListener('DOMContentLoaded', () => {
       newCampaignHeaderMediaAssetId = asset.id;
       status.textContent = `Ready — will send with "${file.name}" instead of the approval sample.`;
     } catch (err) {
-      status.textContent = `Upload failed: ${err.message}`;
+      status.textContent = `Upload failed: ${extractApiErrorDetail(err) || err.message}`;
     }
   });
 
@@ -3616,12 +3690,15 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Select a segment, or build and save one, before launching.');
       return;
     }
+    const paramMappings = collectNewCampaignParamMappings();
+    if (paramMappings === null) return; // collectNewCampaignParamMappings already toasted why
 
     try {
       const created = await authFetch('/api/broadcasts', {
         method: 'POST',
         body: JSON.stringify({
           title, tag_id: tagId || undefined, contact_list_id: contactListId || undefined, segment_id: segmentId || undefined, templateName,
+          paramMappings: Object.keys(paramMappings).length ? paramMappings : undefined,
           headerMediaAssetId: newCampaignHeaderMediaAssetId || undefined,
           pacingConfig: paceValue ? { messages_per_minute: Number(paceValue) } : undefined,
           smartSendingHours: smartSendingValue ? Number(smartSendingValue) : undefined,
@@ -3637,7 +3714,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(created.consentWarning);
       }
     } catch (err) {
-      showToast(err.message);
+      showToast(extractApiErrorDetail(err) || err.message);
     }
   });
 

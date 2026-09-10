@@ -8,18 +8,30 @@ const metaClient = require('./metaClient');
 const { extractPlaceholders } = require('./templateParams');
 
 // Pure — no DB, no network (server/test/broadcastParamMapping.test.js).
-// `mappings` is { [paramName]: {source, field, value} }, already validated
-// complete against the template wherever mappings are authored (broadcast
-// creation, flow node save) — this doesn't re-validate coverage, it just
-// resolves whatever's there. An unresolvable entry (unknown source, or a
-// contact_field naming a field the contact doesn't have) falls back to ''
+// `mappings` is { [paramName]: {source, field, attributeId, value} }, already
+// validated complete against the template wherever mappings are authored
+// (broadcast creation, flow node save) — this doesn't re-validate coverage,
+// it just resolves whatever's there. An unresolvable entry (unknown source,
+// a contact_field naming a field the contact doesn't have, or a
+// contact_attribute id with no value for this contact) falls back to ''
 // rather than throwing, so one bad mapping degrades a single recipient's
 // message instead of failing the whole batch.
-function resolveParamValues(mappings, contact) {
+//
+// `attributeValuesByAttributeId` ({ [attributeId]: value }) is optional and
+// defaults to {} — broadcastRunner.js is the only caller that passes it
+// (fetched per-recipient, only when the broadcast actually uses a
+// contact_attribute mapping; see its own comment for the fetch-failure
+// fallback). flowEngine.js's call site doesn't pass it, so a
+// contact_attribute mapping on a flow's send_template node resolves to ''
+// today, same as any other unresolvable case — flows don't need this
+// capability yet, this just keeps that call site working unchanged.
+function resolveParamValues(mappings, contact, attributeValuesByAttributeId = {}) {
   const resolved = {};
   for (const [name, mapping] of Object.entries(mappings || {})) {
     if (mapping.source === 'contact_field') {
       resolved[name] = contact[mapping.field] || '';
+    } else if (mapping.source === 'contact_attribute') {
+      resolved[name] = attributeValuesByAttributeId[mapping.attributeId] || '';
     } else if (mapping.source === 'static') {
       resolved[name] = mapping.value || '';
     }

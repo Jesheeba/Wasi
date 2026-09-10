@@ -8,6 +8,7 @@ const broadcastsRepo = require('../repositories/broadcastsRepo');
 const broadcastRecipientsRepo = require('../repositories/broadcastRecipientsRepo');
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const chatsRepo = require('../repositories/chatsRepo');
+const contactAttributeValuesRepo = require('../repositories/contactAttributeValuesRepo');
 const messagingService = require('../services/messagingService');
 const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
 const { MessagingError } = messagingService;
@@ -111,7 +112,26 @@ async function sendOneRecipient(broadcast, recipient, template) {
   };
   try {
     const chat = await chatsRepo.findOrCreateByContact(pool, broadcast.client_id, contact);
-    const templateComponents = buildTemplateComponents(template, resolveParamValues(broadcast.param_mappings, contact));
+
+    // Only fetched when this broadcast actually maps a param to a contact
+    // attribute — most campaigns don't, so this adds zero DB round-trips to
+    // the common case. A lookup failure here must never abort this
+    // recipient's send (let alone the rest of the batch/broadcast): it's
+    // caught on its own and falls back to {}, which resolveParamValues'
+    // own documented fallback already turns into '' per unresolved param,
+    // same degrade-one-recipient behavior as any other unresolvable mapping.
+    const needsAttributes = Object.values(broadcast.param_mappings || {}).some((m) => m.source === 'contact_attribute');
+    let attributeValuesByAttributeId = {};
+    if (needsAttributes) {
+      try {
+        const rows = await contactAttributeValuesRepo.listForContact(pool, broadcast.client_id, contact.id);
+        attributeValuesByAttributeId = Object.fromEntries(rows.map((r) => [r.attributeId, r.value]));
+      } catch (attrErr) {
+        console.error(`broadcastRunner: attribute lookup failed for recipient ${recipient.id} (non-fatal, mapped params fall back to blank):`, attrErr.message);
+      }
+    }
+
+    const templateComponents = buildTemplateComponents(template, resolveParamValues(broadcast.param_mappings, contact, attributeValuesByAttributeId));
     const message = await messagingService.sendChatMessage(pool, broadcast.client_id, chat, {
       type: 'template',
       templateName: broadcast.template_name,

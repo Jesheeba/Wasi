@@ -41,6 +41,51 @@ test('resolveParamValues: no mappings resolves to an empty object, not a throw',
   assert.deepEqual(resolveParamValues(null, { name: 'Riyaz' }), {});
 });
 
+// --- contact_attribute mappings (PLAN.md campaign-paramMappings-UI follow-up) ---
+// broadcastRunner.js is the only real caller of the 3rd argument — it fetches
+// attributeValuesByAttributeId per recipient only when needed, and falls back
+// to {} on a lookup failure (see broadcastRunner.js's own comment). This file
+// only tests the pure resolution logic, not that fetch/fallback wiring.
+
+test('resolveParamValues: a contact_attribute mapping reads from the attribute-values map, not the contact', () => {
+  const mappings = { favorite_color: { source: 'contact_attribute', attributeId: 'attr-1' } };
+  const contact = { name: 'Riyaz', phone: '919092766740' };
+  const attributeValues = { 'attr-1': 'Blue' };
+  assert.deepEqual(resolveParamValues(mappings, contact, attributeValues), { favorite_color: 'Blue' });
+});
+
+test('resolveParamValues: a contact_attribute mapping with no matching value falls back to empty string, not undefined/throw', () => {
+  const mappings = { favorite_color: { source: 'contact_attribute', attributeId: 'attr-1' } };
+  assert.deepEqual(resolveParamValues(mappings, { name: 'Riyaz' }, {}), { favorite_color: '' });
+  // Also covers broadcastRunner's failure-containment path: a failed lookup
+  // passes {} through exactly like "this contact has no value for it."
+  assert.deepEqual(resolveParamValues(mappings, { name: 'Riyaz' }), { favorite_color: '' });
+});
+
+test('resolveParamValues: contact_field, contact_attribute, and static mappings combine in one broadcast', () => {
+  const mappings = {
+    customer_name: { source: 'contact_field', field: 'name' },
+    favorite_color: { source: 'contact_attribute', attributeId: 'attr-1' },
+    offer_code: { source: 'static', value: 'SAVE20' },
+  };
+  const contact = { name: 'Riyaz', phone: '919092766740' };
+  const attributeValues = { 'attr-1': 'Blue' };
+  assert.deepEqual(resolveParamValues(mappings, contact, attributeValues), {
+    customer_name: 'Riyaz',
+    favorite_color: 'Blue',
+    offer_code: 'SAVE20',
+  });
+});
+
+test('resolveParamValues: flowEngine.js-style call (no 3rd argument) still works, contact_attribute just resolves blank', () => {
+  const mappings = {
+    customer_name: { source: 'contact_field', field: 'name' },
+    favorite_color: { source: 'contact_attribute', attributeId: 'attr-1' },
+  };
+  const contact = { name: 'Riyaz' };
+  assert.deepEqual(resolveParamValues(mappings, contact), { customer_name: 'Riyaz', favorite_color: '' });
+});
+
 // --- buildTemplateComponents ---
 
 test('buildTemplateComponents: a body-only template gets a body component with the resolved value', () => {

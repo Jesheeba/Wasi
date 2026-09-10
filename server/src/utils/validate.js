@@ -178,15 +178,23 @@ const businessProfileUpdateSchema = z.object({
 // per-recipient value at send time (routes/broadcasts.js and
 // broadcastRunner.js are the two places that need to agree on the field
 // set; kept narrow to the two fields actually useful as message text,
-// rather than exposing every contacts column), 'static' is fixed once at
-// broadcast creation and used unchanged for every recipient.
+// rather than exposing every contacts column), 'contact_attribute' reads a
+// per-recipient custom attribute value (contact_attribute_values, resolved
+// at send time by broadcastRunner.js via templateParamMapping.js — see that
+// file's own comment for the fallback-to-empty-on-failure guarantee), and
+// 'static' is fixed once at broadcast creation and used unchanged for every
+// recipient.
 const broadcastParamMappingSchema = z.object({
-  source: z.enum(['contact_field', 'static']),
+  source: z.enum(['contact_field', 'contact_attribute', 'static']),
   field: z.enum(['name', 'phone']).optional(),
+  attributeId: uuid.optional(),
   value: z.string().optional(),
 }).superRefine((val, ctx) => {
   if (val.source === 'contact_field' && !val.field) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "source 'contact_field' requires a field ('name' or 'phone')" });
+  }
+  if (val.source === 'contact_attribute' && !val.attributeId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "source 'contact_attribute' requires an attributeId" });
   }
   if (val.source === 'static' && !val.value) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "source 'static' requires a non-empty value" });
