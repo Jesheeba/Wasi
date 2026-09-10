@@ -2143,6 +2143,26 @@
     </div>
   </div>
 
+  <!-- Group 2/3 (UI/UX consistency pass) — generic confirm/prompt dialog,
+       ported from admin's showConfirm (admin/app.js) so this app's native
+       confirm()/prompt() calls get the same themed modal every other
+       action already uses, instead of an unstyled browser dialog.
+       showPrompt() (app.js) reuses this exact markup by injecting an
+       <input> into #modal-confirm-body — no separate prompt markup. -->
+  <div id="modal-confirm" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-confirm-title">Are you sure?</h3>
+        <button class="close-modal-btn" data-close-modal="modal-confirm"><i data-lucide="x"></i></button>
+      </div>
+      <div id="modal-confirm-body" style="font-size:0.9rem; color:var(--text-main); line-height:1.5; margin-bottom:1.5rem;"></div>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" class="btn-secondary" data-close-modal="modal-confirm">Cancel</button>
+        <button type="button" class="btn-primary" id="modal-confirm-action-btn" style="width:auto; padding:0 20px;">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Same file server/src/utils/templateParams.js requires() server-side —

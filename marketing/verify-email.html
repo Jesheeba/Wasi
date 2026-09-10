@@ -25,7 +25,7 @@
   <section class="section-tight">
     <div class="container" style="max-width: 420px; text-align:center;">
       <h1 id="verify-heading" style="margin-bottom: 0.5rem;">Verifying your email…</h1>
-      <p id="verify-message" style="color: var(--text-muted); margin-bottom: 1.5rem;">One moment.</p>
+      <p id="verify-message" style="margin-bottom: 1.5rem;">One moment.</p>
       <a href="/index.html" class="btn btn-primary btn-block">Go to Wasi CRM</a>
     </div>
   </section>
@@ -39,9 +39,20 @@
       const heading = document.getElementById('verify-heading');
       const message = document.getElementById('verify-message');
 
+      // Success and failure used to look visually identical — plain text,
+      // no color-coding — so a failed verification read no differently
+      // than a successful one at a glance. Reuses the same real
+      // .form-error-banner/.form-info-banner classes the signup wizard
+      // already established, instead of leaving this page as the one
+      // unstyled outlier.
+      function showOutcome(kind, text) {
+        message.className = kind === 'error' ? 'form-error-banner visible' : 'form-info-banner visible';
+        message.textContent = text;
+      }
+
       if (!token) {
         heading.textContent = 'Missing verification token';
-        message.textContent = 'This link is incomplete. Request a new verification email from inside the app.';
+        showOutcome('error', 'This link is incomplete. Request a new verification email from inside the app.');
         return;
       }
 
@@ -54,11 +65,11 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Verification failed');
           heading.textContent = 'Email verified';
-          message.textContent = 'You can now use your account.';
+          showOutcome('info', 'You can now use your account.');
         })
         .catch((err) => {
           heading.textContent = 'Verification failed';
-          message.textContent = err.message;
+          showOutcome('error', err.message);
         });
     })();
   </script>

@@ -575,10 +575,20 @@ body {
   justify-content: center;
 }
 
-/* Inner Profile Form + Preview Grid */
+/* Inner Profile Form + Preview Grid — renderBusinessProfileForm (app.js)
+   renders exactly 2 children (.profile-form-card, .whatsapp-preview-card).
+   Previously a stale 3-column 160px/1fr/340px template: with only 2 grid
+   items, the form card landed in the 160px track (crushing every field/
+   textarea/input down to ~150px wide, forcing single-word line wraps) and
+   the preview card landed alone in the 1fr track (floating with a huge
+   gap before it), leaving the real 340px track empty at the far right —
+   confirmed live via a real screenshot, not just read from the CSS. The
+   160px width belongs to nothing here: .inner-tabs-list (the Profile/
+   Automation/Catalog/... tab bar, index.html) is a separate sibling
+   element entirely outside this grid, not one of its columns. */
 .profile-workspace-grid {
   display: grid;
-  grid-template-columns: 160px 1fr 340px;
+  grid-template-columns: 1fr 340px;
   gap: 1.5rem;
   align-items: start;
 }
@@ -1309,15 +1319,9 @@ body {
     border-radius: 999px;
   }
 
-  /* .modal-box already scales its width down (width:100%, max-width:500px)
-     — this adds the missing height side for short mobile viewports
-     (landscape phones, small-screen Android) where a tall form modal could
-     otherwise exceed the viewport height. .modal-box-wide already had this
-     (max-height:88vh; overflow-y:auto); plain .modal-box didn't. */
-  .modal-box {
-    max-height: 88vh;
-    overflow-y: auto;
-  }
+  /* .modal-box's own max-height/overflow-y (moved to the base rule, no
+     longer mobile-only — see that rule's comment) already covers this
+     width too; nothing mobile-specific left to add here. */
 }
 
 /* Base height for the Bot Flow Editor canvas — moved out of an inline
@@ -1454,8 +1458,8 @@ body {
     padding: 1.25rem 1rem;
   }
 
-  /* WhatsApp Settings > Profile tab (renderWhatsAppProfileTabs, app.js) —
-     160px / 1fr / 340px fixed-width 3-column grid. */
+  /* WhatsApp Settings > Profile tab (renderBusinessProfileForm, app.js) —
+     stacks the form card and the fixed-width preview card into one column. */
   .profile-workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -1619,10 +1623,33 @@ body {
   pointer-events: auto;
 }
 
+/* UI/UX pass, Group 4 — a bounded-height scrollable region NESTED inside an
+   already-scrolling .modal-box (a contact search results list, a template
+   picker list, an activity timeline). Previously 3 modals each hardcoded
+   their own literal inline max-height (220px/260px/280px) — same
+   mechanism, three one-off copies with no shared class. One class, one
+   default height, with a CSS custom property escape hatch for the call
+   sites that genuinely want a different height than the default — set
+   --modal-inner-scroll-height inline instead of repeating the whole rule. */
+.modal-inner-scroll {
+  max-height: var(--modal-inner-scroll-height, 260px);
+  overflow-y: auto;
+}
+
+/* max-height/overflow-y used to live ONLY inside the @media(max-width:640px)
+   block below, so any modal taller than the viewport had no scroll
+   mechanism at all above 640px — including 900px tablet and 1366x768
+   desktop, the two widths this was actually most likely to matter at
+   (New Campaign's audience/segment/pacing/Smart-Sending content, in
+   particular). Moved here so every modal scrolls internally at every
+   width, not just the narrow ones — confirmed via a real screenshot this
+   was backwards: broken on desktop, fine on mobile, not the reverse. */
 .modal-box {
   background: white;
   width: 100%;
   max-width: 500px;
+  max-height: 88vh;
+  overflow-y: auto;
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
@@ -1631,11 +1658,12 @@ body {
 }
 
 /* Category-driven template form: much richer than the other modals, needs
-   more width and to scroll internally rather than grow past the viewport. */
+   more width than plain .modal-box — max-height/overflow-y are inherited
+   from .modal-box above now (both always used together, confirmed: every
+   .modal-box-wide usage in index.html pairs it with .modal-box, never
+   alone), so this only needs to add the width override. */
 .modal-box-wide {
   max-width: 640px;
-  max-height: 88vh;
-  overflow-y: auto;
 }
 
 .form-hint {

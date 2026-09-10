@@ -347,16 +347,19 @@ footer.site-footer { background: var(--color-dark); color: rgba(255,255,255,0.75
 .form-error-banner {
   background: #FEF2F2; border: 1px solid #FCA5A5; color: #B91C1C; font-size: 0.85rem;
   padding: 11px 14px; border-radius: 10px; margin-bottom: 18px; display: none;
+  text-align: left;
 }
 .form-error-banner.visible { display: block; }
 .form-info-banner {
   background: var(--color-primary-50); border: 1px solid var(--color-primary-200); color: var(--color-primary-800);
   font-size: 0.85rem; padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; display: none;
+  text-align: left;
 }
 .form-info-banner.visible { display: flex; gap: 10px; align-items: flex-start; }
 .form-warn-banner {
   background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E;
   font-size: 0.85rem; padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; display: none;
+  text-align: left;
 }
 .form-warn-banner.visible { display: flex; gap: 10px; align-items: flex-start; }
 .form-warn-banner svg, .form-info-banner svg { flex-shrink: 0; margin-top: 1px; }

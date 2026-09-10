@@ -494,30 +494,41 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('owner-login-card').style.display = '';
   });
 
-  document.getElementById('forgot-password-link')?.addEventListener('click', async (e) => {
+  document.getElementById('forgot-password-link')?.addEventListener('click', (e) => {
     e.preventDefault();
-    const email = prompt('Enter your account email — we’ll send a reset link:');
-    if (!email) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-      const data = await res.json();
-      showToast(data.message || 'If that email is registered, a reset link has been sent.');
-    } catch (err) {
-      showToast('Could not reach the server. Please try again.');
-    }
+    showPrompt({
+      title: 'Reset your password',
+      label: 'Enter your account email — we’ll send a reset link:',
+      placeholder: 'you@example.com',
+      confirmLabel: 'Send reset link',
+      onConfirm: async (email) => {
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          const data = await res.json();
+          showToast(data.message || 'If that email is registered, a reset link has been sent.');
+        } catch (err) {
+          showToast('Could not reach the server. Please try again.');
+        }
+      },
+    });
   });
 
   document.getElementById('user-profile-item')?.addEventListener('click', () => {
-    if (confirm('Do you want to log out?')) {
-      stopPolling();
-      localStorage.removeItem('client_token');
-      localStorage.removeItem('actor_type');
-      showAuthView();
-    }
+    showConfirm({
+      title: 'Log out?',
+      body: 'You can log back in any time.',
+      confirmLabel: 'Log out',
+      onConfirm: async () => {
+        stopPolling();
+        localStorage.removeItem('client_token');
+        localStorage.removeItem('actor_type');
+        showAuthView();
+      },
+    });
   });
 
   // Resumes a session on page load if a token is already stored (spec §3
@@ -3769,17 +3780,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (deleteBtn) {
-      if (!confirm('Delete this template? If it was submitted to Meta, it will be removed there too and can no longer be sent. This cannot be undone.')) return;
-      deleteBtn.disabled = true;
-      try {
-        await authFetch(`/api/templates/${deleteBtn.dataset.deleteTemplate}`, { method: 'DELETE' });
-        await refreshTemplates();
-        renderTemplates();
-        showToast('Template deleted');
-      } catch (err) {
-        showToast(err.message);
-        deleteBtn.disabled = false;
-      }
+      showConfirm({
+        title: 'Delete this template?',
+        body: 'If it was submitted to Meta, it will be removed there too and can no longer be sent. This cannot be undone.',
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          deleteBtn.disabled = true;
+          try {
+            await authFetch(`/api/templates/${deleteBtn.dataset.deleteTemplate}`, { method: 'DELETE' });
+            await refreshTemplates();
+            renderTemplates();
+            showToast('Template deleted');
+          } catch (err) {
+            showToast(err.message);
+            deleteBtn.disabled = false;
+          }
+        },
+      });
     }
   });
 
@@ -4494,14 +4511,20 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('') : '<tr><td colspan="3" style="text-align:center;color:#9CA3AF;">No canned responses yet</td></tr>';
 
     tbody.querySelectorAll('.delete-canned-response-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Delete this canned response?')) return;
-        try {
-          await authFetch(`/api/canned-responses/${btn.dataset.cannedId}`, { method: 'DELETE' });
-          await renderCannedResponsesTable();
-        } catch (err) {
-          showToast(err.message);
-        }
+      btn.addEventListener('click', () => {
+        showConfirm({
+          title: 'Delete this canned response?',
+          body: 'This cannot be undone.',
+          confirmLabel: 'Delete',
+          onConfirm: async () => {
+            try {
+              await authFetch(`/api/canned-responses/${btn.dataset.cannedId}`, { method: 'DELETE' });
+              await renderCannedResponsesTable();
+            } catch (err) {
+              showToast(err.message);
+            }
+          },
+        });
       });
     });
   }
@@ -5083,22 +5106,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  document.getElementById('new-api-key-btn')?.addEventListener('click', async () => {
-    const appName = prompt('Name this key (e.g. "Zapier") so you can recognize it later:');
-    if (!appName || !appName.trim()) return;
-    try {
-      const created = await authFetch('/api/api-keys', { method: 'POST', body: JSON.stringify({ app_name: appName.trim() }) });
-      const revealEl = document.getElementById('new-api-key-reveal');
-      const valueEl = document.getElementById('new-api-key-value');
-      if (revealEl && valueEl) {
-        valueEl.value = created.key;
-        revealEl.style.display = '';
-      }
-      showToast('API key created');
-      renderApiKeysManager();
-    } catch (err) {
-      showToast(err.message);
-    }
+  document.getElementById('new-api-key-btn')?.addEventListener('click', () => {
+    showPrompt({
+      title: 'Create an API key',
+      label: 'Name this key (e.g. "Zapier") so you can recognize it later:',
+      placeholder: 'Zapier',
+      confirmLabel: 'Create',
+      onConfirm: async (appName) => {
+        try {
+          const created = await authFetch('/api/api-keys', { method: 'POST', body: JSON.stringify({ app_name: appName }) });
+          const revealEl = document.getElementById('new-api-key-reveal');
+          const valueEl = document.getElementById('new-api-key-value');
+          if (revealEl && valueEl) {
+            valueEl.value = created.key;
+            revealEl.style.display = '';
+          }
+          showToast('API key created');
+          renderApiKeysManager();
+        } catch (err) {
+          showToast(err.message);
+        }
+      },
+    });
   });
 
   document.getElementById('copy-new-api-key-btn')?.addEventListener('click', () => {
@@ -5114,23 +5143,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteBtn = e.target.closest('[data-delete-key]');
 
     if (revokeBtn && !revokeBtn.disabled) {
-      if (!confirm('Revoke this API key? Any integration (including an MCP/Claude connection) using it will stop working immediately.')) return;
-      try {
-        await authFetch(`/api/api-keys/${revokeBtn.dataset.revokeKey}/revoke`, { method: 'POST' });
-        showToast('API key revoked');
-        renderApiKeysManager();
-      } catch (err) {
-        showToast(err.message);
-      }
+      showConfirm({
+        title: 'Revoke this API key?',
+        body: 'Any integration (including an MCP/Claude connection) using it will stop working immediately.',
+        confirmLabel: 'Revoke',
+        onConfirm: async () => {
+          try {
+            await authFetch(`/api/api-keys/${revokeBtn.dataset.revokeKey}/revoke`, { method: 'POST' });
+            showToast('API key revoked');
+            renderApiKeysManager();
+          } catch (err) {
+            showToast(err.message);
+          }
+        },
+      });
     } else if (deleteBtn && !deleteBtn.disabled) {
-      if (!confirm('Remove this API key? This cannot be undone.')) return;
-      try {
-        await authFetch(`/api/api-keys/${deleteBtn.dataset.deleteKey}`, { method: 'DELETE' });
-        showToast('API key removed');
-        renderApiKeysManager();
-      } catch (err) {
-        showToast(err.message);
-      }
+      showConfirm({
+        title: 'Remove this API key?',
+        body: 'This cannot be undone.',
+        confirmLabel: 'Remove',
+        onConfirm: async () => {
+          try {
+            await authFetch(`/api/api-keys/${deleteBtn.dataset.deleteKey}`, { method: 'DELETE' });
+            showToast('API key removed');
+            renderApiKeysManager();
+          } catch (err) {
+            showToast(err.message);
+          }
+        },
+      });
     }
   });
 
@@ -5217,15 +5258,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function regenerateWebhookSecret() {
-    if (!confirm('Regenerate the webhook signing secret? The current secret will stop verifying immediately — update your endpoint with the new one before relying on it again.')) return;
-    try {
-      const saved = await authFetch('/api/client-webhook/regenerate-secret', { method: 'POST' });
-      renderWebhookSecretField(saved, saved.secret);
-      showToast('Webhook secret regenerated');
-    } catch (err) {
-      showToast(err.message);
-    }
+  function regenerateWebhookSecret() {
+    showConfirm({
+      title: 'Regenerate the webhook signing secret?',
+      body: 'The current secret will stop verifying immediately — update your endpoint with the new one before relying on it again.',
+      confirmLabel: 'Regenerate',
+      onConfirm: async () => {
+        try {
+          const saved = await authFetch('/api/client-webhook/regenerate-secret', { method: 'POST' });
+          renderWebhookSecretField(saved, saved.secret);
+          showToast('Webhook secret regenerated');
+        } catch (err) {
+          showToast(err.message);
+        }
+      },
+    });
   }
 
   document.getElementById('save-webhook-btn')?.addEventListener('click', async () => {
@@ -5854,6 +5901,78 @@ document.addEventListener('DOMContentLoaded', () => {
       if (modal) modal.classList.remove('open');
     });
   });
+
+  // --- Confirm / Prompt dialog (UI/UX consistency pass, Group 2/3) ---
+  // Ported from admin/app.js's showConfirm so this app's native
+  // confirm()/prompt() calls get the same themed modal every other action
+  // already uses. showPrompt() reuses the identical #modal-confirm markup
+  // (its body is raw innerHTML) by injecting a text <input>, rather than
+  // building a second dialog component from scratch.
+  function showConfirm({ title, body, confirmLabel = 'Confirm', danger = true, onConfirm }) {
+    const modal = document.getElementById('modal-confirm');
+    document.getElementById('modal-confirm-title').textContent = title;
+    document.getElementById('modal-confirm-body').innerHTML = body;
+    const actionBtn = document.getElementById('modal-confirm-action-btn');
+    actionBtn.textContent = confirmLabel;
+    actionBtn.style.background = danger ? '#DC2626' : 'var(--color-primary)';
+
+    // Re-cloned on every open so a previous call's click listener never
+    // stacks on top of this one (same precedent as admin's showConfirm).
+    const newBtn = actionBtn.cloneNode(true);
+    actionBtn.parentNode.replaceChild(newBtn, actionBtn);
+    newBtn.addEventListener('click', async () => {
+      newBtn.disabled = true;
+      try {
+        await onConfirm();
+      } catch (err) {
+        // The caller's own catch already shows a toast/inline error for a
+        // real failure — this modal still closes either way so the user
+        // isn't left stuck on it (matches admin's showConfirm exactly).
+      } finally {
+        newBtn.disabled = false;
+        closeConfirm();
+      }
+    });
+
+    modal.classList.add('open');
+  }
+
+  function closeConfirm() {
+    document.getElementById('modal-confirm')?.classList.remove('open');
+  }
+
+  // A prompt() replacement, not just a confirm() one: a single text input
+  // in the same modal, autofocused on open with Enter submitting — both
+  // required per direct instruction, since a prompt replacement without
+  // them is a real downgrade from the native dialog it replaces. Empty
+  // input on confirm is treated as a cancel, matching every call site's
+  // own existing `if (!value) return;` behavior with the native prompt().
+  function showPrompt({ title, label, placeholder = '', confirmLabel = 'OK', onConfirm }) {
+    const inputId = 'modal-confirm-prompt-input';
+    const labelHtml = label ? `<div style="margin-bottom:0.6rem;">${escapeHtml(label)}</div>` : '';
+    showConfirm({
+      title,
+      body: `${labelHtml}<input type="text" id="${inputId}" class="form-input" placeholder="${escapeHtml(placeholder)}" />`,
+      confirmLabel,
+      danger: false,
+      onConfirm: async () => {
+        const value = document.getElementById(inputId)?.value.trim();
+        if (!value) return;
+        await onConfirm(value);
+      },
+    });
+
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.focus();
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('modal-confirm-action-btn')?.click();
+        }
+      });
+    }
+  }
 
   document.getElementById('open-add-contact-modal')?.addEventListener('click', () => {
     document.getElementById('modal-add-contact')?.classList.add('open');

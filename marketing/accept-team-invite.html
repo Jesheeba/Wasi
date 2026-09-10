@@ -32,7 +32,7 @@
           <label class="form-label" for="new-password">Password</label>
           <input type="password" id="new-password" class="form-input" minlength="8" required placeholder="At least 8 characters" />
         </div>
-        <div id="invite-error" class="banner" style="display:none;color:#B91C1C;background:#FEE2E2;padding:10px 14px;border-radius:8px;margin-bottom:1rem;font-size:0.875rem;"></div>
+        <div id="invite-error" class="form-error-banner"></div>
         <button type="submit" class="btn btn-primary btn-block" id="invite-submit">Activate account</button>
       </form>
 
@@ -63,7 +63,7 @@
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        errorEl.style.display = 'none';
+        errorEl.classList.remove('visible');
         const password = document.getElementById('new-password').value;
         const submitBtn = document.getElementById('invite-submit');
         submitBtn.disabled = true;
@@ -86,7 +86,7 @@
           setTimeout(() => { window.location.href = '/index.html'; }, 1200);
         } catch (err) {
           errorEl.textContent = err.message;
-          errorEl.style.display = 'block';
+          errorEl.classList.add('visible');
         } finally {
           submitBtn.disabled = false;
         }
