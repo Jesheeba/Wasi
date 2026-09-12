@@ -33,6 +33,7 @@ function request(path, options = {}) {
 export const api = {
   getFlow: (flowId) => request(`/automation-flows/${flowId}`),
   patchFlow: (flowId, data) => request(`/automation-flows/${flowId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteFlow: (flowId) => request(`/automation-flows/${flowId}`, { method: 'DELETE' }),
   createNode: (flowId, data) => request(`/automation-flows/${flowId}/nodes`, { method: 'POST', body: JSON.stringify(data) }),
   patchNode: (flowId, nodeId, data) => request(`/automation-flows/${flowId}/nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteNode: (flowId, nodeId) => request(`/automation-flows/${flowId}/nodes/${nodeId}`, { method: 'DELETE' }),

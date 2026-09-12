@@ -127,6 +127,32 @@ function FlowEditor() {
     }
   }, [flowId, graph, load]);
 
+  // Deletes the whole flow (not just a node/edge — those already have their
+  // own delete buttons on the card/branch itself). This page is normally
+  // embedded in the main CRM's Bot Flow Editor modal (an <iframe>, same
+  // origin) rather than opened as its own browser tab, so on success it
+  // tells the parent frame to close the modal and refresh its flow list
+  // instead of navigating anywhere itself; opened standalone (window.parent
+  // === window), it just shows a plain "deleted" state since there's no
+  // flow list here to go back to.
+  const handleDeleteFlow = useCallback(() => {
+    if (!graph) return;
+    const ok = window.confirm(
+      `Delete "${graph.name}"? This permanently deletes the flow and all its nodes and branches. Any contact currently in this flow will exit it. This cannot be undone.`
+    );
+    if (!ok) return;
+    api.deleteFlow(flowId)
+      .then(() => {
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'wasi-flow-deleted', flowId }, window.location.origin);
+        } else {
+          setGraph(null);
+          setStatus('deleted');
+        }
+      })
+      .catch((err) => setError(err.message));
+  }, [graph, flowId]);
+
   // --- Derive React Flow nodes/edges from the loaded graph. ---
   useEffect(() => {
     if (!graph) return;
@@ -238,6 +264,7 @@ function FlowEditor() {
   }, [handleDeleteEdge]);
 
   if (status === 'loading') return <div className="wf-loading">Loading…</div>;
+  if (status === 'deleted') return <div className="wf-loading">Flow deleted. You can close this tab.</div>;
   if (status === 'error') {
     return (
       <div className="wf-loading wf-error">
@@ -256,6 +283,9 @@ function FlowEditor() {
         <span className={`wf-status-badge ${graph.status === 'active' ? 'active' : ''}`}>{graph.status}</span>
         <button type="button" className="wf-btn-primary" disabled={blocksActivation} onClick={toggleActive} title={blocksActivation ? 'Fix all issues before activating' : ''}>
           {graph.status === 'active' ? 'Archive Flow' : 'Activate Flow'}
+        </button>
+        <button type="button" className="wf-btn-secondary wf-btn-danger" onClick={handleDeleteFlow} title="Delete this flow">
+          Delete Flow
         </button>
         {error && <span className="wf-error-toast">{error} <button onClick={() => setError(null)}>&times;</button></span>}
       </div>

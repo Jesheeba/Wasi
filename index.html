@@ -9,13 +9,6 @@
   <link rel="stylesheet" href="index.css" />
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Drawflow (read-only flow canvas — Bot Flows editor). Version pinned,
-       unlike lucide's @latest, since app.js's canvas code is written
-       against this exact API surface (addNode/addConnection/editor_mode)
-       and an unannounced breaking release upstream would silently break
-       it rather than just look different. -->
-  <link rel="stylesheet" href="https://unpkg.com/drawflow@0.0.60/dist/drawflow.min.css" />
-  <script src="https://unpkg.com/drawflow@0.0.60/dist/drawflow.min.js"></script>
 </head>
 <body>
 
@@ -1299,6 +1292,31 @@
                     <button type="button" class="btn-secondary btn-sm" id="copy-mcp-config-btn"><i data-lucide="copy" style="width:12px;"></i> Copy</button>
                   </div>
                 </div>
+
+                <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">
+                  <div style="font-weight:600; margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
+                    <i data-lucide="code" style="width:16px;"></i> API Docs — send a WhatsApp message
+                  </div>
+                  <p style="color:#6B7280; font-size:0.85rem; margin:0 0 0.75rem; line-height:1.5;">
+                    Call the Hub API directly from your own CRM or backend using one of the API keys above.
+                  </p>
+                  <div style="font-size:0.8rem; color:#374151; margin-bottom:0.6rem; line-height:1.7;">
+                    <div><strong>Base URL:</strong> <code id="api-docs-base-url" style="background:#F3F4F6; padding:0.1rem 0.4rem; border-radius:4px;">…</code></div>
+                    <div><strong>Endpoint:</strong> <code style="background:#F3F4F6; padding:0.1rem 0.4rem; border-radius:4px;">POST /api/v1/messages</code></div>
+                    <div><strong>Auth header:</strong> <code style="background:#F3F4F6; padding:0.1rem 0.4rem; border-radius:4px;">Authorization: Bearer &lt;api_key&gt;</code></div>
+                  </div>
+                  <p style="font-size:0.8rem; color:#6B7280; margin:0 0 0.5rem;">Example request (template message):</p>
+                  <div class="code-block-wrapper" style="position:relative;">
+                    <pre id="api-docs-curl-snippet" style="background:#0F172A; color:#E2E8F0; font-size:0.75rem; padding:0.85rem; border-radius:8px; overflow-x:auto; margin:0; white-space:pre-wrap; word-break:break-all;">Loading…</pre>
+                    <button type="button" class="btn-secondary btn-sm" id="copy-api-docs-curl-btn"><i data-lucide="copy" style="width:12px;"></i> Copy</button>
+                  </div>
+                  <ul style="font-size:0.8rem; color:#6B7280; margin:0.75rem 0 0; padding-left:1.1rem; line-height:1.6;">
+                    <li><code>type: "template"</code> requires an approved template; use <code>type: "text"</code> with a <code>"body"</code> field instead of <code>template</code>/<code>params</code> only within 24h of the contact's last inbound message.</li>
+                    <li><code>params</code> maps a template's named placeholders (e.g. <code>{{1}}</code>) to values.</li>
+                    <li>Optional <code>headerMediaUrl</code> — a public HTTPS URL to your own file, for a template with an IMAGE/VIDEO/DOCUMENT header.</li>
+                    <li><code>client_id</code> must match the account the API key belongs to.</li>
+                  </ul>
+                </div>
               </div>
 
               <!-- Sub-page 8: TAG MANAGER -->
@@ -1997,25 +2015,17 @@
         <span id="bot-flow-editor-status-badge" class="status-badge"></span>
         <button type="button" class="btn-secondary" id="bot-flow-editor-toggle-status-btn" style="width: auto; padding: 0 14px; font-size: 0.8rem;"></button>
         <span style="font-size: 0.8rem; color: var(--text-muted);" id="bot-flow-editor-entry-label"></span>
-        <a id="bot-flow-editor-open-visual-link" href="#" target="_blank" rel="noopener" class="btn-secondary" style="width: auto; padding: 0 14px; font-size: 0.8rem; display: inline-flex; align-items: center; text-decoration: none; margin-left: auto;">Open Visual Editor &#8599;</a>
+        <button type="button" class="btn-secondary" id="bot-flow-editor-delete-btn" title="Delete this flow" style="width: auto; padding: 0 14px; font-size: 0.8rem; color: #DC2626; display: inline-flex; align-items: center; gap: 4px; margin-left: auto;"><i data-lucide="trash-2" style="width: 14px;"></i> Delete Flow</button>
         <span style="display: flex; border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden;">
           <button type="button" class="flow-view-btn" data-flow-view="list" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer;">List</button>
-          <button type="button" class="flow-view-btn" data-flow-view="canvas" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; border-left: 1px solid var(--border-light);">Canvas</button>
+          <button type="button" class="flow-view-btn" data-flow-view="canvas" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; border-left: 1px solid var(--border-light);">Visual Editor</button>
         </span>
       </div>
       <div id="bot-flow-editor-issues-banner"></div>
       <div id="bot-flow-editor-nodes"></div>
       <div id="bot-flow-editor-canvas-wrap" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <span style="font-size: 0.78rem; color: var(--text-muted);">Read-only — click a node to edit it in the list. Scroll to zoom, drag the background to pan.</span>
-          <span style="display: flex; gap: 6px;">
-            <button type="button" class="btn-secondary" id="bot-flow-canvas-zoom-out-btn" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">&minus;</button>
-            <button type="button" class="btn-secondary" id="bot-flow-canvas-zoom-reset-btn" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">Reset</button>
-            <button type="button" class="btn-secondary" id="bot-flow-canvas-zoom-in-btn" style="width: auto; padding: 2px 10px; font-size: 0.75rem;">+</button>
-          </span>
-        </div>
-        <div id="bot-flow-editor-canvas-legend" style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;"></div>
-        <div id="bot-flow-editor-canvas" style="border: 1px solid var(--border-light); border-radius: 10px; background: #FBFAF7; position: relative; overflow: hidden;"></div>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem;">Drag nodes, draw connections between them, and edit fields directly on the canvas — changes here save immediately and appear in the List view too.</div>
+        <iframe id="bot-flow-editor-iframe" title="Visual flow editor" style="width: 100%; border: 1px solid var(--border-light); border-radius: 10px; background: #FBFAF7;"></iframe>
       </div>
       <div style="margin-top: 1rem;">
         <button type="button" class="btn-secondary" id="bot-flow-editor-add-node-btn" style="width: auto; padding: 0 16px;"><i data-lucide="plus"></i> Add Node</button>

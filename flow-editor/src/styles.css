@@ -106,6 +106,7 @@ body { margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; color: var
   padding: 3px 8px; font-size: 11px; cursor: pointer;
 }
 .wf-btn-danger { color: var(--wf-red); }
+.wf-btn-secondary.wf-btn-danger { border-color: var(--wf-red); }
 
 .wf-button-row { position: relative; display: flex; align-items: center; gap: 4px; margin-bottom: 4px; padding-right: 14px; }
 .wf-branch-target { font-size: 10px; color: var(--wf-text-muted); white-space: nowrap; }

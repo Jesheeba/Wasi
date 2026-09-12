@@ -32,7 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
     flows: [],
     currentFlowGraph: null,
     flowView: 'list',
-    flowCanvasEditor: null,
     wabaConnected: false,
     templates: [],
     tickets: [],
@@ -2116,16 +2115,49 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     grid.innerHTML = state.flows.map(f => `
-      <div class="flow-card" data-flow-id="${f.id}" style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm); cursor: pointer;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-weight: 700; font-size: 1rem; color: var(--color-heading);">${escapeHtml(f.name)}</span>
-          <span class="status-badge ${f.status === 'active' ? 'active' : ''}">${escapeHtml(f.status)}</span>
+      <div class="flow-card" data-flow-id="${f.id}" style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm); cursor: pointer; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+          <span title="${escapeHtml(f.name)}" style="font-weight: 700; font-size: 1rem; color: var(--color-heading); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(f.name)}</span>
+          <span style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+            <span class="status-badge ${f.status === 'active' ? 'active' : ''}">${escapeHtml(f.status)}</span>
+            <button type="button" class="delete-flow-card-btn" data-delete-flow="${f.id}" title="Delete flow" style="border: none; background: none; color: #DC2626; cursor: pointer; padding: 0.25rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
+          </span>
         </div>
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Click to edit</div>
       </div>
     `).join('');
     grid.querySelectorAll('[data-flow-id]').forEach(card => {
       card.addEventListener('click', () => openFlowEditor(card.getAttribute('data-flow-id')));
+    });
+    grid.querySelectorAll('[data-delete-flow]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        confirmAndDeleteFlow(btn.dataset.deleteFlow, () => {
+          refreshFlows().then(renderFlowsList);
+        });
+      });
+    });
+    refreshIcons();
+  }
+
+  // Shared by the flows-grid card delete button and the flow-editor modal's
+  // own Delete Flow button — same confirm copy, same endpoint, same
+  // "contacts currently in this flow exit it" warning either way.
+  function confirmAndDeleteFlow(flowId, onDeleted) {
+    const flow = state.flows.find(f => f.id === flowId) || (state.currentFlowGraph?.id === flowId ? state.currentFlowGraph : null);
+    showConfirm({
+      title: `Delete "${flow?.name || 'this flow'}"?`,
+      body: 'This permanently deletes the flow and all its nodes and branches. Any contact currently in this flow will exit it. This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        try {
+          await authFetch(`/api/automation-flows/${flowId}`, { method: 'DELETE' });
+          showToast('Flow deleted');
+          onDeleted();
+        } catch (err) {
+          showToast(err.message);
+        }
+      },
     });
   }
 
@@ -2152,11 +2184,29 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentFlowGraph = await authFetch(`/api/automation-flows/${flowId}`);
     document.getElementById('bot-flow-editor-title').textContent = state.currentFlowGraph.name;
     document.getElementById('modal-bot-flow-editor')?.classList.add('open');
-    const visualLink = document.getElementById('bot-flow-editor-open-visual-link');
-    if (visualLink) visualLink.href = `/flow-editor/?flow=${flowId}`;
+    // A stale src from a previously-opened flow must never show through
+    // before loadFlowIframe() below gets a chance to point it at this one.
+    const iframe = document.getElementById('bot-flow-editor-iframe');
+    if (iframe) { iframe.removeAttribute('src'); delete iframe.dataset.flowId; }
     state.flowView = 'list';
     renderFlowEditor();
     applyFlowView();
+  }
+
+  // Re-fetches the graph after a List-view mutation (add/delete node,
+  // add/delete/reorder edge, set entry) and re-renders the list in place —
+  // unlike openFlowEditor(), it never touches state.flowView or the
+  // embedded Visual Editor iframe. These mutations are only ever
+  // fired from controls that live inside the List view (hidden while the
+  // Visual Editor tab is active), but their own await chain can still be
+  // in flight after the user switches tabs — calling openFlowEditor() from
+  // here used to snap the modal back to List (and reset the iframe)
+  // out from under a tab switch made in that window, a real race caught by
+  // this session's own Playwright pass.
+  async function refreshCurrentFlowGraph() {
+    if (!state.currentFlowGraph) return;
+    state.currentFlowGraph = await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}`);
+    renderFlowEditor();
   }
 
   // Shared by both the list and the canvas — a node's issues need to look
@@ -2268,198 +2318,42 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshIcons();
   }
 
-  // BFS depth from the entry node (or, absent one, from every node with no
-  // incoming edge) picks each node's column; nodes at the same depth stack
-  // in a column. Cycle-safe via the depth-already-set check — flowEngine.js
-  // explicitly supports a self-loop edge (e.g. "didn't understand, repeat"),
-  // which would infinite-loop a naive BFS without one. Anything never
-  // reached (a disconnected node, or a flow with zero edges at all) gets
-  // appended as its own trailing column rather than silently vanishing.
-  // Only used as a FALLBACK for a node whose real flow_nodes.position is
-  // null — which is every node today, since nothing has ever written to
-  // that column (see migration 023's comment) — but a node WITH a real
-  // stored position always wins over this.
-  function computeFlowLayout(graph) {
-    const incoming = {};
-    graph.edges.forEach(e => { incoming[e.to_node_id] = true; });
-    const roots = graph.entry_node_id
-      ? [graph.entry_node_id]
-      : graph.nodes.filter(n => !incoming[n.id]).map(n => n.id);
-
-    const edgesByFrom = {};
-    graph.edges.forEach(e => { (edgesByFrom[e.from_node_id] = edgesByFrom[e.from_node_id] || []).push(e); });
-
-    const depth = {};
-    roots.forEach(id => { depth[id] = 0; });
-    const queue = [...roots];
-    while (queue.length) {
-      const id = queue.shift();
-      (edgesByFrom[id] || []).forEach(e => {
-        if (depth[e.to_node_id] === undefined) {
-          depth[e.to_node_id] = depth[id] + 1;
-          queue.push(e.to_node_id);
-        }
-      });
+  // The Visual Editor tab embeds the real, fully-editable React Flow app
+  // (flow-editor/, same automation-flows API, same localStorage token —
+  // same origin, so no cross-origin auth issue) directly in this modal
+  // instead of sending the user to a separate browser tab. Only (re)points
+  // the iframe at a flow it isn't already showing, so switching tabs back
+  // and forth doesn't discard in-progress edits inside it.
+  function loadFlowIframe() {
+    const iframe = document.getElementById('bot-flow-editor-iframe');
+    const flow = state.currentFlowGraph;
+    if (!iframe || !flow) return;
+    if (iframe.dataset.flowId !== flow.id) {
+      iframe.src = `/flow-editor/?flow=${flow.id}`;
+      iframe.dataset.flowId = flow.id;
     }
-
-    let nextCol = Math.max(-1, ...Object.values(depth)) + 1;
-    graph.nodes.forEach(n => { if (depth[n.id] === undefined) depth[n.id] = nextCol++; });
-
-    const colCounts = {};
-    const positions = {};
-    graph.nodes.forEach(n => {
-      const col = depth[n.id];
-      positions[n.id] = { x: 60 + col * 320, y: 40 + (colCounts[col] || 0) * 190 };
-      colCounts[col] = (colCounts[col] || 0) + 1;
-    });
-    return positions;
   }
 
-  function flowCanvasEdgeLabel(fromNode, edge) {
-    if (edge.condition_type === 'button_id') {
-      const button = (fromNode.config?.buttons || []).find(b => b.id === edge.condition_value);
-      return button ? `"${button.title}"` : `button "${edge.condition_value}"`;
+  // The List view can go stale the moment the Visual Editor tab is used —
+  // both read/write the same nodes/edges, but only through separate round
+  // trips, so switching back to List needs a fresh fetch rather than
+  // re-rendering whatever was in state.currentFlowGraph before the switch.
+  async function refreshFlowEditorFromServer() {
+    if (!state.currentFlowGraph) return;
+    try {
+      state.currentFlowGraph = await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}`);
+      renderFlowEditor();
+    } catch (err) {
+      // Most likely the flow was just deleted from inside the embedded
+      // editor — the postMessage handler below is already closing this
+      // modal, so there's nothing useful to show here.
     }
-    if (edge.condition_type === 'keyword') return `"${edge.condition_value}"`;
-    return FLOW_EDGE_TYPE_LABELS[edge.condition_type] || edge.condition_type;
-  }
-
-  function jumpToListNode(nodeId) {
-    state.flowView = 'list';
-    applyFlowView();
-    requestAnimationFrame(() => {
-      const card = document.querySelector(`#bot-flow-editor-nodes [data-node-id="${nodeId}"]`);
-      if (!card) return;
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.style.transition = 'background-color 0.3s';
-      card.style.backgroundColor = '#FEF9C3';
-      setTimeout(() => { card.style.backgroundColor = ''; }, 1200);
-    });
-  }
-
-  // Read-only render — editor.editor_mode = 'view' below, no drag, no
-  // add/remove. Every issue the step list shows is shown here too (same
-  // issuesByNodeMap), on the node itself: the spike found a plain graph
-  // hides an unrouted button completely, and a pretty picture that hides
-  // the one real bug in the only real flow tested is worse than the list.
-  function renderFlowCanvas() {
-    const graph = state.currentFlowGraph;
-    const container = document.getElementById('bot-flow-editor-canvas');
-    if (!graph || !container) return;
-
-    if (typeof Drawflow === 'undefined') {
-      container.innerHTML = '<div style="padding:1rem; color:var(--text-muted); font-size:0.85rem;">Canvas library failed to load — check your connection and reopen this flow. The list above still works.</div>';
-      return;
-    }
-
-    container.innerHTML = '';
-    const editor = new Drawflow(container);
-    editor.reroute = true;
-    editor.start();
-    state.flowCanvasEditor = editor;
-
-    if (!graph.nodes.length) {
-      container.innerHTML = '<div style="padding:1rem; color:var(--text-muted); font-size:0.85rem;">No nodes yet.</div>';
-      return;
-    }
-
-    const issuesByNode = issuesByNodeMap(graph);
-    const layout = computeFlowLayout(graph);
-    const incoming = {};
-    graph.edges.forEach(e => { incoming[e.to_node_id] = true; });
-    const edgesByFrom = {};
-    graph.edges.forEach(e => { (edgesByFrom[e.from_node_id] = edgesByFrom[e.from_node_id] || []).push(e); });
-
-    const nodeIdToDfId = {};
-    const usedConditionTypes = new Set();
-
-    graph.nodes.forEach(node => {
-      // Real, persisted position wins whenever one exists — this reads
-      // flow_nodes.position, it doesn't only ever compute its own layout.
-      // It's always the fallback today only because nothing has ever
-      // written to that column yet (no editor does).
-      const pos = node.position || layout[node.id] || { x: 0, y: 0 };
-      const isEntry = node.id === graph.entry_node_id;
-      const nodeIssues = issuesByNode[node.id] || [];
-      const outEdges = edgesByFrom[node.id] || [];
-
-      const outputRows = outEdges.map(e => {
-        usedConditionTypes.add(e.condition_type);
-        return `<div style="font-size:0.68rem; color:#666; padding:2px 0; border-top:1px dashed #E5E7EB;">&rarr; ${escapeHtml(flowCanvasEdgeLabel(node, e))}</div>`;
-      }).join('');
-
-      const html = `<div class="flow-canvas-node-inner">
-        ${isEntry ? '<span class="flow-canvas-entry-badge">ENTRY</span><br>' : ''}
-        <div class="flow-canvas-node-type">${escapeHtml(FLOW_NODE_TYPE_LABELS[node.type] || node.type)}</div>
-        <div class="flow-canvas-node-body">${nodeConfigSummary(node) || '&nbsp;'}</div>
-        ${outputRows ? `<div style="margin-top:4px;">${outputRows}</div>` : ''}
-        ${nodeIssues.length ? `<div class="flow-canvas-node-issue">${nodeIssues.map(i => escapeHtml(i.message)).join('<br>')}</div>` : ''}
-      </div>`;
-
-      const dfId = editor.addNode(node.type, incoming[node.id] ? 1 : 0, outEdges.length, pos.x, pos.y, node.type, {}, html, false);
-      nodeIdToDfId[node.id] = dfId;
-
-      const nodeEl = container.querySelector(`#node-${dfId}`);
-      if (nodeEl) {
-        if (nodeIssues.length) nodeEl.classList.add('flow-node-issue');
-        if (isEntry) nodeEl.classList.add('flow-node-entry');
-      }
-    });
-
-    const outputCounters = {};
-    graph.edges.forEach(e => {
-      outputCounters[e.from_node_id] = (outputCounters[e.from_node_id] || 0) + 1;
-      const fromDfId = nodeIdToDfId[e.from_node_id];
-      const toDfId = nodeIdToDfId[e.to_node_id];
-      if (fromDfId == null || toDfId == null) return; // dangling edge — flowValidation already flags this on the node; nothing to draw
-      editor.addConnection(fromDfId, toDfId, `output_${outputCounters[e.from_node_id]}`, 'input_1');
-    });
-
-    // Color each connection by condition_type — Drawflow's addConnection
-    // takes no per-connection class, so this is a direct DOM pass matching
-    // its own node_in_node-X/node_out_node-Y class pair (confirmed against
-    // the real library in the earlier spike).
-    graph.edges.forEach(e => {
-      const fromDfId = nodeIdToDfId[e.from_node_id];
-      const toDfId = nodeIdToDfId[e.to_node_id];
-      if (fromDfId == null || toDfId == null) return;
-      container.querySelectorAll(`.connection.node_in_node-${toDfId}.node_out_node-${fromDfId}`)
-        .forEach(el => el.classList.add(`flow-edge-${e.condition_type}`));
-    });
-
-    editor.editor_mode = 'view';
-
-    const legend = document.getElementById('bot-flow-editor-canvas-legend');
-    if (legend) {
-      const swatchColor = { button_id: '#1E6E5A', keyword: '#2E5F8A', default: '#9A6A1F', timeout: '#A4402F', always: '#888' };
-      legend.innerHTML = [...usedConditionTypes].map(ct => `
-        <span style="display:flex; align-items:center; gap:4px;">
-          <span style="width:10px; height:10px; border-radius:50%; background:${swatchColor[ct] || '#888'}; display:inline-block;"></span>
-          ${escapeHtml(FLOW_EDGE_TYPE_LABELS[ct] || ct)}
-        </span>
-      `).join('');
-    }
-
-    // The canvas's one interaction — click a node, land on the same node
-    // in the list, where editing actually happens. It never edits anything
-    // itself. A direct delegated DOM click, not Drawflow's own
-    // 'nodeSelected' event — confirmed live that event doesn't fire once
-    // editor_mode is 'view' (selection is part of what view mode disables,
-    // not just dragging), so this reads the clicked node's own
-    // Drawflow-assigned id="node-<n>" instead, which view mode does not
-    // remove.
-    container.addEventListener('click', (e) => {
-      const nodeEl = e.target.closest('[id^="node-"]');
-      if (!nodeEl) return;
-      const dfId = Number(nodeEl.id.replace('node-', ''));
-      const nodeId = Object.keys(nodeIdToDfId).find((id) => nodeIdToDfId[id] === dfId);
-      if (nodeId) jumpToListNode(nodeId);
-    });
   }
 
   function applyFlowView() {
     const listEl = document.getElementById('bot-flow-editor-nodes');
     const canvasWrapEl = document.getElementById('bot-flow-editor-canvas-wrap');
+    const addNodeBtn = document.getElementById('bot-flow-editor-add-node-btn');
     if (!listEl || !canvasWrapEl) return;
     document.querySelectorAll('.flow-view-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.flowView === state.flowView);
@@ -2467,10 +2361,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.flowView === 'canvas') {
       listEl.style.display = 'none';
       canvasWrapEl.style.display = '';
-      renderFlowCanvas();
+      if (addNodeBtn) addNodeBtn.style.display = 'none'; // the embedded editor has its own "Add a node" palette
+      loadFlowIframe();
     } else {
       listEl.style.display = '';
       canvasWrapEl.style.display = 'none';
+      if (addNodeBtn) addNodeBtn.style.display = '';
+      refreshFlowEditorFromServer();
     }
   }
 
@@ -2480,9 +2377,29 @@ document.addEventListener('DOMContentLoaded', () => {
       applyFlowView();
     });
   });
-  document.getElementById('bot-flow-canvas-zoom-in-btn')?.addEventListener('click', () => state.flowCanvasEditor?.zoom_in());
-  document.getElementById('bot-flow-canvas-zoom-out-btn')?.addEventListener('click', () => state.flowCanvasEditor?.zoom_out());
-  document.getElementById('bot-flow-canvas-zoom-reset-btn')?.addEventListener('click', () => state.flowCanvasEditor?.zoom_reset());
+
+  // The embedded editor posts back on its own deletions (of the whole
+  // flow) so this modal/list can react without polling — same-origin
+  // check since flow-editor/ is always served by this same Express app.
+  window.addEventListener('message', (e) => {
+    if (e.origin !== window.location.origin) return;
+    if (e.data?.type === 'wasi-flow-deleted' && e.data.flowId === state.currentFlowGraph?.id) {
+      document.getElementById('modal-bot-flow-editor')?.classList.remove('open');
+      state.currentFlowGraph = null;
+      showToast('Flow deleted');
+      refreshFlows().then(renderFlowsList);
+    }
+  });
+
+  document.getElementById('bot-flow-editor-delete-btn')?.addEventListener('click', () => {
+    const flow = state.currentFlowGraph;
+    if (!flow) return;
+    confirmAndDeleteFlow(flow.id, () => {
+      document.getElementById('modal-bot-flow-editor')?.classList.remove('open');
+      state.currentFlowGraph = null;
+      refreshFlows().then(renderFlowsList);
+    });
+  });
 
   function renderNewNodeConfigFields(type) {
     const container = document.getElementById('new-bot-flow-node-config-fields');
@@ -4963,7 +4880,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ type, config })
       });
       document.getElementById('modal-add-bot-flow-node')?.classList.remove('open');
-      await openFlowEditor(state.currentFlowGraph.id);
+      await refreshCurrentFlowGraph();
       await refreshFlows();
     } catch (err) {
       showToast(err.message);
@@ -4994,15 +4911,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const other = siblings[swapIdx];
         await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges/${edge.id}`, { method: 'PATCH', body: JSON.stringify({ priority: other.priority }) });
         await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges/${other.id}`, { method: 'PATCH', body: JSON.stringify({ priority: edge.priority }) });
-        await openFlowEditor(state.currentFlowGraph.id);
+        await refreshCurrentFlowGraph();
       } else if (deleteNodeBtn) {
         await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/nodes/${deleteNodeBtn.dataset.nodeId}`, { method: 'DELETE' });
-        await openFlowEditor(state.currentFlowGraph.id);
+        await refreshCurrentFlowGraph();
       } else if (setEntryBtn) {
         await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}`, {
           method: 'PATCH', body: JSON.stringify({ entry_node_id: setEntryBtn.dataset.nodeId })
         });
-        await openFlowEditor(state.currentFlowGraph.id);
+        await refreshCurrentFlowGraph();
       } else if (addEdgeBtn) {
         const nodeId = addEdgeBtn.dataset.nodeId;
         const node = findNode(nodeId);
@@ -5025,7 +4942,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modal-add-bot-flow-edge')?.classList.add('open');
       } else if (deleteEdgeBtn) {
         await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges/${deleteEdgeBtn.dataset.edgeId}`, { method: 'DELETE' });
-        await openFlowEditor(state.currentFlowGraph.id);
+        await refreshCurrentFlowGraph();
       }
     } catch (err) {
       showToast(err.message);
@@ -5081,7 +4998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       });
       document.getElementById('modal-add-bot-flow-edge')?.classList.remove('open');
-      await openFlowEditor(state.currentFlowGraph.id);
+      await refreshCurrentFlowGraph();
     } catch (err) {
       showToast(err.message);
     }
@@ -5274,6 +5191,40 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     navigator.clipboard.writeText(el.textContent)
       .then(() => showToast('MCP config copied to clipboard'))
+      .catch(() => showToast('Could not copy — clipboard permission denied'));
+  });
+
+  // API Docs card (Settings > Developer) — a self-serve curl sample for a
+  // client's own CRM/backend to call the Hub API directly, mirroring
+  // crm-integration-guide.md's own example. client_id is pre-filled from the
+  // logged-in account (safe, not a secret); the key itself is a placeholder,
+  // same reasoning as renderMcpConfigSnippet above.
+  function renderApiDocsSnippet() {
+    const baseUrlEl = document.getElementById('api-docs-base-url');
+    const curlEl = document.getElementById('api-docs-curl-snippet');
+    if (!curlEl) return;
+    const backendOrigin = API_BASE || location.origin;
+    if (baseUrlEl) baseUrlEl.textContent = backendOrigin;
+    const clientId = state.user?.id || '<your-client-id>';
+    curlEl.textContent = [
+      `curl -X POST ${backendOrigin}/api/v1/messages \\`,
+      `  -H "Authorization: Bearer wasi_..." \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '{`,
+      `    "client_id": "${clientId}",`,
+      `    "to": "91XXXXXXXXXX",`,
+      `    "type": "template",`,
+      `    "template": "order_shipped",`,
+      `    "params": { "1": "Priya", "2": "#4821" }`,
+      `  }'`,
+    ].join('\n');
+  }
+
+  document.getElementById('copy-api-docs-curl-btn')?.addEventListener('click', () => {
+    const el = document.getElementById('api-docs-curl-snippet');
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent)
+      .then(() => showToast('curl example copied to clipboard'))
       .catch(() => showToast('Could not copy — clipboard permission denied'));
   });
 
@@ -5559,7 +5510,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'attributes') renderAttributesTable();
       if (secKey === 'wallet') renderWallet();
       if (secKey === 'webhook') renderClientWebhook();
-      if (secKey === 'developer') { renderApiKeysManager(); renderMcpConfigSnippet(); }
+      if (secKey === 'developer') { renderApiKeysManager(); renderMcpConfigSnippet(); renderApiDocsSnippet(); }
       if (secKey === 'subscription') renderSubscriptionTab();
       if (secKey === 'billing') renderBillingTab();
       refreshIcons();
