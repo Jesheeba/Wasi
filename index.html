@@ -1540,6 +1540,17 @@
         </div>
         <div id="new-campaign-media" style="display: none;" class="form-group">
           <label class="form-label">Header file</label>
+          <!-- Existing media the template already has uploaded (default or
+               not) — a synced-from-Meta template, or one whose uploads
+               never got promoted to default, previously had no way to be
+               picked here at all; only "upload a new file" existed. -->
+          <select class="form-input" id="new-campaign-media-asset" style="margin-bottom:6px;">
+            <option value="">Upload a new file below…</option>
+          </select>
+          <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+            <button type="button" class="btn-secondary" id="new-campaign-media-make-default-btn" style="display:none; width:auto; padding:4px 10px; font-size:0.78rem;">Make this the default</button>
+            <span id="new-campaign-media-asset-status" style="font-size:0.78rem; color:var(--text-muted);"></span>
+          </div>
           <input type="file" class="form-input" id="new-campaign-media-file" />
           <div id="new-campaign-media-status" style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;"></div>
         </div>

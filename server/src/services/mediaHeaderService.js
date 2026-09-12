@@ -65,10 +65,30 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
     ? await templateMediaCacheRepo.findAssetById(db, clientId, assetId)
     : await templateMediaCacheRepo.findByTemplateId(db, clientId, template.id);
   if (!cached) {
+    if (assetId) {
+      throw new MediaResolutionError(
+        `The selected media for "${template.name}" could not be found (it may have been removed) — choose a file again before sending.`
+      );
+    }
+    // Distinguishing "no default, but other media exists" from "nothing was
+    // ever uploaded" matters: a template synced in from Meta (see
+    // templateSyncService.createFromMetaSync) starts with zero cache rows
+    // regardless of what's actually been uploaded through this app since —
+    // "was never uploaded through this app" is simply false once at least
+    // one asset exists, and was found to actively mislead someone
+    // troubleshooting a template that already has usable media, just none
+    // marked as the default.
+    const others = await templateMediaCacheRepo.listByTemplateId(db, clientId, template.id);
+    if (others.length > 0) {
+      const list = others.map((a) => `"${a.filename || a.media_id}"`).join(', ');
+      throw new MediaResolutionError(
+        `"${template.name}" has no default header media set, so a plain send/broadcast has nothing to use. ` +
+        `${others.length} uploaded file${others.length > 1 ? 's' : ''} already exist for this template (${list}) — ` +
+        `set one as the default, or point this send at one of them directly.`
+      );
+    }
     throw new MediaResolutionError(
-      assetId
-        ? `The selected media for "${template.name}" could not be found (it may have been removed) — choose a file again before sending.`
-        : `"${template.name}"'s header media was never uploaded through this app (or that record was lost) — re-upload the header media for this template before it can be sent.`
+      `"${template.name}"'s header media was never uploaded through this app — upload it before this can be sent.`
     );
   }
 

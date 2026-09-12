@@ -3292,15 +3292,52 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- New Campaign Modal ---
-  let newCampaignHeaderMediaAssetId = null; // set once a new header file has been uploaded for this campaign
+  let newCampaignHeaderMediaAssetId = null; // set once a header file/asset has been chosen for this campaign
   let campaignContactLists = []; // fetched fresh each time the modal opens
   let campaignSegments = []; // item 9 — same "fetched fresh each time the modal opens" pattern
+  let newCampaignMediaAssets = []; // the selected template's uploaded media assets — refreshed on template change, after an upload, and after promoting one to default
 
-  function updateNewCampaignMediaField() {
+  async function updateNewCampaignMediaField() {
     const templateName = document.getElementById('new-campaign-template').value;
     const template = state.templates.find(t => t.name === templateName);
     const mediaField = document.getElementById('new-campaign-media');
-    mediaField.style.display = template && MEDIA_HEADER_TYPES.includes(template.header_type) ? '' : 'none';
+    const isMedia = template && MEDIA_HEADER_TYPES.includes(template.header_type);
+    mediaField.style.display = isMedia ? '' : 'none';
+    if (!isMedia) {
+      newCampaignMediaAssets = [];
+      return;
+    }
+    await refreshNewCampaignMediaAssets(template.id);
+  }
+
+  // A plain broadcast only ever resolves a template's DEFAULT media
+  // (mediaHeaderService.resolveMediaId) — before this, the only way to give
+  // it one was to upload a brand new file every time, even when the
+  // template already had real usable assets (e.g. synced in from Meta, or
+  // uploaded earlier but never promoted). This lists every existing asset
+  // so one can be picked directly instead.
+  async function refreshNewCampaignMediaAssets(templateId) {
+    const select = document.getElementById('new-campaign-media-asset');
+    try {
+      newCampaignMediaAssets = await authFetch(`/api/templates/${templateId}/header-media`);
+    } catch (err) {
+      newCampaignMediaAssets = [];
+    }
+    select.innerHTML = ['<option value="">Use the template\'s default / upload a new file below…</option>']
+      .concat(newCampaignMediaAssets.map(a =>
+        `<option value="${a.id}">${escapeHtml(a.filename || a.id)}${a.isDefault ? ' (current default)' : ''}</option>`
+      )).join('');
+    select.value = '';
+    updateNewCampaignMakeDefaultButton();
+  }
+
+  function updateNewCampaignMakeDefaultButton() {
+    const select = document.getElementById('new-campaign-media-asset');
+    const btn = document.getElementById('new-campaign-media-make-default-btn');
+    const status = document.getElementById('new-campaign-media-asset-status');
+    const asset = newCampaignMediaAssets.find(a => a.id === select.value);
+    btn.style.display = (asset && !asset.isDefault) ? '' : 'none';
+    status.textContent = asset?.isDefault ? 'This is the current default.' : '';
   }
 
   // One row per {{param}} in the selected template's body/TEXT header, same
@@ -3414,7 +3451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('segment-preview-status').textContent = '';
     document.getElementById('new-segment-name').value = '';
     updateCampaignAudienceModeUI();
-    updateNewCampaignMediaField();
+    await updateNewCampaignMediaField();
     renderNewCampaignParamMappings();
     document.getElementById('modal-create-campaign')?.classList.add('open');
 
@@ -3648,12 +3685,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('new-campaign-template')?.addEventListener('change', () => {
+  document.getElementById('new-campaign-template')?.addEventListener('change', async () => {
     newCampaignHeaderMediaAssetId = null;
     document.getElementById('new-campaign-media-file').value = '';
     document.getElementById('new-campaign-media-status').textContent = '';
-    updateNewCampaignMediaField();
+    await updateNewCampaignMediaField();
     renderNewCampaignParamMappings();
+  });
+
+  // Picking an existing asset instead of uploading a new one — either the
+  // template's own default (blank option) or a specific non-default asset,
+  // e.g. one a plain broadcast couldn't otherwise reach at all.
+  document.getElementById('new-campaign-media-asset')?.addEventListener('change', (e) => {
+    newCampaignHeaderMediaAssetId = e.target.value || null;
+    document.getElementById('new-campaign-media-file').value = '';
+    document.getElementById('new-campaign-media-status').textContent = '';
+    updateNewCampaignMakeDefaultButton();
+  });
+
+  document.getElementById('new-campaign-media-make-default-btn')?.addEventListener('click', async () => {
+    const templateName = document.getElementById('new-campaign-template').value;
+    const template = state.templates.find(t => t.name === templateName);
+    const select = document.getElementById('new-campaign-media-asset');
+    const assetId = select.value;
+    const status = document.getElementById('new-campaign-media-asset-status');
+    if (!template || !assetId) return;
+    status.textContent = 'Setting as default…';
+    try {
+      await authFetch(`/api/templates/${template.id}/header-media/${assetId}/default`, { method: 'POST' });
+      await refreshNewCampaignMediaAssets(template.id);
+      select.value = assetId;
+      updateNewCampaignMakeDefaultButton();
+    } catch (err) {
+      status.textContent = `Could not set as default: ${extractApiErrorDetail(err) || err.message}`;
+    }
   });
 
   // Same immediate-upload-on-choice pattern as the chat send-template modal
@@ -3672,6 +3737,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const asset = await authFetch(`/api/templates/${template.id}/header-media`, { method: 'POST', body: form });
       newCampaignHeaderMediaAssetId = asset.id;
       status.textContent = `Ready — will send with "${file.name}" instead of the approval sample.`;
+      // Refresh the picker so the just-uploaded file is selectable (and
+      // promotable to default) without re-opening the modal.
+      await refreshNewCampaignMediaAssets(template.id);
+      document.getElementById('new-campaign-media-asset').value = asset.id;
+      updateNewCampaignMakeDefaultButton();
     } catch (err) {
       status.textContent = `Upload failed: ${extractApiErrorDetail(err) || err.message}`;
     }

@@ -236,7 +236,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
         const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, req.file.buffer, mimeType, req.file.originalname);
         seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (req.file.originalname || null) : null };
       } catch (err) {
-        return res.status(502).json({ error: 'Could not upload header media to Meta', detail: err.message });
+        return res.status(502).json({ error: 'Could not upload header media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
       }
     }
 
@@ -324,7 +324,7 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
   try {
     uploaded = await metaClient.uploadMedia(waba.phone_number_id, accessToken, req.file.buffer, mimeType, req.file.originalname);
   } catch (err) {
-    return res.status(502).json({ error: 'Could not upload media to Meta', detail: err.message });
+    return res.status(502).json({ error: 'Could not upload media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
   }
 
   // Recommended (not required) by Meta for a document header send, same as
@@ -332,6 +332,35 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
   const filename = template.header_type === 'DOCUMENT' ? (req.file.originalname || null) : null;
   const asset = await templateMediaCacheRepo.insertAsset(req.db, req.clientId, template.id, { mediaId: uploaded.id, filename });
   res.status(201).json({ id: asset.id, filename: asset.filename });
+}));
+
+// Lists every media row for a template, default first — the New Campaign
+// modal's existing-asset picker (and any future caller) uses this instead
+// of only ever being able to upload a brand new file, which was the only
+// option before: a template synced in from Meta, or one with successfully
+// uploaded assets that never got promoted to default, had usable media
+// this app had no way to show or pick.
+router.get('/:id/header-media', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
+  if (!template) return res.status(404).json({ error: 'Not found' });
+  const assets = await templateMediaCacheRepo.listByTemplateId(req.db, req.clientId, template.id);
+  res.json(assets.map((a) => ({ id: a.id, filename: a.filename, isDefault: a.is_default, resolvedAt: a.resolved_at })));
+}));
+
+// Promotes an existing, already-uploaded asset to be this template's
+// default — the fallback a plain send/broadcast resolves when no specific
+// headerMediaAssetId is given (mediaHeaderService.resolveMediaId). Needed
+// because POST /:id/header-media above always inserts a new NON-default
+// asset (insertAsset) — there was previously no path at all to promote one.
+router.post('/:id/header-media/:assetId/default', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  uuid.parse(req.params.assetId);
+  const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
+  if (!template) return res.status(404).json({ error: 'Not found' });
+  const updated = await templateMediaCacheRepo.setDefault(req.db, req.clientId, template.id, req.params.assetId);
+  if (!updated) return res.status(404).json({ error: 'Media asset not found for this template' });
+  res.json({ id: updated.id, filename: updated.filename, isDefault: updated.is_default });
 }));
 
 // Edits an existing template's content — body/header[NONE|TEXT only]/
