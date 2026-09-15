@@ -1199,6 +1199,35 @@ body {
   flex-direction: column;
 }
 
+/* Pulled out of an inline style, same reasoning as .chat-list-panel above —
+   the mobile fix below needs to override padding-left without an
+   !important fight against an inline padding shorthand. */
+.chat-list-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* .mobile-sidebar-toggle (see above) is fixed at top:12px/left:12px, a
+   44x44 box with no reserved layout space of its own — any view whose
+   top-left content starts flush at (0,0) sits directly under it. Cosmetic
+   for most views (page-title-bar's own padding already clears it, just
+   clips legibility — see CLAUDE.md's Known Gaps), but #start-new-chat-btn
+   here is a real click target in that exact footprint and was being
+   intercepted, not just visually clipped. Pushing this row's content past
+   the toggle's right edge (44px + 12px left offset + a small gap) is the
+   minimal fix; a shared fix for every view is a separate, larger cleanup.
+   Placed here (after the base rule above, not inside the earlier
+   max-width:900px block near the top of this file) deliberately — a
+   same-specificity override needs to come later in source order to win. */
+@media (max-width: 900px) {
+  .chat-list-header {
+    padding-left: 64px;
+  }
+}
+
 /* Mobile-only "back to chat list" button in the chat header — hidden at
    desktop widths, shown (and floored to a 44px touch target) below 640px
    alongside the rest of the Chat view's mobile collapse, further down. */
