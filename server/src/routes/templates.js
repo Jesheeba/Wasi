@@ -211,6 +211,21 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
       });
     }
 
+    // Releases the tenant DB connection before the first Meta call and
+    // reacquires one only once every Meta round trip below is done — up to
+    // 4 sequential Graph API calls for a media header (createUploadSession/
+    // uploadFileBytes/uploadMedia/createMessageTemplate), each of which can
+    // take seconds. Without this, this one request pins one of the pool's
+    // few connections idle-in-transaction for that whole time — the same
+    // reasoning routes/chats.js's send already documented and fixed
+    // (messagingService.sendChatMessage's connectionHooks), never applied
+    // here even though this route makes more Meta calls per request than
+    // any other tenant route. A failure path below returns straight from
+    // here with no further req.db use, so it needs no reacquire — only the
+    // success path (past both try blocks) does, right before the local
+    // writes.
+    await req.commitAndRelease();
+
     if (isMediaHeader) {
       if (!process.env.META_APP_ID) {
         return res.status(502).json({ error: 'META_APP_ID is not configured for this environment' });
@@ -252,6 +267,16 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
       }
       return res.status(502).json({ error: 'Meta rejected this template', detail: describeMetaError(err), metaError: err.metaError || undefined });
     }
+  }
+
+  // Only reached once every Meta call above has already returned — a fresh
+  // connection is acquired here rather than reusing one held open through
+  // those calls (see the commitAndRelease comment above). No-op (keeps the
+  // original still-open connection) when the waba-connected branch above
+  // was never entered at all — a draft with no WABA connected made no Meta
+  // calls and never released anything.
+  if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
+    req.db = await req.reacquireDb();
   }
 
   const template = await messageTemplatesRepo.create(req.db, {
@@ -320,12 +345,18 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
     });
   }
 
+  // Same reasoning as POST /'s commitAndRelease — don't pin a tenant
+  // connection idle-in-transaction for this Meta upload call.
+  await req.commitAndRelease();
+
   let uploaded;
   try {
     uploaded = await metaClient.uploadMedia(waba.phone_number_id, accessToken, req.file.buffer, mimeType, req.file.originalname);
   } catch (err) {
     return res.status(502).json({ error: 'Could not upload media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
   }
+
+  req.db = await req.reacquireDb();
 
   // Recommended (not required) by Meta for a document header send, same as
   // the approval-time seed in the POST / handler above — null for IMAGE/VIDEO.
@@ -435,6 +466,12 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
       });
     }
 
+    // Same reasoning as POST /'s commitAndRelease — this Meta edit call can
+    // take seconds; don't pin a tenant connection idle-in-transaction for
+    // it. A rejection below returns straight away with no further req.db
+    // use, so only the success path needs to reacquire before updateContent.
+    await req.commitAndRelease();
+
     try {
       await metaClient.updateMessageTemplate(template.meta_template_id, accessToken, templateData);
     } catch (err) {
@@ -443,6 +480,8 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
       }
       return res.status(502).json({ error: 'Meta rejected this edit', detail: describeMetaError(err), metaError: err.metaError || undefined });
     }
+
+    req.db = await req.reacquireDb();
   }
 
   const updated = await messageTemplatesRepo.updateContent(req.db, req.clientId, template.id, templateData);
@@ -481,6 +520,13 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
       });
     }
 
+    // Same reasoning as POST /'s commitAndRelease. Reacquire happens once,
+    // after the try/catch, regardless of whether the Meta call succeeded or
+    // was the "already gone" caught-and-ignored case — both fall through to
+    // the same local delete below and need a live connection for it; only
+    // the real-rejection path returns early with no further req.db use.
+    await req.commitAndRelease();
+
     try {
       await metaClient.deleteMessageTemplate(waba.waba_id, accessToken, template.name, template.meta_template_id);
     } catch (err) {
@@ -493,6 +539,8 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
         return res.status(502).json({ error: 'Could not delete template on Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
       }
     }
+
+    req.db = await req.reacquireDb();
   }
 
   await messageTemplatesRepo.remove(req.db, req.clientId, template.id);
