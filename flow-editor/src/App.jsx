@@ -40,6 +40,7 @@ function FlowEditor() {
   const [graph, setGraph] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [tags, setTags] = useState([]);
+  const [attributes, setAttributes] = useState([]);
   const [rule, setRule] = useState(null);
   const [triggerInput, setTriggerInput] = useState('');
   const [status, setStatus] = useState('loading');
@@ -52,11 +53,12 @@ function FlowEditor() {
   const load = useCallback(() => {
     if (!flowId) { setStatus('error'); setError('No ?flow=<id> in the URL.'); return; }
     setStatus('loading');
-    Promise.all([api.getFlow(flowId), api.listTemplates(), api.listTags(), api.listRulesForFlow(flowId)])
-      .then(([g, t, tg, rules]) => {
+    Promise.all([api.getFlow(flowId), api.listTemplates(), api.listTags(), api.listRulesForFlow(flowId), api.listContactAttributes()])
+      .then(([g, t, tg, rules, attrs]) => {
         setGraph(g);
         setTemplates(t);
         setTags(tg);
+        setAttributes(attrs);
         const linkedRule = rules[0] || null;
         setRule(linkedRule);
         setTriggerInput(linkedRule?.trigger || '');
@@ -173,6 +175,7 @@ function FlowEditor() {
         otherNodes: graph.nodes.filter((x) => x.id !== n.id),
         templates,
         tags,
+        attributes,
         onConfigChange: (config) => handleConfigChange(n.id, config),
         onDelete: () => handleDeleteNode(n.id),
         onSetEntry: () => handleSetEntry(n.id),
@@ -190,7 +193,7 @@ function FlowEditor() {
       type: 'condition',
       data: { conditionType: e.condition_type, conditionValue: e.condition_value, onDelete: handleDeleteEdge },
     })));
-  }, [graph, templates, tags, setNodes, setEdges, handleConfigChange, handleDeleteNode, handleSetEntry, handleAddBranch, handleDeleteEdge]);
+  }, [graph, templates, tags, attributes, setNodes, setEdges, handleConfigChange, handleDeleteNode, handleSetEntry, handleAddBranch, handleDeleteEdge]);
 
   // --- Connect: drag from a handle to another node's target. ---
   const onConnect = useCallback(async (connection) => {

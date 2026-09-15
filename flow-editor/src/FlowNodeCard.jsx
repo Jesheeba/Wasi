@@ -107,14 +107,14 @@ function AddBranchControl({ conditionType, otherNodes, onAdd }) {
 // edited directly on the card (Header/Body/Footer-shaped inputs with live
 // char counts), not in a separate modal — this is Stage 4's whole point.
 export default function FlowNodeCard({ id, data, selected }) {
-  const { node, isEntry, issues, outgoingEdges, otherNodes, templates, tags, onConfigChange, onDelete, onSetEntry, onAddBranch, onDeleteEdge } = data;
+  const { node, isEntry, issues, outgoingEdges, otherNodes, templates, tags, attributes, onConfigChange, onDelete, onSetEntry, onAddBranch, onDeleteEdge } = data;
   const cfg = node.config || {};
 
   const [body, setBody] = useDebouncedCommit(cfg.body || '', (v) => onConfigChange({ ...cfg, body: v }));
 
   const hasIssue = issues && issues.length > 0;
   const alwaysEdge = outgoingEdges.find((e) => e.condition_type === 'always');
-  const showAlwaysHandle = ['send_text', 'send_template', 'delay', 'action'].includes(node.type) && !alwaysEdge;
+  const showAlwaysHandle = ['send_text', 'send_template', 'delay', 'action', 'capture_reply'].includes(node.type) && !alwaysEdge;
 
   const nodeLabel = (n) => (n ? `${NODE_TYPE_LABELS[n.type]} — ${n.id.slice(0, 8)}` : '—');
   const findNode = (nid) => otherNodes.find((n) => n.id === nid) || (n => (n && n.id === node.id ? node : null))(node);
@@ -138,10 +138,10 @@ export default function FlowNodeCard({ id, data, selected }) {
         </div>
       )}
 
-      {(node.type === 'send_text' || node.type === 'send_interactive_buttons') && (
+      {(node.type === 'send_text' || node.type === 'send_interactive_buttons' || node.type === 'capture_reply') && (
         <div className="wf-field nodrag">
-          <div className="wf-field-label">Body <CharCount value={body} max={1024} /></div>
-          <textarea className="wf-textarea" rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Hi {{customer_name}}, …" />
+          <div className="wf-field-label">{node.type === 'capture_reply' ? 'Question' : 'Body'} <CharCount value={body} max={1024} /></div>
+          <textarea className="wf-textarea" rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder={node.type === 'capture_reply' ? "What's your full name?" : 'Hi {{customer_name}}, …'} />
         </div>
       )}
 
@@ -157,6 +157,29 @@ export default function FlowNodeCard({ id, data, selected }) {
       )}
 
       {node.type === 'send_interactive_buttons' && (
+        <div className="wf-field nodrag">
+          <div className="wf-field-label">Timeout (minutes)</div>
+          <input
+            className="wf-input"
+            type="number"
+            min="1"
+            value={cfg.timeout_minutes || ''}
+            onChange={(e) => onConfigChange({ ...cfg, timeout_minutes: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </div>
+      )}
+
+      {node.type === 'capture_reply' && (
+        <div className="wf-field nodrag">
+          <div className="wf-field-label">Save the reply as</div>
+          <select className="wf-select" value={cfg.attribute_id || ''} onChange={(e) => onConfigChange({ ...cfg, attribute_id: e.target.value })}>
+            <option value="">Choose an attribute…</option>
+            {attributes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {node.type === 'capture_reply' && (
         <div className="wf-field nodrag">
           <div className="wf-field-label">Timeout (minutes)</div>
           <input
@@ -243,6 +266,20 @@ export default function FlowNodeCard({ id, data, selected }) {
       {alwaysEdge && (
         <div className="wf-branches">
           <BranchRow edge={alwaysEdge} targetLabel={nodeLabel(findNode(alwaysEdge.to_node_id))} onDelete={() => onDeleteEdge(alwaysEdge.id)} />
+        </div>
+      )}
+
+      {/* capture_reply's optional "no reply arrived" escape hatch — same
+          inline-picker pattern as send_interactive_buttons' timeout branch,
+          since it's the one branch here that isn't a drag-from-handle. */}
+      {node.type === 'capture_reply' && (
+        <div className="wf-branches">
+          {outgoingEdges.filter((e) => e.condition_type === 'timeout').map((e) => (
+            <BranchRow key={e.id} edge={e} targetLabel={nodeLabel(findNode(e.to_node_id))} onDelete={() => onDeleteEdge(e.id)} />
+          ))}
+          {!outgoingEdges.some((e) => e.condition_type === 'timeout') && (
+            <AddBranchControl conditionType="timeout" otherNodes={otherNodes} onAdd={(targetId) => onAddBranch('timeout', targetId)} />
+          )}
         </div>
       )}
 

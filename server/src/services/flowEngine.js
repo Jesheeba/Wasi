@@ -32,8 +32,11 @@ const flowEventsRepo = require('../repositories/flowEventsRepo');
 const contactsRepo = require('../repositories/contactsRepo');
 const consentRepo = require('../repositories/consentRepo');
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
+const contactAttributesRepo = require('../repositories/contactAttributesRepo');
+const contactAttributeValuesRepo = require('../repositories/contactAttributeValuesRepo');
 const messagingService = require('../services/messagingService');
 const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
+const { validateContactAttributeValue } = require('../utils/validate');
 
 // Node types that don't wait for a reply — after executing, the engine
 // follows the node's single 'always' edge automatically, in the same pass
@@ -44,8 +47,8 @@ const { resolveParamValues, buildTemplateComponents } = require('../utils/templa
 // "needs its own spike" note on template button-edge routing), so a
 // send_template node has nothing to wait for. Anything not in this set
 // pauses here and persists that as the contact's resting state — either
-// waiting for a reply (send_interactive_buttons) or waiting for time to
-// pass (delay, handled as its own case in runToRest since it always pauses
+// waiting for a reply (send_interactive_buttons, capture_reply) or waiting
+// for time to pass (delay, handled as its own case in runToRest since it always pauses
 // unconditionally, never advances in the same pass).
 const AUTO_ADVANCE_TYPES = new Set(['send_text', 'send_template', 'action']);
 
@@ -65,6 +68,11 @@ const LEGAL_EDGE_TYPES_BY_NODE_TYPE = {
   send_template: new Set(['always']),
   action: new Set(['always']),
   end: new Set([]),
+  // Doesn't branch on WHAT the contact replied with (that's
+  // send_interactive_buttons' job) — it accepts anything as the captured
+  // value and always continues via 'always'; 'timeout' is the same
+  // optional "no reply arrived" escape hatch send_interactive_buttons has.
+  capture_reply: new Set(['always', 'timeout']),
 };
 
 function isEdgeTypeLegalForNode(nodeType, conditionType) {
@@ -128,6 +136,33 @@ function resolveInboundEdge(edges, inboundEvent) {
   return null;
 }
 
+// Stores an inbound reply against a capture_reply node's configured
+// contact attribute. Never throws and never blocks the flow from
+// continuing — a captured value that doesn't match the attribute's
+// declared type (e.g. a number attribute, free-text reply "twenty-five")
+// is skipped rather than written, per contactAttributeValuesRepo's own
+// documented assumption that a stored value already matches its
+// attribute's type (item 9's segment filtering depends on that staying
+// true). The outcome always rides along on the flow_event this call's
+// caller records, so a skipped capture is still visible for debugging,
+// never silently lost.
+async function captureReply(db, clientId, contact, node, rawText) {
+  const attributeId = node.config?.attribute_id;
+  if (!attributeId) return { captured: false, reason: 'no_attribute_configured' };
+
+  const attribute = await contactAttributesRepo.findById(db, clientId, attributeId);
+  if (!attribute) return { captured: false, reason: 'attribute_no_longer_exists', attributeId };
+
+  const value = (rawText || '').trim();
+  if (!value) return { captured: false, reason: 'empty_reply', attributeId };
+  if (!validateContactAttributeValue(attribute.type, value)) {
+    return { captured: false, reason: 'value_does_not_match_attribute_type', attributeId, attributeType: attribute.type, value };
+  }
+
+  await contactAttributeValuesRepo.upsert(db, clientId, contact.id, attributeId, value);
+  return { captured: true, attributeId, attributeName: attribute.name, value };
+}
+
 async function executeAction(db, clientId, contact, node) {
   const { kind } = node.config || {};
   if (kind === 'assign_tag') {
@@ -159,7 +194,10 @@ async function executeAction(db, clientId, contact, node) {
 // catches and turns into a 'stalled' state — a safe failure (nothing sent,
 // nothing silently skipped), not a crash.
 async function executeNode(db, clientId, contact, chat, node) {
-  if (node.type === 'send_text') {
+  if (node.type === 'send_text' || node.type === 'capture_reply') {
+    // capture_reply's send side is identical to send_text — it's the SAME
+    // prompt-then-wait shape, the only difference is what happens to the
+    // reply once it arrives (see captureReply() below, called from evaluate()).
     await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: renderBody(node.config.body, contact) });
   } else if (node.type === 'send_interactive_buttons') {
     await messagingService.sendChatMessage(db, clientId, chat, {
@@ -332,11 +370,11 @@ async function startFlow(db, clientId, contact, chat, flow) {
   });
 }
 
-async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge) {
+async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge, eventType = 'button_clicked', extraDetail = {}) {
   await flowEventsRepo.record(db, {
     clientId, contactId: contact.id, flowId: flowState.flow_id, nodeId: flowState.current_node_id,
-    eventType: 'button_clicked',
-    detail: { edgeId: matchedEdge.id, conditionType: matchedEdge.condition_type, conditionValue: matchedEdge.condition_value },
+    eventType,
+    detail: { edgeId: matchedEdge.id, conditionType: matchedEdge.condition_type, conditionValue: matchedEdge.condition_value, ...extraDetail },
   });
 
   // fallbackNodeId = flowState.current_node_id, not the default (matchedEdge.to_node_id)
@@ -406,10 +444,31 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
 
   if (flowState) {
     const edges = await flowEdgesRepo.listForNode(db, clientId, flowState.current_node_id);
-    const matched = resolveInboundEdge(edges, inboundEvent);
-    if (matched) {
-      await continueFlow(db, clientId, contact, chat, flowState, matched);
-      return;
+    const currentNode = await flowNodesRepo.findById(db, clientId, flowState.current_node_id);
+
+    // capture_reply doesn't branch on WHAT was said (resolveInboundEdge's
+    // button_id/keyword/default matching is meaningless here) — any
+    // inbound event is accepted as the answer, stored, and the node's
+    // single 'always' edge is always the target. Handled before
+    // resolveInboundEdge entirely so a captured value that happens to look
+    // like some OTHER node's keyword/button id is never misrouted.
+    if (currentNode?.type === 'capture_reply') {
+      const alwaysEdge = edges.find((e) => e.condition_type === 'always');
+      if (alwaysEdge) {
+        const outcome = await captureReply(db, clientId, contact, currentNode, inboundEvent.text);
+        await continueFlow(db, clientId, contact, chat, flowState, alwaysEdge, 'reply_captured', { capture: outcome });
+        return;
+      }
+      // No 'always' edge — a mis-authored flow (flowValidation.js flags
+      // this before activation) that somehow reached runtime anyway. Falls
+      // through to the same 'unmatched_input' recording every other
+      // no-match case gets, rather than a special case here.
+    } else {
+      const matched = resolveInboundEdge(edges, inboundEvent);
+      if (matched) {
+        await continueFlow(db, clientId, contact, chat, flowState, matched);
+        return;
+      }
     }
     // No branch recognized this input — flow state is left untouched on
     // purpose (see migration 023's module comment) rather than guessing.
@@ -427,4 +486,5 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
 module.exports = {
   evaluate, startFlow, advanceDueNode,
   normalizeInboundEvent, resolveInboundEdge, dueEdgeType, isEdgeTypeLegalForNode, renderBody,
+  captureReply,
 };

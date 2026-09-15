@@ -19,6 +19,22 @@ function fakeDb(templatesByName) {
   };
 }
 
+// Separate fake for capture_reply's own DB hop
+// (contactAttributesRepo.findById: `select * from contact_attributes where
+// client_id = $1 and id = $2`) — kept apart from fakeDb() above since that
+// one's own assertion (sql must mention message_templates) would fail the
+// moment this different query ran through it.
+function fakeAttributesDb(attributesById) {
+  return {
+    async query(sql, params) {
+      assert.match(sql, /from contact_attributes/);
+      const id = params[1];
+      const row = attributesById[id];
+      return { rows: row ? [row] : [] };
+    },
+  };
+}
+
 const CLIENT_ID = 'client-1';
 
 test('validateFlow: an unrouted button on a node with a default branch — falls-through message', async () => {
@@ -130,6 +146,56 @@ test('validateFlow: an edge pointing at a node that no longer exists in the give
   assert.equal(issues.length, 1);
   assert.equal(issues[0].code, 'dangling_edge');
   assert.equal(issues[0].edgeId, 'e1');
+});
+
+test('validateFlow: a capture_reply node with no always edge stalls every contact — flagged', async () => {
+  const nodes = [{ id: 'n1', type: 'capture_reply', config: { body: 'What is your name?', attribute_id: 'attr-1' } }];
+  const issues = await validateFlow(fakeAttributesDb({ 'attr-1': { id: 'attr-1', name: 'full_name', type: 'text' } }), CLIENT_ID, nodes, []);
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].code, 'capture_reply_dead_end');
+});
+
+test('validateFlow: a capture_reply node with no attribute selected', async () => {
+  const nodes = [
+    { id: 'n1', type: 'capture_reply', config: { body: 'What is your name?' } },
+    { id: 'n2', type: 'end', config: {} },
+  ];
+  const edges = [{ id: 'e1', from_node_id: 'n1', to_node_id: 'n2', condition_type: 'always', condition_value: null }];
+  const issues = await validateFlow(fakeAttributesDb({}), CLIENT_ID, nodes, edges);
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].code, 'capture_attribute_missing');
+});
+
+test('validateFlow: a capture_reply node referencing an attribute that no longer exists', async () => {
+  const nodes = [
+    { id: 'n1', type: 'capture_reply', config: { body: 'What is your name?', attribute_id: 'ghost-attr' } },
+    { id: 'n2', type: 'end', config: {} },
+  ];
+  const edges = [{ id: 'e1', from_node_id: 'n1', to_node_id: 'n2', condition_type: 'always', condition_value: null }];
+  const issues = await validateFlow(fakeAttributesDb({}), CLIENT_ID, nodes, edges);
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].code, 'capture_attribute_not_found');
+});
+
+test('validateFlow: a capture_reply node with no question text set', async () => {
+  const nodes = [
+    { id: 'n1', type: 'capture_reply', config: { attribute_id: 'attr-1' } },
+    { id: 'n2', type: 'end', config: {} },
+  ];
+  const edges = [{ id: 'e1', from_node_id: 'n1', to_node_id: 'n2', condition_type: 'always', condition_value: null }];
+  const issues = await validateFlow(fakeAttributesDb({ 'attr-1': { id: 'attr-1', name: 'full_name', type: 'text' } }), CLIENT_ID, nodes, edges);
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].code, 'capture_body_missing');
+});
+
+test('validateFlow: a fully-configured capture_reply node — no issue', async () => {
+  const nodes = [
+    { id: 'n1', type: 'capture_reply', config: { body: 'What is your name?', attribute_id: 'attr-1' } },
+    { id: 'n2', type: 'end', config: {} },
+  ];
+  const edges = [{ id: 'e1', from_node_id: 'n1', to_node_id: 'n2', condition_type: 'always', condition_value: null }];
+  const issues = await validateFlow(fakeAttributesDb({ 'attr-1': { id: 'attr-1', name: 'full_name', type: 'text' } }), CLIENT_ID, nodes, edges);
+  assert.equal(issues.length, 0);
 });
 
 test('validateFlow: a dangling edge from n1 does not count toward n1s own routed-button coverage', async () => {

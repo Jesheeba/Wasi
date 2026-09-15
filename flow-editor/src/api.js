@@ -47,6 +47,7 @@ export const api = {
     return request(`/templates/${templateId}/header-media`, { method: 'POST', body: form });
   },
   listTags: () => request('/tags'),
+  listContactAttributes: () => request('/contact-attributes'),
   listRulesForFlow: (flowId) => request(`/automation-rules?flow_id=${flowId}`),
   createRule: (data) => request('/automation-rules', { method: 'POST', body: JSON.stringify(data) }),
   updateRule: (ruleId, data) => request(`/automation-rules/${ruleId}`, { method: 'PATCH', body: JSON.stringify(data) }),

@@ -11,6 +11,7 @@ export const FLOW_EDGE_TYPES_BY_NODE_TYPE = {
   send_template: ['always'],
   action: ['always'],
   end: [],
+  capture_reply: ['always', 'timeout'],
 };
 
 export const FLOW_EDGE_TYPE_LABELS = {
@@ -38,6 +39,7 @@ export const NODE_TYPE_LABELS = {
   delay: 'Delay',
   action: 'Action',
   end: 'End',
+  capture_reply: 'Capture Reply',
 };
 
 // Palette entries — one per creatable node shape. 'action' nodes carry a
@@ -53,6 +55,7 @@ export const PALETTE_ITEMS = [
   { paletteId: 'assign_tag', type: 'action', label: 'Assign Tag', defaultConfig: { kind: 'assign_tag', tag_id: '' } },
   { paletteId: 'set_opt_in', type: 'action', label: 'Set Opt-In', defaultConfig: { kind: 'set_opt_in', opt_in_event: 'opted_in' } },
   { paletteId: 'human_handoff', type: 'action', label: 'Hand Off to Human', defaultConfig: { kind: 'human_handoff' } },
+  { paletteId: 'capture_reply', type: 'capture_reply', label: 'Capture Reply', defaultConfig: { body: '', attribute_id: '' } },
   { paletteId: 'end', type: 'end', label: 'End', defaultConfig: {} },
 ];
 

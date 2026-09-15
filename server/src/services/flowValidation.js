@@ -5,6 +5,7 @@
 // editor, informational) and its PATCH /:id (blocks a transition to
 // status: 'active').
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
+const contactAttributesRepo = require('../repositories/contactAttributesRepo');
 
 // Deliberately NOT flagged: send_text/send_template/action nodes with zero
 // outgoing edges. flowEngine.js's runToRest treats that as a legitimate,
@@ -82,6 +83,32 @@ async function validateFlow(db, clientId, nodes, edges) {
             message: `Template "${templateName}" is ${template.status}, not approved — Meta will reject sends using it.`,
           });
         }
+      }
+    }
+
+    // capture_reply always needs somewhere to go — unlike
+    // send_interactive_buttons, it has nothing structurally interesting to
+    // do with zero outgoing edges (there's no "human takes over after this"
+    // reading of "ask a question and never continue"), so it gets delay's
+    // dead-end treatment. It also needs a real attribute to write the
+    // answer into — flowEngine.js's captureReply() already fails soft at
+    // runtime if the attribute was deleted after this flow was built, but
+    // that should be caught here before activation, not discovered live.
+    if (node.type === 'capture_reply') {
+      if (!outgoing.some((e) => e.condition_type === 'always')) {
+        issues.push({
+          nodeId: node.id, edgeId: null, code: 'capture_reply_dead_end',
+          message: 'This question has no branch to continue to — every contact who answers it stalls here permanently.',
+        });
+      }
+      const attributeId = node.config?.attribute_id;
+      if (!attributeId) {
+        issues.push({ nodeId: node.id, edgeId: null, code: 'capture_attribute_missing', message: 'No attribute selected to save the answer into.' });
+      } else if (!(await contactAttributesRepo.findById(db, clientId, attributeId))) {
+        issues.push({ nodeId: node.id, edgeId: null, code: 'capture_attribute_not_found', message: 'The attribute this question saves into no longer exists.' });
+      }
+      if (!node.config?.body) {
+        issues.push({ nodeId: node.id, edgeId: null, code: 'capture_body_missing', message: 'No question text set for this node.' });
       }
     }
   }

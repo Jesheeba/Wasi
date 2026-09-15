@@ -2090,6 +2090,7 @@ document.addEventListener('DOMContentLoaded', () => {
     send_template: ['always'],
     action: ['always'],
     end: [],
+    capture_reply: ['always', 'timeout'],
   };
   const FLOW_EDGE_TYPE_LABELS = {
     always: 'Always (continues automatically)',
@@ -2100,7 +2101,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const FLOW_NODE_TYPE_LABELS = {
     send_text: 'Send Text', send_interactive_buttons: 'Send Buttons', send_template: 'Send Template',
-    delay: 'Delay', action: 'Action', end: 'End',
+    delay: 'Delay', action: 'Action', end: 'End', capture_reply: 'Capture Reply',
   };
 
   async function refreshFlows() {
@@ -2172,6 +2173,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (c.kind === 'set_opt_in') return `Set opt-in: ${escapeHtml(c.opt_in_event || '')}`;
       if (c.kind === 'human_handoff') return 'Hand off to a human';
       return escapeHtml(c.kind || '');
+    }
+    if (node.type === 'capture_reply') {
+      const attr = state.contactAttributes.find(a => a.id === c.attribute_id);
+      return `${escapeHtml(c.body || '')} — saves reply as: ${escapeHtml(attr?.name || 'no attribute selected')}`;
     }
     return '';
   }
@@ -2440,6 +2445,18 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       document.getElementById('new-bot-flow-node-action-kind')?.addEventListener('change', renderNewNodeActionFields);
       renderNewNodeActionFields();
+    } else if (type === 'capture_reply') {
+      const attrOptions = state.contactAttributes.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+      container.innerHTML = `
+        <div class="form-group"><label class="form-label">Question</label><textarea id="new-bot-flow-node-body" class="form-input" rows="3" placeholder="What's your full name?" required></textarea></div>
+        <div class="form-group">
+          <label class="form-label">Save the reply as</label>
+          ${state.contactAttributes.length
+            ? `<select id="new-bot-flow-node-attribute-id" class="form-input" required><option value="">Choose an attribute…</option>${attrOptions}</select>`
+            : `<div style="font-size: 0.8rem; color: var(--text-muted);">No contact attributes exist yet — create one in Settings &gt; Contact Attributes first.</div>`}
+        </div>
+        <div class="form-group"><label class="form-label">Timeout, minutes (optional — only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
+      `;
     } else {
       container.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted);">Ends the flow — nothing further to configure.</div>';
     }
@@ -2546,6 +2563,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (kind === 'assign_tag') return { kind, tag_id: document.getElementById('new-bot-flow-node-tag-id').value };
       if (kind === 'set_opt_in') return { kind, opt_in_event: document.getElementById('new-bot-flow-node-opt-in-event').value };
       return { kind };
+    }
+    if (type === 'capture_reply') {
+      const timeoutVal = document.getElementById('new-bot-flow-node-timeout').value;
+      return {
+        body: document.getElementById('new-bot-flow-node-body').value.trim(),
+        attribute_id: document.getElementById('new-bot-flow-node-attribute-id')?.value || null,
+        ...(timeoutVal ? { timeout_minutes: Number(timeoutVal) } : {}),
+      };
     }
     return {};
   }
