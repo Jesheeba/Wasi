@@ -550,7 +550,7 @@ function renderStatistics(stats) {
 async function loadClients() {
   setInlineError('clients-error', null);
   const tbody = document.getElementById('clients-table-body');
-  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">Loading…</td></tr>';
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">Loading…</td></tr>';
 
   try {
     const clients = await apiFetch('/api/clients');
@@ -567,12 +567,37 @@ async function loadClients() {
   }
 }
 
+// Payment reminder / auto-suspend feature — mirrors
+// paymentReminderRunner.js's own WARNING_AFTER_DAYS/SUSPEND_AFTER_DAYS
+// (3/5) so the countdown shown here matches what the runner will actually
+// do; no endpoint exposes those constants, so this is a by-comment sync,
+// not a shared import. Shown in BOTH the list (so a pending suspension is
+// visible without opening each client — the explicit requirement this
+// feature was built for) and the detail page's billing card below.
+const PAYMENT_WARNING_AFTER_DAYS = 3;
+const PAYMENT_SUSPEND_AFTER_DAYS = 5;
+
+function billingBadgeHtml(client) {
+  if (client.payment_status !== 'unpaid') {
+    return '<span class="status-badge status-approved">Paid</span>';
+  }
+  if (!client.payment_marked_unpaid_at) {
+    return '<span class="status-badge status-pending">Unpaid</span>';
+  }
+  const daysUnpaid = (Date.now() - new Date(client.payment_marked_unpaid_at).getTime()) / 86400000;
+  const daysLeft = Math.max(0, Math.ceil(PAYMENT_SUSPEND_AFTER_DAYS - daysUnpaid));
+  if (client.status === 'suspended' && client.auto_suspended_for_nonpayment) {
+    return '<span class="status-badge status-rejected">Auto-suspended</span>';
+  }
+  return `<span class="status-badge status-rejected" title="Will auto-suspend in ${daysLeft} day${daysLeft === 1 ? '' : 's'} unless marked paid">⚠ Unpaid — ${daysLeft}d left</span>`;
+}
+
 function renderClientsTable(clients) {
   const tbody = document.getElementById('clients-table-body');
   document.getElementById('clients-count-label').textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
 
   if (!clients.length) {
-    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">No clients match.</td></tr>';
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="6">No clients match.</td></tr>';
     return;
   }
 
@@ -581,6 +606,7 @@ function renderClientsTable(clients) {
       <td>${escapeHtml(c.name)}</td>
       <td>${escapeHtml(c.email)}</td>
       <td>${statusBadge(c.status)}</td>
+      <td>${billingBadgeHtml(c)}</td>
       <td>${escapeHtml(c.tenant_slug)}</td>
       <td>${formatDate(c.created_at)}</td>
     </tr>
@@ -792,6 +818,69 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
     `<option value="${s}" ${s === client.status ? 'selected' : ''}>${s.replace(/_/g, ' ')}</option>`
   ).join('');
 
+  // Payment reminder / auto-suspend feature. "Service" maps directly onto
+  // status active<->suspended — there's no separate boolean for it, this is
+  // just a clearer binary control for the one common transition, alongside
+  // (not replacing) the full status dropdown above for the onboarding-only
+  // states. Disabled while the client hasn't reached 'active' yet at all,
+  // since "off" would be meaningless (there's no service running yet to
+  // turn off) — the existing dropdown is still how a pending_setup/
+  // payment_confirmed client gets activated the first time.
+  const serviceTogglable = client.status === 'active' || client.status === 'suspended';
+  const serviceOn = client.status === 'active';
+
+  const daysUnpaid = client.payment_marked_unpaid_at
+    ? (Date.now() - new Date(client.payment_marked_unpaid_at).getTime()) / 86400000
+    : 0;
+  const daysLeft = Math.max(0, Math.ceil(PAYMENT_SUSPEND_AFTER_DAYS - daysUnpaid));
+  const suspendByDate = client.payment_marked_unpaid_at
+    ? formatDate(new Date(new Date(client.payment_marked_unpaid_at).getTime() + PAYMENT_SUSPEND_AFTER_DAYS * 86400000).toISOString())
+    : null;
+
+  const pendingSuspensionBannerHtml = (client.payment_status === 'unpaid' && client.payment_marked_unpaid_at && client.status !== 'suspended')
+    ? `
+      <div class="empty-state" style="color:#B91C1C; background:#FEF2F2; border:1px solid #FECACA; border-radius:8px; padding:0.6rem 0.75rem; margin-bottom:0.75rem;">
+        <strong>⚠ Unpaid since ${formatDate(client.payment_marked_unpaid_at)}.</strong>
+        ${client.payment_warning_sent_at ? `Suspension warning sent ${formatDate(client.payment_warning_sent_at)}.` : `Warning not sent yet (fires ${PAYMENT_WARNING_AFTER_DAYS} days after marked unpaid).`}
+        Will auto-suspend Service on <strong>${suspendByDate}</strong> (${daysLeft} day${daysLeft === 1 ? '' : 's'} left) unless marked paid.
+      </div>
+    `
+    : (client.status === 'suspended' && client.auto_suspended_for_nonpayment)
+    ? `
+      <div class="empty-state" style="color:#B91C1C; background:#FEF2F2; border:1px solid #FECACA; border-radius:8px; padding:0.6rem 0.75rem; margin-bottom:0.75rem;">
+        <strong>Auto-suspended for nonpayment</strong> — mark this client Paid to restore Service automatically.
+      </div>
+    `
+    : '';
+
+  const serviceBillingCardHtml = `
+    <div class="detail-card">
+      <div class="detail-card-title">Service &amp; Billing</div>
+      ${pendingSuspensionBannerHtml}
+      <div class="detail-row">
+        <span class="detail-row-label">Service</span>
+        <span class="detail-row-value">
+          <label class="wasi-toggle wasi-toggle-danger" title="${serviceTogglable ? '' : 'Activate this client via the status editor first'}">
+            <input type="checkbox" id="service-toggle" ${serviceOn ? 'checked' : ''} ${serviceTogglable ? '' : 'disabled'}>
+            <span class="wasi-toggle-label">${serviceOn ? 'On' : 'Off'}</span>
+          </label>
+        </span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-row-label">Payment</span>
+        <span class="detail-row-value">
+          <label class="wasi-toggle">
+            <input type="checkbox" id="payment-toggle" ${client.payment_status === 'paid' ? 'checked' : ''}>
+            <span class="wasi-toggle-label">${client.payment_status === 'paid' ? 'Paid' : 'Unpaid'}</span>
+          </label>
+        </span>
+      </div>
+      <div id="service-billing-result"></div>
+      <div class="detail-row"><span class="detail-row-label">Activated</span><span class="detail-row-value">${client.activated_at ? formatDate(client.activated_at) : '—'}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Last Reminder Sent</span><span class="detail-row-value">${client.last_reminder_sent_on ? formatDate(client.last_reminder_sent_on) : 'Never'}</span></div>
+    </div>
+  `;
+
   const subscriptionHtml = subscription
     ? `
       <div class="detail-row"><span class="detail-row-label">Plan</span><span class="detail-row-value">${escapeHtml(subscription.plan || '—')}</span></div>
@@ -929,6 +1018,8 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
         </div>
       </div>
 
+      ${serviceBillingCardHtml}
+
       <div class="detail-card">
         <div class="detail-card-title">Subscription</div>
         ${subscriptionHtml}
@@ -962,6 +1053,8 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   });
 
   document.getElementById('status-editor-save-btn').addEventListener('click', () => saveClientStatus(client.id));
+  document.getElementById('service-toggle')?.addEventListener('change', (e) => toggleClientService(client, e.target));
+  document.getElementById('payment-toggle')?.addEventListener('change', (e) => toggleClientPayment(client, e.target));
   // Not rendered for the two needs_manual_resolution/incomplete_meta_linked
   // states (see renderWabaResolutionHtml/wabaHtml above) — optional-chained
   // rather than assumed present, unlike the other buttons on this page.
@@ -1051,6 +1144,68 @@ async function saveHubForward(clientId) {
     btn.disabled = false;
     btn.textContent = originalText;
   }
+}
+
+// Turning Service OFF suspends a live account — the whole reason this
+// feature added a visible warning+countdown for the AUTOMATIC path is that
+// a silent suspension is unacceptable; the same applies to a mis-click on
+// this manual toggle, so turning it off gets a real confirm step. Turning
+// it back on is purely restorative and doesn't need one.
+function toggleClientService(client, checkboxEl) {
+  const turningOn = checkboxEl.checked;
+  const resultEl = document.getElementById('service-billing-result');
+
+  const apply = async () => {
+    resultEl.innerHTML = '';
+    try {
+      await apiFetch(`/api/clients/${client.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: turningOn ? 'active' : 'suspended' }),
+      });
+      showToast(`Service turned ${turningOn ? 'on' : 'off'} for ${client.name}.`, 'success');
+      loadClientDetail(client.id);
+    } catch (err) {
+      if (err.status === 401) return;
+      checkboxEl.checked = !turningOn; // revert the toggle's visual state on failure
+      resultEl.innerHTML = `<div class="inline-error" style="margin-bottom:0.75rem;">${escapeHtml(err.message)}</div>`;
+      showToast('Failed to update Service: ' + err.message, 'error');
+    }
+  };
+
+  if (turningOn) {
+    apply();
+    return;
+  }
+  checkboxEl.checked = true; // hold the visual state until confirmed
+  showConfirm({
+    title: 'Turn Service off?',
+    body: `<p>This suspends <strong>${escapeHtml(client.name)}</strong>'s account. They will not be able to use Wasi until Service is turned back on.</p>`,
+    confirmLabel: 'Turn Off',
+    danger: true,
+    onConfirm: async () => {
+      checkboxEl.checked = false;
+      await apply();
+    },
+  });
+}
+
+function toggleClientPayment(client, checkboxEl) {
+  const paid = checkboxEl.checked;
+  const resultEl = document.getElementById('service-billing-result');
+  resultEl.innerHTML = '';
+
+  apiFetch(`/api/clients/${client.id}/payment-status`, {
+    method: 'POST',
+    body: JSON.stringify({ paid }),
+  }).then(() => {
+    showToast(`${client.name} marked ${paid ? 'Paid' : 'Unpaid'}.`, 'success');
+    loadClientDetail(client.id);
+  }).catch((err) => {
+    if (err.status === 401) return;
+    checkboxEl.checked = !paid;
+    resultEl.innerHTML = `<div class="inline-error" style="margin-bottom:0.75rem;">${escapeHtml(err.message)}</div>`;
+    showToast('Failed to update payment status: ' + err.message, 'error');
+  });
 }
 
 async function saveClientStatus(clientId) {

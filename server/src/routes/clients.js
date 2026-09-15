@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { Router } = require('express');
+const { z } = require('zod');
 const { pool } = require('../db/pool');
 const clientsRepo = require('../repositories/clientsRepo');
 const apiKeysRepo = require('../repositories/apiKeysRepo');
@@ -115,11 +116,87 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   res.json({ ...omitPasswordHash(client), temporaryPassword, loginUrl: `${APP_URL}/index.html` });
 }));
 
+// Real, previously-existing gap: this route never wrote an audit_log entry
+// at all — the only automatic clients.status transition anywhere in this
+// codebase (razorpayWebhook.js's pending_setup -> payment_confirmed) is
+// logged, but every MANUAL admin status change (including suspend/
+// reactivate — the "Service" toggle in admin) was silently untracked.
+// Fixed alongside this feature since it directly matters here: an admin
+// flipping Service off/on is exactly the kind of action that needs a paper
+// trail (see this feature's own visible-not-just-reachable requirement for
+// pending suspensions).
 router.patch('/:id', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const data = clientUpdateSchema.parse(req.body);
-  const client = await clientsRepo.update(pool, req.params.id, data);
+  const existing = await clientsRepo.findById(pool, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  // activated_at is set exactly once, the moment status genuinely
+  // transitions TO 'active' — this is the "date they started using the
+  // application" the payment reminder's monthly cycle anchors to
+  // (paymentReminderRunner.js). Never overwritten on a later active-again
+  // transition (e.g. reactivated after a suspension) — the original
+  // activation date stays the billing-cycle anchor, not a reset one.
+  const fields = { ...data };
+  if (data.status === 'active' && existing.status !== 'active' && !existing.activated_at) {
+    fields.activated_at = new Date().toISOString();
+  }
+  // A manual status change always supersedes whatever the auto-suspend
+  // mechanism was tracking — an admin explicitly setting status here (to
+  // ANY value, not just back to active) means this client is no longer in
+  // the auto-suspend flow's territory, so it shouldn't later auto-reactivate
+  // them based on a stale flag.
+  if (data.status) {
+    fields.auto_suspended_for_nonpayment = false;
+  }
+
+  const client = await clientsRepo.update(pool, req.params.id, fields);
   if (!client) return res.status(404).json({ error: 'Not found' });
+
+  if (data.status && data.status !== existing.status) {
+    await auditLogRepo.record({
+      actor_type: 'admin', actor_id: req.adminId,
+      action: 'client_status_changed',
+      target: `${client.id}: ${existing.status} -> ${data.status}`,
+    });
+  }
+
+  res.json(omitPasswordHash(client));
+}));
+
+// The "Paid"/"Unpaid" toggle (admin UI) — separate from the generic status
+// PATCH above since it has its own side effects beyond a raw column set
+// (starting/clearing the nonpayment countdown, and auto-reactivating
+// Service if THIS mechanism, not an unrelated manual suspension, was what
+// suspended it — see auto_suspended_for_nonpayment's own comment above and
+// in migration 068).
+router.post('/:id/payment-status', asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const paid = z.boolean().parse(req.body.paid);
+  const existing = await clientsRepo.findById(pool, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  const fields = paid
+    ? { payment_status: 'paid', payment_marked_unpaid_at: null, payment_warning_sent_at: null }
+    : { payment_status: 'unpaid', payment_marked_unpaid_at: new Date().toISOString(), payment_warning_sent_at: null };
+
+  // Marking paid restores Service automatically, but ONLY if THIS feature
+  // was what suspended it — an admin who suspended a client for an
+  // unrelated reason (abuse, a support dispute, anything else) shouldn't
+  // have that decision silently undone by a payment status flip.
+  if (paid && existing.auto_suspended_for_nonpayment) {
+    fields.status = 'active';
+    fields.auto_suspended_for_nonpayment = false;
+  }
+
+  const client = await clientsRepo.update(pool, req.params.id, fields);
+
+  await auditLogRepo.record({
+    actor_type: 'admin', actor_id: req.adminId,
+    action: paid ? 'client_marked_paid' : 'client_marked_unpaid',
+    target: `${client.id}: ${client.name}`,
+  });
+
   res.json(omitPasswordHash(client));
 }));
 
