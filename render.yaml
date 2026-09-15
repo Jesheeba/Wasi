@@ -45,3 +45,5 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      - key: PAYMENT_REMINDER_WABA_ID
+        sync: false
