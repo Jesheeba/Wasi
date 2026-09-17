@@ -2186,6 +2186,26 @@
     </div>
   </div>
 
+  <!-- Error dialog — the themed-modal shell from the Group 2/3 dialog above,
+       for a caught error that's too long or too structured (a Meta
+       rejection's real wording, embedded-signup guidance, a multi-reason
+       template-validation `details` array) to read in an auto-dismissing
+       toast. reportError() (app.js) picks this or the plain toast per
+       error; short/generic errors keep using the toast unchanged. -->
+  <div id="modal-error-dialog" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-error-dialog-title">Something went wrong</h3>
+        <button class="close-modal-btn" data-close-modal="modal-error-dialog"><i data-lucide="x"></i></button>
+      </div>
+      <div id="modal-error-dialog-body" class="modal-inner-scroll" style="font-size:0.9rem; color:var(--text-main); line-height:1.5; white-space:pre-line; margin-bottom:1.5rem;"></div>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" class="btn-secondary" id="modal-error-dialog-copy-btn">Copy details</button>
+        <button type="button" class="btn-primary" data-close-modal="modal-error-dialog" style="width:auto; padding:0 20px;">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Same file server/src/utils/templateParams.js requires() server-side —

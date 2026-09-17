@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await loadInitialData();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
     // Restores whichever top-level view the URL hash names (kept in sync by
     // switchView below) instead of always landing on Chat — a reload used to
@@ -438,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('actor_type', 'owner');
       await enterApp(data.client, { type: 'owner', role: 'Owner', id: data.client.id });
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
@@ -476,7 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // shape, not a full profile.
       await enterApp({ name: data.teamMember.name }, { type: 'team_member', role: data.teamMember.role, id: data.teamMember.id });
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
@@ -756,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await authFetch(`/api/chats/${state.activeChatId}/messages/${btn.dataset.retryId}/retry`, { method: 'POST' });
       await refreshActiveChatMessages();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -869,7 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await refreshActiveChatMessages();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
 
     // chats.unread_count only ever increments server-side (an inbound
@@ -948,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatFromServer();
       showToast('Chat assigned.');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -959,7 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatFromServer();
       showToast('Chat unassigned.');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -970,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatFromServer();
       showToast('Chat marked resolved.');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -981,7 +981,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatFromServer();
       showToast('Chat reopened.');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -994,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       state.activeChatNotes = await authFetch(`/api/chats/${state.activeChatId}/notes`);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
       return;
     }
     if (!state.activeChatNotes.length) {
@@ -1070,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
       closeMentionPicker();
       await renderChatNotes();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -1215,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await authFetch(`/api/contacts/${contactId}/tags/${btn.dataset.tagId}`, { method: 'DELETE' });
       renderContactTagsInto(wrapper, contactId, () => wrapper.dataset.contactId !== contactId);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -1231,7 +1231,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await authFetch(`/api/contacts/${contactId}/tags`, { method: 'POST', body: JSON.stringify({ tagId }) });
       renderContactTagsInto(wrapper, contactId, () => wrapper.dataset.contactId !== contactId);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
       select.value = '';
     }
   });
@@ -1397,7 +1397,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.contacts.unshift(adapted);
       await proceedWithContact(adapted);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     } finally {
       btn.disabled = false;
     }
@@ -1442,7 +1442,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('new-conversation-step-template').style.display = '';
       renderNewConversationTemplateList();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -1503,7 +1503,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // session_window_closed / waba_not_connected are real, explainable
       // states (see server/src/services/messagingService.js) — surface the
       // server's message as-is rather than a generic "request failed".
-      showToast(err.message);
+      reportError(err);
       chatMessageInput.value = text; // give the draft back so it isn't lost
     }
   }
@@ -2044,7 +2044,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshBroadcasts();
       renderBroadcasts();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -2156,7 +2156,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('Flow deleted');
           onDeleted();
         } catch (err) {
-          showToast(err.message);
+          reportError(err);
         }
       },
     });
@@ -3766,7 +3766,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(created.tierWarning);
       }
     } catch (err) {
-      showToast(extractApiErrorDetail(err) || err.message);
+      reportError(err);
     }
   });
 
@@ -3792,7 +3792,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result.orphaned) parts.push(`${result.orphaned} no longer on Meta`);
       showToast(parts.length ? `Synced: ${parts.join(', ')}.` : 'Synced — no changes.');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     } finally {
       btn.disabled = false;
       btn.innerHTML = originalHtml;
@@ -3833,7 +3833,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTemplates();
             showToast('Template deleted');
           } catch (err) {
-            showToast(err.message);
+            reportError(err);
             deleteBtn.disabled = false;
           }
         },
@@ -4366,7 +4366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // despite it (or via a path that skipped the live check).
         showToast(result?.warnings?.[0] || 'Template updated and resubmitted to Meta for review.');
       } catch (err) {
-        showToast(extractApiErrorDetail(err) || err.message);
+        reportError(err);
       }
       return;
     }
@@ -4447,7 +4447,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // despite it (or via a path that skipped the live check).
       if (result?.warnings?.[0]) showToast(result.warnings[0]);
     } catch (err) {
-      showToast(extractApiErrorDetail(err) || err.message);
+      reportError(err);
     }
   });
 
@@ -4473,7 +4473,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-create-ticket')?.classList.remove('open');
       showToast('Support ticket submitted.');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4496,7 +4496,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshTags();
       renderTagsManager();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
       return;
     }
 
@@ -4515,7 +4515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // shows up in either picker until the next full session refresh.
       state.teamMembers = await authFetch('/api/team-members');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
       return;
     }
     tbody.innerHTML = state.teamMembers.length ? state.teamMembers.map(m => `
@@ -4548,7 +4548,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-invite-member')?.classList.remove('open');
       showToast('Invite sent to ' + email);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4559,7 +4559,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       state.cannedResponses = await authFetch('/api/canned-responses');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
       return;
     }
     tbody.innerHTML = state.cannedResponses.length ? state.cannedResponses.map(c => `
@@ -4581,7 +4581,7 @@ document.addEventListener('DOMContentLoaded', () => {
               await authFetch(`/api/canned-responses/${btn.dataset.cannedId}`, { method: 'DELETE' });
               await renderCannedResponsesTable();
             } catch (err) {
-              showToast(err.message);
+              reportError(err);
             }
           },
         });
@@ -4602,7 +4602,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await authFetch('/api/canned-responses', { method: 'POST', body: JSON.stringify({ shortcut, body }) });
       await renderCannedResponsesTable();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
       return;
     }
     e.target.reset();
@@ -4622,7 +4622,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <tr><td style="font-weight:600;">${a.name}</td><td>${a.name.toLowerCase().replace(/\s+/g, '_')}</td><td>${a.type}</td><td>—</td></tr>
       `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No custom attributes yet</td></tr>';
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -4643,7 +4643,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-add-attribute')?.classList.remove('open');
       showToast('Attribute added');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4657,7 +4657,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <tr><td>${p.razorpay_payment_link_id || p.id.slice(0, 8)}</td><td>${p.title}</td><td>₹${p.amount_inr.toFixed ? p.amount_inr.toFixed(2) : p.amount_inr}</td><td>Razorpay</td><td><span class="status-badge ${p.status === 'paid' ? 'active' : ''}">${p.status}</span></td></tr>
       `).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No payment links yet</td></tr>';
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -4681,7 +4681,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-create-payment')?.classList.remove('open');
       showToast(link.url ? `Payment link created: ${link.url}` : 'Payment link created');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4728,7 +4728,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const { balance } = await authFetch('/api/wallet');
       balanceEl.textContent = '₹ ' + Number(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 });
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -4848,7 +4848,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       rzp.open();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
@@ -4892,7 +4892,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('new-rule-flow-group').style.display = 'none';
       document.getElementById('modal-create-rule')?.classList.remove('open');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4913,7 +4913,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-create-bot-flow')?.classList.remove('open');
       openFlowEditor(flow.id);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4930,7 +4930,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderFlowsList();
       showToast(`Flow ${newStatus === 'active' ? 'activated' : 'archived'}.`);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -4956,7 +4956,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshCurrentFlowGraph();
       await refreshFlows();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -5018,7 +5018,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await refreshCurrentFlowGraph();
       }
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -5073,7 +5073,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-add-bot-flow-edge')?.classList.remove('open');
       await refreshCurrentFlowGraph();
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -5184,7 +5184,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('API key created');
           renderApiKeysManager();
         } catch (err) {
-          showToast(err.message);
+          reportError(err);
         }
       },
     });
@@ -5213,7 +5213,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('API key revoked');
             renderApiKeysManager();
           } catch (err) {
-            showToast(err.message);
+            reportError(err);
           }
         },
       });
@@ -5228,7 +5228,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('API key removed');
             renderApiKeysManager();
           } catch (err) {
-            showToast(err.message);
+            reportError(err);
           }
         },
       });
@@ -5348,7 +5348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderWebhookSecretField(webhook, null);
       }
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -5363,7 +5363,7 @@ document.addEventListener('DOMContentLoaded', () => {
           renderWebhookSecretField(saved, saved.secret);
           showToast('Webhook secret regenerated');
         } catch (err) {
-          showToast(err.message);
+          reportError(err);
         }
       },
     });
@@ -5380,7 +5380,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderWebhookSecretField(saved, saved.secret || null);
       showToast('Webhook settings saved');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
@@ -5495,7 +5495,7 @@ document.addEventListener('DOMContentLoaded', () => {
       set('metric-incoming', m.incoming);
       set('metric-outgoing', m.outgoing);
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -5513,7 +5513,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No tags yet</td></tr>';
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -5531,7 +5531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No campaigns yet</td></tr>';
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -5553,7 +5553,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No tracked replies yet</td></tr>';
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   }
 
@@ -5685,7 +5685,7 @@ document.addEventListener('DOMContentLoaded', () => {
               method: 'POST',
               body: JSON.stringify({ waba_id: err.waba_id }),
             });
-            showToast(err.message);
+            reportError(err);
           } catch (recordErr) {
             // Fixed 2026-09-07 — this used to be console.error'd into
             // silence. This is the worst case in the whole flow: Meta
@@ -5707,11 +5707,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason
         // in body.detail, with a generic body.error as the top-level
         // summary (see that route's catch block) — authFetch's err.message
-        // is only ever the generic one, so a real rejection (e.g. the new
+        // is only ever the generic one, so a real rejection (e.g. the
         // missing-phone_number_id case, 2026-09-05) used to show as a
-        // content-free "WhatsApp connection failed" toast. Preferring
-        // err.body?.detail here surfaces the actual reason instead.
-        showToast(err.body?.detail || err.message);
+        // content-free "WhatsApp connection failed" toast. reportError()
+        // prefers err.body.detail over err.message for exactly this
+        // reason, and — being real embedded-signup guidance text — this is
+        // routinely long enough to land in the error dialog, not a toast.
+        reportError(err);
       } finally {
         btn.disabled = false;
         btn.textContent = 'Connect WhatsApp';
@@ -5945,7 +5947,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         saveStatus.textContent = '';
         saveBtn.disabled = false;
-        showToast(err.message);
+        reportError(err);
       }
     });
 
@@ -5982,7 +5984,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await renderBusinessProfileForm(waba);
       } catch (err) {
         pictureStatus.textContent = '';
-        showToast(err.message);
+        reportError(err);
       }
     });
   }
@@ -6068,6 +6070,85 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // --- Error dialog ---
+  // Most caught errors are short and self-explanatory ("Contact not
+  // found", a network timeout) and stay a toast. A real minority are long
+  // and/or structured — Meta's own rejection wording (routes/templates.js's
+  // `detail`, via describeMetaError), embedded-signup guidance
+  // (embeddedSignup.js's onProgress strings), or a template-validation
+  // `details` array (templateParams.js) — and cramming those into an
+  // auto-dismissing 2.2s toast is how a Meta error message ends up only
+  // ever read off the Network tab. 100 chars is picked from this app's own
+  // real error text, not guessed: today's short/generic toasts ("Session
+  // expired, please log in again.", "Request timed out...") all run under
+  // ~65 chars, while every real actionable single-reason message (a
+  // template validation rule, an embedded-signup guidance string, a Meta
+  // rejection detail) runs 95-660+ chars — 100 sits cleanly in the gap
+  // between those two clusters.
+  const ERROR_DIALOG_LENGTH_THRESHOLD = 100;
+
+  function shouldUseErrorDialog(message, details) {
+    if (details && details.length > 1) return true;
+    if (!message) return false;
+    return message.length > ERROR_DIALOG_LENGTH_THRESHOLD || message.includes('\n');
+  }
+
+  // details is rendered as a real <ul>, not extractApiErrorDetail's
+  // join(' ') — losing that structure (numbered params + missing sample +
+  // words-ratio all run together into one paragraph) is exactly why these
+  // errors have been hard to read.
+  function showErrorDialog({ title = 'Something went wrong', message, details }) {
+    document.getElementById('modal-error-dialog-title').textContent = title;
+    const body = document.getElementById('modal-error-dialog-body');
+    if (details && details.length) {
+      body.innerHTML = `<ul style="margin:0; padding-left:1.25rem;">${details.map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul>`;
+    } else {
+      body.textContent = message;
+    }
+
+    // Re-cloned on every open, same reason showConfirm re-clones its
+    // action button — a previous call's click listener must never stack.
+    const copyBtn = document.getElementById('modal-error-dialog-copy-btn');
+    const newCopyBtn = copyBtn.cloneNode(true);
+    copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+    const copyText = details && details.length ? details.join('\n') : message;
+    newCopyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(copyText);
+        const original = newCopyBtn.textContent;
+        newCopyBtn.textContent = 'Copied!';
+        setTimeout(() => { newCopyBtn.textContent = original; }, 1500);
+      } catch (_err) {
+        showToast('Could not copy — clipboard permission denied');
+      }
+    });
+
+    document.getElementById('modal-error-dialog')?.classList.add('open');
+  }
+
+  // The single replacement for `showToast(err.message)` at every authFetch
+  // catch site — decides toast vs. dialog per-error instead of forcing
+  // every call site to. `err.body.error` (the short category Postgres/Zod
+  // validation and Meta-rejection routes send, e.g. "Invalid template
+  // body", "Meta rejected this template") becomes the dialog's title;
+  // `err.body.detail` (a single long string, e.g. Meta's own rejection
+  // wording) or `err.body.details` (an array of specific reasons) becomes
+  // its body. A plain error with neither just shows err.message either way
+  // — same message, dialog or toast depending on its own length.
+  function reportError(err, { title } = {}) {
+    const category = err?.message || 'Something went wrong.';
+    const hasDetails = !!(err?.body && Array.isArray(err.body.details) && err.body.details.length && err.body.details.every((d) => typeof d === 'string'));
+    const details = hasDetails ? err.body.details : null;
+    const detailText = (err?.body && typeof err.body.detail === 'string' && err.body.detail) || null;
+    const measureText = details ? details.join(' ') : (detailText || category);
+
+    if (shouldUseErrorDialog(measureText, details)) {
+      showErrorDialog({ title: title || category, message: detailText || category, details });
+    } else {
+      showToast(measureText);
+    }
+  }
+
   document.getElementById('open-add-contact-modal')?.addEventListener('click', () => {
     document.getElementById('modal-add-contact')?.classList.add('open');
   });
@@ -6085,7 +6166,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.target.reset();
       document.getElementById('modal-add-contact')?.classList.remove('open');
     } catch (err) {
-      showToast(err.message);
+      reportError(err);
     }
   });
 
