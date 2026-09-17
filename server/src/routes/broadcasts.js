@@ -10,6 +10,8 @@ const { uuid, broadcastCreateSchema } = require('../utils/validate');
 const { extractPlaceholders } = require('../utils/templateParams');
 const { requireRole } = require('../middleware/requireRole');
 const { compileFilter, UnknownAttributeError, InvalidConditionError, SEGMENT_QUERY_TIMEOUT_MS } = require('../utils/segmentFilter');
+const { describeMessageFailure } = require('../utils/metaMessageErrorMessages');
+const { toCsv } = require('../utils/csvExport');
 
 const router = Router();
 
@@ -203,6 +205,100 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
   // pending recipients on its next tick — no synchronous send here, so this
   // returns immediately even for a large audience.
   res.status(201).json({ ...broadcast, recipient_count: recipients.length, consentWarning, tierWarning });
+}));
+
+const RECIPIENT_STATUSES = ['pending', 'sent', 'delivered', 'read', 'failed', 'skipped'];
+
+// broadcastRunner.js's markSkipped is called with one of two shapes: the
+// literal string 'smart_sending_window' (a fixed reason code, not meant to
+// be shown raw), or a real MessagingError message for a consent skip
+// (already human-readable — see messagingService's assertConsentForTemplate)
+// — passed through as-is.
+function describeSkipReason(reason) {
+  if (reason === 'smart_sending_window') {
+    return 'This contact already received a broadcast recently — skipped by this campaign\'s Smart Sending window.';
+  }
+  return reason || 'Skipped — not opted in to marketing messages.';
+}
+
+// Shapes one listByBroadcast() row for the API response. `reason` is only
+// ever populated for failed/skipped — everything else has nothing to
+// explain. A failed row's Meta error code only exists when the failure
+// happened AFTER Meta accepted the send (message_error_reason/
+// meta_error_code, from the status webhook); a pre-send failure (contact
+// deleted, retries exhausted) only ever has recipient_error_reason, hence
+// preferring the message-level fields but falling back to the
+// recipient-level one.
+function shapeRecipient(row) {
+  const shaped = {
+    id: row.recipient_id,
+    contactId: row.contact_id,
+    name: row.contact_name || null,
+    phone: row.contact_phone || null,
+    status: row.effective_status,
+    at: row.status_at,
+    reason: null,
+  };
+  if (row.effective_status === 'failed') {
+    shaped.reason = describeMessageFailure({
+      metaErrorCode: row.meta_error_code,
+      errorReason: row.message_error_reason || row.recipient_error_reason,
+    });
+  } else if (row.effective_status === 'skipped') {
+    shaped.reason = describeSkipReason(row.recipient_error_reason);
+  }
+  return shaped;
+}
+
+// PLAN.md item 28 — broadcast detail view metadata + header-strip counts.
+router.get('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const broadcast = await broadcastsRepo.findByIdWithStats(req.db, req.clientId, req.params.id);
+  if (!broadcast) return res.status(404).json({ error: 'Not found' });
+  res.json(broadcast);
+}));
+
+// PLAN.md item 28 — the per-recipient table. No pagination: matches this
+// app's existing convention (contacts/chats lists are unpaginated too), and
+// a broadcast's own audience size is bounded by this app's real scale
+// (thousands, not millions). status/search are optional server-side
+// filters — the frontend can also filter/search client-side over the full
+// returned set, but passing them avoids shipping the whole list for a
+// narrow view (e.g. "just the failed ones").
+router.get('/:id/recipients', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const broadcast = await broadcastsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!broadcast) return res.status(404).json({ error: 'Not found' });
+  const status = RECIPIENT_STATUSES.includes(req.query.status) ? req.query.status : null;
+  const search = typeof req.query.search === 'string' && req.query.search.trim() ? req.query.search.trim() : null;
+  const rows = await broadcastRecipientsRepo.listByBroadcast(req.db, req.clientId, broadcast.id, { status, search });
+  res.json(rows.map(shapeRecipient));
+}));
+
+// PLAN.md item 28 — "Export the failed list as CSV." Defaults to 'failed'
+// (the one export the spec actually asked for) but honors an explicit
+// ?status= so it isn't a bespoke one-off query — it's the exact same
+// listByBroadcast() the table itself uses.
+router.get('/:id/recipients/export', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const broadcast = await broadcastsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!broadcast) return res.status(404).json({ error: 'Not found' });
+  const status = RECIPIENT_STATUSES.includes(req.query.status) ? req.query.status : 'failed';
+  const rows = await broadcastRecipientsRepo.listByBroadcast(req.db, req.clientId, broadcast.id, { status });
+  const csv = toCsv(
+    [
+      { key: 'name', header: 'Name' },
+      { key: 'phone', header: 'Phone' },
+      { key: 'status', header: 'Status' },
+      { key: 'at', header: 'Timestamp' },
+      { key: 'reason', header: 'Reason' },
+    ],
+    rows.map(shapeRecipient)
+  );
+  const safeTitle = broadcast.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase() || 'broadcast';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_${status}_recipients.csv"`);
+  res.send(csv);
 }));
 
 // PLAN.md item 11 — no schema change: broadcasts.status is plain text with

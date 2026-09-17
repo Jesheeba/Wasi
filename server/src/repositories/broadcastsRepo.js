@@ -48,6 +48,49 @@ async function findById(db, clientId, id) {
   return rows[0] || null;
 }
 
+// PLAN.md item 28 — the per-broadcast detail view's header strip. Same
+// bucket definitions list()'s own lateral join already established
+// (delivered = messages.status in ('delivered','read'), i.e. "at least
+// delivered," read = messages.status = 'read' — a subset of delivered, not
+// a separate bucket, matching WhatsApp's own sent->delivered->read
+// progression), extended here with failed/pending so the 5 buckets the
+// detail view needs (sent/delivered/read/failed/skipped) plus pending sum
+// to recipient_count. "Failed" covers both a pre-send failure
+// (broadcast_recipients.status = 'failed' — e.g. contact deleted, retries
+// exhausted before ever reaching Meta) and a post-send delivery failure
+// (status = 'sent' but the linked message later failed via the status
+// webhook) — the two failure moments this app tracks, unified into one
+// count since a client viewing this page doesn't care which stage it
+// failed at, only that it did.
+async function findByIdWithStats(db, clientId, id) {
+  const { rows } = await db.query(
+    `select b.*,
+            coalesce(rc.total, 0)::int as recipient_count,
+            coalesce(rc.pending, 0)::int as pending_count,
+            coalesce(rc.sent, 0)::int as sent_count,
+            coalesce(rc.delivered, 0)::int as delivered_count,
+            coalesce(rc.read, 0)::int as read_count,
+            coalesce(rc.failed, 0)::int as failed_count,
+            coalesce(rc.skipped, 0)::int as skipped_count
+     from broadcasts b
+     left join lateral (
+       select count(*) as total,
+              count(*) filter (where br.status in ('pending', 'sending')) as pending,
+              count(*) filter (where br.status = 'sent') as sent,
+              count(*) filter (where br.status = 'sent' and m.status in ('delivered', 'read')) as delivered,
+              count(*) filter (where br.status = 'sent' and m.status = 'read') as read,
+              count(*) filter (where br.status = 'failed' or (br.status = 'sent' and m.status = 'failed')) as failed,
+              count(*) filter (where br.status = 'skipped') as skipped
+       from broadcast_recipients br
+       left join messages m on m.id = br.message_id
+       where br.broadcast_id = b.id
+     ) rc on true
+     where b.client_id = $1 and b.id = $2`,
+    [clientId, id]
+  );
+  return rows[0] || null;
+}
+
 async function create(db, clientId, {
   title, tag_id, contact_list_id, segment_id, template_name, scheduled_date, param_mappings, header_media_asset_id, pacing_config,
   smart_sending_hours,
@@ -94,4 +137,4 @@ async function listActive(db) {
   return rows;
 }
 
-module.exports = { list, findById, create, markStatus, listDueScheduled, listActive };
+module.exports = { list, findById, findByIdWithStats, create, markStatus, listDueScheduled, listActive };

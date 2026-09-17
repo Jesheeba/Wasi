@@ -270,7 +270,73 @@ async function hasRecentSend(db, clientId, contactId, hours) {
   return rows[0].has_recent;
 }
 
+// PLAN.md item 28 — the per-broadcast detail view's recipient table.
+// `effective_status` mirrors broadcastsRepo.findByIdWithStats's own bucket
+// definitions exactly (a recipient's status column alone doesn't capture
+// Meta's later delivered/read/failed updates once it's been handed off —
+// those only ever land on the linked messages row). Computed in a CTE
+// rather than inline so it can be filtered by name/alias in the outer
+// WHERE, not repeated. `status_at` picks the one timestamp that actually
+// means something for whatever the effective status is — there is no
+// single "last updated" column to fall back on (see migration
+// 072_messages_status_timestamps.js's own reasoning for why delivered_at/
+// read_at/failed_at exist as three separate nullable columns, never
+// backfilled for pre-migration rows, hence the null-safe checks here
+// showing "no data" rather than guessing from sent_at).
+async function listByBroadcast(db, clientId, broadcastId, { status, search } = {}) {
+  const params = [broadcastId, clientId];
+  let searchClause = '';
+  if (search) {
+    params.push(`%${search}%`);
+    searchClause = `and (contact_name ilike $${params.length} or contact_phone ilike $${params.length})`;
+  }
+  let statusClause = '';
+  if (status) {
+    params.push(status);
+    statusClause = `and effective_status = $${params.length}`;
+  }
+  const { rows } = await db.query(
+    `with base as (
+       select
+         br.id as recipient_id,
+         br.contact_id,
+         c.name as contact_name,
+         c.phone as contact_phone,
+         br.created_at,
+         case
+           when br.status = 'skipped' then 'skipped'
+           when br.status in ('pending', 'sending') then 'pending'
+           when br.status = 'failed' then 'failed'
+           when br.status = 'sent' and m.status = 'read' then 'read'
+           when br.status = 'sent' and m.status = 'delivered' then 'delivered'
+           when br.status = 'sent' and m.status = 'failed' then 'failed'
+           when br.status = 'sent' then 'sent'
+           else br.status
+         end as effective_status,
+         case
+           when br.status = 'sent' and m.status = 'read' then m.read_at
+           when br.status = 'sent' and m.status = 'delivered' then m.delivered_at
+           when br.status = 'sent' and m.status = 'failed' then m.failed_at
+           when br.status = 'sent' then m.sent_at
+           else null
+         end as status_at,
+         br.error_reason as recipient_error_reason,
+         m.error_reason as message_error_reason,
+         m.meta_error_code
+       from broadcast_recipients br
+       left join contacts c on c.id = br.contact_id
+       left join messages m on m.id = br.message_id
+       where br.broadcast_id = $1 and br.client_id = $2
+     )
+     select * from base
+     where true ${statusClause} ${searchClause}
+     order by created_at asc`,
+    params
+  );
+  return rows;
+}
+
 module.exports = {
   createFromAudience, createFromList, createFromSegment, claimBatch, markSent, markFailed, markSkipped,
-  markFailedAttempt, BACKOFF_SECONDS, MAX_SEND_ATTEMPTS, hasPending, hasRecentSend,
+  markFailedAttempt, BACKOFF_SECONDS, MAX_SEND_ATTEMPTS, hasPending, hasRecentSend, listByBroadcast,
 };

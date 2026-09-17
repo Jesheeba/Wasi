@@ -120,10 +120,16 @@ test('field "messages" carrying only a statuses array is dispatched, not silentl
   });
   assert.equal(res.status, 200);
 
-  const { rows } = await pool.query('select status, error_reason from messages where id = $1', [testMessageId]);
+  const { rows } = await pool.query('select status, error_reason, failed_at, delivered_at, read_at from messages where id = $1', [testMessageId]);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].status, 'failed');
   assert.match(rows[0].error_reason, /Re-engagement message/);
+  // migration 072_messages_status_timestamps.js: a status transition stamps
+  // its own column only — a 'failed' status must not also backfill
+  // delivered_at/read_at, which this message never actually reached.
+  assert.ok(rows[0].failed_at, 'failed_at should be stamped on a failed status transition');
+  assert.equal(rows[0].delivered_at, null);
+  assert.equal(rows[0].read_at, null);
 });
 
 test('an actually-unhandled field does not silently 200 without a trace', async () => {

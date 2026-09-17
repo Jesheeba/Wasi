@@ -227,8 +227,18 @@ async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt
 // don't track) — a no-op update is expected, not an error. Only ever called
 // from metaWebhook.js, on the privileged connection.
 async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorReason, metaErrorCode) {
+  // delivered_at/read_at/failed_at: stamped only the first time a message
+  // reaches that status (coalesce keeps the original time on a duplicate
+  // webhook delivery, which Meta is known to send) — see migration
+  // 072_messages_status_timestamps.js for why these exist at all.
   const { rows } = await db.query(
-    `update messages set status = $3, error_reason = coalesce($4, error_reason), meta_error_code = coalesce($5, meta_error_code)
+    `update messages set
+       status = $3,
+       error_reason = coalesce($4, error_reason),
+       meta_error_code = coalesce($5, meta_error_code),
+       delivered_at = case when $3 = 'delivered' then coalesce(delivered_at, now()) else delivered_at end,
+       read_at = case when $3 = 'read' then coalesce(read_at, now()) else read_at end,
+       failed_at = case when $3 = 'failed' then coalesce(failed_at, now()) else failed_at end
      where client_id = $1 and meta_message_id = $2 returning *`,
     [clientId, metaMessageId, status, errorReason || null, metaErrorCode || null]
   );

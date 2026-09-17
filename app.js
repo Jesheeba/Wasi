@@ -2017,6 +2017,11 @@ document.addEventListener('DOMContentLoaded', () => {
         : b.status === 'Paused'
           ? `<button type="button" class="btn-secondary broadcast-resume-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">Resume</button>`
           : '';
+      // PLAN.md item 28 — the per-recipient detail view. Available for
+      // every status (unlike pause/resume, which only make sense mid-send)
+      // since a Completed/Scheduled campaign's recipient list is just as
+      // real and worth drilling into.
+      const viewBtn = `<button type="button" class="btn-secondary broadcast-view-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">View</button>`;
       const tr = `
         <tr>
           <td style="font-weight: 600;">${b.title}</td>
@@ -2026,7 +2031,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${b.readRate}</td>
           <td>${skippedCell}</td>
           <td>${b.date}</td>
-          <td>${actionBtn}</td>
+          <td style="display:flex; gap:6px;">${viewBtn}${actionBtn}</td>
         </tr>
       `;
       broadcastsTableBody.innerHTML += tr;
@@ -2036,6 +2041,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('broadcasts-table-body')?.addEventListener('click', async (e) => {
     const pauseBtn = e.target.closest('.broadcast-pause-btn');
     const resumeBtn = e.target.closest('.broadcast-resume-btn');
+    const viewBtn = e.target.closest('.broadcast-view-btn');
+    if (viewBtn) {
+      openBroadcastDetail(viewBtn.dataset.broadcastId);
+      return;
+    }
     const btn = pauseBtn || resumeBtn;
     if (!btn) return;
     const action = pauseBtn ? 'pause' : 'resume';
@@ -2046,6 +2056,165 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     }
+  });
+
+  // --- Broadcast detail (PLAN.md item 28) ---
+  // "Delivered" only ever means Meta reported it delivered — WhatsApp only
+  // sends a read receipt when the recipient has read receipts turned on, so
+  // "delivered, not read" genuinely means "we don't know if they've read it,"
+  // not "they haven't." Labels below say so explicitly rather than implying
+  // delivered-but-unread is a known state.
+  const BROADCAST_STATUS_LABELS = {
+    pending: 'Pending', sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed', skipped: 'Skipped',
+  };
+  const BROADCAST_STATUS_COLORS = {
+    pending: { bg: '#F3F4F6', fg: '#4B5563' },
+    sent: { bg: '#E0E7FF', fg: '#4338CA' },
+    delivered: { bg: '#DBEAFE', fg: '#1D4ED8' },
+    read: { bg: '#D1FAE5', fg: '#047857' },
+    failed: { bg: '#FEE2E2', fg: '#B91C1C' },
+    skipped: { bg: '#FEF3C7', fg: '#B45309' },
+  };
+
+  let broadcastDetailState = null; // { id, meta, recipients } — set on open, cleared on close.
+
+  async function openBroadcastDetail(broadcastId) {
+    const modal = document.getElementById('modal-broadcast-detail');
+    if (!modal) return;
+    document.getElementById('broadcast-detail-title').textContent = 'Loading…';
+    document.getElementById('broadcast-detail-strip').innerHTML = '';
+    document.getElementById('broadcast-detail-recipients-body').innerHTML = '';
+    document.getElementById('broadcast-detail-status-filter').value = '';
+    document.getElementById('broadcast-detail-search').value = '';
+    modal.classList.add('open');
+    try {
+      const [meta, recipients] = await Promise.all([
+        authFetch(`/api/broadcasts/${broadcastId}`),
+        authFetch(`/api/broadcasts/${broadcastId}/recipients`),
+      ]);
+      broadcastDetailState = { id: broadcastId, meta, recipients };
+      renderBroadcastDetail();
+    } catch (err) {
+      modal.classList.remove('open');
+      reportError(err);
+    }
+  }
+
+  function renderBroadcastDetail() {
+    if (!broadcastDetailState) return;
+    const { meta } = broadcastDetailState;
+    document.getElementById('broadcast-detail-title').textContent = meta.title;
+
+    const audience = meta.contact_list_id ? 'Contact list' : meta.segment_id ? 'Segment' : (state.tagsById[meta.tag_id]?.name || 'Everyone');
+    document.getElementById('broadcast-detail-meta').innerHTML = [
+      `Template: <strong>${meta.template_name || '—'}</strong>`,
+      `Audience: <strong>${audience}</strong> (${meta.recipient_count})`,
+      `Status: <strong>${meta.status}</strong>`,
+      `Created: <strong>${(meta.created_at || '').toString().slice(0, 16).replace('T', ' ')}</strong>`,
+    ].join(' &middot; ');
+
+    const total = meta.recipient_count || 0;
+    const pct = (n) => (total > 0 ? `${Math.round((n / total) * 1000) / 10}%` : '0%');
+    const buckets = [
+      { key: 'sent', label: 'Sent', count: meta.sent_count },
+      { key: 'delivered', label: 'Delivered', count: meta.delivered_count, note: 'Only counts a real delivery receipt from Meta. A contact with read receipts off can still be "Delivered" forever — that\'s expected, not a failure to read.' },
+      { key: 'read', label: 'Read', count: meta.read_count, note: 'Only reported when the recipient has read receipts turned on — "Delivered but not Read" means unknown, not unread.' },
+      { key: 'failed', label: 'Failed', count: meta.failed_count },
+      { key: 'skipped', label: 'Skipped', count: meta.skipped_count },
+    ];
+    document.getElementById('broadcast-detail-strip').innerHTML = buckets.map((b) => {
+      const color = BROADCAST_STATUS_COLORS[b.key];
+      const title = b.note ? ` title="${b.note.replace(/"/g, '&quot;')}"` : '';
+      return `
+        <div style="background:${color.bg}; color:${color.fg}; border-radius:10px; padding:8px 12px; min-width:90px;"${title}>
+          <div style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">${b.label}</div>
+          <div style="font-size:1.1rem; font-weight:700;">${pct(b.count)}</div>
+          <div style="font-size:0.72rem;">${b.count.toLocaleString()}</div>
+        </div>
+      `;
+    }).join('');
+    if (meta.pending_count > 0) {
+      document.getElementById('broadcast-detail-strip').innerHTML += `
+        <div style="background:${BROADCAST_STATUS_COLORS.pending.bg}; color:${BROADCAST_STATUS_COLORS.pending.fg}; border-radius:10px; padding:8px 12px; min-width:90px;">
+          <div style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Pending</div>
+          <div style="font-size:1.1rem; font-weight:700;">${pct(meta.pending_count)}</div>
+          <div style="font-size:0.72rem;">${meta.pending_count.toLocaleString()}</div>
+        </div>
+      `;
+    }
+
+    renderBroadcastDetailRecipients();
+  }
+
+  function renderBroadcastDetailRecipients() {
+    if (!broadcastDetailState) return;
+    const statusFilter = document.getElementById('broadcast-detail-status-filter').value;
+    const search = document.getElementById('broadcast-detail-search').value.trim().toLowerCase();
+    const rows = broadcastDetailState.recipients.filter((r) => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (search && !((r.name || '').toLowerCase().includes(search) || (r.phone || '').toLowerCase().includes(search))) return false;
+      return true;
+    });
+
+    const tbody = document.getElementById('broadcast-detail-recipients-body');
+    const emptyEl = document.getElementById('broadcast-detail-empty');
+    if (rows.length === 0) {
+      tbody.innerHTML = '';
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+    tbody.innerHTML = rows.map((r) => {
+      const color = BROADCAST_STATUS_COLORS[r.status] || BROADCAST_STATUS_COLORS.pending;
+      const label = BROADCAST_STATUS_LABELS[r.status] || r.status;
+      const when = r.at ? new Date(r.at).toLocaleString() : '—';
+      const reason = r.reason ? `<span title="${r.reason.replace(/"/g, '&quot;')}">${r.reason}</span>` : '—';
+      return `
+        <tr>
+          <td>${r.name || '—'}</td>
+          <td>${r.phone || '—'}</td>
+          <td><span class="status-badge" style="background:${color.bg}; color:${color.fg};">${label}</span></td>
+          <td>${when}</td>
+          <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${reason}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('broadcast-detail-status-filter')?.addEventListener('change', renderBroadcastDetailRecipients);
+  document.getElementById('broadcast-detail-search')?.addEventListener('input', renderBroadcastDetailRecipients);
+  document.getElementById('broadcast-detail-export-btn')?.addEventListener('click', async () => {
+    if (!broadcastDetailState) return;
+    // Not a plain window.open/link — this app authenticates with a Bearer
+    // token from localStorage (authFetch), not a cookie, so a bare
+    // navigation to this URL would carry no auth and 401. authFetch itself
+    // can't be reused as-is either (it always calls res.json()), so this
+    // fetches the CSV directly with the same Authorization header, then
+    // saves it via a throwaway object URL + <a download> — the standard way
+    // to turn a fetched blob into a real file save with no server-side
+    // signed-URL mechanism needed just for this one button.
+    const statusFilter = document.getElementById('broadcast-detail-status-filter').value || 'failed';
+    const token = localStorage.getItem('client_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/broadcasts/${broadcastDetailState.id}/recipients/export?status=${encodeURIComponent(statusFilter)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${broadcastDetailState.meta.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase() || 'broadcast'}_${statusFilter}_recipients.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      reportError(err);
+    }
+  });
+  document.querySelector('#modal-broadcast-detail [data-close-modal]')?.addEventListener('click', () => {
+    broadcastDetailState = null;
   });
 
   // --- Automation Rules ---

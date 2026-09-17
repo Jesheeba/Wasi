@@ -302,11 +302,15 @@ async function handleInboundMessages(waba, value) {
       // destructure, since a new column's default behavior is to leak here
       // silently — this exact test only caught it because someone happened
       // to write a key-set assertion, not because the destructure itself
-      // guards against it.
+      // guards against it. delivered_at/read_at/failed_at (migration
+      // 072_messages_status_timestamps.js) are dropped for the same reason
+      // as error_reason/meta_error_code above — they're stamped by
+      // chatsRepo.updateStatusByMetaId on an outbound message's delivery
+      // lifecycle and are always null on an inbound row.
       const {
         id, client_id, chat_id: _chatId, meta_message_id, status: _hardcodedStatus,
         direction: _direction, error_reason: _errorReason, meta_error_code: _metaErrorCode,
-        referral: _referral,
+        referral: _referral, delivered_at: _deliveredAt, read_at: _readAt, failed_at: _failedAt,
         ...forwardableMessage
       } = inserted;
       await enqueueForwards(waba, 'message.received', {
