@@ -122,7 +122,10 @@ async function claimBatch(db, broadcastId, limit) {
     `with claimed as (
        select id from broadcast_recipients
        where broadcast_id = $1
-         and (status = 'pending' or (status = 'sending' and claimed_at < now() - interval '5 minutes'))
+         and (
+           (status = 'pending' and next_attempt_at <= now())
+           or (status = 'sending' and claimed_at < now() - interval '5 minutes')
+         )
        order by created_at asc
        limit $2
        for update skip locked
@@ -183,6 +186,48 @@ async function markFailed(db, id, errorReason) {
   );
 }
 
+// Load-analysis follow-up (migration 071) — retry-with-backoff for a
+// TRANSIENT send failure only (broadcastRunner.js's isTransientSendError
+// decides which errors reach this vs. markFailed above). Modeled directly
+// on webhookDeliveriesRepo.markFailedAttempt's shape (same
+// attempt_count/next_attempt_at bookkeeping, same "this function itself
+// decides retry vs. permanent give-up" contract), but with a deliberately
+// much shorter schedule: a live campaign should resolve or give up within
+// minutes, not have stragglers trickle in hours after the broadcast looks
+// "done" the way a webhook redelivery reasonably can. 30s/2m/10m gives a
+// rate-limited send 3 real chances within ~12.5 minutes, matched to how
+// long a 429/timeout condition against a phone number's own send rate
+// realistically takes to clear, not a guess split evenly by feel.
+const BACKOFF_SECONDS = [30, 120, 600];
+const MAX_SEND_ATTEMPTS = BACKOFF_SECONDS.length;
+
+async function markFailedAttempt(db, id, errorMessage, attemptCountBefore) {
+  const nextAttemptCount = attemptCountBefore + 1;
+  const giveUp = nextAttemptCount >= MAX_SEND_ATTEMPTS;
+  if (giveUp) {
+    // Same terminal shape as markFailed above (status='failed'), plus the
+    // real attempt_count so a failed recipient's history distinguishes "we
+    // tried 3 times, all transient" from "rejected outright, never retried."
+    await db.query(
+      `update broadcast_recipients set status = 'failed', attempt_count = $2, error_reason = $3, next_attempt_at = now() where id = $1`,
+      [id, nextAttemptCount, errorMessage]
+    );
+    return { giveUp: true, nextAttemptCount };
+  }
+  const backoffSeconds = BACKOFF_SECONDS[nextAttemptCount - 1];
+  // Stays 'pending' (not a new status) — claimBatch's own next_attempt_at
+  // check is what keeps it from being reclaimed early; hasPending() already
+  // treats 'pending' as not-done, so the broadcast correctly stays 'Sending'
+  // while this recipient waits out its backoff.
+  await db.query(
+    `update broadcast_recipients
+     set status = 'pending', attempt_count = $2, error_reason = $3, next_attempt_at = now() + ($4 || ' seconds')::interval
+     where id = $1`,
+    [id, nextAttemptCount, errorMessage, String(backoffSeconds)]
+  );
+  return { giveUp: false, nextAttemptCount };
+}
+
 // Distinct from markFailed on purpose (build plan Phase 4) — a non-opted-in
 // recipient is never attempted, so it isn't a send failure. Reported
 // separately on the broadcast (see broadcastsRepo.list's skipped_count).
@@ -225,4 +270,7 @@ async function hasRecentSend(db, clientId, contactId, hours) {
   return rows[0].has_recent;
 }
 
-module.exports = { createFromAudience, createFromList, createFromSegment, claimBatch, markSent, markFailed, markSkipped, hasPending, hasRecentSend };
+module.exports = {
+  createFromAudience, createFromList, createFromSegment, claimBatch, markSent, markFailed, markSkipped,
+  markFailedAttempt, BACKOFF_SECONDS, MAX_SEND_ATTEMPTS, hasPending, hasRecentSend,
+};

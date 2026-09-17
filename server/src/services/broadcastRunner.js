@@ -52,6 +52,45 @@ function effectiveBatchSize(broadcast) {
   return Math.min(BATCH_SIZE, perTick);
 }
 
+// Load-analysis follow-up: distinguishes a TRANSIENT send failure (worth
+// retrying — a rate limit or a network/timeout blip) from a PERMANENT one
+// (a rejected template, an invalid phone, a disabled account — retrying
+// changes nothing) so sendOneRecipient's catch can route to
+// broadcastRecipientsRepo.markFailedAttempt (backoff + eventual give-up)
+// instead of markFailed (immediate, terminal) only for the former.
+//
+// Scoped deliberately narrow, matching the two failure modes actually named
+// for this fix (429s and timeouts) rather than guessing at every possible
+// Meta error code:
+//  - err.metaError present: only Meta's own documented rate-limit codes.
+//    130429 ("Rate limit hit") and 131056 ("too many messages sent from
+//    this phone number in a short period of time") are both in Meta's
+//    public Cloud API error code reference; 4 ("Application request limit
+//    reached") is the general cross-Graph-API platform rate limit, not
+//    WhatsApp-specific. These are Meta's documented codes, not guessed —
+//    but, like this session's messaging-tier field, NOT yet confirmed
+//    against a real live rate-limited send from this app (this dev
+//    environment can't decrypt a real production WABA token — see
+//    CLAUDE.md's SERVER_SECRET Known Gap). Widen/correct this list once a
+//    real 429 from this app's own traffic is captured.
+//  - err.metaError absent: this is either metaClient.js's own timeout
+//    (fetchWithTimeout's thrown "Meta API request timed out after Ns", no
+//    HTTP response was ever received) or a raw network-level failure
+//    (Node's fetch throws a generic "fetch failed" for DNS/connection-reset/
+//    refused). Both are transient by nature — nothing about the recipient
+//    or the message caused them.
+// Deliberately excludes err.code values other than 'send_failed'
+// (waba_not_connected, media_resolution_failed) — those are account/config
+// problems a retry a few minutes later won't fix either, and
+// consent_required is already routed to markSkipped before this is ever
+// reached.
+const TRANSIENT_META_ERROR_CODES = new Set([4, 130429, 131056]);
+function isTransientSendError(err) {
+  if (!(err instanceof MessagingError) || err.code !== 'send_failed') return false;
+  if (err.metaError) return TRANSIENT_META_ERROR_CODES.has(err.metaError.code);
+  return /timed out|fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(err.message || '');
+}
+
 async function runWithConcurrency(items, limit, worker) {
   let cursor = 0;
   async function next() {
@@ -147,6 +186,8 @@ async function sendOneRecipient(broadcast, recipient, template) {
     // that decides whether a template send needs consent.
     if (err instanceof MessagingError && err.code === 'consent_required') {
       await broadcastRecipientsRepo.markSkipped(pool, recipient.id, err.message);
+    } else if (isTransientSendError(err)) {
+      await broadcastRecipientsRepo.markFailedAttempt(pool, recipient.id, err.message, recipient.attempt_count || 0);
     } else {
       await broadcastRecipientsRepo.markFailed(pool, recipient.id, err.message);
     }
@@ -236,4 +277,4 @@ function stop() {
   timer = null;
 }
 
-module.exports = { start, stop, tick, processBroadcast };
+module.exports = { start, stop, tick, processBroadcast, isTransientSendError };
