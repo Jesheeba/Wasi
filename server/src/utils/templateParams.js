@@ -222,6 +222,49 @@ function validateHeaderText(text) {
   return { valid: true, paramFormat: 'named', params: uniqueInOrder(namedMatches.map((m) => m.name)), errors: [] };
 }
 
+// Real client rejection, not a hypothetical: Riyaz (Sirah Digital)'s
+// `booking_otp` template — body "Your Sirah Digital verification code is
+// {{code}}. It expires in 10 minutes. For your security, do not share this
+// code with anyone." — submitted under Utility, rejected by Meta with
+// rejection_reason 'INCORRECT_CATEGORY'. Every existing rule in this file
+// is purely structural (placeholder syntax, word count, sample coverage) —
+// nothing here has ever looked at what the template's text actually SAYS.
+// This is the first content-based check, and it stays narrow on purpose:
+// checked against every rejected template this app has ever recorded
+// (2 total, in production, ever) — the other one ('INVALID_FORMAT', a
+// one-off from an internal test template) has no real recurring pattern to
+// generalize from, so it's not encoded here. This one phrase-list is
+// deliberately an UNOFFICIAL heuristic, same class as the words-ratio rule
+// above, and gets the identical treatment: a WARNING, never a hard block —
+// a legitimate Utility/Marketing template could plausibly mention "code"
+// in an unrelated sense (a discount code, a tracking code), and blocking
+// on a false positive would be worse than warning and letting the author
+// decide. This can only ever catch patterns this app has actually seen
+// rejected — it is not, and cannot be, a guarantee of catching every way
+// Meta might reject a template (policy/quality/business-verification
+// reasons aren't detectable from template text at all).
+const AUTH_CONTENT_RE = /\b(verification code|one[- ]?time password|\botp\b|security code|authentication code|passcode)\b/i;
+
+function looksLikeAuthenticationContent(text) {
+  return AUTH_CONTENT_RE.test(text || '');
+}
+
+// category is the template's OWN category value (already Authentication ->
+// never worth warning, since that's the category Meta actually expects
+// this content in).
+function checkCategoryContentMismatch(text, category) {
+  if (category === 'Authentication') return { mismatch: false };
+  if (!looksLikeAuthenticationContent(text)) return { mismatch: false };
+  return {
+    mismatch: true,
+    warning:
+      'This reads like an OTP/verification-code message. Meta requires those to be submitted under the ' +
+      'Authentication category (its own auto-generated wording, no custom body) — a Utility or Marketing ' +
+      'submission with this kind of content has been rejected before with reason INCORRECT_CATEGORY. ' +
+      'Consider switching Category to Authentication before submitting, unless this really isn\'t an OTP message.',
+  };
+}
+
 const templateParams = {
   extractPlaceholders,
   isPurelyNumeric,
@@ -232,6 +275,8 @@ const templateParams = {
   validateTemplateText,
   validateHeaderText,
   defaultExampleFor,
+  looksLikeAuthenticationContent,
+  checkCategoryContentMismatch,
 };
 
 // Dual CommonJS/browser export — this file is pure string/regex/array logic

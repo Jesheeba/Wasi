@@ -8,7 +8,7 @@ const mediaHeaderService = require('../services/mediaHeaderService');
 const { decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, messageTemplateCreateSchema, messageTemplateUpdateSchema } = require('../utils/validate');
-const { validateTemplateText, validateHeaderText } = require('../utils/templateParams');
+const { validateTemplateText, validateHeaderText, checkCategoryContentMismatch } = require('../utils/templateParams');
 const templateSyncService = require('../services/templateSyncService');
 const { requireRole } = require('../middleware/requireRole');
 
@@ -290,7 +290,14 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
     await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, seededMedia);
   }
 
-  res.status(201).json(template);
+  // Non-blocking — the CRM's own Create/Edit modal already shows this live
+  // as the client types (see app.js's updateTemplateBodyValidation); this
+  // covers every OTHER caller (Hub API, a script, anything that bypasses
+  // that UI) with the same signal, on the same real-rejection evidence
+  // (templateParams.js's own comment). Never withholds the 201 — the
+  // template was already genuinely submitted to Meta by this point.
+  const categoryCheck = checkCategoryContentMismatch(data.body, data.category);
+  res.status(201).json(categoryCheck.mismatch ? { ...template, warnings: [categoryCheck.warning] } : template);
 }));
 
 // Uploads a new media asset for a media-header template, for one send to
@@ -485,7 +492,9 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
   }
 
   const updated = await messageTemplatesRepo.updateContent(req.db, req.clientId, template.id, templateData);
-  res.json(updated);
+  // Same non-blocking signal as POST /'s — see that route's comment.
+  const categoryCheck = checkCategoryContentMismatch(templateData.body, templateData.category);
+  res.json(categoryCheck.mismatch ? { ...updated, warnings: [categoryCheck.warning] } : updated);
 }));
 
 // Deletes a template — on Meta first (when it was ever submitted there),

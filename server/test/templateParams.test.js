@@ -14,6 +14,8 @@ const {
   validateTemplateText,
   validateHeaderText,
   defaultExampleFor,
+  looksLikeAuthenticationContent,
+  checkCategoryContentMismatch,
 } = require('../src/utils/templateParams');
 const { buildTemplateCreatePayload, buildNamedBodyComponents, TemplateValidationError } = require('../src/utils/metaClient');
 const { messageTemplateCreateSchema } = require('../src/utils/validate');
@@ -404,4 +406,48 @@ test('messageTemplateCreateSchema: a numbered-param body still parses at the sch
 test('buildNamedBodyComponents: empty/no values -> empty array, matches sendTemplateMessage default', () => {
   assert.deepEqual(buildNamedBodyComponents({}), []);
   assert.deepEqual(buildNamedBodyComponents(undefined), []);
+});
+
+// --- looksLikeAuthenticationContent / checkCategoryContentMismatch ---
+// Real, not hypothetical: Riyaz (Sirah Digital)'s 'booking_otp' template
+// was rejected by Meta with rejection_reason 'INCORRECT_CATEGORY' for
+// exactly this body, submitted under Utility.
+const REAL_REJECTED_OTP_BODY =
+  'Your Sirah Digital verification code is {{code}}. It expires in 10 minutes. For your security, do not share this code with anyone.';
+
+test('looksLikeAuthenticationContent: flags the real rejected OTP body', () => {
+  assert.equal(looksLikeAuthenticationContent(REAL_REJECTED_OTP_BODY), true);
+});
+
+test('looksLikeAuthenticationContent: flags other common OTP phrasings', () => {
+  assert.equal(looksLikeAuthenticationContent('Your OTP is {{code}}.'), true);
+  assert.equal(looksLikeAuthenticationContent('Use one-time password {{code}} to sign in.'), true);
+  assert.equal(looksLikeAuthenticationContent('Your security code: {{code}}'), true);
+  assert.equal(looksLikeAuthenticationContent('Here is your passcode: {{code}}'), true);
+});
+
+test('looksLikeAuthenticationContent: does not flag ordinary business copy, including unrelated uses of "code"', () => {
+  assert.equal(looksLikeAuthenticationContent('Hi {{customer_name}}, your order has shipped.'), false);
+  assert.equal(looksLikeAuthenticationContent('Use code {{promo_code}} for 20% off your next order.'), false);
+  assert.equal(looksLikeAuthenticationContent('Your tracking code is {{tracking_id}}.'), false);
+});
+
+test('checkCategoryContentMismatch: warns for OTP-shaped content under Utility/Marketing, never blocks (no "valid" field at all)', () => {
+  const utility = checkCategoryContentMismatch(REAL_REJECTED_OTP_BODY, 'Utility');
+  assert.equal(utility.mismatch, true);
+  assert.match(utility.warning, /Authentication category/);
+  assert.match(utility.warning, /INCORRECT_CATEGORY/);
+
+  const marketing = checkCategoryContentMismatch(REAL_REJECTED_OTP_BODY, 'Marketing');
+  assert.equal(marketing.mismatch, true);
+});
+
+test('checkCategoryContentMismatch: never warns when category is already Authentication', () => {
+  const result = checkCategoryContentMismatch(REAL_REJECTED_OTP_BODY, 'Authentication');
+  assert.equal(result.mismatch, false);
+});
+
+test('checkCategoryContentMismatch: no warning for ordinary content regardless of category', () => {
+  const result = checkCategoryContentMismatch('Hi {{customer_name}}, your order has shipped.', 'Utility');
+  assert.equal(result.mismatch, false);
 });
