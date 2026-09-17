@@ -2106,13 +2106,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('broadcast-detail-title').textContent = meta.title;
 
     const audience = meta.contact_list_id ? 'Contact list' : meta.segment_id ? 'Segment' : (state.tagsById[meta.tag_id]?.name || 'Everyone');
-    document.getElementById('broadcast-detail-meta').innerHTML = [
-      `Template: <strong>${meta.template_name || '—'}</strong>`,
-      `Audience: <strong>${audience}</strong> (${meta.recipient_count})`,
-      `Status: <strong>${meta.status}</strong>`,
-      `Created: <strong>${(meta.created_at || '').toString().slice(0, 16).replace('T', ' ')}</strong>`,
-    ].join(' &middot; ');
+    const metaItems = [
+      { label: 'Template', value: meta.template_name || '—' },
+      { label: 'Audience', value: `${audience} (${meta.recipient_count.toLocaleString()})` },
+      { label: 'Status', value: meta.status },
+      { label: 'Created', value: (meta.created_at || '').toString().slice(0, 16).replace('T', ' ') || '—' },
+    ];
+    document.getElementById('broadcast-detail-meta').innerHTML = metaItems.map((item) => `
+      <div class="broadcast-meta-item">
+        <div class="broadcast-meta-label">${item.label}</div>
+        <div class="broadcast-meta-value" title="${item.value}">${item.value}</div>
+      </div>
+    `).join('');
 
+    // Layout/spacing only follows the AiSensy reference (large percentage,
+    // count beneath, a plain horizontal row) — colors stay this app's own
+    // neutral card style (--color-heading/--text-muted/--border-light),
+    // never the reference's own palette.
     const total = meta.recipient_count || 0;
     const pct = (n) => (total > 0 ? `${Math.round((n / total) * 1000) / 10}%` : '0%');
     const buckets = [
@@ -2122,26 +2132,19 @@ document.addEventListener('DOMContentLoaded', () => {
       { key: 'failed', label: 'Failed', count: meta.failed_count },
       { key: 'skipped', label: 'Skipped', count: meta.skipped_count },
     ];
+    if (meta.pending_count > 0) {
+      buckets.unshift({ key: 'pending', label: 'Pending', count: meta.pending_count });
+    }
     document.getElementById('broadcast-detail-strip').innerHTML = buckets.map((b) => {
-      const color = BROADCAST_STATUS_COLORS[b.key];
       const title = b.note ? ` title="${b.note.replace(/"/g, '&quot;')}"` : '';
       return `
-        <div style="background:${color.bg}; color:${color.fg}; border-radius:10px; padding:8px 12px; min-width:90px;"${title}>
-          <div style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">${b.label}</div>
-          <div style="font-size:1.1rem; font-weight:700;">${pct(b.count)}</div>
-          <div style="font-size:0.72rem;">${b.count.toLocaleString()}</div>
+        <div class="broadcast-stat-block"${title}>
+          <div class="broadcast-stat-label">${b.label}</div>
+          <div class="broadcast-stat-value">${pct(b.count)}</div>
+          <div class="broadcast-stat-count">${b.count.toLocaleString()}</div>
         </div>
       `;
     }).join('');
-    if (meta.pending_count > 0) {
-      document.getElementById('broadcast-detail-strip').innerHTML += `
-        <div style="background:${BROADCAST_STATUS_COLORS.pending.bg}; color:${BROADCAST_STATUS_COLORS.pending.fg}; border-radius:10px; padding:8px 12px; min-width:90px;">
-          <div style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Pending</div>
-          <div style="font-size:1.1rem; font-weight:700;">${pct(meta.pending_count)}</div>
-          <div style="font-size:0.72rem;">${meta.pending_count.toLocaleString()}</div>
-        </div>
-      `;
-    }
 
     renderBroadcastDetailRecipients();
   }
@@ -2158,11 +2161,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const tbody = document.getElementById('broadcast-detail-recipients-body');
     const emptyEl = document.getElementById('broadcast-detail-empty');
+    const card = document.querySelector('.broadcast-recipients-card .modal-inner-scroll');
     if (rows.length === 0) {
       tbody.innerHTML = '';
+      if (card) card.style.display = 'none';
       emptyEl.style.display = 'block';
       return;
     }
+    if (card) card.style.display = '';
     emptyEl.style.display = 'none';
     tbody.innerHTML = rows.map((r) => {
       const color = BROADCAST_STATUS_COLORS[r.status] || BROADCAST_STATUS_COLORS.pending;
@@ -2175,7 +2181,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${r.phone || '—'}</td>
           <td><span class="status-badge" style="background:${color.bg}; color:${color.fg};">${label}</span></td>
           <td>${when}</td>
-          <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${reason}</td>
+          <td class="broadcast-recipient-reason">${reason}</td>
         </tr>
       `;
     }).join('');

@@ -1684,6 +1684,152 @@ body {
   max-width: 640px;
 }
 
+/* PLAN.md item 28 — the broadcast detail view has real width pressure
+   .modal-box-wide's 640px doesn't have: a 5-column recipient table, a
+   metadata grid, and a row of stat blocks all need more room than a form
+   modal does. 900px matches this app's own existing tablet breakpoint value
+   (breakpoints.css), not an arbitrary number. */
+.modal-box-xwide {
+  max-width: 900px;
+}
+
+/* --- Broadcast detail view (PLAN.md item 28) ---
+   Visual-only components: a metadata card (label-above-value, like a real
+   summary panel instead of a dense middot-separated line), a horizontal row
+   of stat blocks (large percentage, count beneath — same shape as the
+   Dashboard's .stat-card, without the icon), and a properly spaced
+   recipient table. Colors stay this app's own palette (--color-heading/
+   --text-muted/--border-light/--shadow-sm) rather than any per-bucket tint —
+   only the layout/spacing follows the reference. */
+.broadcast-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.broadcast-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.broadcast-meta-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.broadcast-meta-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.broadcast-stat-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.broadcast-stat-block {
+  flex: 1 1 130px;
+  min-width: 120px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.broadcast-stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.broadcast-stat-value {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--color-heading);
+  line-height: 1.1;
+}
+
+.broadcast-stat-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.broadcast-detail-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.1rem;
+  flex-wrap: wrap;
+}
+
+.broadcast-detail-status-filter {
+  width: auto;
+  min-width: 150px;
+}
+
+.broadcast-detail-search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.broadcast-detail-export-btn {
+  width: auto;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.broadcast-recipients-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.broadcast-recipients-table th:first-child,
+.broadcast-recipients-table td:first-child {
+  padding-left: 20px;
+}
+
+.broadcast-recipients-table th:last-child,
+.broadcast-recipients-table td:last-child {
+  padding-right: 20px;
+}
+
+.broadcast-recipient-reason {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.broadcast-detail-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 28px 20px;
+  text-align: center;
+}
+
 .form-hint {
   font-size: 0.75rem;
   color: var(--text-muted);

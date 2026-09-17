@@ -1614,15 +1614,18 @@
        export hits the server-side status filter, since that one genuinely
        needs a server round trip regardless. -->
   <div id="modal-broadcast-detail" class="modal-overlay">
-    <div class="modal-box modal-box-wide">
+    <div class="modal-box modal-box-xwide">
       <div class="modal-header">
         <h3 class="modal-title" id="broadcast-detail-title">Campaign</h3>
         <button class="close-modal-btn" data-close-modal="modal-broadcast-detail"><i data-lucide="x"></i></button>
       </div>
-      <div id="broadcast-detail-meta" style="font-size:0.8rem; color:var(--text-muted); margin:-8px 0 14px;"></div>
-      <div id="broadcast-detail-strip" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;"></div>
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-        <select id="broadcast-detail-status-filter" class="form-input" style="width:auto; font-size:0.8rem;">
+
+      <div id="broadcast-detail-meta" class="broadcast-meta-grid"></div>
+
+      <div id="broadcast-detail-strip" class="broadcast-stat-row"></div>
+
+      <div class="broadcast-detail-toolbar">
+        <select id="broadcast-detail-status-filter" class="form-input broadcast-detail-status-filter">
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="sent">Sent</option>
@@ -1631,23 +1634,26 @@
           <option value="failed">Failed</option>
           <option value="skipped">Skipped</option>
         </select>
-        <input type="text" id="broadcast-detail-search" class="form-input" placeholder="Search name or phone…" style="flex:1; min-width:160px; font-size:0.8rem;" />
-        <button type="button" class="btn-secondary" id="broadcast-detail-export-btn" style="width:auto; padding:0 12px; font-size:0.78rem; white-space:nowrap;">Export failed (CSV)</button>
+        <input type="text" id="broadcast-detail-search" class="form-input broadcast-detail-search" placeholder="Search name or phone…" />
+        <button type="button" class="btn-secondary broadcast-detail-export-btn" id="broadcast-detail-export-btn">Export failed (CSV)</button>
       </div>
-      <div class="modal-inner-scroll" style="--modal-inner-scroll-height: 360px;">
-        <table class="data-table" style="width:100%; font-size:0.8rem;">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th>When</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody id="broadcast-detail-recipients-body"></tbody>
-        </table>
-        <div id="broadcast-detail-empty" style="display:none; color:var(--text-muted); font-size:0.85rem; padding:12px 0;">No recipients match this filter.</div>
+
+      <div class="broadcast-recipients-card">
+        <div class="modal-inner-scroll" style="--modal-inner-scroll-height: 420px;">
+          <table class="data-table broadcast-recipients-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>When</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="broadcast-detail-recipients-body"></tbody>
+          </table>
+          <div id="broadcast-detail-empty" class="broadcast-detail-empty">No recipients match this filter.</div>
+        </div>
       </div>
     </div>
   </div>
