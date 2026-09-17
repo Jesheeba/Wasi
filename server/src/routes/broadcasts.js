@@ -3,6 +3,8 @@ const broadcastsRepo = require('../repositories/broadcastsRepo');
 const broadcastRecipientsRepo = require('../repositories/broadcastRecipientsRepo');
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const contactSegmentsRepo = require('../repositories/contactSegmentsRepo');
+const wabasRepo = require('../repositories/wabasRepo');
+const metaClient = require('../utils/metaClient');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, broadcastCreateSchema } = require('../utils/validate');
 const { extractPlaceholders } = require('../utils/templateParams');
@@ -10,6 +12,57 @@ const { requireRole } = require('../middleware/requireRole');
 const { compileFilter, UnknownAttributeError, InvalidConditionError, SEGMENT_QUERY_TIMEOUT_MS } = require('../utils/segmentFilter');
 
 const router = Router();
+
+// Real data, not a fabricated dedup count: distinct conversation THREADS
+// this client has actually messaged (outbound) in the last rolling 24h.
+// Counts distinct chat_id, not contact_id — a chats row's contact_id is
+// nullable (a chat doesn't require a linked contacts row), and
+// COUNT(DISTINCT contact_id) silently ignores NULLs, which would undercount
+// (or zero out) any chat never linked to a contact. chat_id already
+// uniquely identifies one conversation thread regardless of that linkage,
+// so it needs no join to chats at all. Deliberately an APPROXIMATION of
+// Meta's own conversation-billing count, not an exact match — it doesn't
+// replicate Meta's marketing/service conversation-window dedup rules, just
+// counts real sends. Documented as such everywhere this number is surfaced
+// (see tierWarning below and the /tier-status route), matching this
+// codebase's own established discipline (see routes/analytics.js's
+// cost-estimate endpoint) of never claiming precision the app doesn't have.
+async function usedConversationsLast24h(db, clientId) {
+  const { rows } = await db.query(
+    `select count(distinct chat_id)::int as used
+     from messages
+     where client_id = $1 and direction = 'out' and sent_at >= now() - interval '24 hours'`,
+    [clientId]
+  );
+  return rows[0].used;
+}
+
+// Shared by the /tier-status route (called when the New Campaign modal
+// opens, before any audience is even picked) and the POST / preflight
+// warning below (once the real audience size is known) — same numbers,
+// two different callers.
+async function computeTierStatus(db, clientId) {
+  const waba = await wabasRepo.findByClientId(clientId);
+  const tier = waba?.messaging_tier || null;
+  const cap = tier ? metaClient.messagingTierCap(tier) : null;
+  if (!tier || cap === null) {
+    // Unknown tier (never checked, or Meta returned something this app
+    // doesn't recognize) — never claim a limit we don't actually know.
+    return { tier, unlimited: false, capNumber: null, usedToday: null, remaining: null, tierCheckedAt: waba?.messaging_tier_checked_at || null };
+  }
+  const unlimited = cap === Infinity;
+  // JSON can't carry Infinity (JSON.stringify(Infinity) === "null"), so
+  // capNumber/remaining stay null for the unlimited case too — `unlimited`
+  // is the field that disambiguates "no numeric cap because unlimited" from
+  // "no numeric cap because unknown" for every caller.
+  const usedToday = await usedConversationsLast24h(db, clientId);
+  const remaining = unlimited ? null : Math.max(0, cap - usedToday);
+  return { tier, unlimited, capNumber: unlimited ? null : cap, usedToday, remaining, tierCheckedAt: waba.messaging_tier_checked_at };
+}
+
+router.get('/tier-status', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  res.json(await computeTierStatus(req.db, req.clientId));
+}));
 
 router.get('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   res.json(await broadcastsRepo.list(req.db, req.clientId));
@@ -128,10 +181,28 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
     }
   }
 
+  // Real-time messaging-tier preflight warning (CLAUDE.md Known Gaps —
+  // "real-time Meta tier detection was deliberately not built" until now).
+  // Warn-only, same non-blocking pattern as consentWarning above: never
+  // blocks broadcast creation, since (a) the tier is often unknown until
+  // first checked and blocking on unknown data would be fabricating a limit
+  // this app doesn't actually know, and (b) there's no rollback path for the
+  // broadcast/recipient rows already created above. Computed here, not
+  // before creation, specifically so it needs zero new audience-count
+  // queries — recipients.length is already known.
+  let tierWarning = null;
+  if (recipients.length > 0) {
+    const tierStatus = await computeTierStatus(req.db, req.clientId);
+    if (tierStatus.remaining !== null && recipients.length > tierStatus.remaining) {
+      const capLabel = tierStatus.capNumber !== null ? `${tierStatus.capNumber.toLocaleString()} conversations/24h` : 'an unlimited cap';
+      tierWarning = `Your account's messaging tier (${tierStatus.tier}, ${capLabel}) has ~${tierStatus.remaining.toLocaleString()} remaining today — this broadcast's ${recipients.length.toLocaleString()} recipients may exceed it, and some sends could be rejected by WhatsApp. This is an estimate based on this app's own send history, not a live count from Meta.`;
+    }
+  }
+
   // broadcastRunner.js (started in index.js) picks up 'Sending' broadcasts'
   // pending recipients on its next tick — no synchronous send here, so this
   // returns immediately even for a large audience.
-  res.status(201).json({ ...broadcast, recipient_count: recipients.length, consentWarning });
+  res.status(201).json({ ...broadcast, recipient_count: recipients.length, consentWarning, tierWarning });
 }));
 
 // PLAN.md item 11 — no schema change: broadcasts.status is plain text with

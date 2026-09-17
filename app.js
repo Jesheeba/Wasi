@@ -3376,6 +3376,31 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('campaign-audience-segment-section').style.display = isSegment ? '' : 'none';
   }
 
+  // Real-time messaging-tier status (build plan: broadcast preflight
+  // warning) — shown once when the modal opens, before any audience is even
+  // picked, so a client sees "how much room is left today" up front rather
+  // than only after Launch. Deliberately not a hard stop; see
+  // routes/broadcasts.js's own comment on why this stays a warning only.
+  async function loadCampaignTierStatus() {
+    const el = document.getElementById('campaign-tier-status');
+    if (!el) return;
+    el.textContent = '';
+    try {
+      const status = await authFetch('/api/broadcasts/tier-status');
+      if (!status.tier) {
+        el.textContent = 'Messaging tier not checked yet — ask an admin to refresh it before a large campaign.';
+        return;
+      }
+      if (status.unlimited) {
+        el.textContent = `Messaging tier: ${status.tier} — no daily cap.`;
+        return;
+      }
+      el.textContent = `Messaging tier: ${status.tier} (${status.capNumber.toLocaleString()} conversations/24h) — ~${status.remaining.toLocaleString()} remaining today. Estimate based on this app's own send history, not a live Meta count.`;
+    } catch (err) {
+      el.textContent = '';
+    }
+  }
+
   document.getElementById('open-create-broadcast-modal')?.addEventListener('click', async () => {
     populateTagSelect(document.getElementById('new-campaign-tag'));
     populateTemplateSelect(document.getElementById('new-campaign-template'));
@@ -3396,6 +3421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await updateNewCampaignMediaField();
     renderNewCampaignParamMappings();
     document.getElementById('modal-create-campaign')?.classList.add('open');
+    loadCampaignTierStatus();
 
     try {
       campaignContactLists = await authFetch('/api/contact-lists');
@@ -3736,6 +3762,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (created?.consentWarning) {
         showToast(created.consentWarning);
       }
+      if (created?.tierWarning) {
+        showToast(created.tierWarning);
+      }
     } catch (err) {
       showToast(extractApiErrorDetail(err) || err.message);
     }
@@ -3895,6 +3924,18 @@ document.addEventListener('DOMContentLoaded', () => {
         errors.push(`Sample value required for: ${missing.join(', ')} — Meta rejects templates without one.`);
         hasBlockingError = true;
       }
+    }
+
+    // A real, previously-rejected pattern (see templateParams.js's own
+    // comment) — an OTP/verification-code message submitted under the
+    // wrong category. Same non-blocking treatment as the ratio rule above:
+    // this is a phrase-based heuristic, a false positive is possible (e.g.
+    // a legitimate template mentioning an unrelated "code"), so it warns
+    // and lets the author decide rather than refusing to let them submit.
+    const category = document.getElementById('new-template-category')?.value;
+    const categoryCheck = window.templateParams.checkCategoryContentMismatch(field.value, category);
+    if (categoryCheck.mismatch) {
+      errors.push(categoryCheck.warning);
     }
 
     warning.style.display = errors.length ? '' : 'none';
@@ -4311,7 +4352,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       try {
-        await authFetch(`/api/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        const result = await authFetch(`/api/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(payload) });
         await refreshTemplates();
         renderTemplates();
         e.target.reset();
@@ -4320,7 +4361,10 @@ document.addEventListener('DOMContentLoaded', () => {
         resetTemplateModalToCreateMode();
         syncTemplateFormUI();
         document.getElementById('modal-create-template')?.classList.remove('open');
-        showToast('Template updated and resubmitted to Meta for review.');
+        // Same category/content-mismatch signal the live warning above
+        // already showed — surfaced again here for whoever submitted
+        // despite it (or via a path that skipped the live check).
+        showToast(result?.warnings?.[0] || 'Template updated and resubmitted to Meta for review.');
       } catch (err) {
         showToast(extractApiErrorDetail(err) || err.message);
       }
@@ -4387,7 +4431,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return form;
           })()
         : JSON.stringify(payload);
-      await authFetch('/api/templates', {
+      const result = await authFetch('/api/templates', {
         method: 'POST',
         body: requestBody
       });
@@ -4398,6 +4442,10 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTemplateButtonsList();
       syncTemplateFormUI();
       document.getElementById('modal-create-template')?.classList.remove('open');
+      // Same category/content-mismatch signal the live warning above
+      // already showed — surfaced again here for whoever submitted
+      // despite it (or via a path that skipped the live check).
+      if (result?.warnings?.[0]) showToast(result.warnings[0]);
     } catch (err) {
       showToast(extractApiErrorDetail(err) || err.message);
     }

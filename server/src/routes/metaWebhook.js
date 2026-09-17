@@ -383,9 +383,21 @@ async function handleAccountUpdate(waba, value) {
     : value.ban_info
       ? JSON.stringify(value.ban_info)
       : null;
+  // messaging_limit_tier: unlike restriction_info/ban_info above, this field
+  // name IS documented in Meta's public Cloud API reference (see
+  // metaClient.js's getPhoneNumberDetails comment) — but whether Meta
+  // actually includes it in a real account_update payload (vs. only on a
+  // direct phone-number GET) has never been confirmed live, so it's read
+  // defensively (present -> stored, absent -> left alone) same as every
+  // other unconfirmed field in this handler; the raw value is already
+  // captured to audit log unconditionally below regardless.
+  const tier = typeof value.messaging_limit_tier === 'string' && value.messaging_limit_tier ? value.messaging_limit_tier : null;
   await pool.query(
-    `update wabas set quality_rating = coalesce($1, quality_rating), restriction_status = $2 where id = $3`,
-    [value.quality_rating || null, restriction, waba.id]
+    `update wabas set quality_rating = coalesce($1, quality_rating), restriction_status = $2,
+     messaging_tier = coalesce($3, messaging_tier),
+     messaging_tier_checked_at = case when $3 is not null then now() else messaging_tier_checked_at end
+     where id = $4`,
+    [value.quality_rating || null, restriction, tier, waba.id]
   );
   await auditLogRepo.record({
     actor_type: 'meta_webhook',

@@ -164,8 +164,37 @@ async function registerPhoneNumber(phoneNumberId, accessToken, pin) {
   });
 }
 
+// messaging_limit_tier added 2026-09-16 for real-time tier detection (see
+// CLAUDE.md's Known Gaps / messagingTierRefreshRunner.js). This field IS
+// documented in Meta's own public Cloud API reference (phone-number
+// resource, values TIER_50/TIER_250/TIER_1K/TIER_10K/TIER_100K/
+// TIER_UNLIMITED), but — following this codebase's own repeated rule not to
+// trust an unconfirmed Meta shape (see metaWebhook.js's handleUnmappedWabaEvent
+// history) — callers must still treat an absent/unexpected value as unknown,
+// never assume it's always present. Not yet verified against a live
+// response from this session (local dev can't decrypt a real production
+// WABA token — see CLAUDE.md's SERVER_SECRET Known Gap); the deployed
+// server or a fresh local WABA connection is needed for that.
 async function getPhoneNumberDetails(phoneNumberId, accessToken) {
-  return graphFetch(`/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`, { accessToken });
+  return graphFetch(`/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier`, { accessToken });
+}
+
+// Meta's documented tier values -> the real numeric 24h unique-conversation
+// cap they represent. Anything not in this map (null, a future tier value
+// Meta adds, or a genuinely malformed response) returns null — "unknown,"
+// never guessed or defaulted to a number. Infinity for TIER_UNLIMITED is
+// deliberate: callers comparing `audienceSize > cap - used` need arithmetic
+// that never fires a false warning for an unlimited-tier account.
+const MESSAGING_TIER_CAPS = {
+  TIER_50: 50,
+  TIER_250: 250,
+  TIER_1K: 1000,
+  TIER_10K: 10000,
+  TIER_100K: 100000,
+  TIER_UNLIMITED: Infinity,
+};
+function messagingTierCap(tierValue) {
+  return Object.prototype.hasOwnProperty.call(MESSAGING_TIER_CAPS, tierValue) ? MESSAGING_TIER_CAPS[tierValue] : null;
 }
 
 // profile_picture_url here is a Meta-hosted CDN link for DISPLAY only —
@@ -785,6 +814,7 @@ module.exports = {
   subscribeAppToWaba,
   registerPhoneNumber,
   getPhoneNumberDetails,
+  messagingTierCap,
   getBusinessProfile,
   updateBusinessProfile,
   createUploadSession,

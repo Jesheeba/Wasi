@@ -909,10 +909,16 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       <div class="detail-row"><span class="detail-row-label">Display Name</span><span class="detail-row-value">${escapeHtml(waba.display_name || '—')}</span></div>
       <div class="detail-row"><span class="detail-row-label">Quality Rating</span><span class="detail-row-value">${escapeHtml(waba.quality_rating || '—')}</span></div>
       <div class="detail-row"><span class="detail-row-label">Status</span><span class="detail-row-value">${statusBadge(waba.status)}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Messaging Tier</span><span class="detail-row-value">${waba.messaging_tier ? statusBadge(waba.messaging_tier.toLowerCase()) : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>'}</span></div>
+      ${waba.messaging_tier_checked_at ? `<div class="detail-row"><span class="detail-row-label">Tier Checked</span><span class="detail-row-value">${formatDate(waba.messaging_tier_checked_at)}</span></div>` : ''}
       <div class="detail-row"><span class="detail-row-label">Verified At</span><span class="detail-row-value">${formatDate(waba.verified_at)}</span></div>
       <div id="retry-provisioning-result"></div>
       <button class="btn-secondary btn-sm" id="retry-provisioning-btn" style="margin-top:0.75rem; width:100%; justify-content:center;">
         <i data-lucide="refresh-cw" style="width:14px;"></i> Retry Provisioning
+      </button>
+      <div id="refresh-messaging-tier-result"></div>
+      <button class="btn-secondary btn-sm" id="refresh-messaging-tier-btn" style="margin-top:0.5rem; width:100%; justify-content:center;">
+        <i data-lucide="gauge" style="width:14px;"></i> Refresh Messaging Tier
       </button>
 
       <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
@@ -1059,6 +1065,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   // states (see renderWabaResolutionHtml/wabaHtml above) — optional-chained
   // rather than assumed present, unlike the other buttons on this page.
   document.getElementById('retry-provisioning-btn')?.addEventListener('click', () => retryProvisioning(client.id));
+  document.getElementById('refresh-messaging-tier-btn')?.addEventListener('click', () => refreshMessagingTier(client.id));
   document.getElementById('delete-client-btn').addEventListener('click', () => confirmDeleteClient(client));
   document.getElementById('reset-client-password-btn').addEventListener('click', () => confirmResetClientPassword(client));
   const hubForwardBtn = document.getElementById('hub-forward-save-btn');
@@ -1283,6 +1290,42 @@ async function resolveWaba(clientId) {
     const explanation = (err.data && err.data.detail) ? `${err.message}: ${err.data.detail}` : err.message;
     resultEl.innerHTML = `<div class="inline-error" style="margin-top:0.75rem; margin-bottom:0;">${escapeHtml(explanation)}</div>`;
     showToast('Failed to resolve: ' + explanation, 'error');
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function refreshMessagingTier(clientId) {
+  const btn = document.getElementById('refresh-messaging-tier-btn');
+  const resultEl = document.getElementById('refresh-messaging-tier-result');
+  resultEl.innerHTML = '';
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:14px;"></i> Checking…';
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const res = await apiFetch(`/api/admin/clients/${clientId}/refresh-messaging-tier`, { method: 'POST' });
+    resultEl.innerHTML = `<div class="inline-success" style="margin-top:0.75rem; margin-bottom:0;">
+      Messaging tier is now "${escapeHtml(res.waba.messaging_tier || 'unknown')}".
+    </div>`;
+    showToast('Messaging tier refreshed.', 'success');
+    loadClientDetail(clientId);
+  } catch (err) {
+    if (err.status === 401) return;
+    // 400 = no WABA to check, 502 = the call to Meta failed (expected in this
+    // dev environment since no real Meta app is configured). Both are normal
+    // UI states, not bugs — same treatment as retryProvisioning below.
+    let explanation = err.message;
+    if (err.status === 502) {
+      explanation = `Tier check failed when calling Meta: ${err.data && err.data.detail ? err.data.detail : err.message}. This is expected in this environment — no real Meta app is configured (see server/.env.example).`;
+    } else if (err.status === 400) {
+      explanation = err.message;
+    }
+    resultEl.innerHTML = `<div class="inline-warning" style="margin-top:0.75rem; margin-bottom:0;">${escapeHtml(explanation)}</div>`;
+    showToast('Messaging tier check did not succeed — see details below.', 'error');
+  } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
     if (window.lucide) lucide.createIcons();

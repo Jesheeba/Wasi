@@ -13,6 +13,7 @@ const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRe
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
+const messagingTierRefreshRunner = require('../services/messagingTierRefreshRunner');
 const metaClient = require('../utils/metaClient');
 const { completeWabaConnection } = require('../services/wabaConnectionService');
 const { decrypt } = require('../utils/encryption');
@@ -142,6 +143,23 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
   } catch (err) {
     res.status(502).json({ error: 'Retry failed', detail: err.message });
   }
+}));
+
+// --- Manual refresh: pull the real messaging tier from Meta right now ---
+router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const waba = await wabasRepo.findByClientId(id);
+  if (!waba || !waba.access_token_encrypted) {
+    return res.status(400).json({ error: 'No WhatsApp connection to check — client must complete Embedded Signup first' });
+  }
+
+  const result = await messagingTierRefreshRunner.refreshOne(waba);
+  if (!result.ok) {
+    return res.status(502).json({ error: 'Messaging tier check failed', detail: result.reason });
+  }
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'messaging_tier_refreshed', target: `${id}: ${result.tier}` });
+  const updated = await wabasRepo.findByClientId(id);
+  res.json({ refreshed: true, waba: maskWaba(updated) });
 }));
 
 // --- Resolve a needs_manual_resolution WABA (PLAN.md item 25, Part A) ---
@@ -486,16 +504,17 @@ router.get('/clients-overview', asyncHandler(async (req, res) => {
 }));
 
 // --- Health per client: quality rating, restriction status, last successful
-// webhook, forwarding failure count. The daily-check screen. Messaging tier is
-// deliberately absent — Meta's field/shape for it hasn't been confirmed
-// against a live payload (same honesty standard metaWebhook.js's own
-// handleUnmappedWabaEvent already uses), so it ships as "not yet available"
-// rather than a guessed field that might silently never populate. ---
+// webhook, forwarding failure count, messaging tier. The daily-check screen.
+// messaging_tier/messaging_tier_checked_at now come from the real column
+// (see messagingTierRefreshRunner.js) — 'unknown' means Meta was checked but
+// didn't return the field, null means never checked yet; still never a
+// guessed value. ---
 router.get('/health', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select c.id as client_id, c.name as client_name, c.tenant_slug,
            w.id as waba_row_id, w.waba_id, w.status as waba_status,
            w.quality_rating, w.restriction_status,
+           w.messaging_tier, w.messaging_tier_checked_at,
            (select max(received_at) from meta_webhook_log
              where success = true and w.id = any(waba_ids_touched)) as last_successful_webhook_at,
            (select count(*)::int from webhook_deliveries wd
@@ -504,7 +523,7 @@ router.get('/health', asyncHandler(async (req, res) => {
     join wabas w on w.client_id = c.id
     order by c.name asc
   `);
-  res.json(rows.map((r) => ({ ...r, messaging_tier: null })));
+  res.json(rows);
 }));
 
 // --- Volume: sends per client per day ---

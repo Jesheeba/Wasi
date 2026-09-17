@@ -15,6 +15,7 @@
 const { pool } = require('../db/pool');
 const alertEventsRepo = require('../repositories/alertEventsRepo');
 const alertNotifier = require('../services/alertNotifier');
+const metaClient = require('../utils/metaClient');
 
 const TICK_MS = 5 * 60 * 1000;
 const FAILED_SEND_SPIKE_THRESHOLD = 10;
@@ -114,14 +115,38 @@ async function checkQualityRating() {
   }));
 }
 
-// TODO(messaging-tier): confirm the real Graph API field name against a
-// live connected WABA before implementing this fetch — do not guess from
-// the reference spec, which doesn't give a verified field name either.
-// Follow this codebase's own established practice (see CLAUDE.md's Meta
-// Official Template Library history: "real Phase 0 API research, not
-// assumed"). wabas.messaging_tier (migration 053) exists and is nullable,
-// waiting on this — no fetch/populate code written yet, deliberately, per
-// PLAN.md item 13's own scope.
+// 4b. Messaging tier near capacity. The fetch/populate work this file's own
+// TODO used to point to now lives in services/messagingTierRefreshRunner.js
+// (a fetch+persist job doesn't fit this file's pure check-then-alert shape —
+// see that file's header comment for the reasoning). This check only reads
+// what that runner has already written to wabas.messaging_tier — skips any
+// waba with an unknown tier ('unknown'/null, never checked or Meta didn't
+// return it) or TIER_UNLIMITED entirely, never fabricating urgency against a
+// limit this app doesn't actually know.
+const TIER_NEAR_CAPACITY_THRESHOLD = 0.9;
+async function checkTierNearCapacity() {
+  const { rows } = await pool.query(`
+    select w.id as waba_row_id, w.waba_id, w.messaging_tier, c.name as client_name,
+      (select count(distinct m.chat_id)::int from messages m
+       where m.client_id = c.id and m.direction = 'out' and m.sent_at >= now() - interval '24 hours') as used_today
+    from wabas w join clients c on c.id = w.client_id
+    where w.status = 'connected' and w.messaging_tier is not null and w.messaging_tier != 'unknown'
+  `);
+  const alerts = [];
+  for (const r of rows) {
+    const cap = metaClient.messagingTierCap(r.messaging_tier);
+    if (cap === null || cap === Infinity) continue;
+    if (r.used_today >= cap * TIER_NEAR_CAPACITY_THRESHOLD) {
+      alerts.push({
+        dedupKey: r.waba_row_id,
+        severity: 'warning',
+        message: `${r.client_name}'s WABA (${r.waba_id}) has used ~${r.used_today} of its ${r.messaging_tier} tier's ${cap} conversations/24h — nearing capacity.`,
+        details: r,
+      });
+    }
+  }
+  return alerts;
+}
 
 // 5. Any template paused or disabled.
 async function checkTemplatesPausedOrDisabled() {
@@ -231,6 +256,7 @@ async function tick() {
     await reconcile('sustained_failures', await checkSustainedFailures());
     await reconcile('waba_restriction', await checkWabaRestrictions());
     await reconcile('quality_rating', await checkQualityRating());
+    await reconcile('tier_near_capacity', await checkTierNearCapacity());
     await reconcile('template_paused_disabled', await checkTemplatesPausedOrDisabled());
     await reconcile('webhook_delivery_failures', await checkWebhookDeliveryFailures());
     await reconcile('failed_send_spike', await checkFailedSendSpike());
