@@ -427,6 +427,19 @@ function buildNamedBodyComponents(paramValues) {
   }];
 }
 
+// Builds the `components` array for sending an AUTHENTICATION (copy-code OTP)
+// template. Meta wants the code twice: as the BODY's single positional
+// parameter (no `parameter_name` — Meta writes that body itself, so there is
+// no author-chosen name) and as the OTP button's url parameter at index 0.
+// Leaving out the button parameter gets the send rejected by Meta.
+function buildAuthenticationSendComponents(code) {
+  const text = String(code);
+  return [
+    { type: 'body', parameters: [{ type: 'text', text }] },
+    { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text }] },
+  ];
+}
+
 // Same shape as buildNamedBodyComponents, for a template's HEADER — Meta
 // caps a text header at one named parameter (see templateParams.js's
 // validateHeaderText), but this doesn't re-enforce that; it just builds
@@ -828,6 +841,7 @@ module.exports = {
   sendTemplateMessage,
   buildNamedHeaderComponents,
   buildNamedBodyComponents,
+  buildAuthenticationSendComponents,
   buildTemplateCreatePayload,
   createMessageTemplate,
   updateMessageTemplate,

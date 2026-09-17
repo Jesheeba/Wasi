@@ -65,6 +65,7 @@ router.post('/', asyncHandler(async (req, res) => {
   // closing — a client with a missing/unsynced template should sync it
   // first (POST /api/templates/sync), not have this endpoint guess for them.
   let templateLanguage;
+  let templateComponents = [];
   if (data.type === 'template') {
     const template = await messageTemplatesRepo.findByNameAndClient(pool, req.clientId, data.template);
     if (!template) {
@@ -72,6 +73,22 @@ router.post('/', asyncHandler(async (req, res) => {
         `No local record of template "${data.template}" — sync templates (POST /api/templates/sync) so its real approved language can be resolved, then retry.`);
     }
     templateLanguage = template.language;
+
+    // Authentication (OTP) templates can't go through the named-body builder:
+    // Meta generates their body itself with one positional {{1}}, and rejects
+    // the send unless the same code is ALSO passed to the copy-code button.
+    // The caller passes the code as the template's single param, e.g.
+    // `params: { "1": "482913" }` — whatever the key, its one value is the code.
+    if (template.category === 'Authentication') {
+      const values = Object.values(data.params || {});
+      if (values.length !== 1 || String(values[0]).trim() === '') {
+        return sendApiError(res, 400, 'otp_code_required',
+          `Template "${data.template}" is an Authentication template — pass the one-time code as its single param, e.g. "params": { "1": "123456" }.`);
+      }
+      templateComponents = metaClient.buildAuthenticationSendComponents(values[0]);
+    } else {
+      templateComponents = metaClient.buildNamedBodyComponents(data.params);
+    }
   }
 
   try {
@@ -80,7 +97,7 @@ router.post('/', asyncHandler(async (req, res) => {
       body: data.body,
       templateName: data.template,
       templateLanguage,
-      templateComponents: data.type === 'template' ? metaClient.buildNamedBodyComponents(data.params) : [],
+      templateComponents,
       headerMediaUrl: data.headerMediaUrl,
       // interactive (type: 'interactive') only — buttons routes through
       // sendChatMessage -> metaClient.sendInteractiveMessage, the same path

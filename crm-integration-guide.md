@@ -57,6 +57,10 @@ curl -X POST https://<wasi-host>/api/v1/messages \
 
 - `type: "template"` — required outside the 24-hour customer-service
   window. Requires an **approved** template (see below).
+- **Authentication (OTP) templates** — pass the one-time code as the single
+  param, e.g. `"params": { "1": "482913" }`. Wasi puts it in both the body
+  and the copy-code button, which Meta requires. A missing code, or more
+  than one param, is rejected with `400 otp_code_required`.
 - `headerMediaUrl` (only for a template whose header is IMAGE/VIDEO/DOCUMENT)
   — a public `https://` URL to *your* file for this one send (e.g. an
   invoice PDF you generated for this order). Wasi fetches it, uploads it to
