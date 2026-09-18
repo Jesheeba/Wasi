@@ -171,8 +171,21 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
       });
     }
   } catch (err) {
+    console.error(
+      `messagingService.sendChatMessage: send failed — client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
+      err.metaError || err.message
+    );
     if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
-    await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code);
+    await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code, err.metaError?.error_subcode);
+    // Commits the failure write right here, on this connection, before
+    // returning control to the route — NOT left for the response's own
+    // finalize(res.statusCode < 500) to decide. A 502 for a "send_failed"
+    // MessagingError is exactly what that blanket rule reads as an aborted
+    // transaction and rolls back, which is what silently discarded this
+    // exact write in production (bug found 18 Sep 2026, present since
+    // b9affd5): the row stayed 'pending' forever with meta_error_code null,
+    // even though this line had already run and returned successfully.
+    if (connectionHooks.release) await connectionHooks.release();
     const sendError = new MessagingError(err.message, 'send_failed');
     // Carries Meta's raw error object through, if this failure came from a
     // real Graph API rejection (see metaClient.js's graphFetch) — the hub
@@ -218,9 +231,18 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   try {
     metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
   } catch (err) {
+    console.error(
+      `messagingService.retryMessage: retry failed — client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
+      err.metaError || err.message
+    );
     if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
-    await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code);
-    throw new MessagingError(err.message, 'send_failed');
+    await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code, err.metaError?.error_subcode);
+    // Same commit-before-throw reasoning as sendChatMessage's catch above —
+    // see that comment for the full bug writeup.
+    if (connectionHooks.release) await connectionHooks.release();
+    const sendError = new MessagingError(err.message, 'send_failed');
+    sendError.metaError = err.metaError || null;
+    throw sendError;
   }
 
   if (connectionHooks.reacquire) db = await connectionHooks.reacquire();

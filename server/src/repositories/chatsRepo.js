@@ -167,12 +167,15 @@ async function markSent(db, clientId, messageId, metaMessageId) {
 // metaClient.js's graphFetch, e.g. 190/10 for auth-class errors) — optional
 // since not every failure reaches Meta at all (a plan-limit or consent
 // rejection never makes the API call), same reasoning messagingService.js's
-// sendError.metaError already documents.
-async function markFailed(db, clientId, messageId, errorReason, metaErrorCode) {
+// sendError.metaError already documents. metaErrorSubcode (migration
+// 073_messages_error_subcode.js) is the same story one level deeper — a
+// single code like #200 covers several distinct causes distinguished only
+// by err.metaError?.error_subcode.
+async function markFailed(db, clientId, messageId, errorReason, metaErrorCode, metaErrorSubcode) {
   const { rows } = await db.query(
-    `update messages set status = 'failed', error_reason = $3, meta_error_code = $4
+    `update messages set status = 'failed', error_reason = $3, meta_error_code = $4, meta_error_subcode = $5
      where client_id = $1 and id = $2 returning *`,
-    [clientId, messageId, errorReason, metaErrorCode || null]
+    [clientId, messageId, errorReason, metaErrorCode || null, metaErrorSubcode || null]
   );
   return rows[0] || null;
 }

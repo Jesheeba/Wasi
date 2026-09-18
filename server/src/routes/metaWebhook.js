@@ -306,10 +306,14 @@ async function handleInboundMessages(waba, value) {
       // 072_messages_status_timestamps.js) are dropped for the same reason
       // as error_reason/meta_error_code above — they're stamped by
       // chatsRepo.updateStatusByMetaId on an outbound message's delivery
-      // lifecycle and are always null on an inbound row.
+      // lifecycle and are always null on an inbound row. meta_error_subcode
+      // (073_messages_error_subcode.js) is dropped for the identical reason
+      // as meta_error_code itself — same table, same outbound-only column,
+      // always null here.
       const {
         id, client_id, chat_id: _chatId, meta_message_id, status: _hardcodedStatus,
         direction: _direction, error_reason: _errorReason, meta_error_code: _metaErrorCode,
+        meta_error_subcode: _metaErrorSubcode,
         referral: _referral, delivered_at: _deliveredAt, read_at: _readAt, failed_at: _failedAt,
         ...forwardableMessage
       } = inserted;
