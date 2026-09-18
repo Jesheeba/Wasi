@@ -1,19 +1,18 @@
 // Sendability monitoring, Layers 1 (registration) and 2 (health_status) —
-// built after a real 26-hour undetected outage (TNPSC Mentors, 2026-09-18).
-// See migration 074_wabas_sendability.js and sendabilityMonitorRunner.js's
-// header comments for the full context.
+// INTEGRATION coverage. Built after a real 26-hour undetected outage (TNPSC
+// Mentors, 2026-09-18). See migration 074_wabas_sendability.js and
+// sendabilityMonitorRunner.js's header comments for the full context.
 //
-// The one thing every test here must prove, not just assume: Layer 1 never
-// sets wabas.sendable/sendable_reason/sendable_error_code/sendable_checked_at
-// under any circumstance — is_on_biz_app === false && code_verification_status
-// !== 'VERIFIED' was floated as a "definitely can't send" rule but was never
-// confirmed (TNPSC registered successfully and code_verification_status
-// stayed EXPIRED regardless of whether it could actually send), so an
-// unvalidated heuristic must not be able to override what the send probe
-// (Layer 3, not yet built) will find. Only graph.facebook.com is faked (this
-// codebase's established convention) — everything else runs against the
-// real (shared dev/prod) database via a dedicated disposable test client +
-// WABA, deleted in after().
+// This file needs the real (shared dev/prod) database — it registers and
+// deletes a disposable test client, logs in as the demo admin, and exercises
+// the real HTTP routes end to end (admin's check-sendability route, GET
+// /api/admin/health, the audit_log rows actually landing). Run it
+// deliberately, when you want that coverage — it is not the file that proves
+// the load-bearing "Layer 1 cannot set sendable" constraint; that's
+// sendabilityMonitorRunnerUnit.test.js, which needs no database or network
+// call at all and runs anywhere, any time. This file's own "sendable stays
+// null" assertions are a secondary confirmation that the real HTTP/DB path
+// agrees with the unit-level proof, not the primary proof itself.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');

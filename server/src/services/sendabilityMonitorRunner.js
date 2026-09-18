@@ -27,10 +27,19 @@
 // audit_log entry, not just the admin-triggered manual one — silent failure
 // is what let the TNPSC outage run 26 hours undetected, so this runner does
 // not repeat that specific gap even though its sibling file does.
-const { pool } = require('../db/pool');
 const metaClient = require('../utils/metaClient');
-const auditLogRepo = require('../repositories/auditLogRepo');
 const { decrypt } = require('../utils/encryption');
+
+// pool/auditLogRepo are required LAZILY (inside functions, never at module
+// scope) so this file can be `require`d by a pure unit test — see
+// sendabilityMonitorRunnerUnit.test.js — without transitively loading
+// db/pool.js, whose own module-scope guard (assertNotProductionDatabase)
+// would otherwise throw the moment this file is imported, even for a test
+// that injects stub replacements and never touches the database. Real
+// callers (refreshNow/tick/the admin route) get the exact same real pool/
+// auditLogRepo as before — this changes WHEN they're required, not WHAT.
+function getPool() { return require('../db/pool').pool; }
+function getAuditLogRepo() { return require('../repositories/auditLogRepo'); }
 
 const TICK_MS = 60 * 60 * 1000; // hourly tick, same cadence as messagingTierRefreshRunner
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000; // 4h — see the approved plan's cadence reasoning
@@ -40,13 +49,25 @@ const STALE_AFTER_MS = 4 * 60 * 60 * 1000; // 4h — see the approved plan's cad
 // callable directly by an admin "Check Registration & Health Now" route,
 // bypassing the staleness check, same relationship refreshOne() has to
 // messagingTierRefreshRunner.js's admin-triggered refresh.
-async function refreshOne(waba) {
+//
+// `deps` ({ db, metaClient, auditLogRepo }) lets a test inject stand-ins for
+// all three externals this function touches — the real pool/metaClient/
+// auditLogRepo are used when a dep isn't supplied, so production behavior is
+// byte-for-byte unchanged. This exists specifically so the load-bearing
+// assertion ("Layer 1 cannot set sendable") can be proven with a stubbed
+// repo and a stubbed metaClient — no real database, no real network call,
+// runs anywhere, any time. See sendabilityMonitorRunnerUnit.test.js.
+async function refreshOne(waba, deps = {}) {
   if (!waba?.access_token_encrypted || !waba.phone_number_id) {
     return { ok: false, reason: 'No connected phone number to check.' };
   }
+  const db = deps.db || getPool();
+  const meta = deps.metaClient || metaClient;
+  const audit = deps.auditLogRepo || getAuditLogRepo();
+
   try {
     const accessToken = decrypt(waba.access_token_encrypted);
-    const details = await metaClient.getPhoneNumberDetails(waba.phone_number_id, accessToken);
+    const details = await meta.getPhoneNumberDetails(waba.phone_number_id, accessToken);
     // Logged once per refresh, not stripped after "confirmed" — same
     // diagnostic-logging precedent this codebase used for Embedded Signup
     // and the messaging-tier field before trusting an unconfirmed Meta shape.
@@ -59,7 +80,7 @@ async function refreshOne(waba) {
     const healthStatus = details?.health_status && typeof details.health_status === 'object' ? details.health_status : null;
     const now = new Date().toISOString();
 
-    await pool.query(
+    await db.query(
       `update wabas set
          registration_is_on_biz_app = $1,
          registration_code_verification_status = $2,
@@ -74,7 +95,7 @@ async function refreshOne(waba) {
 
     // Every check leaves a trace, not just the outcome — this is the
     // specific gap that let today's outage run 26 hours unnoticed.
-    await auditLogRepo.record({
+    await audit.record({
       actor_type: 'system',
       actor_id: waba.client_id,
       action: 'sendability_registration_checked',
@@ -87,7 +108,7 @@ async function refreshOne(waba) {
     // Still a trace, even on failure — a check that silently never happened
     // is indistinguishable from "nothing is wrong," which is exactly how
     // today's outage stayed invisible.
-    await auditLogRepo.record({
+    await audit.record({
       actor_type: 'system',
       actor_id: waba.client_id,
       action: 'sendability_registration_check_failed',
@@ -100,7 +121,8 @@ async function refreshOne(waba) {
 }
 
 async function refreshNow() {
-  const { rows } = await pool.query(`select * from wabas where status = 'connected'`);
+  const db = getPool();
+  const { rows } = await db.query(`select * from wabas where status = 'connected'`);
   const results = [];
   for (const waba of rows) {
     results.push({ wabaId: waba.waba_id, ...(await refreshOne(waba)) });
@@ -110,7 +132,8 @@ async function refreshNow() {
 
 async function tick() {
   try {
-    const { rows } = await pool.query(
+    const db = getPool();
+    const { rows } = await db.query(
       `select * from wabas where status = 'connected'
        and (registration_checked_at is null or registration_checked_at < now() - interval '${STALE_AFTER_MS / 1000} seconds')`
     );
