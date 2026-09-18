@@ -923,7 +923,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
 
       <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
         <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.35rem;">Sendability Monitoring</div>
-        <div class="detail-row"><span class="detail-row-label">Sendable</span><span class="detail-row-value">${waba.sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.sendable_reason || '')}">No${waba.sendable_error_code ? ` (#${waba.sendable_error_code})` : ''}</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet — send probe (Layer 3) is not enabled yet</span>'}</span></div>
+        <div class="detail-row"><span class="detail-row-label">Sendable</span><span class="detail-row-value">${waba.sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.sendable_reason || '')}">No${waba.sendable_error_code ? ` (#${waba.sendable_error_code})` : ''}</span>` : waba.sendable_checked_at ? `<span class="status-badge status-pending" title="${escapeHtml(waba.sendable_reason || '')}">Unknown — unrecognized probe response, needs a look</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>'}</span></div>
         ${waba.sendable === false && waba.sendable_reason ? `<div class="inline-warning" style="margin:0.4rem 0;">${escapeHtml(waba.sendable_reason)}</div>` : ''}
         ${waba.sendable_checked_at ? `<div class="detail-row"><span class="detail-row-label">Sendable Checked</span><span class="detail-row-value">${formatDate(waba.sendable_checked_at)}</span></div>` : ''}
         <div class="detail-row"><span class="detail-row-label">Registration</span><span class="detail-row-value">${registrationBadgeHtml(waba)}</span></div>
@@ -936,7 +936,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
         <div class="detail-row"><span class="detail-row-label">Health Status</span><span class="detail-row-value">${healthStatusSummaryHtml(waba)}</span></div>
         <div id="check-sendability-result"></div>
         <button class="btn-secondary btn-sm" id="check-sendability-btn" style="margin-top:0.5rem; width:100%; justify-content:center;">
-          <i data-lucide="heart-pulse" style="width:14px;"></i> Check Registration &amp; Health Now
+          <i data-lucide="heart-pulse" style="width:14px;"></i> Check Sendability Now
         </button>
       </div>
 
@@ -1352,9 +1352,9 @@ async function refreshMessagingTier(clientId) {
   }
 }
 
-// Sendability monitoring Layers 1+2 only — this deliberately never reports a
-// "sendable" verdict, since that column is only ever written by the send
-// probe (Layer 3, not yet built). See sendabilityMonitorRunner.js.
+// Sendability monitoring, all three layers — runs registration/health AND
+// the send probe together (see sendabilityMonitorRunner.js's refreshOne).
+// The probe is the one that actually sets `sendable`.
 async function checkSendability(clientId) {
   const btn = document.getElementById('check-sendability-btn');
   const resultEl = document.getElementById('check-sendability-result');
@@ -1367,10 +1367,11 @@ async function checkSendability(clientId) {
   try {
     const res = await apiFetch(`/api/admin/clients/${clientId}/check-sendability`, { method: 'POST' });
     const w = res.waba;
+    const sendableText = w.sendable === true ? 'Yes' : w.sendable === false ? `No${w.sendable_error_code ? ` (#${w.sendable_error_code})` : ''}` : 'Unknown — unrecognized probe response';
     resultEl.innerHTML = `<div class="inline-success" style="margin-top:0.75rem; margin-bottom:0;">
-      Registration and health checked. On Business App: ${w.registration_is_on_biz_app === null ? '—' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}, Code Verification: ${escapeHtml(w.registration_code_verification_status || 'unknown')}.
+      Sendable: ${escapeHtml(sendableText)}. On Business App: ${w.registration_is_on_biz_app === null ? '—' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}, Code Verification: ${escapeHtml(w.registration_code_verification_status || 'unknown')}.
     </div>`;
-    showToast('Registration & health checked.', 'success');
+    showToast('Sendability checked.', 'success');
     loadClientDetail(clientId);
   } catch (err) {
     if (err.status === 401) return;

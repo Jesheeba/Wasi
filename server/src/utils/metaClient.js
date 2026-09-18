@@ -187,6 +187,70 @@ async function getPhoneNumberDetails(phoneNumberId, accessToken) {
   );
 }
 
+// Sendability probe (Layer 3, 2026-09-18) — the only check proven, by hand,
+// to catch a billing-shaped sendability block (TNPSC: registration fine,
+// health_status AVAILABLE on every entity, still couldn't send — the credit
+// line was the previous BSP's). Sends a template that does not exist to a
+// NANPA-reserved fictional number (555-0100-0199, permanently reserved for
+// fictional/testing use, never assigned to a real subscriber) — no message
+// can ever be delivered: the template doesn't exist, and neither does the
+// recipient. Meta evaluates permission BEFORE validating the template or
+// recipient, so the response classifies sendability without ever attempting
+// a real send.
+//
+// Verified BY HAND against both ends before this was wired into a runner:
+//   Fortune (healthy):  HTTP 404, (#132001) template not found  -> sendable
+//   TNPSC   (blocked):  HTTP 403, (#200) OAuthException permission denied -> not sendable
+// Classify on error.code, NOT HTTP status — both responses are OAuthException
+// and status alone does not distinguish them.
+const SENDABILITY_PROBE_TO = '12025550100'; // +1 202 555 0100, NANPA-reserved fictional
+const SENDABILITY_PROBE_TEMPLATE_NAME = '__wasi_sendability_probe__';
+
+// Returns a classification, never throws for any HTTP response Meta actually
+// sends back (403/404/whatever — these are the NORMAL, expected outcomes of
+// this probe, not failures). Only throws if the request itself never got a
+// response at all (network/timeout, via fetchWithTimeout) — that is a real
+// failure, distinct from an unrecognized response, and callers must not
+// treat it as evidence sendability changed.
+async function probeSendability(phoneNumberId, accessToken) {
+  const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
+  const body = {
+    messaging_product: 'whatsapp',
+    to: SENDABILITY_PROBE_TO,
+    type: 'template',
+    template: { name: SENDABILITY_PROBE_TEMPLATE_NAME, language: { code: 'en_US' }, components: [] },
+  };
+
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  const error = data?.error || null;
+  const errorData = error?.error_data || null;
+
+  if (error?.code === 132001) {
+    return { sendable: true, reason: null, code: null, errorData: null };
+  }
+  if (error?.code === 200) {
+    return { sendable: false, reason: error.message || '(#200) Permission denied', code: error.code, errorData };
+  }
+  // Never guessed either way — an unrecognized code, a genuine 200 success
+  // (shouldn't happen with a nonexistent template, but handled defensively
+  // rather than assumed impossible), or a body with no Meta error object at
+  // all all land here, with exactly what came back preserved for a human to
+  // read later.
+  return {
+    sendable: null,
+    reason: error
+      ? `Unexpected probe response: (#${error.code}) ${error.message}`
+      : `Unexpected probe response: HTTP ${res.status}, no Meta error object in the response body`,
+    code: error?.code ?? null,
+    errorData,
+  };
+}
+
 // Meta's documented tier values -> the real numeric 24h unique-conversation
 // cap they represent. Anything not in this map (null, a future tier value
 // Meta adds, or a genuinely malformed response) returns null — "unknown,"
@@ -822,6 +886,9 @@ module.exports = {
   subscribeAppToWaba,
   registerPhoneNumber,
   getPhoneNumberDetails,
+  probeSendability,
+  SENDABILITY_PROBE_TO,
+  SENDABILITY_PROBE_TEMPLATE_NAME,
   messagingTierCap,
   getBusinessProfile,
   updateBusinessProfile,

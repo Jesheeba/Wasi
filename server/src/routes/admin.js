@@ -163,12 +163,14 @@ router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res)
   res.json({ refreshed: true, waba: maskWaba(updated) });
 }));
 
-// --- Manual check: registration + health_status (sendability monitoring
-// Layers 1+2 — see migration 074_wabas_sendability.js and
-// sendabilityMonitorRunner.js). Does NOT report on `sendable` itself — that
-// column is only ever written by the send probe (Layer 3, not yet built) —
-// so this route's own success response deliberately never mentions
-// "sendable," only what it actually checked. ---
+// --- Manual check: all three sendability layers (registration, health,
+// and the send probe — see migration 074_wabas_sendability.js/
+// 075_wabas_sendable_error_data.js and sendabilityMonitorRunner.js).
+// refreshOne runs both sub-checks independently and never throws past the
+// pre-flight guard/a token-decrypt failure below, so `!result.ok` here means
+// the check couldn't even be attempted, not that either sub-check found a
+// problem — a found problem (not registered, not sendable) is still a 200,
+// visible in the returned waba's own columns. ---
 router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
@@ -184,7 +186,7 @@ router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
     actor_type: 'admin',
     actor_id: req.adminId,
     action: 'sendability_checked_manually',
-    target: `${id}: is_on_biz_app=${result.isOnBizApp} code_verification_status=${result.codeVerificationStatus || 'unknown'}`,
+    target: `${id}: is_on_biz_app=${result.registration.isOnBizApp} code_verification_status=${result.registration.codeVerificationStatus || 'unknown'} sendable=${result.probe.sendable} sendable_code=${result.probe.code ?? 'n/a'}`,
   });
   const updated = await wabasRepo.findByClientId(id);
   res.json({ checked: true, waba: maskWaba(updated) });
@@ -546,7 +548,7 @@ router.get('/health', asyncHandler(async (req, res) => {
            w.registration_is_on_biz_app, w.registration_code_verification_status,
            w.registration_platform_type, w.registration_phone_status, w.registration_checked_at,
            w.health_status, w.health_status_checked_at,
-           w.sendable, w.sendable_checked_at, w.sendable_reason, w.sendable_error_code,
+           w.sendable, w.sendable_checked_at, w.sendable_reason, w.sendable_error_code, w.sendable_error_data,
            (select max(received_at) from meta_webhook_log
              where success = true and w.id = any(waba_ids_touched)) as last_successful_webhook_at,
            (select count(*)::int from webhook_deliveries wd
