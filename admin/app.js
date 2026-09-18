@@ -923,9 +923,11 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
 
       <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
         <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.35rem;">Sendability Monitoring</div>
-        <div class="detail-row"><span class="detail-row-label">Sendable</span><span class="detail-row-value">${waba.sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.sendable_reason || '')}">No${waba.sendable_error_code ? ` (#${waba.sendable_error_code})` : ''}</span>` : waba.sendable_checked_at ? `<span class="status-badge status-pending" title="${escapeHtml(waba.sendable_reason || '')}">Unknown — unrecognized probe response, needs a look</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>'}</span></div>
-        ${waba.sendable === false && waba.sendable_reason ? `<div class="inline-warning" style="margin:0.4rem 0;">${escapeHtml(waba.sendable_reason)}</div>` : ''}
+        <div class="detail-row"><span class="detail-row-label">Sendable</span><span class="detail-row-value">${waba.sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.sendable_reason || '')}">No</span>` : waba.sendable_checked_at ? `<span class="status-badge status-pending" title="${escapeHtml(waba.sendable_reason || '')}">Unknown</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>'}</span></div>
+        ${waba.sendable !== true && waba.sendable_reason ? `<div class="inline-warning" style="margin:0.4rem 0;">${escapeHtml(waba.sendable_reason)}</div>` : ''}
         ${waba.sendable_checked_at ? `<div class="detail-row"><span class="detail-row-label">Sendable Checked</span><span class="detail-row-value">${formatDate(waba.sendable_checked_at)}</span></div>` : ''}
+        <div class="detail-row"><span class="detail-row-label">Probe (permission only)</span><span class="detail-row-value">${waba.probe_sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.probe_sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.probe_reason || '')}">No${waba.probe_error_code ? ` (#${waba.probe_error_code})` : ''}</span>` : waba.probe_checked_at ? `<span class="status-badge status-pending" title="${escapeHtml(waba.probe_reason || '')}">Unknown${waba.probe_error_code ? ` (#${waba.probe_error_code})` : ''}</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>'}</span></div>
+        <div style="font-size:0.72rem; color:var(--text-muted); margin:-0.2rem 0 0.4rem;">Probe tests Meta permission only — a payment/billing block (health_status BLOCKED) can still stop sending even when the probe passes. "Sendable" above is the combined, trustworthy answer.</div>
         <div class="detail-row"><span class="detail-row-label">Registration</span><span class="detail-row-value">${registrationBadgeHtml(waba)}</span></div>
         ${waba.registration_checked_at ? `
           <div class="detail-row"><span class="detail-row-label">On Business App</span><span class="detail-row-value">${waba.registration_is_on_biz_app === null ? '—' : (waba.registration_is_on_biz_app ? 'Yes' : 'No')}</span></div>
@@ -1367,9 +1369,9 @@ async function checkSendability(clientId) {
   try {
     const res = await apiFetch(`/api/admin/clients/${clientId}/check-sendability`, { method: 'POST' });
     const w = res.waba;
-    const sendableText = w.sendable === true ? 'Yes' : w.sendable === false ? `No${w.sendable_error_code ? ` (#${w.sendable_error_code})` : ''}` : 'Unknown — unrecognized probe response';
+    const sendableText = w.sendable === true ? 'Yes' : w.sendable === false ? 'No' : 'Unknown';
     resultEl.innerHTML = `<div class="inline-success" style="margin-top:0.75rem; margin-bottom:0;">
-      Sendable: ${escapeHtml(sendableText)}. On Business App: ${w.registration_is_on_biz_app === null ? '—' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}, Code Verification: ${escapeHtml(w.registration_code_verification_status || 'unknown')}.
+      Sendable: ${escapeHtml(sendableText)}${w.sendable_reason ? ` (${escapeHtml(w.sendable_reason)})` : ''}. Probe (permission only): ${w.probe_sendable === true ? 'Yes' : w.probe_sendable === false ? 'No' : 'Unknown'}. On Business App: ${w.registration_is_on_biz_app === null ? '—' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}.
     </div>`;
     showToast('Sendability checked.', 'success');
     loadClientDetail(clientId);

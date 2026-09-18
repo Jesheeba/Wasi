@@ -1,4 +1,4 @@
-// Sendability monitoring — all three layers.
+// Sendability monitoring — all three layers, plus the combined verdict.
 // Built after a real 26-hour undetected outage (TNPSC Mentors, 2026-09-18) —
 // see migration 074_wabas_sendability.js's header comment for the full
 // context and why this is three layers, not one.
@@ -6,34 +6,37 @@
 // Layer 3 (the send probe) was approved 2026-09-18 after validating by hand
 // against both a known-good account (Fortune: HTTP 404, code 132001) and the
 // known-bad one (TNPSC: HTTP 403, code 200) — see metaClient.probeSendability's
-// own header comment. Today's live run made it MORE important, not less:
-// health_status came back AVAILABLE on every entity for TNPSC (the account
-// that cannot send) while correctly flagging real 141006 payment errors on
-// three other clients — proof health_status catches one class of problem and
-// misses another, and the probe is the only check that tests the thing that
-// actually matters (can a real message go out). So the probe runs for EVERY
-// connected WABA on EVERY check, unconditionally — never skipped because
-// health_status looked fine, never skipped because Layer 1's registration
-// check flagged something, and never skipped just because Layer 1/2's own
-// Meta call failed (an unrelated read failure must not silently suppress the
-// one check that catches billing).
+// own header comment. The probe runs for EVERY connected WABA on EVERY
+// check, unconditionally — never skipped because health_status looked fine,
+// never skipped because Layer 1's registration check flagged something, and
+// never skipped just because Layer 1/2's own Meta call failed.
 //
-// Only checkSendabilityProbe ever writes wabas.sendable/sendable_reason/
-// sendable_error_code/sendable_error_data/sendable_checked_at.
-// checkRegistrationAndHealth (Layer 1+2) writes only its own
-// registration_*/health_status* columns — is_on_biz_app === false &&
-// code_verification_status !== 'VERIFIED' was floated as a "definitely
-// can't send" rule, but it was never confirmed (TNPSC registered
-// successfully and code_verification_status stayed EXPIRED regardless of
-// whether it could actually send), so it must never be able to override
-// what the probe empirically finds.
+// The FIRST real check cycle (2026-09-18) found the probe alone isn't
+// enough either: three WABAs (GV Mart, Brainlit, RD Interlock Bricks) came
+// back sendable:true from the probe while health_status reported them
+// BLOCKED with 141006 (a payment-method error) — the probe tests
+// PERMISSION, not overall sendability. See migration
+// 076_wabas_sendable_verdict_split.js's header comment for the full
+// writeup. That migration renamed the raw probe columns to
+// probe_sendable/probe_reason/probe_error_code/probe_error_data/
+// probe_checked_at (unchanged meaning, just honestly named) and reclaimed
+// wabas.sendable/sendable_reason/sendable_checked_at for the genuinely
+// combined verdict computeSendableVerdict below produces: sendable only if
+// the probe passes AND no health_status entity is BLOCKED.
 //
-// Same fetch+persist shape as messagingTierRefreshRunner.js (own file, own
-// interval, staleness-gated tick, refreshOne/refreshNow split for the admin
-// "check now" button) — see that file's header comment for why this kind of
-// job isn't folded into alertRunner.js's pure check-then-alert shape. No
-// alertRunner wiring yet, by direct instruction — watch one real cycle
-// after this deploys before turning on any alerting against the new verdict.
+// A note on why a failed/incomplete health fetch must never overwrite a
+// good stored health_status with null (found live, same day): Meta doesn't
+// always return health_status on every call, and a registration check can
+// fail outright (expired token, timeout) independent of the probe. Losing
+// the last known-good health_status to a transient gap would make
+// "genuinely never checked" indistinguishable from "checked before, just
+// not this time" — checkRegistrationAndHealth's UPDATE uses
+// coalesce(new, existing) on every field that can legitimately come back
+// absent, and returns the EFFECTIVE (post-coalesce) value to its caller so
+// the verdict computation below sees the same truth the database does.
+//
+// No alertRunner wiring yet — by direct instruction, watch real cycles
+// before turning on any alerting against the new verdict.
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 
@@ -49,7 +52,17 @@ function getPool() { return require('../db/pool').pool; }
 function getAuditLogRepo() { return require('../repositories/auditLogRepo'); }
 
 const TICK_MS = 60 * 60 * 1000; // hourly tick, same cadence as messagingTierRefreshRunner
-const STALE_AFTER_MS = 4 * 60 * 60 * 1000; // 4h — see the approved plan's cadence reasoning; both layers refresh together, one staleness column governs both
+const STALE_AFTER_MS = 4 * 60 * 60 * 1000; // 4h — see the approved plan's cadence reasoning; all layers refresh together, one staleness column governs all
+
+// "New value if Meta actually returned one this call, otherwise whatever
+// was already stored" — the in-memory mirror of the SQL coalesce() the
+// UPDATE below also applies. Both exist: SQL is the real protection
+// (authoritative, safe under a concurrent read), this mirrors it so the
+// same call's own return value — and the verdict computation that reads
+// it — sees the same effective truth without a second round-trip.
+function effective(newValue, oldValue) {
+  return newValue !== null && newValue !== undefined ? newValue : (oldValue ?? null);
+}
 
 // Layer 1+2. Own try/catch — never throws out, so a failure here can never
 // block the probe below, and one client's Meta failure can't block the rest
@@ -62,24 +75,24 @@ async function checkRegistrationAndHealth(waba, accessToken, db, meta, audit) {
     // and the messaging-tier field before trusting an unconfirmed Meta shape.
     console.log(`sendabilityMonitorRunner: raw phone-number details for waba ${waba.waba_id}:`, JSON.stringify(details));
 
-    const isOnBizApp = typeof details?.is_on_biz_app === 'boolean' ? details.is_on_biz_app : null;
-    const codeVerificationStatus = typeof details?.code_verification_status === 'string' ? details.code_verification_status : null;
-    const platformType = typeof details?.platform_type === 'string' ? details.platform_type : null;
-    const phoneStatus = typeof details?.status === 'string' ? details.status : null;
-    const healthStatus = details?.health_status && typeof details.health_status === 'object' ? details.health_status : null;
+    const rawIsOnBizApp = typeof details?.is_on_biz_app === 'boolean' ? details.is_on_biz_app : null;
+    const rawCodeVerificationStatus = typeof details?.code_verification_status === 'string' ? details.code_verification_status : null;
+    const rawPlatformType = typeof details?.platform_type === 'string' ? details.platform_type : null;
+    const rawPhoneStatus = typeof details?.status === 'string' ? details.status : null;
+    const rawHealthStatus = details?.health_status && typeof details.health_status === 'object' ? details.health_status : null;
     const now = new Date().toISOString();
 
     await db.query(
       `update wabas set
-         registration_is_on_biz_app = $1,
-         registration_code_verification_status = $2,
-         registration_platform_type = $3,
-         registration_phone_status = $4,
+         registration_is_on_biz_app = coalesce($1, registration_is_on_biz_app),
+         registration_code_verification_status = coalesce($2, registration_code_verification_status),
+         registration_platform_type = coalesce($3, registration_platform_type),
+         registration_phone_status = coalesce($4, registration_phone_status),
          registration_checked_at = $5,
-         health_status = $6,
+         health_status = coalesce($6, health_status),
          health_status_checked_at = $5
        where id = $7`,
-      [isOnBizApp, codeVerificationStatus, platformType, phoneStatus, now, healthStatus ? JSON.stringify(healthStatus) : null, waba.id]
+      [rawIsOnBizApp, rawCodeVerificationStatus, rawPlatformType, rawPhoneStatus, now, rawHealthStatus ? JSON.stringify(rawHealthStatus) : null, waba.id]
     );
 
     // Every check leaves a trace, not just the outcome — this is the
@@ -88,10 +101,20 @@ async function checkRegistrationAndHealth(waba, accessToken, db, meta, audit) {
       actor_type: 'system',
       actor_id: waba.client_id,
       action: 'sendability_registration_checked',
-      target: `${waba.client_id}: is_on_biz_app=${isOnBizApp} code_verification_status=${codeVerificationStatus || 'unknown'} platform_type=${platformType || 'unknown'}`,
+      target: `${waba.client_id}: is_on_biz_app=${rawIsOnBizApp} code_verification_status=${rawCodeVerificationStatus || 'unknown'} platform_type=${rawPlatformType || 'unknown'}`,
     });
 
-    return { ok: true, isOnBizApp, codeVerificationStatus, platformType, phoneStatus, healthStatus };
+    return {
+      ok: true,
+      isOnBizApp: effective(rawIsOnBizApp, waba.registration_is_on_biz_app),
+      codeVerificationStatus: effective(rawCodeVerificationStatus, waba.registration_code_verification_status),
+      platformType: effective(rawPlatformType, waba.registration_platform_type),
+      phoneStatus: effective(rawPhoneStatus, waba.registration_phone_status),
+      // The EFFECTIVE (post-coalesce) health_status — what's actually now
+      // stored, whether that's fresh from this call or carried over. null
+      // here means genuinely never successfully populated, ever.
+      healthStatus: effective(rawHealthStatus, waba.health_status),
+    };
   } catch (err) {
     console.error(`sendabilityMonitorRunner: registration/health check failed for waba ${waba.waba_id}:`, err.message);
     await audit.record({
@@ -106,17 +129,18 @@ async function checkRegistrationAndHealth(waba, accessToken, db, meta, audit) {
   }
 }
 
-// Layer 3 — the only check that determines `sendable`. Own try/catch,
-// independent of checkRegistrationAndHealth's outcome — see this file's
-// header comment for why it must run unconditionally.
+// Layer 3 — the raw probe result only (permission, not overall
+// sendability — see this file's header comment). Writes probe_sendable/
+// probe_reason/probe_error_code/probe_error_data/probe_checked_at. Own
+// try/catch, independent of checkRegistrationAndHealth's outcome.
 async function checkSendabilityProbe(waba, accessToken, db, meta, audit) {
   try {
     // metaClient.probeSendability never throws for a real Meta response
     // (403/404/whatever) — only for a genuine network/timeout failure that
     // never got a response at all. That distinction matters: this catch
-    // block only ever runs for the latter, which is NOT evidence sendability
-    // changed, so it deliberately does not touch the sendable* columns —
-    // leaving whatever verdict was last known stands until a real response
+    // block only ever runs for the latter, which is NOT evidence anything
+    // changed, so it deliberately does not touch the probe_* columns —
+    // leaving whatever result was last known stands until a real response
     // says otherwise.
     const result = await meta.probeSendability(waba.phone_number_id, accessToken);
     console.log(`sendabilityMonitorRunner: probe result for waba ${waba.waba_id}:`, JSON.stringify(result));
@@ -124,11 +148,11 @@ async function checkSendabilityProbe(waba, accessToken, db, meta, audit) {
     const now = new Date().toISOString();
     await db.query(
       `update wabas set
-         sendable = $1,
-         sendable_reason = $2,
-         sendable_error_code = $3,
-         sendable_error_data = $4,
-         sendable_checked_at = $5
+         probe_sendable = $1,
+         probe_reason = $2,
+         probe_error_code = $3,
+         probe_error_data = $4,
+         probe_checked_at = $5
        where id = $6`,
       [result.sendable, result.reason, result.code, result.errorData ? JSON.stringify(result.errorData) : null, now, waba.id]
     );
@@ -141,7 +165,7 @@ async function checkSendabilityProbe(waba, accessToken, db, meta, audit) {
       actor_type: 'system',
       actor_id: waba.client_id,
       action: result.sendable === null ? 'sendability_unknown' : 'sendability_probed',
-      target: `${waba.client_id}: sendable=${result.sendable} code=${result.code ?? 'n/a'} reason=${result.reason || 'n/a'}`,
+      target: `${waba.client_id}: probe_sendable=${result.sendable} code=${result.code ?? 'n/a'} reason=${result.reason || 'n/a'}`,
     });
 
     return { ok: true, sendable: result.sendable, reason: result.reason, code: result.code };
@@ -159,19 +183,75 @@ async function checkSendabilityProbe(waba, accessToken, db, meta, audit) {
   }
 }
 
-// Runs Layers 1+2 and Layer 3 for ONE waba, unconditionally, independent of
-// each other. Also callable directly by an admin "Check Sendability Now"
-// route, bypassing the staleness check, same relationship refreshOne() has
-// to messagingTierRefreshRunner.js's admin-triggered refresh.
+// The combined, honest verdict — pure function, no I/O, exported for direct
+// unit testing. This is the ONLY thing that should ever be read as "can
+// this WABA actually send a real campaign right now":
+//   - probeSendable !== true (false OR null) -> mirror the probe exactly;
+//     health_status can only ever make a passing probe result WORSE, it can
+//     never rescue a failing/unknown one.
+//   - probeSendable === true but healthStatus is null (never successfully
+//     checked, not merely absent this one time — see checkRegistrationAndHealth's
+//     coalesce) -> null. "We couldn't see one of the two signals" is not
+//     "it's fine."
+//   - probeSendable === true and some health_status entity is BLOCKED
+//     (any entity, not just WABA — a BLOCKED PHONE_NUMBER/BUSINESS/APP
+//     means the same thing) -> false.
+//   - otherwise -> true.
+// reason always names which signal produced the verdict ("Probe: ..." vs
+// "Health: ...") so nobody has to guess which raw column to open.
+function computeSendableVerdict({ probeSendable, probeReason, healthStatus }) {
+  if (probeSendable !== true) {
+    return { sendable: probeSendable, reason: `Probe: ${probeReason}` };
+  }
+  if (!healthStatus) {
+    return { sendable: null, reason: 'Health: never successfully checked — cannot confirm sendability' };
+  }
+  const entities = Array.isArray(healthStatus.entities) ? healthStatus.entities : [];
+  const blocked = entities.find((e) => e?.can_send_message === 'BLOCKED');
+  if (blocked) {
+    const code = blocked.errors?.[0]?.error_code;
+    const desc = blocked.errors?.[0]?.error_description || 'blocked';
+    return { sendable: false, reason: `Health: ${blocked.entity_type || 'an entity'} is BLOCKED${code ? ` (#${code})` : ''} — ${desc}` };
+  }
+  return { sendable: true, reason: null };
+}
+
+// Computes and writes the combined verdict from both sub-checks' results.
+// Only recomputed when the probe itself produced a real result (probe.ok)
+// — if the probe never reached Meta at all this cycle, there is no new
+// information to act on, and the previous verdict is left standing
+// untouched, same reasoning checkSendabilityProbe already applies to its
+// own probe_* columns.
+async function writeSendableVerdict(waba, registration, probe, db, audit) {
+  if (!probe.ok) return null;
+
+  const healthStatus = registration.ok ? registration.healthStatus : effective(null, waba.health_status);
+  const verdict = computeSendableVerdict({ probeSendable: probe.sendable, probeReason: probe.reason, healthStatus });
+
+  const now = new Date().toISOString();
+  await db.query(
+    `update wabas set sendable = $1, sendable_reason = $2, sendable_checked_at = $3 where id = $4`,
+    [verdict.sendable, verdict.reason, now, waba.id]
+  );
+  await audit.record({
+    actor_type: 'system',
+    actor_id: waba.client_id,
+    action: 'sendable_verdict_computed',
+    target: `${waba.client_id}: sendable=${verdict.sendable} reason=${verdict.reason || 'n/a'}`,
+  });
+  return verdict;
+}
+
+// Runs Layers 1+2, Layer 3, and the combined verdict for ONE waba,
+// unconditionally, independent of each other. Also callable directly by an
+// admin "Check Sendability Now" route, bypassing the staleness check, same
+// relationship refreshOne() has to messagingTierRefreshRunner.js's
+// admin-triggered refresh.
 //
 // `deps` ({ db, metaClient, auditLogRepo }) lets a test inject stand-ins for
 // all three externals this function touches — the real pool/metaClient/
 // auditLogRepo are used when a dep isn't supplied, so production behavior is
-// byte-for-byte unchanged. This exists specifically so the load-bearing
-// assertions (Layer 1 cannot set sendable; the probe classifies on
-// error.code, not HTTP status) can be proven with a stubbed repo and a
-// stubbed metaClient — no real database, no real network call, runs
-// anywhere, any time. See sendabilityMonitorRunnerUnit.test.js.
+// byte-for-byte unchanged. See sendabilityMonitorRunnerUnit.test.js.
 async function refreshOne(waba, deps = {}) {
   if (!waba?.access_token_encrypted || !waba.phone_number_id) {
     return { ok: false, reason: 'No connected phone number to check.' };
@@ -188,9 +268,14 @@ async function refreshOne(waba, deps = {}) {
   }
 
   const registration = await checkRegistrationAndHealth(waba, accessToken, db, meta, audit);
+  // Layer 3 runs unconditionally — see header comment: registration and
+  // health_status can both look fine while sending is still actually
+  // blocked, and neither Layer 1/2's own findings nor a failure in that
+  // check may ever suppress the probe.
   const probe = await checkSendabilityProbe(waba, accessToken, db, meta, audit);
+  const verdict = await writeSendableVerdict(waba, registration, probe, db, audit);
 
-  return { ok: true, registration, probe };
+  return { ok: true, registration, probe, verdict };
 }
 
 async function refreshNow() {
@@ -228,4 +313,4 @@ function stop() {
   timer = null;
 }
 
-module.exports = { start, stop, tick, refreshNow, refreshOne };
+module.exports = { start, stop, tick, refreshNow, refreshOne, computeSendableVerdict };

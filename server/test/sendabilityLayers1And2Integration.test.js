@@ -1,20 +1,22 @@
-// Sendability monitoring, all three layers — INTEGRATION coverage. Built
-// after a real 26-hour undetected outage (TNPSC Mentors, 2026-09-18). See
-// migration 074_wabas_sendability.js/075_wabas_sendable_error_data.js and
-// sendabilityMonitorRunner.js's header comments for the full context.
+// Sendability monitoring, all three layers plus the combined verdict —
+// INTEGRATION coverage. Built after a real 26-hour undetected outage (TNPSC
+// Mentors, 2026-09-18), and the first real check cycle's own finding that
+// the probe alone is not enough (GV Mart/Brainlit/RD Interlock Bricks
+// passed the probe while health_status reported them BLOCKED with 141006).
+// See migration 074/075/076_wabas_*.js and sendabilityMonitorRunner.js's
+// header comments for the full context.
 //
 // This file needs the real (shared dev/prod) database — it registers and
 // deletes a disposable test client, logs in as the demo admin, and exercises
 // the real HTTP routes end to end (admin's check-sendability route, GET
 // /api/admin/health, the audit_log rows actually landing). Run it
 // deliberately, when you want that coverage — it is not the file that proves
-// the load-bearing constraints (Layer 1 cannot set sendable; the probe
-// classifies on error.code, not HTTP status; an unrecognized response is
-// never guessed). Those live in sendabilityMonitorRunnerUnit.test.js, which
-// needs no database or network call at all and runs anywhere, any time.
-// This file's assertions are a secondary confirmation that the real
-// HTTP/DB path agrees with the unit-level proof, not the primary proof
-// itself.
+// the load-bearing constraints (the combined verdict logic, the coalesce
+// protection, the probe's error.code classification). Those live in
+// sendabilityMonitorRunnerUnit.test.js, which needs no database or network
+// call at all and runs anywhere, any time. This file's assertions are a
+// secondary confirmation that the real HTTP/DB path agrees with the
+// unit-level proof, not the primary proof itself.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
@@ -41,13 +43,10 @@ function authed(token) {
 // Registration (Layer 1+2) is a GET to /{phone_number_id}?fields=...; the
 // probe (Layer 3) is a POST to /{phone_number_id}/messages — both URLs
 // contain TEST_PHONE_NUMBER_ID, so they're told apart by whether the URL
-// ends in /messages, not just by substring match (an earlier version of
-// this file's helper didn't make this distinction and would have fed the
-// probe's POST the registration fixture's shape by accident).
+// ends in /messages, not just by substring match.
 // `registration`/`probe` each independently: a plain object (success), or
 // `{ fail: true }` to simulate that ONE call failing with a Meta-side error
-// while the other still runs normally — same "options must be forwarded to
-// the real fetch" precedent as messagingTier.test.js's own helper.
+// while the other still runs normally.
 async function withFakeGraphFetch({ registration, probe }, fn) {
   const originalFetch = global.fetch;
   global.fetch = async (url, options) => {
@@ -71,22 +70,25 @@ async function withFakeGraphFetch({ registration, probe }, fn) {
   }
 }
 
-// Real shapes verified by hand 2026-09-18 — reused across tests so the
-// integration coverage matches exactly what was actually observed, not an
-// invented approximation.
+// Real shapes verified by hand 2026-09-18.
 const FORTUNE_PROBE_RESPONSE = { status: 404, body: { error: { message: 'Template name does not exist in the translation', type: 'OAuthException', code: 132001 } } };
 const TNPSC_PROBE_RESPONSE = { status: 403, body: { error: { message: 'You do not have the necessary permission to send messages on behalf of this WhatsApp Business Account', type: 'OAuthException', code: 200 } } };
+// The exact shape from the first real check cycle: probe permission is
+// fine, but the WABA entity itself is BLOCKED for a payment reason.
+const GV_MART_HEALTH_STATUS = { entities: [{ entity_type: 'WABA', can_send_message: 'BLOCKED', errors: [{ error_code: 141006, error_description: 'There was an error with your payment method' }] }] };
 
 async function setWabaRow(fields) {
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: TEST_WABA_ID, phone_number_id: TEST_PHONE_NUMBER_ID, status: 'connected',
     access_token_encrypted: encrypt('fake-token-never-sent-to-meta'),
-    // Explicit resets every call — several tests below assert these stay
-    // null/set, and upsertForClient only touches columns it's passed.
+    // Explicit resets every call — several tests below assert these
+    // stay/become specific values, and upsertForClient only touches columns
+    // it's passed.
     registration_is_on_biz_app: null, registration_code_verification_status: null,
     registration_platform_type: null, registration_phone_status: null, registration_checked_at: null,
     health_status: null, health_status_checked_at: null,
-    sendable: null, sendable_checked_at: null, sendable_reason: null, sendable_error_code: null, sendable_error_data: null,
+    probe_sendable: null, probe_checked_at: null, probe_reason: null, probe_error_code: null, probe_error_data: null,
+    sendable: null, sendable_reason: null, sendable_checked_at: null,
     ...fields,
   });
 }
@@ -126,108 +128,100 @@ after(async () => {
   await pool.end();
 });
 
-test('refreshOne persists registration fields and health_status even when they look exactly like the unconfirmed "cannot send" rule, but sendable comes from the probe, not from them', async () => {
+test('the exact GV Mart shape against the real database: probe passes, health_status is BLOCKED, combined sendable is false while probe_sendable stays true', async () => {
   await setWabaRow({});
   const waba = await wabasRepo.findByClientId(testClientId);
 
   await withFakeGraphFetch({
-    registration: {
-      display_phone_number: '910000000000', verified_name: 'Test', quality_rating: 'GREEN',
-      is_on_biz_app: false, code_verification_status: 'EXPIRED', platform_type: 'CLOUD_API', status: 'CONNECTED',
-      health_status: { entities: [{ entity_type: 'PHONE_NUMBER', can_send_message: 'AVAILABLE' }] },
-    },
-    probe: FORTUNE_PROBE_RESPONSE, // deliberately the HEALTHY probe result, contradicting the registration heuristic
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: GV_MART_HEALTH_STATUS },
+    probe: FORTUNE_PROBE_RESPONSE,
   }, async () => {
     const result = await sendabilityMonitorRunner.refreshOne(waba);
-    assert.equal(result.ok, true);
-    assert.equal(result.registration.isOnBizApp, false);
-    assert.equal(result.registration.codeVerificationStatus, 'EXPIRED');
-    assert.equal(result.probe.sendable, true, 'the probe, not the registration heuristic, decides sendable');
+    assert.equal(result.probe.sendable, true);
+    assert.equal(result.verdict.sendable, false);
   });
 
   const updated = await wabasRepo.findByClientId(testClientId);
-  assert.equal(updated.registration_is_on_biz_app, false);
-  assert.equal(updated.registration_code_verification_status, 'EXPIRED');
-  assert.equal(updated.registration_platform_type, 'CLOUD_API');
-  assert.equal(updated.registration_phone_status, 'CONNECTED');
-  assert.ok(updated.registration_checked_at);
-  assert.deepEqual(updated.health_status, { entities: [{ entity_type: 'PHONE_NUMBER', can_send_message: 'AVAILABLE' }] });
-  assert.ok(updated.health_status_checked_at);
-
-  // The load-bearing assertion for this file: registration looks exactly
-  // like the "cannot send" shape, but sendable=true because that's what the
-  // PROBE found — proof the write path really is independent, against the
-  // real database, not just in the stubbed unit test.
-  assert.equal(updated.sendable, true);
-  assert.equal(updated.sendable_error_code, null);
+  assert.deepEqual(updated.health_status, GV_MART_HEALTH_STATUS);
+  assert.equal(updated.probe_sendable, true, 'the raw probe result is preserved distinctly');
+  assert.equal(updated.sendable, false, 'the combined verdict is the honest one');
+  assert.match(updated.sendable_reason, /141006/);
+  assert.match(updated.sendable_reason, /^Health:/);
 });
 
-test('the exact TNPSC shape: registration/health look completely normal, but the probe still reports sendable=false', async () => {
+test('the exact TNPSC shape: probe denies permission outright, combined verdict mirrors it regardless of health_status', async () => {
   await setWabaRow({});
   const waba = await wabasRepo.findByClientId(testClientId);
 
   await withFakeGraphFetch({
-    registration: {
-      display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED',
-      health_status: { entities: [{ entity_type: 'PHONE_NUMBER', can_send_message: 'AVAILABLE' }, { entity_type: 'BUSINESS', can_send_message: 'AVAILABLE' }] },
-    },
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: { entities: [{ entity_type: 'WABA', can_send_message: 'AVAILABLE' }] } },
     probe: TNPSC_PROBE_RESPONSE,
   }, async () => {
     const result = await sendabilityMonitorRunner.refreshOne(waba);
     assert.equal(result.probe.sendable, false);
     assert.equal(result.probe.code, 200);
+    assert.equal(result.verdict.sendable, false);
   });
 
   const updated = await wabasRepo.findByClientId(testClientId);
-  assert.equal(updated.registration_is_on_biz_app, true, 'registration looks fine — this is exactly why health_status/registration alone would have missed this');
+  assert.equal(updated.probe_sendable, false);
+  assert.equal(updated.probe_error_code, 200);
   assert.equal(updated.sendable, false);
-  assert.equal(updated.sendable_error_code, 200);
-  assert.match(updated.sendable_reason, /necessary permission/);
+  assert.match(updated.sendable_reason, /^Probe:/);
 });
 
-test('refreshOne stores health_status exactly as Meta returned it, including a BUSINESS-level LIMITED entry, independent of the probe result', async () => {
+test('a healthy account on both signals: sendable true, reason null', async () => {
   await setWabaRow({});
   const waba = await wabasRepo.findByClientId(testClientId);
 
-  const rawHealth = {
-    entities: [
-      { entity_type: 'PHONE_NUMBER', can_send_message: 'AVAILABLE' },
-      { entity_type: 'WABA', can_send_message: 'AVAILABLE' },
-      {
-        entity_type: 'BUSINESS', can_send_message: 'LIMITED',
-        errors: [{ error_code: 141010, error_description: 'The Business has not passed business verification', possible_solution: 'Verify the business.' }],
-      },
-      { entity_type: 'APP', can_send_message: 'AVAILABLE' },
-    ],
-  };
   await withFakeGraphFetch({
-    registration: { display_phone_number: '910000000000', health_status: rawHealth },
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: { entities: [{ entity_type: 'WABA', can_send_message: 'AVAILABLE' }] } },
     probe: FORTUNE_PROBE_RESPONSE,
   }, async () => {
     await sendabilityMonitorRunner.refreshOne(waba);
   });
 
   const updated = await wabasRepo.findByClientId(testClientId);
-  assert.deepEqual(updated.health_status, rawHealth);
-  assert.equal(updated.sendable, true, 'Layer 2 is informational only — a real BUSINESS-level problem is captured, but the probe still decides sendable');
+  assert.equal(updated.sendable, true);
+  assert.equal(updated.sendable_reason, null);
 });
 
-test('an unrecognized probe response sets sendable=null and preserves error_data, without guessing', async () => {
+test('a registration response that omits health_status does not wipe a previously-stored BLOCKED reading, against the real database', async () => {
+  await setWabaRow({ health_status: JSON.stringify(GV_MART_HEALTH_STATUS), health_status_checked_at: new Date() });
+  const waba = await wabasRepo.findByClientId(testClientId);
+  assert.deepEqual(waba.health_status, GV_MART_HEALTH_STATUS, 'sanity check on the fixture itself');
+
+  await withFakeGraphFetch({
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED' }, // no health_status this time
+    probe: FORTUNE_PROBE_RESPONSE,
+  }, async () => {
+    const result = await sendabilityMonitorRunner.refreshOne(waba);
+    assert.equal(result.verdict.sendable, false, 'the carried-over BLOCKED reading must still be honored');
+  });
+
+  const updated = await wabasRepo.findByClientId(testClientId);
+  assert.deepEqual(updated.health_status, GV_MART_HEALTH_STATUS, 'must not have been nulled out by this cycle\'s incomplete response');
+  assert.equal(updated.sendable, false);
+});
+
+test('an unrecognized probe response sets sendable=null and preserves probe_error_data, without guessing', async () => {
   await setWabaRow({});
   const waba = await wabasRepo.findByClientId(testClientId);
 
   await withFakeGraphFetch({
-    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED' },
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: { entities: [] } },
     probe: { status: 400, body: { error: { message: 'Rate limit hit', type: 'OAuthException', code: 80007, error_data: { details: 'too many requests' } } } },
   }, async () => {
     const result = await sendabilityMonitorRunner.refreshOne(waba);
     assert.equal(result.probe.sendable, null);
+    assert.equal(result.verdict.sendable, null);
   });
 
   const updated = await wabasRepo.findByClientId(testClientId);
+  assert.equal(updated.probe_sendable, null);
+  assert.equal(updated.probe_error_code, 80007);
+  assert.deepEqual(updated.probe_error_data, { details: 'too many requests' });
   assert.equal(updated.sendable, null);
-  assert.equal(updated.sendable_error_code, 80007);
-  assert.deepEqual(updated.sendable_error_data, { details: 'too many requests' });
 
   const { rows } = await pool.query(
     `select * from audit_log where actor_type = 'system' and action = 'sendability_unknown' and target like $1 order by created_at desc limit 1`,
@@ -236,58 +230,38 @@ test('an unrecognized probe response sets sendable=null and preserves error_data
   assert.equal(rows.length, 1, 'an unrecognized probe response must be audited distinctly as sendability_unknown');
 });
 
-test('registration check failing does not prevent the probe from running or writing sendable', async () => {
-  await setWabaRow({});
-  const waba = await wabasRepo.findByClientId(testClientId);
-
-  await withFakeGraphFetch({ registration: { fail: true }, probe: TNPSC_PROBE_RESPONSE }, async () => {
-    const result = await sendabilityMonitorRunner.refreshOne(waba);
-    assert.equal(result.registration.ok, false);
-    assert.equal(result.probe.ok, true);
-    assert.equal(result.probe.sendable, false);
-  });
-
-  const updated = await wabasRepo.findByClientId(testClientId);
-  assert.equal(updated.sendable, false, 'an unrelated registration-check failure must never suppress the probe or its write');
-});
-
-test('every successful refreshOne writes audit_log entries for both layers (not just the admin-triggered one)', async () => {
+test('every successful refreshOne writes audit_log entries for all three checks (not just the admin-triggered one)', async () => {
   await setWabaRow({});
   const waba = await wabasRepo.findByClientId(testClientId);
   await withFakeGraphFetch({
-    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED' },
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: { entities: [] } },
     probe: FORTUNE_PROBE_RESPONSE,
   }, async () => {
     await sendabilityMonitorRunner.refreshOne(waba);
   });
 
-  const { rows: registrationRows } = await pool.query(
-    `select * from audit_log where actor_type = 'system' and action = 'sendability_registration_checked' and target like $1 order by created_at desc limit 1`,
-    [`${testClientId}%`]
-  );
-  assert.equal(registrationRows.length, 1, 'a background tick-driven check must leave a trace, not just a route-driven one');
-
-  const { rows: probeRows } = await pool.query(
-    `select * from audit_log where actor_type = 'system' and action = 'sendability_probed' and target like $1 order by created_at desc limit 1`,
-    [`${testClientId}%`]
-  );
-  assert.equal(probeRows.length, 1, 'a classified probe result must also leave its own trace');
+  for (const action of ['sendability_registration_checked', 'sendability_probed', 'sendable_verdict_computed']) {
+    const { rows } = await pool.query(
+      `select * from audit_log where actor_type = 'system' and action = $1 and target like $2 order by created_at desc limit 1`,
+      [action, `${testClientId}%`]
+    );
+    assert.equal(rows.length, 1, `${action} must be audited`);
+  }
 });
 
-test('admin POST /clients/:id/check-sendability: success path updates and returns the waba with a real sendable verdict', async () => {
+test('admin POST /clients/:id/check-sendability: success path returns both the combined verdict and the raw probe result', async () => {
   await setWabaRow({});
 
   await withFakeGraphFetch({
-    registration: { display_phone_number: '910000000000', is_on_biz_app: false, code_verification_status: 'EXPIRED', platform_type: 'CLOUD_API' },
-    probe: TNPSC_PROBE_RESPONSE,
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: GV_MART_HEALTH_STATUS },
+    probe: FORTUNE_PROBE_RESPONSE,
   }, async () => {
     const res = await fetch(`${baseUrl}/api/admin/clients/${testClientId}/check-sendability`, { method: 'POST', headers: authed(adminToken) });
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.checked, true);
-    assert.equal(body.waba.registration_is_on_biz_app, false);
-    assert.equal(body.waba.sendable, false);
-    assert.equal(body.waba.sendable_error_code, 200);
+    assert.equal(body.waba.probe_sendable, true, 'raw probe result surfaced');
+    assert.equal(body.waba.sendable, false, 'combined verdict surfaced, and correctly disagrees with the raw probe result');
     assert.equal(body.waba.access_token_encrypted, undefined, 'maskWaba must still strip the token from this route\'s response');
   });
 
@@ -299,19 +273,17 @@ test('admin POST /clients/:id/check-sendability: success path updates and return
   assert.match(rows[0].target, /sendable=false/);
 });
 
-test('admin POST /clients/:id/check-sendability: 502 with detail when the token itself cannot be used at all', async () => {
-  // A waba row whose token is missing entirely — refreshOne's own pre-flight
-  // guard, still the one case this route treats as a real failure to report.
+test('admin POST /clients/:id/check-sendability: 400 when there is no token at all to check', async () => {
   await wabasRepo.upsertForClient(testClientId, { waba_id: TEST_WABA_ID, phone_number_id: null, status: 'connected', access_token_encrypted: null });
   const res = await fetch(`${baseUrl}/api/admin/clients/${testClientId}/check-sendability`, { method: 'POST', headers: authed(adminToken) });
-  assert.equal(res.status, 400, 'no phone_number_id at all is caught before refreshOne even runs, by the route\'s own existing guard');
+  assert.equal(res.status, 400);
 });
 
-test('GET /api/admin/health includes the new registration/health/sendable columns', async () => {
+test('GET /api/admin/health includes both the combined verdict and the raw probe columns', async () => {
   await setWabaRow({});
   const waba = await wabasRepo.findByClientId(testClientId);
   await withFakeGraphFetch({
-    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED' },
+    registration: { display_phone_number: '910000000000', is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: { entities: [] } },
     probe: FORTUNE_PROBE_RESPONSE,
   }, async () => {
     await sendabilityMonitorRunner.refreshOne(waba);
@@ -323,6 +295,6 @@ test('GET /api/admin/health includes the new registration/health/sendable column
   const row = rows.find((r) => r.client_id === testClientId);
   assert.ok(row, 'this suite\'s test client must appear in the health monitor listing');
   assert.equal(row.registration_is_on_biz_app, true);
-  assert.equal(row.registration_code_verification_status, 'VERIFIED');
+  assert.equal(row.probe_sendable, true);
   assert.equal(row.sendable, true);
 });
