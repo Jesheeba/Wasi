@@ -175,8 +175,16 @@ async function registerPhoneNumber(phoneNumberId, accessToken, pin) {
 // response from this session (local dev can't decrypt a real production
 // WABA token — see CLAUDE.md's SERVER_SECRET Known Gap); the deployed
 // server or a fresh local WABA connection is needed for that.
+// is_on_biz_app/code_verification_status/platform_type/status/health_status
+// added 2026-09-18 for sendability monitoring (see migration
+// 074_wabas_sendability.js and services/sendabilityMonitorRunner.js) —
+// `status` here is Meta's own phone-number-resource field, unrelated to this
+// app's wabas.status connection-state enum; callers must not conflate them.
 async function getPhoneNumberDetails(phoneNumberId, accessToken) {
-  return graphFetch(`/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier`, { accessToken });
+  return graphFetch(
+    `/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier,is_on_biz_app,code_verification_status,platform_type,status,health_status`,
+    { accessToken }
+  );
 }
 
 // Meta's documented tier values -> the real numeric 24h unique-conversation

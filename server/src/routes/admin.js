@@ -14,6 +14,7 @@ const apiKeysRepo = require('../repositories/apiKeysRepo');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
 const messagingTierRefreshRunner = require('../services/messagingTierRefreshRunner');
+const sendabilityMonitorRunner = require('../services/sendabilityMonitorRunner');
 const metaClient = require('../utils/metaClient');
 const { completeWabaConnection } = require('../services/wabaConnectionService');
 const { decrypt } = require('../utils/encryption');
@@ -160,6 +161,33 @@ router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res)
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'messaging_tier_refreshed', target: `${id}: ${result.tier}` });
   const updated = await wabasRepo.findByClientId(id);
   res.json({ refreshed: true, waba: maskWaba(updated) });
+}));
+
+// --- Manual check: registration + health_status (sendability monitoring
+// Layers 1+2 — see migration 074_wabas_sendability.js and
+// sendabilityMonitorRunner.js). Does NOT report on `sendable` itself — that
+// column is only ever written by the send probe (Layer 3, not yet built) —
+// so this route's own success response deliberately never mentions
+// "sendable," only what it actually checked. ---
+router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const waba = await wabasRepo.findByClientId(id);
+  if (!waba || !waba.access_token_encrypted) {
+    return res.status(400).json({ error: 'No WhatsApp connection to check — client must complete Embedded Signup first' });
+  }
+
+  const result = await sendabilityMonitorRunner.refreshOne(waba);
+  if (!result.ok) {
+    return res.status(502).json({ error: 'Sendability check failed', detail: result.reason });
+  }
+  await auditLogRepo.record({
+    actor_type: 'admin',
+    actor_id: req.adminId,
+    action: 'sendability_checked_manually',
+    target: `${id}: is_on_biz_app=${result.isOnBizApp} code_verification_status=${result.codeVerificationStatus || 'unknown'}`,
+  });
+  const updated = await wabasRepo.findByClientId(id);
+  res.json({ checked: true, waba: maskWaba(updated) });
 }));
 
 // --- Resolve a needs_manual_resolution WABA (PLAN.md item 25, Part A) ---
@@ -515,6 +543,10 @@ router.get('/health', asyncHandler(async (req, res) => {
            w.id as waba_row_id, w.waba_id, w.status as waba_status,
            w.quality_rating, w.restriction_status,
            w.messaging_tier, w.messaging_tier_checked_at,
+           w.registration_is_on_biz_app, w.registration_code_verification_status,
+           w.registration_platform_type, w.registration_phone_status, w.registration_checked_at,
+           w.health_status, w.health_status_checked_at,
+           w.sendable, w.sendable_checked_at, w.sendable_reason, w.sendable_error_code,
            (select max(received_at) from meta_webhook_log
              where success = true and w.id = any(waba_ids_touched)) as last_successful_webhook_at,
            (select count(*)::int from webhook_deliveries wd

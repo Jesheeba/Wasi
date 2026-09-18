@@ -922,6 +922,25 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       </button>
 
       <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
+        <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.35rem;">Sendability Monitoring</div>
+        <div class="detail-row"><span class="detail-row-label">Sendable</span><span class="detail-row-value">${waba.sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.sendable_reason || '')}">No${waba.sendable_error_code ? ` (#${waba.sendable_error_code})` : ''}</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet — send probe (Layer 3) is not enabled yet</span>'}</span></div>
+        ${waba.sendable === false && waba.sendable_reason ? `<div class="inline-warning" style="margin:0.4rem 0;">${escapeHtml(waba.sendable_reason)}</div>` : ''}
+        ${waba.sendable_checked_at ? `<div class="detail-row"><span class="detail-row-label">Sendable Checked</span><span class="detail-row-value">${formatDate(waba.sendable_checked_at)}</span></div>` : ''}
+        <div class="detail-row"><span class="detail-row-label">Registration</span><span class="detail-row-value">${registrationBadgeHtml(waba)}</span></div>
+        ${waba.registration_checked_at ? `
+          <div class="detail-row"><span class="detail-row-label">On Business App</span><span class="detail-row-value">${waba.registration_is_on_biz_app === null ? '—' : (waba.registration_is_on_biz_app ? 'Yes' : 'No')}</span></div>
+          <div class="detail-row"><span class="detail-row-label">Code Verification</span><span class="detail-row-value">${escapeHtml(waba.registration_code_verification_status || '—')}</span></div>
+          <div class="detail-row"><span class="detail-row-label">Platform Type</span><span class="detail-row-value">${escapeHtml(waba.registration_platform_type || '—')}</span></div>
+          <div class="detail-row"><span class="detail-row-label">Registration Checked</span><span class="detail-row-value">${formatDate(waba.registration_checked_at)}</span></div>
+        ` : ''}
+        <div class="detail-row"><span class="detail-row-label">Health Status</span><span class="detail-row-value">${healthStatusSummaryHtml(waba)}</span></div>
+        <div id="check-sendability-result"></div>
+        <button class="btn-secondary btn-sm" id="check-sendability-btn" style="margin-top:0.5rem; width:100%; justify-content:center;">
+          <i data-lucide="heart-pulse" style="width:14px;"></i> Check Registration &amp; Health Now
+        </button>
+      </div>
+
+      <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
         <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.35rem;">CRM Inbound Forwarding</div>
         <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.6rem; line-height:1.5;">
           Pushes inbound WhatsApp replies and template/account status changes to the client's own CRM webhook. Ask the client for their CRM's webhook URL before filling this in.
@@ -1066,6 +1085,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   // rather than assumed present, unlike the other buttons on this page.
   document.getElementById('retry-provisioning-btn')?.addEventListener('click', () => retryProvisioning(client.id));
   document.getElementById('refresh-messaging-tier-btn')?.addEventListener('click', () => refreshMessagingTier(client.id));
+  document.getElementById('check-sendability-btn')?.addEventListener('click', () => checkSendability(client.id));
   document.getElementById('delete-client-btn').addEventListener('click', () => confirmDeleteClient(client));
   document.getElementById('reset-client-password-btn').addEventListener('click', () => confirmResetClientPassword(client));
   const hubForwardBtn = document.getElementById('hub-forward-save-btn');
@@ -1332,6 +1352,43 @@ async function refreshMessagingTier(clientId) {
   }
 }
 
+// Sendability monitoring Layers 1+2 only — this deliberately never reports a
+// "sendable" verdict, since that column is only ever written by the send
+// probe (Layer 3, not yet built). See sendabilityMonitorRunner.js.
+async function checkSendability(clientId) {
+  const btn = document.getElementById('check-sendability-btn');
+  const resultEl = document.getElementById('check-sendability-result');
+  resultEl.innerHTML = '';
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:14px;"></i> Checking…';
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const res = await apiFetch(`/api/admin/clients/${clientId}/check-sendability`, { method: 'POST' });
+    const w = res.waba;
+    resultEl.innerHTML = `<div class="inline-success" style="margin-top:0.75rem; margin-bottom:0;">
+      Registration and health checked. On Business App: ${w.registration_is_on_biz_app === null ? '—' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}, Code Verification: ${escapeHtml(w.registration_code_verification_status || 'unknown')}.
+    </div>`;
+    showToast('Registration & health checked.', 'success');
+    loadClientDetail(clientId);
+  } catch (err) {
+    if (err.status === 401) return;
+    let explanation = err.message;
+    if (err.status === 502) {
+      explanation = `Check failed when calling Meta: ${err.data && err.data.detail ? err.data.detail : err.message}. This is expected in this environment — no real Meta app is configured (see server/.env.example).`;
+    } else if (err.status === 400) {
+      explanation = err.message;
+    }
+    resultEl.innerHTML = `<div class="inline-warning" style="margin-top:0.75rem; margin-bottom:0;">${escapeHtml(explanation)}</div>`;
+    showToast('Sendability check did not succeed — see details below.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
 async function retryProvisioning(clientId) {
   const btn = document.getElementById('retry-provisioning-btn');
   const resultEl = document.getElementById('retry-provisioning-result');
@@ -1475,7 +1532,7 @@ function renderOnboardingTable(rows) {
 async function loadWabas() {
   setInlineError('wabas-error', null);
   const tbody = document.getElementById('wabas-table-body');
-  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="7">Loading…</td></tr>';
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">Loading…</td></tr>';
 
   try {
     const rows = await apiFetch('/api/admin/wabas');
@@ -1488,10 +1545,51 @@ async function loadWabas() {
   }
 }
 
+// Sendability monitoring, Layer 1 (registration) — a compact summary for the
+// WABA Health table and the client-detail panel. Deliberately NOT a
+// pass/fail verdict: is_on_biz_app === false && code_verification_status
+// !== 'VERIFIED' is an unconfirmed hypothesis (see migration
+// 074_wabas_sendability.js's header comment — TNPSC registered successfully
+// and code_verification_status stayed EXPIRED regardless of whether it could
+// actually send), so this renders as an informational flag with an explicit
+// "unconfirmed" note, never as a red "cannot send" badge — only the send
+// probe (Layer 3, not yet built) gets to make that claim.
+function registrationBadgeHtml(waba) {
+  if (!waba.registration_checked_at) {
+    return '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>';
+  }
+  if (waba.registration_is_on_biz_app === true) {
+    return '<span class="status-badge status-approved" title="Coexistence — linked via the WhatsApp Business app">On Business App</span>';
+  }
+  if (waba.registration_code_verification_status && waba.registration_code_verification_status !== 'VERIFIED') {
+    return `<span class="status-badge status-pending" title="Not on the WhatsApp Business app, and code_verification_status is ${escapeHtml(waba.registration_code_verification_status)} — unconfirmed whether this blocks sending, see sendable status for the real answer">⚠ ${escapeHtml(waba.registration_code_verification_status)}</span>`;
+  }
+  return '<span class="status-badge status-approved">Registered</span>';
+}
+
+// Sendability monitoring, Layer 2 (health_status) — verified NOT to catch
+// the billing-shaped failure that caused the 2026-09-18 outage (returned
+// AVAILABLE for every entity on the known-bad account while sends failed),
+// so this is purely informational, same as the registration badge above —
+// never treated as the sendability signal.
+function healthStatusSummaryHtml(waba) {
+  if (!waba.health_status_checked_at) {
+    return '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>';
+  }
+  const entities = waba.health_status?.entities || [];
+  const notAvailable = entities.filter((e) => e.can_send_message && e.can_send_message !== 'AVAILABLE');
+  if (notAvailable.length === 0) {
+    return '<span class="status-badge status-approved">All Available</span>';
+  }
+  const first = notAvailable[0];
+  const reason = first.errors?.[0]?.error_description || first.can_send_message;
+  return `<span class="status-badge status-rejected" title="${escapeHtml(JSON.stringify(notAvailable))}">${escapeHtml(first.entity_type || '?')}: ${escapeHtml(reason || 'not available')}${notAvailable.length > 1 ? ` (+${notAvailable.length - 1} more)` : ''}</span>`;
+}
+
 function renderWabasTable(rows) {
   const tbody = document.getElementById('wabas-table-body');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="7">No WhatsApp Business Accounts connected yet.</td></tr>';
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">No WhatsApp Business Accounts connected yet.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((r) => `
@@ -1502,6 +1600,7 @@ function renderWabasTable(rows) {
       <td>${escapeHtml(r.phone_number_id || '—')}</td>
       <td>${escapeHtml(r.quality_rating || '—')}</td>
       <td>${statusBadge(r.status)}</td>
+      <td>${registrationBadgeHtml(r)}</td>
       <td>${formatDate(r.verified_at)}</td>
     </tr>
   `).join('');
@@ -1559,7 +1658,7 @@ function renderPlatformOverview(rows) {
 async function loadHealthMonitor() {
   setInlineError('health-monitor-error', null);
   const tbody = document.getElementById('health-monitor-table-body');
-  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">Loading…</td></tr>';
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="9">Loading…</td></tr>';
 
   try {
     const rows = await apiFetch('/api/admin/health');
@@ -1574,7 +1673,7 @@ async function loadHealthMonitor() {
 function renderHealthMonitor(rows) {
   const tbody = document.getElementById('health-monitor-table-body');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">No WhatsApp Business Accounts connected yet.</td></tr>';
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="9">No WhatsApp Business Accounts connected yet.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((r) => `
@@ -1585,6 +1684,7 @@ function renderHealthMonitor(rows) {
       <td>${statusBadge(r.waba_status)}</td>
       <td>${escapeHtml(r.quality_rating || '—')}</td>
       <td>${escapeHtml(r.restriction_status || '—')}</td>
+      <td>${healthStatusSummaryHtml(r)}</td>
       <td>${formatDateTime(r.last_successful_webhook_at)}</td>
       <td>${r.forwarding_failure_count}</td>
     </tr>
