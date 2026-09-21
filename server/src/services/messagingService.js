@@ -145,6 +145,15 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
         'auth_code_required'
       );
     }
+    // Meta's documented cap on an Authentication template's code parameter.
+    // Checked here so the caller gets a clear error from us instead of a
+    // Meta rejection.
+    if (code.length > 15) {
+      throw new MessagingError(
+        `The one-time code is ${code.length} characters — WhatsApp allows at most 15 for an Authentication template.`,
+        'auth_code_invalid'
+      );
+    }
     finalComponents = metaClient.buildAuthenticationSendComponents(code);
   }
   if (type === 'template' && template && mediaHeaderService.isMediaHeaderType(template.header_type)) {

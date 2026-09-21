@@ -87,8 +87,8 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   the single param, under any key — `"params": { "code": "123456" }`. Wasi
   sends it as both the body parameter and the Copy code button's parameter,
   which Meta requires (you don't build the button component yourself). A
-  request with no code is rejected with `auth_code_required` (409). Meta
-  limits the code to 15 characters.
+  request with no code is rejected with `auth_code_required` (409), and a
+  code over 15 characters (Meta's limit) with `auth_code_invalid` (409).
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.

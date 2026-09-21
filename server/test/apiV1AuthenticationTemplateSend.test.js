@@ -101,7 +101,7 @@ test('an Authentication template send carries the code in body AND button; a mis
     return { ok: true, status: 200, json: async () => ({ id: `${SUITE_PREFIX}meta_template_id`, status: 'APPROVED', category: 'AUTHENTICATION' }) };
   };
 
-  let okRes, okData, missingRes, missingData;
+  let okRes, okData, missingRes, missingData, tooLongRes, tooLongData;
   try {
     const templateName = `${SUITE_PREFIX}otp_${Date.now()}`;
     const templateRes = await fetch(`${baseUrl}/api/templates`, {
@@ -128,6 +128,12 @@ test('an Authentication template send carries the code in body AND button; a mis
       body: JSON.stringify({ client_id: testClientId, to: phone, type: 'template', template: templateName }),
     });
     missingData = await missingRes.json();
+
+    tooLongRes = await fetch(`${baseUrl}/api/v1/messages`, {
+      method: 'POST', headers: authed(apiKey),
+      body: JSON.stringify({ client_id: testClientId, to: phone, type: 'template', template: templateName, params: { code: '1234567890123456' } }),
+    });
+    tooLongData = await tooLongRes.json();
   } finally {
     global.fetch = originalFetch;
   }
@@ -141,4 +147,8 @@ test('an Authentication template send carries the code in body AND button; a mis
 
   assert.equal(missingRes.status, 409, JSON.stringify(missingData));
   assert.equal(missingData.error.code, 'auth_code_required');
+
+  assert.equal(tooLongRes.status, 409, JSON.stringify(tooLongData));
+  assert.equal(tooLongData.error.code, 'auth_code_invalid');
+  assert.equal(sendRequests.length, 1, 'the over-length code must also be rejected before reaching Meta');
 });
