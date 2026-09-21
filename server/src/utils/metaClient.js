@@ -533,6 +533,30 @@ function buildAuthenticationSendComponents(code) {
   ];
 }
 
+// Extracts the one-time code from a caller's raw `params` for an
+// Authentication template send — strictly: exactly one entry, whose value is
+// a non-empty (after trimming) string or a finite number. Returns
+// { code } (always a string; a number is converted) or { error } with a
+// message saying what was wrong. Runs on the RAW params, before
+// buildNamedBodyComponents, because that function stringifies everything
+// (null -> "null") and its key order (integer-like keys first) would make
+// "pick one of several" arbitrary — so anything ambiguous is rejected
+// instead of guessed at. Length is checked separately in
+// messagingService.sendChatMessage, which every caller passes through.
+function extractAuthenticationCode(params) {
+  const entries = params && typeof params === 'object' && !Array.isArray(params) ? Object.entries(params) : [];
+  if (entries.length !== 1) {
+    return { error: `Authentication templates take exactly one parameter (the code); received ${entries.length}.` };
+  }
+  const [key, value] = entries[0];
+  const isValidString = typeof value === 'string' && value.trim() !== '';
+  const isValidNumber = typeof value === 'number' && Number.isFinite(value);
+  if (!isValidString && !isValidNumber) {
+    return { error: `${key} must be a non-empty string or number.` };
+  }
+  return { code: String(value) };
+}
+
 // Template messages — deliverable any time (business-initiated), required
 // outside the 24h window and for all broadcast/campaign sends. `components`
 // follows Meta's template component array shape — build it with
@@ -920,6 +944,7 @@ module.exports = {
   buildNamedHeaderComponents,
   buildNamedBodyComponents,
   buildAuthenticationSendComponents,
+  extractAuthenticationCode,
   buildTemplateCreatePayload,
   createMessageTemplate,
   updateMessageTemplate,

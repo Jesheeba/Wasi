@@ -84,11 +84,14 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   session-message rule). Outside that window this call is rejected, not
   silently downgraded.
 - **Authentication (OTP / Copy code) templates**: pass the one-time code as
-  the single param, under any key — `"params": { "code": "123456" }`. Wasi
+  the only param, under any key — `"params": { "code": "123456" }`. Wasi
   sends it as both the body parameter and the Copy code button's parameter,
-  which Meta requires (you don't build the button component yourself). A
-  request with no code is rejected with `auth_code_required` (409), and a
-  code over 15 characters (Meta's limit) with `auth_code_invalid` (409).
+  which Meta requires (you don't build the button component yourself).
+  `params` must have exactly one entry, a non-empty string or a number
+  (numbers are sent as text). Anything else — no params, several params,
+  null/boolean/object/array/empty values, or a code over 15 characters
+  (Meta's limit) — is rejected with `auth_code_invalid` (409) and a message
+  saying what was wrong; nothing is sent to Meta.
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.

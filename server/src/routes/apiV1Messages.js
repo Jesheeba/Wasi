@@ -65,6 +65,7 @@ router.post('/', asyncHandler(async (req, res) => {
   // closing — a client with a missing/unsynced template should sync it
   // first (POST /api/templates/sync), not have this endpoint guess for them.
   let templateLanguage;
+  let templateComponents = [];
   if (data.type === 'template') {
     const template = await messageTemplatesRepo.findByNameAndClient(pool, req.clientId, data.template);
     if (!template) {
@@ -72,6 +73,19 @@ router.post('/', asyncHandler(async (req, res) => {
         `No local record of template "${data.template}" — sync templates (POST /api/templates/sync) so its real approved language can be resolved, then retry.`);
     }
     templateLanguage = template.language;
+
+    if (template.category === 'Authentication') {
+      // OTP template: params must be exactly one code value, validated on the
+      // raw input (see metaClient.extractAuthenticationCode). The body +
+      // Copy code button pair is built here; sendChatMessage re-checks the
+      // length and rebuilds the same shape for callers that don't come
+      // through this route.
+      const extracted = metaClient.extractAuthenticationCode(data.params);
+      if (extracted.error) return sendApiError(res, 409, 'auth_code_invalid', extracted.error);
+      templateComponents = metaClient.buildAuthenticationSendComponents(extracted.code);
+    } else {
+      templateComponents = metaClient.buildNamedBodyComponents(data.params);
+    }
   }
 
   try {
@@ -80,7 +94,7 @@ router.post('/', asyncHandler(async (req, res) => {
       body: data.body,
       templateName: data.template,
       templateLanguage,
-      templateComponents: data.type === 'template' ? metaClient.buildNamedBodyComponents(data.params) : [],
+      templateComponents,
       headerMediaUrl: data.headerMediaUrl,
       // interactive (type: 'interactive') only — buttons routes through
       // sendChatMessage -> metaClient.sendInteractiveMessage, the same path

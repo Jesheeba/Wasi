@@ -131,11 +131,13 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
   // Meta), not a "sent then failed" message bubble.
   let finalComponents = templateComponents || [];
   // Authentication (OTP) templates need the code in BOTH the body and the
-  // Copy code button, or Meta rejects with (#131008). Callers only supply
-  // the code once (Hub API `params`, whatever key name they chose), so it's
-  // lifted from the first body parameter here and re-emitted in Meta's
-  // required two-component shape. Resolved pre-flight, like the media-header
-  // check below: a missing code never creates a message row.
+  // Copy code button, or Meta rejects with (#131008). The Hub API route has
+  // already validated its raw params down to exactly one code and built this
+  // pair (routes/apiV1Messages.js); for any other caller the code is lifted
+  // from the first body parameter here. Either way it's re-emitted in
+  // Meta's required two-component shape and length-checked. Resolved
+  // pre-flight, like the media-header check below: a bad code never creates
+  // a message row.
   if (type === 'template' && template?.category === 'Authentication') {
     const bodyComponent = finalComponents.find((c) => c.type === 'body');
     const code = bodyComponent?.parameters?.[0]?.text;
