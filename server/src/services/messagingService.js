@@ -130,6 +130,23 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
   // resolved is a pre-flight rejection (nothing was ever attempted with
   // Meta), not a "sent then failed" message bubble.
   let finalComponents = templateComponents || [];
+  // Authentication (OTP) templates need the code in BOTH the body and the
+  // Copy code button, or Meta rejects with (#131008). Callers only supply
+  // the code once (Hub API `params`, whatever key name they chose), so it's
+  // lifted from the first body parameter here and re-emitted in Meta's
+  // required two-component shape. Resolved pre-flight, like the media-header
+  // check below: a missing code never creates a message row.
+  if (type === 'template' && template?.category === 'Authentication') {
+    const bodyComponent = finalComponents.find((c) => c.type === 'body');
+    const code = bodyComponent?.parameters?.[0]?.text;
+    if (!code) {
+      throw new MessagingError(
+        'This is an Authentication template — pass the one-time code as a param (e.g. params: { "code": "123456" }).',
+        'auth_code_required'
+      );
+    }
+    finalComponents = metaClient.buildAuthenticationSendComponents(code);
+  }
   if (type === 'template' && template && mediaHeaderService.isMediaHeaderType(template.header_type)) {
     let resolved;
     try {

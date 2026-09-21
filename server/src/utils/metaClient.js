@@ -517,6 +517,22 @@ function buildNamedHeaderComponents(paramValues) {
   }];
 }
 
+// Builds the `components` array for SENDING an Authentication template
+// (OTP / Copy code button). Meta requires the one-time code twice: once as
+// the body's parameter and once as the button's parameter (sub_type 'url',
+// index '0' — Meta's documented shape for both COPY_CODE and ONE_TAP
+// authentication buttons; a send with only the body fails with "(#131008)
+// Required parameter is missing"). Unlike buildNamedBodyComponents, the body
+// parameter carries no `parameter_name` — Authentication bodies are Meta-
+// generated with a positional {{1}}, not a named parameter.
+function buildAuthenticationSendComponents(code) {
+  const value = String(code);
+  return [
+    { type: 'body', parameters: [{ type: 'text', text: value }] },
+    { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: value }] },
+  ];
+}
+
 // Template messages — deliverable any time (business-initiated), required
 // outside the 24h window and for all broadcast/campaign sends. `components`
 // follows Meta's template component array shape — build it with
@@ -903,6 +919,7 @@ module.exports = {
   sendTemplateMessage,
   buildNamedHeaderComponents,
   buildNamedBodyComponents,
+  buildAuthenticationSendComponents,
   buildTemplateCreatePayload,
   createMessageTemplate,
   updateMessageTemplate,

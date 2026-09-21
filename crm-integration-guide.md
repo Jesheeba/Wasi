@@ -83,6 +83,12 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   within 24 hours of the customer's last inbound message (WhatsApp's
   session-message rule). Outside that window this call is rejected, not
   silently downgraded.
+- **Authentication (OTP / Copy code) templates**: pass the one-time code as
+  the single param, under any key — `"params": { "code": "123456" }`. Wasi
+  sends it as both the body parameter and the Copy code button's parameter,
+  which Meta requires (you don't build the button component yourself). A
+  request with no code is rejected with `auth_code_required` (409). Meta
+  limits the code to 15 characters.
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.
