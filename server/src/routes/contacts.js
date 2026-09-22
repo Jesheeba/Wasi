@@ -103,12 +103,32 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
 // comment). Requires a source; writes an immutable consent_events row in
 // the same transaction as the status change. consentRepo.recordEvent runs
 // on its own privileged connection (see its module comment), not req.db.
+//
+// Consent hardening Phase 1: opted_out is sticky (consentRepo.recordEvent
+// throws ConsentBlockedError for an 'opted_in' event against an
+// already-opted-out contact) — surfaced here as a 409, not a 500, since a
+// client/team member hitting this isn't a server error, it's this route
+// correctly refusing to overwrite a real opt-out. actorType/actorId thread
+// through so the new consent_events columns (migration 077) are populated
+// for whoever eventually calls this (nothing does yet — Phase 2 builds the
+// UI that will).
 router.post('/:id/consent', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const data = consentEventCreateSchema.parse(req.body);
-  const contact = await consentRepo.recordEvent(req.clientId, req.params.id, data);
-  if (!contact) return res.status(404).json({ error: 'Not found' });
-  res.status(201).json(contact);
+  try {
+    const contact = await consentRepo.recordEvent(req.clientId, req.params.id, {
+      ...data,
+      actorType: req.actorType,
+      actorId: req.actorType === 'team_member' ? req.actorId : null,
+    });
+    if (!contact) return res.status(404).json({ error: 'Not found' });
+    res.status(201).json(contact);
+  } catch (err) {
+    if (err instanceof consentRepo.ConsentBlockedError) {
+      return res.status(409).json({ error: err.message });
+    }
+    throw err;
+  }
 }));
 
 router.get('/:id/consent', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {

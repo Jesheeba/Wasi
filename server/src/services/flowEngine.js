@@ -172,6 +172,14 @@ async function executeAction(db, clientId, contact, node) {
     // db-first (see its module comment) — always called on the privileged
     // pool here, same as every other flowEngine call (metaWebhook.js is the
     // only caller, on `pool`).
+    //
+    // Consent hardening Phase 1, behaviour change accepted by direct
+    // instruction: opted_in is sticky-blocked against an already-opted-out
+    // contact (consentRepo.ConsentBlockedError). No special handling here —
+    // it propagates like any other action-node failure, and runToRest's
+    // existing generic catch records a 'stalled' flow_event with the real
+    // reason and stops the flow at this node, rather than this node
+    // silently overwriting a real opt-out the way it used to.
     await consentRepo.recordEvent(clientId, contact.id, {
       event: node.config.opt_in_event,
       source: 'flow',

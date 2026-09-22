@@ -16,6 +16,8 @@ const { pool } = require('../db/pool');
 const alertEventsRepo = require('../repositories/alertEventsRepo');
 const alertNotifier = require('../services/alertNotifier');
 const metaClient = require('../utils/metaClient');
+const consentRepo = require('../repositories/consentRepo');
+const failedConsentWritesRepo = require('../repositories/failedConsentWritesRepo');
 
 const TICK_MS = 5 * 60 * 1000;
 const FAILED_SEND_SPIKE_THRESHOLD = 10;
@@ -218,6 +220,75 @@ async function checkAuthClassErrors() {
   }));
 }
 
+// 8. Consent hardening Phase 1 follow-up — replays failed_consent_writes.
+// consentRepo.recordOptOutDurable falls back to writing here when even a
+// retry fails; a row sitting here unresolved means a real customer said
+// STOP and it's still not reflected in contacts.opt_in_status, so they
+// could keep receiving marketing they opted out of. This is a mutation, not
+// a pure condition check like the numbered checks above — it runs once per
+// tick, BEFORE checkPendingFailedConsentWrites below, so a row fixed by
+// this replay is already gone by the time that check builds its alert
+// candidate list, and the alert can auto-resolve within the same tick a
+// transient outage clears. Every row is independent (own try/catch) — one
+// still-failing row must never block the rest of the batch from being
+// retried.
+async function replayFailedConsentWrites() {
+  const pending = await failedConsentWritesRepo.listPending();
+  for (const row of pending) {
+    try {
+      await consentRepo.recordEvent(row.client_id, row.contact_id, {
+        event: row.event, source: row.source, evidence: row.evidence,
+      });
+      // Either the write now succeeded, or the contact no longer exists
+      // (recordEvent's own not-found case resolves to null without
+      // throwing) — both mean there is nothing further this row can
+      // accomplish, so it's resolved either way.
+      await failedConsentWritesRepo.resolve(row.id);
+    } catch (err) {
+      if (err instanceof consentRepo.ConsentBlockedError) {
+        // Only reachable if this row's event were ever 'opted_in' — today
+        // recordOptOutDurable only ever writes 'opted_out' rows here, so
+        // this is defensive, not the expected path. It means the contact
+        // has genuinely opted out since this row was written, by some
+        // other route — a stronger, more current signal than this stale
+        // pending write, so it's resolved as moot rather than retried
+        // forever against a target state that would just get re-blocked.
+        console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} blocked — contact has opted out since; resolving as moot, not retrying:`, err.message);
+        await failedConsentWritesRepo.resolve(row.id);
+        continue;
+      }
+      // Still failing for the same (or a new) reason — leave it pending,
+      // it gets another attempt next tick.
+      console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} still failing, left pending:`, err.message);
+    }
+  }
+}
+
+// 9. Any failed_consent_writes row still unresolved after the replay above
+// — a real customer opt-out that is STILL not reflected in
+// contacts.opt_in_status. Unlike chatSlaLogsRepo's own alertOnWriteFailure
+// (left purely for a human to resolve, since nothing re-checks it), this
+// alert auto-resolves via reconcile()'s existing resolveStale the moment
+// replayFailedConsentWrites clears the last pending row — there IS now a
+// real periodic re-check that can tell "is this still happening," so it
+// should behave like every other condition-based check in this file, not
+// like a one-off write failure. Deliberately a SEPARATE alert_type from
+// consentRepo's own immediate 'consent_opt_out_write_failed' (raised the
+// instant a write first fails, stays open until a human closes it — fast
+// awareness of a fresh failure) — this one instead reflects ongoing
+// backlog and clears itself; conflating the two would mean either losing
+// the immediate ping or losing the auto-resolve.
+async function checkPendingFailedConsentWrites() {
+  const count = await failedConsentWritesRepo.countPending();
+  if (count === 0) return [];
+  return [{
+    dedupKey: 'global',
+    severity: 'critical',
+    message: `${count} inbound WhatsApp opt-out(s) are still not recorded after retrying (failed_consent_writes) — the affected contact(s) may still receive marketing they opted out of. This is a compliance risk.`,
+    details: { pendingCount: count },
+  }];
+}
+
 async function maybeSendDailyDigest() {
   const today = new Date().toISOString().slice(0, 10);
   if (await alertEventsRepo.existsAny('daily_digest', today)) return;
@@ -261,6 +332,8 @@ async function tick() {
     await reconcile('webhook_delivery_failures', await checkWebhookDeliveryFailures());
     await reconcile('failed_send_spike', await checkFailedSendSpike());
     await reconcile('auth_class_error', await checkAuthClassErrors());
+    await replayFailedConsentWrites();
+    await reconcile('consent_opt_out_pending_replay', await checkPendingFailedConsentWrites());
     await maybeSendDailyDigest();
   } catch (err) {
     console.error('alertRunner tick failed:', err.message);
@@ -289,4 +362,6 @@ module.exports = {
   checkWebhookDeliveryFailures,
   checkFailedSendSpike,
   checkAuthClassErrors,
+  replayFailedConsentWrites,
+  checkPendingFailedConsentWrites,
 };

@@ -229,27 +229,22 @@ async function handleInboundMessages(waba, value) {
       // insert above is idempotent on meta_message_id, so an uncaught throw
       // here would 500 (Meta retries) but the retry's insert becomes a
       // no-op, permanently skipping this whole block — including
-      // enqueueForwards — with no way to ever recover it. That's not a
-      // trade worth making for a consent write specifically: recordEvent is
-      // its own atomic transaction (see consentRepo.js), so a throw already
-      // means nothing was persisted regardless of whether we retry: the
-      // real enforcement point (messagingService.assertConsentForTemplate)
-      // re-checks contacts.opt_in_status fresh from the DB at send time
-      // rather than trusting this request succeeded. Swallowing here loses
-      // no protection the old code actually had — it just stops a lost
-      // consent write from also killing the forward.
+      // enqueueForwards — with no way to ever recover it. recordOptOutDurable
+      // never throws (consent hardening Phase 1 — see its own comment in
+      // consentRepo.js): it retries once, and on repeated failure writes a
+      // durable fallback row and raises an alert instead of losing the
+      // opt-out to a log line, which is what this used to do.
       if (isOptOutMessage(body)) {
-        try {
-          await consentRepo.recordEvent(clientId, contact.id, {
-            event: 'opted_out',
-            source: 'inbound_stop_keyword',
-            evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
-          });
-        } catch (err) {
-          console.error('metaWebhook: consentRepo.recordEvent FAILED for an opt-out message — opt-out was NOT recorded, needs manual follow-up:', {
-            clientId, metaMessageId: msg.id, error: err.message,
-          });
-        }
+        // phone passed explicitly (not just inside evidence) so
+        // recordOptOutDurable's own last-resort log line is guaranteed to
+        // have it even if a future caller's evidence shape omits it —
+        // see that function's own comment for why this can't rely on
+        // evidence's contents.
+        await consentRepo.recordOptOutDurable(clientId, contact.id, {
+          source: 'inbound_stop_keyword',
+          phone,
+          evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
+        });
       }
 
       // Isolated so a bug in a client's own automation rules can never
