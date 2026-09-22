@@ -13,6 +13,8 @@ const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRe
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
+const alertNotifier = require('../services/alertNotifier');
+const { getAlertingConfigStatus } = require('../utils/alertingConfig');
 const messagingTierRefreshRunner = require('../services/messagingTierRefreshRunner');
 const sendabilityMonitorRunner = require('../services/sendabilityMonitorRunner');
 const metaClient = require('../utils/metaClient');
@@ -562,6 +564,31 @@ router.get('/health', asyncHandler(async (req, res) => {
     order by c.name asc
   `);
   res.json(rows);
+}));
+
+// Backs the Health Monitor's "Alerts are not configured" banner —
+// alertingConfig.js is the single source of truth this and index.js's
+// startup warning both read, so they can never disagree. Pure env var
+// presence check, no DB.
+router.get('/alerting-status', asyncHandler(async (req, res) => {
+  res.json(getAlertingConfigStatus());
+}));
+
+// Admin-only "Send test alert" — bypasses alert_events entirely (no row
+// written, real or fake) so a test click never clutters the real alert
+// history or gets picked up as "already open" by alertRunner.js's own
+// dedup logic. Calls alertNotifier.notify() directly with a synthetic,
+// clearly-labeled alert and relays its real per-channel result — including
+// Resend's or Meta's exact error text — back to the admin UI, rather than
+// a bare success/failure toast.
+router.post('/alerts/test', asyncHandler(async (req, res) => {
+  const result = await alertNotifier.notify({
+    alert_type: 'test_alert',
+    severity: 'info',
+    message: `Test alert, sent manually from the admin panel by admin ${req.adminId} to verify alerting is configured correctly.`,
+    details: { triggeredBy: req.adminId, at: new Date().toISOString() },
+  });
+  res.json(result);
 }));
 
 // --- Volume: sends per client per day ---

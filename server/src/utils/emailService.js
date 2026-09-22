@@ -14,7 +14,12 @@ async function sendEmail({ to, subject, html }) {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: process.env.EMAIL_FROM || 'Wasi CRM <noreply@example.com>',
+      // Matches .env.example's own placeholder exactly — previously drifted
+      // ('noreply@example.com' here vs 'noreply@yourdomain.com' there),
+      // harmless while EMAIL_FROM is always meant to be overridden, but
+      // worth keeping the two in sync rather than two different-looking
+      // placeholders for the same unset case.
+      from: process.env.EMAIL_FROM || 'Wasi CRM <noreply@yourdomain.com>',
       to,
       subject,
       html,

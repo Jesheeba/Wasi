@@ -1663,6 +1663,8 @@ async function loadHealthMonitor() {
   const tbody = document.getElementById('health-monitor-table-body');
   tbody.innerHTML = '<tr class="table-empty-row"><td colspan="9">Loading…</td></tr>';
 
+  loadAlertingStatusBanner();
+
   try {
     const rows = await apiFetch('/api/admin/health');
     renderHealthMonitor(rows);
@@ -1670,6 +1672,66 @@ async function loadHealthMonitor() {
     if (err.status === 401) return;
     tbody.innerHTML = '';
     setInlineError('health-monitor-error', err.message);
+  }
+}
+
+// Confirmed real 2026-09-22: production has RESEND_API_KEY/ALERT_EMAIL_TO/
+// ALERT_WHATSAPP_TO/ALERT_WABA_ID all unset, and this was invisible
+// anywhere in the admin panel. Fetched separately from the health rows
+// above (its own endpoint, its own failure mode) so a health-fetch error
+// never hides this banner or vice versa.
+async function loadAlertingStatusBanner() {
+  const banner = document.getElementById('alerting-status-banner');
+  if (!banner) return;
+  try {
+    const status = await apiFetch('/api/admin/alerting-status');
+    const gaps = [];
+    if (!status.resendConfigured) gaps.push('email (RESEND_API_KEY)');
+    if (!status.emailConfigured) gaps.push('alert recipient (ALERT_EMAIL_TO)');
+    if (!status.whatsappConfigured) gaps.push('WhatsApp alerts (ALERT_WHATSAPP_TO/ALERT_WABA_ID)');
+    if (gaps.length === 0) {
+      banner.style.display = 'none';
+      return;
+    }
+    banner.style.display = 'flex';
+    banner.textContent = `Alerts are not fully configured — missing: ${gaps.join(', ')}. Ops alerts are only logged to the console, not actually sent. See .env.example.`;
+  } catch (err) {
+    if (err.status === 401) return;
+    // A failure to even CHECK the status is itself worth surfacing, not
+    // silently hidden — but distinguishable from "confirmed not configured".
+    banner.style.display = 'flex';
+    banner.textContent = `Could not check alerting configuration: ${err.message}`;
+  }
+}
+
+// "Send test alert" — POST /api/admin/alerts/test, then renders the real
+// per-channel result (attempted/sent/error, including Resend's or Meta's
+// exact error text) rather than a bare success/failure toast. Never writes
+// a real alert_events row (see that route's own comment).
+async function sendTestAlert() {
+  const btn = document.getElementById('send-test-alert-btn');
+  const resultEl = document.getElementById('test-alert-result');
+  btn.disabled = true;
+  resultEl.style.display = 'block';
+  resultEl.textContent = 'Sending test alert…';
+  try {
+    const result = await apiFetch('/api/admin/alerts/test', { method: 'POST' });
+    const lines = [];
+    for (const [channel, r] of [['Email', result.email], ['WhatsApp', result.whatsapp]]) {
+      if (!r.attempted) {
+        lines.push(`${channel}: not attempted — ${r.reason || r.error || 'not configured'}`);
+      } else if (r.sent) {
+        lines.push(`${channel}: sent successfully.`);
+      } else {
+        const metaDetail = r.metaError ? ` (Meta: ${JSON.stringify(r.metaError)})` : '';
+        lines.push(`${channel}: FAILED — ${r.error}${metaDetail}`);
+      }
+    }
+    resultEl.textContent = lines.join('\n');
+  } catch (err) {
+    resultEl.textContent = `Could not send test alert: ${err.message}`;
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -2525,6 +2587,7 @@ function initEventListeners() {
   document.getElementById('refresh-wabas-btn').addEventListener('click', loadWabas);
   document.getElementById('refresh-platform-overview-btn').addEventListener('click', loadPlatformOverview);
   document.getElementById('refresh-health-monitor-btn').addEventListener('click', loadHealthMonitor);
+  document.getElementById('send-test-alert-btn').addEventListener('click', sendTestAlert);
   document.getElementById('refresh-volume-btn').addEventListener('click', loadVolume);
   document.getElementById('volume-days-filter').addEventListener('change', loadVolume);
   document.getElementById('refresh-failures-btn').addEventListener('click', loadFailures);

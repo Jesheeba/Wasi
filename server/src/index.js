@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { createApp } = require('./app');
+const { getAlertingConfigStatus } = require('./utils/alertingConfig');
 const broadcastRunner = require('./services/broadcastRunner');
 const forwardRunner = require('./services/forwardRunner');
 const alertRunner = require('./services/alertRunner');
@@ -36,11 +37,36 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+// Confirmed real (2026-09-22, direct question): production has none of
+// RESEND_API_KEY/ALERT_EMAIL_TO/ALERT_WHATSAPP_TO/ALERT_WABA_ID set — every
+// ops alert this app has ever raised has silently gone nowhere but the
+// console. This was invisible because every degrade-gracefully code path
+// (emailService.js, alertNotifier.js) logs a "would have sent" line and
+// moves on, exactly as designed for local dev, but nothing surfaced that
+// same condition anywhere a deployed operator would actually see it. This
+// startup check and the matching admin Health Monitor banner
+// (GET /api/admin/alerting-status, alertingConfig.js) close that — a missing
+// var is now a loud boot-time log line, not something only discoverable by
+// reading server logs during an actual incident.
+function logAlertingConfigWarnings() {
+  const status = getAlertingConfigStatus();
+  if (!status.resendConfigured) {
+    console.warn('[startup] RESEND_API_KEY is not set — password reset, email verification, admin invites, AND ops alert emails will only log to console, never actually send.');
+  }
+  if (!status.emailConfigured) {
+    console.warn('[startup] ALERT_EMAIL_TO is not set — ops alerts have no email recipient and will only log to console.');
+  }
+  if (!status.whatsappConfigured) {
+    console.warn('[startup] ALERT_WHATSAPP_TO/ALERT_WABA_ID are not both set — WhatsApp ops alerts are disabled (email-only, if that\'s configured).');
+  }
+}
+
 const port = process.env.PORT || 4000;
 const app = createApp();
 
 app.listen(port, () => {
   console.log(`wasi-crm-server listening on http://localhost:${port}`);
+  logAlertingConfigWarnings();
   broadcastRunner.start();
   forwardRunner.start();
   alertRunner.start();

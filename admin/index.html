@@ -329,8 +329,20 @@
               <div class="page-title">Health Monitor</div>
               <div class="page-subtitle">Quality rating, restriction status, and webhook staleness — the daily check</div>
             </div>
+            <button class="btn-secondary" id="send-test-alert-btn"><i data-lucide="bell-ring" style="width:14px;"></i> Send test alert</button>
             <button class="btn-secondary" id="refresh-health-monitor-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
           </div>
+          <!-- Confirmed real 2026-09-22: production had every ALERT_*/
+               RESEND_API_KEY env var unset, and this was invisible anywhere
+               in the admin panel — every ops alert had silently gone
+               nowhere. GET /api/admin/alerting-status (alertingConfig.js,
+               the same source index.js's startup warning reads) drives
+               this banner so that can't happen invisibly again. -->
+          <div id="alerting-status-banner" class="inline-error" style="display:none; margin-bottom:1rem;"></div>
+          <!-- Result of send-test-alert-btn — per-channel attempted/sent/
+               error, including Resend's or Meta's exact wording, not just a
+               pass/fail toast. -->
+          <div id="test-alert-result" style="display:none; margin-bottom:1rem; padding:10px 14px; border-radius:8px; font-size:0.85rem; background:#F8FAFC; border:1px solid #E2E8F0; white-space:pre-line;"></div>
           <div id="health-monitor-error" class="inline-error" style="display:none;"></div>
           <div class="table-card">
             <div style="overflow-x:auto;">
