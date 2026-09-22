@@ -231,6 +231,10 @@ function createApp() {
   // that can drift. Safe to serve raw: pure validation logic, no secrets,
   // no server-only code path.
   app.get('/templateParams.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'templateParams.js')));
+  // Same static-asset pattern as templateParams.js immediately above —
+  // consent hardening Phase 2's shared opt-in confirmation wording (see
+  // consentStatement.js's own module comment).
+  app.get('/consentStatement.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'consentStatement.js')));
   app.use('/marketing', express.static(path.join(REPO_ROOT, 'marketing')));
   app.use('/admin', express.static(path.join(REPO_ROOT, 'admin')));
   // Postman collection + environment template for the admin panel's API

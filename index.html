@@ -386,6 +386,16 @@
                 <input type="text" id="contact-search" placeholder="Search contacts..." />
               </div>
               <div style="display: flex; gap: 8px; align-items: center;">
+                <!-- Consent hardening Phase 2 — bulk opt-in. Hidden (no
+                     "display:none" needed, [hidden] does it) whenever
+                     nothing is selected; shown by app.js's
+                     updateContactsBulkToolbar once at least one row is
+                     checked. Owner/Admin/Manager only — app.js hides this
+                     for an Agent, matching the server's own requireRole
+                     gate on POST /api/contacts/bulk-consent (a hidden
+                     button is a UX nicety, not the real gate). -->
+                <span id="contacts-selected-count" style="font-size: 0.78rem; color: var(--text-muted);" hidden></span>
+                <button class="btn-secondary" id="contacts-bulk-opt-in-btn" hidden><i data-lucide="check-check" style="width:14px;"></i> Mark as opted in</button>
                 <input type="file" id="import-contacts-csv-file" accept=".csv" style="display:none;" />
                 <button class="btn-secondary" id="import-contacts-csv-btn"><i data-lucide="upload"></i> Import CSV</button>
                 <button class="btn-secondary" id="export-contacts-csv-btn"><i data-lucide="download"></i> Export CSV</button>
@@ -395,6 +405,7 @@
             <table class="data-table">
               <thead>
                 <tr>
+                  <th style="width:32px;"><input type="checkbox" id="contacts-select-all" title="Select all"></th>
                   <th>Name</th>
                   <th>Phone Number</th>
                   <th>Tags</th>
@@ -1450,6 +1461,16 @@
       </div>
       <div style="font-size: 0.8rem; color: #6B7280; margin: -8px 0 14px;" id="contact-detail-phone"></div>
 
+      <!-- Consent hardening Phase 2 — per-contact opt-in/opt-out control.
+           Rendered by app.js's renderContactOptInInto; "Mark opted in"
+           reuses the exact same confirmation modal (#modal-bulk-opt-in)
+           bulk opt-in uses, just with a single-id array — one flow, not
+           two parallel implementations. -->
+      <div style="margin-bottom: 14px;">
+        <div class="details-section-title">Opt-In Status</div>
+        <div id="contact-detail-optin" style="font-size: 0.825rem;"></div>
+      </div>
+
       <div>
         <div class="details-section-title">Tags</div>
         <div class="contact-tags-wrapper" id="contact-detail-tags-wrapper">
@@ -2239,6 +2260,44 @@
     </div>
   </div>
 
+  <!-- Consent hardening Phase 2 — the one bulk/per-contact opt-in
+       confirmation modal, opened via app.js's openOptInConfirmModal(ids,
+       {contactName}) for both the Contacts-view bulk toolbar and the
+       contact detail panel's single "Mark opted in" button — one flow, not
+       two. The statement text is loaded from window.consentStatement
+       (served raw, see consentStatement.js's own module comment) so it's
+       never hand-duplicated here. Confirm stays disabled until both the
+       checkbox is ticked and a method is chosen — enforced in app.js, not
+       just visually implied. -->
+  <div id="modal-bulk-opt-in" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-bulk-opt-in-title">Mark as opted in</h3>
+        <button class="close-modal-btn" data-close-modal="modal-bulk-opt-in"><i data-lucide="x"></i></button>
+      </div>
+      <p id="modal-bulk-opt-in-subtitle" style="font-size:0.85rem; color:var(--text-muted); margin:-8px 0 14px;"></p>
+      <div id="modal-bulk-opt-in-statement" style="font-size:0.85rem; color:var(--text-main); line-height:1.5; background:#F8FAFC; border:1px solid var(--border-light); border-radius:8px; padding:10px 12px; margin-bottom:14px;"></div>
+      <label style="display:flex; gap:8px; align-items:flex-start; font-size:0.85rem; margin-bottom:14px; cursor:pointer;">
+        <input type="checkbox" id="modal-bulk-opt-in-confirm-checkbox" style="margin-top:2px;">
+        <span>I confirm the statement above.</span>
+      </label>
+      <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">How was this permission collected?</label>
+      <select class="form-input" id="modal-bulk-opt-in-method" style="margin-bottom:14px;">
+        <option value="">Select a method…</option>
+        <option value="website_form">Website sign-up form</option>
+        <option value="in_store">In-store / in-person</option>
+        <option value="existing_customer_agreement">Existing customer agreement</option>
+        <option value="other">Other</option>
+      </select>
+      <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Note (optional)</label>
+      <textarea class="form-input" id="modal-bulk-opt-in-note" rows="2" style="margin-bottom:14px; resize:vertical;" placeholder="Anything worth recording alongside this confirmation…"></textarea>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" class="btn-secondary" data-close-modal="modal-bulk-opt-in">Cancel</button>
+        <button type="button" class="btn-primary" id="modal-bulk-opt-in-confirm-btn" style="width:auto; padding:0 20px;" disabled>Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Error dialog — the themed-modal shell from the Group 2/3 dialog above,
        for a caught error that's too long or too structured (a Meta
        rejection's real wording, embedded-signup guidance, a multi-reason
@@ -2266,6 +2325,12 @@
        (app.js) can call the exact same functions the server checks at
        submit time, not a hand-duplicated copy. Must load before app.js. -->
   <script src="/templateParams.js"></script>
+  <!-- Consent hardening Phase 2 — same served-raw pattern as
+       templateParams.js immediately above, so the opt-in confirmation
+       modal's statement text (app.js) is the exact same string
+       routes/contacts.js stores in consent_events.evidence, never a
+       hand-duplicated copy. Must load before app.js. -->
+  <script src="/consentStatement.js"></script>
   <!-- Cache-busting query string, added 2026-09-05 — embeddedSignup.js had
        NONE at all until a real deploy served stale (pre-fix) code to a real
        client despite a plain refresh: it's served via a bare res.sendFile()

@@ -14,6 +14,22 @@ async function findById(db, clientId, id) {
   return rows[0] || null;
 }
 
+// Consent hardening Phase 2 — bulk opt-in needs each selected contact's
+// CURRENT status up front to report an honest updated/alreadyOptedIn split
+// (routes/contacts.js's bulk-consent route) without calling
+// consentRepo.recordEvent for a contact that's already opted_in. An id in
+// `ids` that doesn't belong to this client (deleted mid-selection, or
+// tampered with client-side) simply isn't in the returned rows — the caller
+// reports it as not found rather than this throwing.
+async function findManyByIds(db, clientId, ids) {
+  if (!ids.length) return [];
+  const { rows } = await db.query(
+    'select * from contacts where client_id = $1 and id = any($2::uuid[])',
+    [clientId, ids]
+  );
+  return rows;
+}
+
 async function create(db, clientId, { name, phone, tag_id, status }) {
   const { rows } = await db.query(
     `insert into contacts (client_id, name, phone, tag_id, status)
@@ -115,4 +131,4 @@ async function importFromRows(db, clientId, rows) {
   return results;
 }
 
-module.exports = { list, findById, create, update, remove, findByPhone, upsertByPhone, importFromRows };
+module.exports = { list, findById, findManyByIds, create, update, remove, findByPhone, upsertByPhone, importFromRows };

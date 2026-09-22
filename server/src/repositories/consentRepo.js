@@ -49,7 +49,16 @@ class ConsentBlockedError extends Error {
 // the outer request transaction.
 async function recordEvent(clientId, contactId, { event, source, evidence, actorType, actorId, batchId } = {}) {
   const client = await pool.connect();
-  client.on('error', (err) => console.error('consentRepo: checked-out client error (non-fatal):', err.message));
+  // Named handler, removed before release() — pg.Pool reuses the same
+  // underlying Client object across separate connect()/release() cycles, so
+  // an `.on('error', ...)` that's never removed accumulates one listener per
+  // call on whichever client happens to be reused, eventually tripping
+  // Node's MaxListenersExceededWarning. Found live via Phase 2's bulk
+  // opt-in, which calls this once per contact in a request (hundreds at
+  // once) — the exact same class of bug broadcastRunner.js's own
+  // processBroadcast already hit and fixed first; this mirrors that fix.
+  const onClientError = (err) => console.error('consentRepo: checked-out client error (non-fatal):', err.message);
+  client.on('error', onClientError);
   try {
     await client.query('BEGIN');
 
@@ -92,6 +101,7 @@ async function recordEvent(clientId, contactId, { event, source, evidence, actor
     await client.query('ROLLBACK');
     throw err;
   } finally {
+    client.removeListener('error', onClientError);
     client.release();
   }
 }

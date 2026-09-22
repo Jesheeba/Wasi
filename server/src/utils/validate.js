@@ -723,6 +723,27 @@ const consentEventCreateSchema = z.object({
   evidence: z.record(z.any()).optional(),
 });
 
+// Consent hardening Phase 2 — bulk "Mark as opted in" in Contacts.
+// `confirmed: true` is a defense-in-depth literal assertion mirroring the
+// UI's own required-checkbox gate — a caller bypassing the UI (a script,
+// the Hub API in a future phase) still has to explicitly assert this, not
+// just send a bare list of ids. `method` is the consent-collection method
+// the client is attesting to, shown in the confirmation modal's dropdown;
+// `note` is optional free text, mainly meaningful for 'other'. Both are
+// stored verbatim in each row's consent_events.evidence, alongside the
+// exact statement text shown (see app.js's CONSENT_STATEMENT usage) — the
+// route, not this schema, is what actually assembles that evidence object.
+// 20000 is a generous, not a tight, cap — this app's own no-pagination
+// convention means a "select all" in the UI is the client's whole contact
+// list; the cap exists only to reject a truly pathological request.
+const CONSENT_METHODS = ['website_form', 'in_store', 'existing_customer_agreement', 'other'];
+const bulkConsentOptInSchema = z.object({
+  contactIds: z.array(uuid).min(1).max(20000),
+  method: z.enum(CONSENT_METHODS),
+  note: z.string().max(500).optional(),
+  confirmed: z.literal(true, { errorMap: () => ({ message: 'confirmed must be true — this endpoint requires an explicit consent confirmation, not just a list of contact ids' }) }),
+});
+
 // PLAN.md item 15 — Meta conversation pricing / cost calculator. category
 // matches Meta's real conversation-category constants (uppercase,
 // including SERVICE — a conversation category, unlike a message template's
@@ -800,6 +821,8 @@ module.exports = {
   clientWebhookSchema,
   hubForwardConfigSchema,
   consentEventCreateSchema,
+  bulkConsentOptInSchema,
+  CONSENT_METHODS,
   apiMessageSendSchema,
   zapierSubscribeSchema,
   apiKeySelfCreateSchema,

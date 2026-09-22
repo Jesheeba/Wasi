@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const crypto = require('crypto');
 const multer = require('multer');
 const contactsRepo = require('../repositories/contactsRepo');
 const consentRepo = require('../repositories/consentRepo');
@@ -7,13 +8,15 @@ const contactAttributeValuesRepo = require('../repositories/contactAttributeValu
 const contactTagsRepo = require('../repositories/contactTagsRepo');
 const tagsRepo = require('../repositories/tagsRepo');
 const contactTimelineRepo = require('../repositories/contactTimelineRepo');
+const auditLogRepo = require('../repositories/auditLogRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const {
   uuid, contactCreateSchema, contactUpdateSchema, consentEventCreateSchema,
-  contactAttributeValueSetSchema, validateContactAttributeValue, contactTagAddSchema,
+  bulkConsentOptInSchema, contactAttributeValueSetSchema, validateContactAttributeValue, contactTagAddSchema,
 } = require('../utils/validate');
 const { requireRole } = require('../middleware/requireRole');
 const { parseContactsCsv } = require('../utils/csvContacts');
+const { CONSENT_STATEMENT } = require('../utils/consentStatement');
 
 const router = Router();
 
@@ -98,23 +101,100 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
   res.status(204).send();
 }));
 
-// The only route that can change opt_in_status — deliberately not part of
-// the generic PATCH above (see validate.js's consentEventCreateSchema
-// comment). Requires a source; writes an immutable consent_events row in
-// the same transaction as the status change. consentRepo.recordEvent runs
-// on its own privileged connection (see its module comment), not req.db.
+// Consent hardening Phase 2 — bulk "Mark as opted in," gated to
+// Owner/Admin/Manager only (requireRole's own list excludes Agent
+// entirely; Owner always passes regardless of the list — see
+// middleware/requireRole.js). Every id in contactIds is attempted
+// independently — one bad/blocked id must never abort the rest of the
+// batch, matching this codebase's own established "one bad row can't kill
+// the batch" discipline (contactListsRepo.addMembersFromRows,
+// broadcastRunner's per-broadcast try/catch, etc.). A shared batchId
+// (migration 077's consent_events.batch_id) lets every row this one
+// confirmation produced be found together later.
+//
+// findManyByIds is fetched up front purely to report an honest
+// updated/alreadyOptedIn split without a wasted recordEvent call for a
+// contact that's already opted_in — it is NOT the authority on whether a
+// write is allowed. consentRepo.recordEvent's own row lock is: a contact
+// that looked 'unknown' in this pre-fetch but gets a real inbound STOP
+// between the fetch and this specific row's write still lands in
+// skippedOptedOut, not updated, because recordEvent re-checks fresh under
+// FOR UPDATE regardless of what this route assumed.
+router.post('/bulk-consent', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  const data = bulkConsentOptInSchema.parse(req.body);
+  const contacts = await contactsRepo.findManyByIds(req.db, req.clientId, data.contactIds);
+  const foundIds = new Set(contacts.map((c) => c.id));
+
+  const batchId = crypto.randomUUID();
+  const actorType = req.actorType;
+  const actorId = req.actorType === 'team_member' ? req.actorId : null;
+  const evidence = { statement: CONSENT_STATEMENT, method: data.method, note: data.note || null };
+
+  let updated = 0;
+  let alreadyOptedIn = 0;
+  let skippedOptedOut = 0;
+  const notFound = data.contactIds.length - foundIds.size;
+
+  for (const contact of contacts) {
+    if (contact.opt_in_status === 'opted_in') {
+      alreadyOptedIn += 1;
+      continue;
+    }
+    try {
+      await consentRepo.recordEvent(req.clientId, contact.id, {
+        event: 'opted_in', source: 'bulk_ui', evidence, actorType, actorId, batchId,
+      });
+      updated += 1;
+    } catch (err) {
+      if (err instanceof consentRepo.ConsentBlockedError) {
+        skippedOptedOut += 1;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  await auditLogRepo.record({
+    actor_type: 'client', actor_id: req.clientId,
+    action: 'contacts_bulk_opt_in',
+    // "<id>: <description>" convention — matches auditLogRepo.list's own
+    // dual-shape match (see that repo's module comment / CLAUDE.md's fixed
+    // audit-trail-filter bug) so this shows up on the client's own history
+    // the same way every other self-serve action already does.
+    target: `${req.clientId}: ${updated} contact(s) marked opted in, batch ${batchId}`,
+  });
+
+  res.json({ batchId, total: data.contactIds.length, updated, alreadyOptedIn, skippedOptedOut, notFound });
+}));
+
+// The only route that can change opt_in_status for a single contact —
+// deliberately not part of the generic PATCH above (see validate.js's
+// consentEventCreateSchema comment). Requires a source; writes an
+// immutable consent_events row in the same transaction as the status
+// change. consentRepo.recordEvent runs on its own privileged connection
+// (see its module comment), not req.db.
 //
 // Consent hardening Phase 1: opted_out is sticky (consentRepo.recordEvent
 // throws ConsentBlockedError for an 'opted_in' event against an
 // already-opted-out contact) — surfaced here as a 409, not a 500, since a
 // client/team member hitting this isn't a server error, it's this route
 // correctly refusing to overwrite a real opt-out. actorType/actorId thread
-// through so the new consent_events columns (migration 077) are populated
-// for whoever eventually calls this (nothing does yet — Phase 2 builds the
-// UI that will).
+// through so the new consent_events columns (migration 077) are populated.
+//
+// Consent hardening Phase 2: an Agent may mark a contact opted_out (routine
+// day-to-day moderation, matches this route's existing role gate), but
+// never opted_in (that needs the same evidence-backed confirmation bulk
+// opt-in requires — an Agent has no such flow) — this is a distinction
+// requireRole's plain role-list can't express (it's per-event, not
+// per-route), so it's checked explicitly here instead. Bulk opt-in above
+// doesn't need the equivalent check: its own requireRole list excludes
+// Agent entirely, since bulk-by-definition only ever writes opted_in.
 router.post('/:id/consent', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const data = consentEventCreateSchema.parse(req.body);
+  if (data.event === 'opted_in' && req.actorType === 'team_member' && req.actorRole === 'Agent') {
+    return res.status(403).json({ error: 'Agents can mark a contact opted out, but not opted in — that needs Admin, Manager, or Owner.' });
+  }
   try {
     const contact = await consentRepo.recordEvent(req.clientId, req.params.id, {
       ...data,

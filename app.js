@@ -48,7 +48,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // currently has open; the staleness guard for
     // renderContactAttributesInto/renderContactTagsInto calls made from
     // that panel, parallel to activeChatId's role for the Chat drawer.
-    activeContactDetailId: null
+    activeContactDetailId: null,
+    // Consent hardening Phase 2 — Contacts-view bulk-select, a Set (not an
+    // array) so add/remove/has are O(1) regardless of how many contacts a
+    // client selects. Cleared on every renderContacts() re-render (a fresh
+    // contact list may not contain the same ids) and after a bulk action
+    // completes.
+    selectedContactIds: new Set()
   };
 
   const refreshIcons = () => {
@@ -1299,12 +1305,81 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('contact-detail-name').textContent = contact.name;
     document.getElementById('contact-detail-phone').textContent = contact.phone;
     document.getElementById('modal-contact-detail')?.classList.add('open');
+    renderContactOptInInto(document.getElementById('contact-detail-optin'), contact);
     renderContactAttributesInto(document.getElementById('contact-detail-attributes'), contactId, () => state.activeContactDetailId !== contactId);
     renderContactTagsInto(document.getElementById('contact-detail-tags-wrapper'), contactId, () => state.activeContactDetailId !== contactId);
     renderContactTimeline(document.getElementById('contact-detail-timeline'), contactId, () => state.activeContactDetailId !== contactId);
   }
 
+  // Consent hardening Phase 2 — the detail panel's per-contact opt-in
+  // control. "Mark opted in" opens the same confirmation modal bulk opt-in
+  // uses (single id); "Mark opted out" is a plain yes/no confirm — opting
+  // OUT doesn't need evidence of permission, it's the opposite action, so
+  // the heavier statement-confirmation flow doesn't apply. An opted_out
+  // contact shows neither button as clickable — sticky opt-out
+  // (consentRepo.recordEvent, Phase 1) would refuse the request anyway;
+  // this just doesn't let the user reach a doomed request in the first
+  // place, with an explanation of why. Any role that can open this panel
+  // may mark opted_out (matches routes/contacts.js's own requireRole list);
+  // "Mark opted in" is hidden for an Agent, matching that same route's
+  // in-handler Agent-can't-opt-in check.
+  function renderContactOptInInto(container, contact) {
+    if (!container) return;
+    const badge = OPT_IN_BADGE[contact.optInStatus] || OPT_IN_BADGE.unknown;
+    const detail = contact.optInSource
+      ? `${contact.optInSource}${contact.optInAt ? ' · ' + contact.optInAt.slice(0, 10) : ''}`
+      : 'No consent event recorded yet.';
+
+    const canOptIn = state.actorRole !== 'Agent';
+    let actionsHtml = '';
+    if (contact.optInStatus === 'opted_out') {
+      actionsHtml = `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">Opted-out contacts can only opt back in themselves (e.g. replying START) — this can't be overridden here.</div>`;
+    } else {
+      if (contact.optInStatus !== 'opted_in' && canOptIn) {
+        actionsHtml += `<button type="button" class="btn-secondary" style="margin-top:8px; margin-right:8px; padding:4px 12px; font-size:0.78rem;" id="contact-detail-mark-opted-in-btn">Mark opted in</button>`;
+      }
+      actionsHtml += `<button type="button" class="btn-secondary" style="margin-top:8px; padding:4px 12px; font-size:0.78rem;" id="contact-detail-mark-opted-out-btn">Mark opted out</button>`;
+    }
+
+    container.innerHTML = `
+      <span class="status-badge" style="background: ${badge.bg}; color: ${badge.color};">${badge.label}</span>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${detail}</div>
+      ${actionsHtml}
+    `;
+    refreshIcons();
+
+    document.getElementById('contact-detail-mark-opted-in-btn')?.addEventListener('click', () => {
+      openOptInConfirmModal([contact.id], { contactName: contact.name });
+    });
+    document.getElementById('contact-detail-mark-opted-out-btn')?.addEventListener('click', () => {
+      showConfirm({
+        title: 'Mark opted out?',
+        body: `${escapeHtml(contact.name)} will no longer receive Marketing-category messages from this account.`,
+        confirmLabel: 'Mark opted out',
+        danger: true,
+        onConfirm: async () => {
+          try {
+            await authFetch(`/api/contacts/${contact.id}/consent`, {
+              method: 'POST',
+              body: JSON.stringify({ event: 'opted_out', source: 'client_marked' }),
+            });
+            await refreshContacts();
+            renderContacts();
+            const refreshedContact = state.contacts.find((c) => c.id === contact.id);
+            if (refreshedContact) renderContactOptInInto(document.getElementById('contact-detail-optin'), refreshedContact);
+            showToast('Marked opted out.');
+          } catch (err) {
+            reportError(err);
+          }
+        },
+      });
+    });
+  }
+
   document.getElementById('contacts-table-body')?.addEventListener('click', (e) => {
+    // Consent hardening Phase 2 — checking a row's own selection checkbox
+    // must not also open the detail panel underneath it.
+    if (e.target.closest('.contacts-row-checkbox')) return;
     const row = e.target.closest('tr[data-contact-id]');
     if (!row) return;
     openContactDetailPanel(row.dataset.contactId);
@@ -1955,8 +2030,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const contactsTableBody = document.getElementById('contacts-table-body');
     if (!contactsTableBody) return;
 
+    // Consent hardening Phase 2 — a fresh contact list may not contain the
+    // same ids the previous one did (a filter/search change never mutates
+    // state.contacts itself, but a reload/refresh does), so selection is
+    // cleared on every real re-render rather than carried forward stale.
+    state.selectedContactIds.clear();
+    updateContactsBulkToolbar();
+
     if (!state.contacts.length) {
-      contactsTableBody.innerHTML = '<tr><td colspan="6" style="padding:1rem;color:#6B7280;text-align:center;">No contacts yet. Contacts appear here once someone messages your connected WhatsApp number.</td></tr>';
+      contactsTableBody.innerHTML = '<tr><td colspan="7" style="padding:1rem;color:#6B7280;text-align:center;">No contacts yet. Contacts appear here once someone messages your connected WhatsApp number.</td></tr>';
       return;
     }
 
@@ -1968,9 +2050,11 @@ document.addEventListener('DOMContentLoaded', () => {
         : '—';
       // PLAN.md item 8.5 — data-contact-id + cursor:pointer make the whole
       // row open the contact detail panel (see the delegated click
-      // listener near openContactDetailPanel below).
+      // listener near openContactDetailPanel below, which ignores clicks
+      // on the new checkbox below so selecting a row doesn't also open it).
       const tr = `
         <tr data-contact-id="${c.id}" style="cursor: pointer;">
+          <td><input type="checkbox" class="contacts-row-checkbox" data-contact-id="${c.id}"></td>
           <td style="font-weight: 600;">${c.name}</td>
           <td>${c.phone}</td>
           <td><span class="tag-badge">${c.tag}</span></td>
@@ -1985,6 +2069,58 @@ document.addEventListener('DOMContentLoaded', () => {
       contactsTableBody.innerHTML += tr;
     });
   }
+
+  // Consent hardening Phase 2 — shows/hides the "N selected" + "Mark as
+  // opted in" toolbar controls, and keeps the header select-all checkbox's
+  // checked/indeterminate state honest against the actual per-row
+  // selection (not just "did the user click select-all last"). Owner/
+  // Admin/Manager only, matching the server's own requireRole gate on
+  // POST /api/contacts/bulk-consent — an Agent never sees this button at
+  // all, rather than seeing it and hitting a 403.
+  function updateContactsBulkToolbar() {
+    const count = state.selectedContactIds.size;
+    const countEl = document.getElementById('contacts-selected-count');
+    const btn = document.getElementById('contacts-bulk-opt-in-btn');
+    const canBulkOptIn = state.actorRole !== 'Agent';
+    if (countEl) {
+      countEl.hidden = count === 0;
+      countEl.textContent = `${count} selected`;
+    }
+    if (btn) btn.hidden = count === 0 || !canBulkOptIn;
+
+    const selectAll = document.getElementById('contacts-select-all');
+    if (selectAll) {
+      const total = state.contacts.length;
+      selectAll.checked = total > 0 && count === total;
+      selectAll.indeterminate = count > 0 && count < total;
+    }
+  }
+
+  document.getElementById('contacts-table-body')?.addEventListener('change', (e) => {
+    const checkbox = e.target.closest('.contacts-row-checkbox');
+    if (!checkbox) return;
+    const id = checkbox.dataset.contactId;
+    if (checkbox.checked) state.selectedContactIds.add(id);
+    else state.selectedContactIds.delete(id);
+    updateContactsBulkToolbar();
+  });
+
+  document.getElementById('contacts-select-all')?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      state.contacts.forEach((c) => state.selectedContactIds.add(c.id));
+    } else {
+      state.selectedContactIds.clear();
+    }
+    document.querySelectorAll('#contacts-table-body .contacts-row-checkbox').forEach((cb) => {
+      cb.checked = state.selectedContactIds.has(cb.dataset.contactId);
+    });
+    updateContactsBulkToolbar();
+  });
+
+  document.getElementById('contacts-bulk-opt-in-btn')?.addEventListener('click', () => {
+    if (state.selectedContactIds.size === 0) return;
+    openOptInConfirmModal(Array.from(state.selectedContactIds));
+  });
 
   // --- Broadcasts Table ---
   function renderBroadcasts() {
@@ -6210,6 +6346,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeConfirm() {
     document.getElementById('modal-confirm')?.classList.remove('open');
+  }
+
+  // Consent hardening Phase 2 — the one opt-in confirmation modal, shared by
+  // the Contacts-view bulk toolbar (many ids) and the contact detail panel's
+  // "Mark opted in" button (one id) — same statement, same method/note
+  // fields, same POST /api/contacts/bulk-consent call either way; a
+  // single-contact opt-in is just a bulk request with one id, not a
+  // separate implementation. The statement text comes from
+  // window.consentStatement (consentStatement.js, served raw — see that
+  // file's own module comment) so it can never drift from what the server
+  // actually stores in consent_events.evidence.
+  function openOptInConfirmModal(contactIds, { contactName } = {}) {
+    const modal = document.getElementById('modal-bulk-opt-in');
+    if (!modal || !contactIds.length) return;
+
+    document.getElementById('modal-bulk-opt-in-subtitle').textContent = contactName
+      ? `For ${contactName}.`
+      : `For ${contactIds.length} selected contact${contactIds.length === 1 ? '' : 's'}.`;
+    document.getElementById('modal-bulk-opt-in-statement').textContent =
+      window.consentStatement?.CONSENT_STATEMENT || 'Confirm you have permission to message these contacts.';
+
+    const checkbox = document.getElementById('modal-bulk-opt-in-confirm-checkbox');
+    const methodSelect = document.getElementById('modal-bulk-opt-in-method');
+    const noteInput = document.getElementById('modal-bulk-opt-in-note');
+    const confirmBtn = document.getElementById('modal-bulk-opt-in-confirm-btn');
+    checkbox.checked = false;
+    methodSelect.value = '';
+    noteInput.value = '';
+
+    // Re-cloned so a previous open's click/change listeners never stack on
+    // top of this one — same precedent as showConfirm's own actionBtn
+    // handling. Wired AFTER cloning so onchange lands on the element that's
+    // actually still in the DOM.
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    const updateConfirmEnabled = () => { newConfirmBtn.disabled = !(checkbox.checked && methodSelect.value); };
+    updateConfirmEnabled();
+    checkbox.onchange = updateConfirmEnabled;
+    methodSelect.onchange = updateConfirmEnabled;
+
+    newConfirmBtn.addEventListener('click', async () => {
+      newConfirmBtn.disabled = true;
+      try {
+        const result = await authFetch('/api/contacts/bulk-consent', {
+          method: 'POST',
+          body: JSON.stringify({
+            contactIds,
+            method: methodSelect.value,
+            note: noteInput.value.trim() || undefined,
+            confirmed: true,
+          }),
+        });
+        modal.classList.remove('open');
+        await refreshContacts();
+        renderContacts();
+        if (state.activeContactDetailId && contactIds.includes(state.activeContactDetailId)) {
+          const refreshedContact = state.contacts.find((c) => c.id === state.activeContactDetailId);
+          if (refreshedContact) renderContactOptInInto(document.getElementById('contact-detail-optin'), refreshedContact);
+        }
+        const parts = [`${result.updated} marked opted in`];
+        if (result.alreadyOptedIn) parts.push(`${result.alreadyOptedIn} already opted in`);
+        if (result.skippedOptedOut) parts.push(`${result.skippedOptedOut} skipped (opted out)`);
+        if (result.notFound) parts.push(`${result.notFound} not found`);
+        showToast(parts.join(', ') + '.');
+      } catch (err) {
+        reportError(err);
+      } finally {
+        newConfirmBtn.disabled = !(checkbox.checked && methodSelect.value);
+      }
+    });
+
+    modal.classList.add('open');
   }
 
   // A prompt() replacement, not just a confirm() one: a single text input
