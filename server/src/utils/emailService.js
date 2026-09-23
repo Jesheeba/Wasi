@@ -1,12 +1,18 @@
 // Thin wrapper around Resend. Same degrade-gracefully pattern as
 // metaClient.js/razorpayClient.js: without RESEND_API_KEY configured, this
-// logs the email to the console instead of throwing, so password
-// reset/verification/admin-invite flows are still testable end-to-end in
-// dev/CI without a real email account — the link just shows up in server logs.
+// logs that an email was attempted instead of throwing, so password
+// reset/verification/admin-invite flows still complete end-to-end in
+// dev/CI without a real email account — but the email BODY (subject/html)
+// is deliberately never logged, only that a send to this address was
+// attempted. `html` for a password-reset or invite email contains a live,
+// single-use token — logging it puts that token anywhere server logs are
+// readable, which is as good as handing out the account. If you need the
+// real link during local testing, read it out of `auth_tokens`/the DB
+// directly, or configure a real RESEND_API_KEY.
 async function sendEmail({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.log(`[emailService] RESEND_API_KEY not set — would have sent to ${to}: "${subject}"\n${html}`);
+    console.log(`[emailService] RESEND_API_KEY not set — email not delivered (attempted send to ${to})`);
     return { sent: false, reason: 'not_configured' };
   }
 
