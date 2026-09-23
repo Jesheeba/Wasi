@@ -1194,14 +1194,26 @@ body {
 /* item 1 — centred date-separator pill, sticky to the top of the scrolling
    .chat-messages container while its day's messages are in view (the
    standard "stack of sticky headers" trick: every pill is sticky at
-   top:0, so the next one to scroll up simply displaces the previous one). */
+   top:0, so the next one to scroll up simply displaces the previous one).
+   Found live (a landing-page screenshot capture, not a report): a plain
+   MARGIN here let the sticky-pinned pill visually overlap the very next
+   bubble's first line at any scroll offset smaller than the pill's own
+   height — margin is outside the box, so the pill's opaque background
+   never covered that gap once the container scrolled just enough to pin
+   it. Switched top/bottom spacing to PADDING (background now extends
+   through it) plus an explicit background matching the chat window's own
+   (#FAFDFB, set inline on chat-active-workspace's first child in
+   index.html) — the reserved zone is now actually opaque at every scroll
+   position, not just visually close. */
 .chat-date-separator {
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
   justify-content: center;
-  margin: 6px 0;
+  padding: 6px 0;
+  margin-bottom: 6px;
+  background: #FAFDFB;
 }
 .chat-date-separator span {
   background: #E7F3FB;
