@@ -24,6 +24,15 @@ document.addEventListener('DOMContentLoaded', () => {
     actorId: null,
     currentView: 'chat',
     activeChatId: null,
+    // Set once per chat-open (openActiveChat), from the message id
+    // computeUnreadDividerMessageId lands on — never recomputed by a poll
+    // tick, so the "Unread messages" line can't jump or vanish mid-session.
+    // Cleared to null whenever a different chat opens.
+    activeChatUnreadDividerMessageId: null,
+    // Snapshot of chat.count (server's unread_count) taken the instant a
+    // chat is opened, before openActiveChat clears it to 0 — the input to
+    // computeUnreadDividerMessageId's one-time placement guess.
+    activeChatUnreadCountAtOpen: 0,
     chats: [],
     contacts: [],
     tagsById: {},
@@ -150,6 +159,62 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
+  // Full local date+time, for hover/tap tooltips and status-timeline lines —
+  // never truncated to just a time the way timeLabel is.
+  function fullTimeLabel(isoString) {
+    if (!isoString) return '';
+    return new Date(isoString).toLocaleString([], {
+      day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit'
+    });
+  }
+
+  function isSameLocalDay(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  function startOfLocalDay(d) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  }
+
+  // WhatsApp's own date-separator ladder: Today / Yesterday / weekday name
+  // (within 7 days) / "23 September" (this year) / "23 September 2025"
+  // (older). Compares LOCAL calendar days (viewer's own timezone), not a
+  // rolling 24h window — a chat opened at 00:30 must say "Today" correctly.
+  function dateLabel(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    const now = new Date();
+    if (isSameLocalDay(d, now)) return 'Today';
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (isSameLocalDay(d, yesterday)) return 'Yesterday';
+
+    const diffDays = Math.round((startOfLocalDay(now) - startOfLocalDay(d)) / 86400000);
+    if (diffDays > 0 && diffDays < 7) return d.toLocaleDateString([], { weekday: 'long' });
+    if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString([], { day: 'numeric', month: 'long' });
+    return d.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  // Chat list convention: time-only for something that happened today,
+  // otherwise the same date ladder dateLabel uses (minus "Today" itself,
+  // which never applies once the same-day branch below already caught it).
+  function chatListTimeLabel(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isSameLocalDay(d, new Date())) return timeLabel(isoString);
+    return dateLabel(isoString);
+  }
+
+  // For embedding into an HTML attribute (the tooltip text lives in
+  // data-full-time, read back out via CSS attr()) — escapeHtml alone doesn't
+  // escape quotes, which would break out of the attribute.
+  function escapeAttr(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   // Adapts real API rows (tag_id, created_at, unread_count, ...) into the flat
   // shape the existing renderers expect (tag name, created, time, count).
   function adaptContact(c) {
@@ -172,7 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
       name: c.name,
       phone: c.phone,
       tag: state.tagsById[c.tag_id]?.name || '—',
-      time: timeLabel(c.last_message_at),
+      // Raw ISO, not pre-formatted — chatListTimeLabel derives the
+      // WhatsApp-style label (time-only for today, else a date) at render
+      // time, so "Today" stays correct across midnight without a re-adapt.
+      time: c.last_message_at,
       count: c.unread_count,
       // item 2/5.5 — previously dropped by this adapter entirely, so no
       // renderer could see them even though the API already returns both.
@@ -730,26 +798,157 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Status ticks mirror WhatsApp's own convention; 'failed' gets a retry
   // affordance instead since silently dropping a message is worse than
-  // surfacing that it needs one click to resend.
+  // surfacing that it needs one click to resend. Both cases carry a
+  // stacked-timeline tooltip (sent/delivered/read, or failed + reason) from
+  // messages.sent_at/delivered_at/read_at/failed_at — "if we have them": a
+  // null column is just omitted, never guessed at.
   function statusBadge(m) {
     if (m.direction !== 'out') return '';
+    const lines = [`Sent: ${fullTimeLabel(m.sent_at)}`];
+    if (m.delivered_at) lines.push(`Delivered: ${fullTimeLabel(m.delivered_at)}`);
+    if (m.read_at) lines.push(`Read: ${fullTimeLabel(m.read_at)}`);
+
     if (m.status === 'failed') {
-      return `<button type="button" class="msg-retry-btn" data-retry-id="${m.id}" title="${(m.error_reason || 'Send failed').replace(/"/g, '&quot;')}">⚠ Retry</button>`;
+      if (m.failed_at) lines.push(`Failed: ${fullTimeLabel(m.failed_at)}`);
+      const reason = m.error_reason || 'Send failed';
+      return `
+        <span class="msg-status-wrap" data-status="failed" tabindex="0">
+          <button type="button" class="msg-retry-btn" data-retry-id="${m.id}" title="${escapeAttr(reason)}">⚠ Retry</button>
+          <span class="msg-tooltip" role="tooltip">${escapeHtml(reason)}<br>${lines.map(escapeHtml).join('<br>')}</span>
+        </span>`;
     }
     const tick = { pending: '🕒', sent: '✓', delivered: '✓✓', read: '✓✓' }[m.status] || '';
-    return `<span class="msg-status" data-status="${m.status}">${tick}</span>`;
+    return `
+      <span class="msg-status-wrap" data-status="${m.status}" tabindex="0">
+        <span class="msg-status" data-status="${m.status}">${tick}</span>
+        <span class="msg-tooltip" role="tooltip">${lines.map(escapeHtml).join('<br>')}</span>
+      </span>`;
   }
 
-  function renderMessages(messages) {
+  // A message bubble. `showMeta` is true only for the last message in its
+  // group (item 5 — time/ticks shown once, at the bottom of the group).
+  // Every bubble still gets a hover/tap tooltip with the full date+time
+  // (item 3) via data-full-time, and a screen-reader-only <time> when the
+  // visible one is suppressed, so grouping never costs accessibility.
+  function renderMessageBubble(m, showMeta) {
+    const bodyHtml = m.body.replace(/</g, '&lt;');
+    const metaHtml = showMeta
+      ? `<div class="msg-time"><time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
+      : `<time class="sr-only" datetime="${m.sent_at}">${fullTimeLabel(m.sent_at)}</time>`;
+    return `
+      <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}" data-message-id="${m.id}" data-full-time="${escapeAttr(fullTimeLabel(m.sent_at))}" tabindex="0">
+        <div>${bodyHtml}</div>
+        ${metaHtml}
+      </div>`;
+  }
+
+  const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+  // Interleaves date separators, the unread divider (if any), and grouped
+  // message clusters into one flat list of render items. A date separator
+  // or the unread divider always breaks a group — WhatsApp never shows a
+  // continuous group spanning either.
+  function buildMessageRenderItems(messages, dividerMessageId) {
+    const items = [];
+    let currentGroup = null;
+    let lastDateKey = null;
+
+    messages.forEach((m) => {
+      const sentDate = new Date(m.sent_at);
+      const dateKey = `${sentDate.getFullYear()}-${sentDate.getMonth()}-${sentDate.getDate()}`;
+
+      if (dateKey !== lastDateKey) {
+        items.push({ type: 'date', iso: m.sent_at });
+        lastDateKey = dateKey;
+        currentGroup = null;
+      }
+      if (dividerMessageId && m.id === dividerMessageId) {
+        items.push({ type: 'divider' });
+        currentGroup = null;
+      }
+
+      const prevInGroup = currentGroup && currentGroup.messages[currentGroup.messages.length - 1];
+      const canContinue = currentGroup
+        && currentGroup.direction === m.direction
+        && (sentDate.getTime() - new Date(prevInGroup.sent_at).getTime()) <= MESSAGE_GROUP_WINDOW_MS;
+
+      if (canContinue) {
+        currentGroup.messages.push(m);
+      } else {
+        currentGroup = { type: 'group', direction: m.direction, messages: [m] };
+        items.push(currentGroup);
+      }
+    });
+
+    return items;
+  }
+
+  function renderMessageRenderItem(item) {
+    if (item.type === 'date') {
+      return `<div class="chat-date-separator"><span>${escapeHtml(dateLabel(item.iso))}</span></div>`;
+    }
+    if (item.type === 'divider') {
+      return `<div class="chat-unread-divider"><span>Unread messages</span></div>`;
+    }
+    const bubbles = item.messages.map((m, i) => renderMessageBubble(m, i === item.messages.length - 1)).join('');
+    return `<div class="msg-group msg-group-${item.direction === 'in' ? 'in' : 'out'}">${bubbles}</div>`;
+  }
+
+  // unreadCount is chats.unread_count as of chat-open time — a GUESS about
+  // which currently-loaded message it corresponds to, not authoritative.
+  // Any mismatch (more unread than inbound messages we actually have)
+  // bails out to "no divider" rather than risk placing it at the wrong
+  // message: a missing divider is a minor miss, a wrong one tells someone
+  // they've read something they haven't.
+  function computeUnreadDividerMessageId(messages, unreadCount) {
+    if (!unreadCount || unreadCount <= 0) return null;
+    const inboundIndices = [];
+    messages.forEach((m, i) => { if (m.direction === 'in') inboundIndices.push(i); });
+    if (unreadCount > inboundIndices.length) return null;
+    const firstUnreadIndex = inboundIndices[inboundIndices.length - unreadCount];
+    return messages[firstUnreadIndex]?.id || null;
+  }
+
+  // isInitialOpen distinguishes "just opened this chat" (compute the unread
+  // divider fresh, scroll to it or to the bottom) from every other call —
+  // a poll tick, a retry, a send — which must never recompute the divider
+  // (it stays put for the life of the open chat, per direct instruction)
+  // and must never yank the reader's scroll position: it's restored as-is,
+  // except when the reader was already at the bottom, where staying
+  // pinned to the bottom as new content arrives is the expected behavior,
+  // not a yank.
+  function renderMessages(messages, { isInitialOpen = false } = {}) {
     const msgContainer = document.getElementById('chat-messages-container');
     if (!msgContainer) return;
-    msgContainer.innerHTML = messages.map(m => `
-      <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}">
-        <div>${m.body.replace(/</g, '&lt;')}</div>
-        <div class="msg-time">${timeLabel(m.sent_at)} ${statusBadge(m)}</div>
-      </div>
-    `).join('');
-    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    const prevScrollTop = msgContainer.scrollTop;
+    const prevScrollHeight = msgContainer.scrollHeight;
+    const wasNearBottom = (prevScrollHeight - prevScrollTop - msgContainer.clientHeight) < 80;
+
+    let dividerId;
+    if (isInitialOpen) {
+      dividerId = computeUnreadDividerMessageId(messages, state.activeChatUnreadCountAtOpen);
+      state.activeChatUnreadDividerMessageId = dividerId;
+    } else {
+      const pending = state.activeChatUnreadDividerMessageId;
+      dividerId = pending && messages.some(m => m.id === pending) ? pending : null;
+    }
+
+    const items = buildMessageRenderItems(messages, dividerId);
+    msgContainer.innerHTML = items.map(renderMessageRenderItem).join('');
+
+    if (isInitialOpen) {
+      const dividerEl = dividerId ? msgContainer.querySelector('.chat-unread-divider') : null;
+      if (dividerEl) {
+        dividerEl.scrollIntoView({ block: 'center' });
+      } else {
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+      }
+    } else if (wasNearBottom) {
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    } else {
+      msgContainer.scrollTop = Math.min(prevScrollTop, msgContainer.scrollHeight - msgContainer.clientHeight);
+    }
   }
 
   // Delegated once — renderMessages rebuilds the container's innerHTML on
@@ -757,21 +956,41 @@ document.addEventListener('DOMContentLoaded', () => {
   // gone by the time the user clicks it.
   document.getElementById('chat-messages-container')?.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-retry-id]');
-    if (!btn || !state.activeChatId) return;
-    try {
-      await authFetch(`/api/chats/${state.activeChatId}/messages/${btn.dataset.retryId}/retry`, { method: 'POST' });
-      await refreshActiveChatMessages();
-    } catch (err) {
-      reportError(err);
+    if (btn) {
+      if (state.activeChatId) {
+        try {
+          await authFetch(`/api/chats/${state.activeChatId}/messages/${btn.dataset.retryId}/retry`, { method: 'POST' });
+          await refreshActiveChatMessages();
+        } catch (err) {
+          reportError(err);
+        }
+      }
+      return;
+    }
+    // Tap-to-reveal (item 3/4): toggles the hover tooltip on a bubble or a
+    // status-tick cluster for touch devices, which have no :hover. Ignored
+    // when the tap landed on the retry button itself (handled above).
+    const tipTrigger = e.target.closest('.msg-bubble, .msg-status-wrap');
+    if (tipTrigger) {
+      const wasOpen = tipTrigger.classList.contains('tooltip-open');
+      document.querySelectorAll('.tooltip-open').forEach(el => el.classList.remove('tooltip-open'));
+      if (!wasOpen) tipTrigger.classList.add('tooltip-open');
     }
   });
 
-  async function refreshActiveChatMessages() {
+  // Closes any tap-opened tooltip when the user taps/clicks elsewhere.
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.msg-bubble, .msg-status-wrap')) {
+      document.querySelectorAll('.tooltip-open').forEach(el => el.classList.remove('tooltip-open'));
+    }
+  });
+
+  async function refreshActiveChatMessages(opts) {
     if (!state.activeChatId) return;
     const messages = await authFetch(`/api/chats/${state.activeChatId}/messages`);
     state.activeChatMessages = messages;
     state.lastMessageAt = messages.length ? messages[messages.length - 1].sent_at : null;
-    renderMessages(messages);
+    renderMessages(messages, opts);
     renderChatWindowStatus();
   }
 
@@ -843,6 +1062,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openActiveChat(chat) {
     state.activeChatId = chat.id;
+    // Snapshot the unread count and reset the divider before anything below
+    // (including the unread_count=0 PATCH further down) can touch either —
+    // this is the one moment the "how many are unread" guess is taken; it's
+    // never recomputed for the rest of this chat's open session.
+    state.activeChatUnreadCountAtOpen = chat.count || 0;
+    state.activeChatUnreadDividerMessageId = null;
     if (chatEmptyPlaceholder) chatEmptyPlaceholder.style.display = 'none';
     if (chatActiveWorkspace) chatActiveWorkspace.style.display = 'flex';
     // Mobile-only (<=640px, index.css): swaps the single visible panel from
@@ -873,7 +1098,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderContactTagsInto(document.getElementById('drawer-contact-tags-wrapper'), chat.contactId, () => state.activeChatId !== chat.id);
 
     try {
-      await refreshActiveChatMessages();
+      await refreshActiveChatMessages({ isInitialOpen: true });
     } catch (err) {
       reportError(err);
     }
@@ -1993,7 +2218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-            <span style="font-size: 0.7rem; color: #6B7280;">${chat.time}</span>
+            <span style="font-size: 0.7rem; color: #6B7280;">${chatListTimeLabel(chat.time)}</span>
             <span style="background: #4AC959; color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 700; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${chat.count}</span>
           </div>
         </div>
