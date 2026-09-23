@@ -71,6 +71,16 @@ const DEEPA_BEAT4 = plus(DEEPA_BEAT3, 240); // confirmation template
 const DEEPA_BEAT4_READ = plus(DEEPA_BEAT4, 600); // ticks turn blue ~10min later
 const CAMPAIGN_AT = daysAgoAt(4, 11, 0, 0); // "three weeks later" from beat 3/4
 
+// Any computed timestamp is clamped to at most 30s before script start —
+// belt-and-suspenders against a fixed early-morning clock time (e.g.
+// Rahul Menon's 00:05 "today" message below) landing in the future on the
+// rare run that happens to start before that clock time. A day-scale
+// "daysAgo" value is never close enough to NOW for this to change it.
+function clampPast(date) {
+  const safeNow = plus(NOW, -30);
+  return date < safeNow ? date : safeNow;
+}
+
 // --- Filler contacts — enough for a lived-in inbox + campaign recipients.
 // Each has a real, plausible coaching-institute exchange. `campaign` marks
 // which effective_status bucket (see broadcastRecipientsRepo.listByBroadcast)
@@ -296,10 +306,14 @@ async function seed() {
     await client.query('delete from team_members where client_id = $1', [DEMO_CLIENT_ID]);
     await client.query('delete from automation_flows where client_id = $1', [DEMO_CLIENT_ID]);
 
-    await client.query(
-      `insert into subscriptions (client_id, plan, status, renews_at) values ($1, 'Starter', 'active', now() + interval '60 days')`,
-      [DEMO_CLIENT_ID]
-    );
+    // No subscriptions row, deliberately: admin's real /api/admin/billing/
+    // overview sums the price of every 'active' subscription across ALL
+    // clients into estimatedMrr, unfiltered — an 'active' Starter row here
+    // would inflate that real figure. Nothing in the Chat/Campaigns/Flow
+    // Builder screenshots this seed exists for needs one; the only place a
+    // missing subscription is even visible is Settings > Subscription (a
+    // "No active subscription yet" card), a tab none of the 5 target
+    // screenshots open.
 
     const tagId = {};
     for (const t of TAGS) {
@@ -371,7 +385,7 @@ async function seed() {
       await client.query(`insert into contact_tags (contact_id, tag_id, client_id) values ($1, $2, $3)`, [contact.id, tagId[f.tag], DEMO_CLIENT_ID]);
 
       const lastMsg = f.messages[f.messages.length - 1];
-      const lastMsgAt = daysAgoAt(lastMsg.daysAgo, lastMsg.hour, lastMsg.minute);
+      const lastMsgAt = clampPast(daysAgoAt(lastMsg.daysAgo, lastMsg.hour, lastMsg.minute));
       const { rows: [chat] } = await client.query(
         `insert into chats (client_id, contact_id, name, phone, tag_id, status, last_message_at, unread_count)
          values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
@@ -379,7 +393,7 @@ async function seed() {
       );
 
       for (const m of f.messages) {
-        await insertMessage(chat.id, { dir: m.dir, body: m.body, sentAt: daysAgoAt(m.daysAgo, m.hour, m.minute), status: m.status });
+        await insertMessage(chat.id, { dir: m.dir, body: m.body, sentAt: clampPast(daysAgoAt(m.daysAgo, m.hour, m.minute)), status: m.status });
       }
       contactByKey[f.suffix] = { id: contact.id, chatId: chat.id, campaign: f.campaign };
     }
