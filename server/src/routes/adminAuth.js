@@ -6,12 +6,17 @@ const { hashPassword, comparePassword, signAdminToken } = require('../utils/auth
 const { sendEmail } = require('../utils/emailService');
 const { loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../utils/validate');
 const { requireAdminAuth } = require('../middleware/requireAdminAuth');
+const { adminLoginLimiter } = require('../middleware/rateLimit');
 
 const router = Router();
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
-router.post('/login', asyncHandler(async (req, res) => {
+// app.js mounts this whole router behind authLimiter (20/15min per IP) —
+// /login gets this additional, stricter limiter on top (5/15min per
+// IP+email) since it's the single highest-blast-radius login in the app.
+// forgot-password/reset-password below stay on authLimiter alone.
+router.post('/login', adminLoginLimiter, asyncHandler(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
   const admin = await adminUsersRepo.findByEmail(email);

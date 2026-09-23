@@ -86,4 +86,29 @@ const sessionCheckLimiter = rateLimit({
   message: { error: 'Too many requests, please try again shortly.' },
 });
 
-module.exports = { authLimiter, webhookLimiter, apiLimiter, apiKeyCreationLimiter, sessionCheckLimiter };
+// Admin login specifically (routes/adminAuth.js POST /login) — the admin
+// account reaches every client's data and there's exactly one of it, so it
+// needs a tighter bucket than authLimiter's 20/15min (which stays applied
+// to this whole router at the app.js mount point, forgot/reset-password
+// included — this is an additional, stricter limiter stacked on top of
+// that, for /login only). Keyed by IP + the submitted email together, not
+// IP alone — an attacker cycling IPs (a botnet, a proxy pool) would
+// otherwise get a fresh 5-attempt bucket per IP against the same admin
+// account; tying the key to the email closes that.
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `${req.ip}:${String(req.body?.email || '').trim().toLowerCase()}`,
+  message: { error: 'Too many attempts, please try again later.' },
+});
+
+module.exports = {
+  authLimiter,
+  webhookLimiter,
+  apiLimiter,
+  apiKeyCreationLimiter,
+  sessionCheckLimiter,
+  adminLoginLimiter,
+};
