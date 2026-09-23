@@ -269,7 +269,11 @@ const FLOW_NODES = [
     config: { body: 'Here are the fee details: ₹18,000 for the full course, payable in two instalments. Reply YES to hold your seat.' },
   },
   {
-    key: 'callback', type: 'send_text', position: { x: 460, y: 320 },
+    // y:320 originally — found live (flow builder screenshot capture) to
+    // render visually underneath the entry node's own card, which is
+    // considerably taller than its own y-span once its body text + 2
+    // buttons + timeout fields are all shown; 560 clears it.
+    key: 'callback', type: 'send_text', position: { x: 480, y: 560 },
     config: { body: 'Thanks! One of our team will call you back within the hour.' },
   },
 ];
