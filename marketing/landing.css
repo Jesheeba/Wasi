@@ -1,20 +1,23 @@
 /* ==========================================================================
-   Wasi — Landing page (split-scroll story). BEAT 1 SPIKE ONLY — see
-   landing.html's own header comment for scope. Dark-only by decision: no
-   light variant, no toggle. Loaded AFTER marketing.css, which still supplies
-   the Google Fonts import, the reset, .container, and .btn-primary (already
-   the right green for this page's CTAs — reused as-is, untouched here).
-   Everything below only redefines the shared tokens marketing.css's rules
-   already reference (so body/.btn-primary/.container pick up dark values
-   automatically, no !important fighting) and adds landing-page-only
-   components: the dark field, the phone frame, the window-chrome frame, and
-   the beat-reveal mechanism.
+   Wasi — Landing page. A complete, conventional page (nav, hero, features,
+   how-it-works, pricing, FAQ, footer — same shape as AiSensy/Wati/Interakt),
+   not the scroll-narrative spike this file previously held.
 
-   Colour decision (not mine to relitigate): green stays exactly where it
-   already lives in the product — CTA buttons, WhatsApp bubbles — and
-   nowhere else. No second accent hue. The two panes are told apart
-   structurally (phone silhouette vs. browser-window chrome), never by
-   colour.
+   Loaded AFTER marketing.css, which already defines real, responsive,
+   tested CSS for most of this page's sections — .feature-grid (unused here,
+   see FEATURES below for why), .steps-grid/.step-card, .pricing-grid/
+   .price-card, .compare-table, .explainer-grid/.explainer-card, .faq-list,
+   .cta-band, footer.site-footer, and the 900px/640px responsive rules for
+   all of them. This file reuses those classes as-is wherever the HTML
+   matches them (see landing.html's own class names) and only overrides
+   what genuinely needs to change for dark mode, or defines what's actually
+   new: the credibility strip, alternating feature blocks, the phone/window
+   frame device, and the static split-screen section.
+
+   Colour: green stays exactly where it already lives in the product — CTA
+   buttons, WhatsApp bubbles — and nowhere else. No second accent hue.
+   --color-primary* is intentionally UNCHANGED below; only the neutral
+   tokens (background/text/border/shadow) are redefined for dark.
    ========================================================================== */
 
 :root {
@@ -27,86 +30,139 @@
   --border-light: #22301F;
   --color-heading: #F3F6F3;
   --landing-surface-2: #182018;
+
+  /* marketing.css's shadow tokens were calibrated for a light/white page —
+     a shadow that dark barely reads against a near-black background.
+     Redefined here so every REUSED component (price-card, step-card,
+     faq-item, explainer-card, compare-table-wrap — all of which reference
+     these same variables) gets correct dark-mode elevation automatically,
+     with no per-component override needed. */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.55);
 }
 
 body { background-color: var(--bg-app); }
 
-/* ---------- Minimal preview header (full nav comes later — see build order) ---------- */
-.landing-preview-bar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
+/* Desktop-only section spacing bump ("generous spacing... much higher
+   standard") — deliberately scoped to min-width:901px rather than
+   overriding the bare `section` selector unconditionally: marketing.css's
+   own 900px/640px responsive rules for `section` padding are already
+   correct and tested, and an unscoped override here would load AFTER
+   them in the cascade and silently win at every width, undoing their
+   mobile tightening. Scoping it like this is the same pattern used
+   throughout this file for every other size/column override below. */
+/* 96px, not marketing.css's own 88px default — a real but modest bump.
+   Found by actually looking at the rendered page, not by picking a number
+   up front: an earlier draft used 128px/88px here, and two adjacent
+   sections' paddings compound at their shared boundary (this section's
+   bottom + the next section's top), so 128px+88px produced a 216px gap
+   between the credibility strip and Features that read as broken empty
+   space, not "generous." 96px/56px compounds to a still-generous but no
+   longer excessive ~150-190px depending on which two section types meet. */
+@media (min-width: 901px) {
+  section { padding: 96px 0; }
+  .section-tight { padding: 56px 0; }
+}
+
+/* Alternates the field colour band-to-band for section rhythm, without
+   hard borders everywhere — applied to a few sections via landing.html's
+   own alt-band class. */
+.alt-band { background: var(--landing-surface-2); }
+
+/* ---------- Nav — marketing.css's .site-nav is light-themed; overridden
+   here rather than touching that shared file, since signup.html/privacy.html
+   etc. still need the light version. ---------- */
+.site-nav {
   background: rgba(10, 15, 12, 0.85);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border-light);
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  border-bottom-color: var(--border-light);
 }
-.landing-preview-bar .wordmark { font-weight: 700; color: var(--text-main); font-size: 1rem; }
-.landing-preview-bar .preview-tag {
-  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--color-primary-700); background: var(--color-primary-50);
-  padding: 3px 9px; border-radius: 9999px;
+.nav-toggle { background: var(--bg-card); border-color: var(--border-light); }
+.nav-toggle span, .nav-toggle span::before, .nav-toggle span::after { background: var(--text-main); }
+.nav-login {
+  font-size: 0.85rem; font-weight: 500; color: var(--text-muted); text-decoration: none;
 }
+.nav-login:hover { color: var(--text-main); }
 
-/* ---------- Beat scaffold ---------- */
-.beat {
-  padding: 96px 0;
-  overflow: hidden;
-}
-/* 3 effective grid items — caption, phone, window — not 2. .beat-panes
-   wraps the phone+window pair in HTML purely for organization; display:
-   contents removes it from the box model so its two children become
-   direct grid items of .container alongside .beat-caption, sitting in 3
-   columns on desktop. On mobile (below) the grid collapses to 1 column,
-   and because .beat-panes contributes nothing of its own to the box
-   model, all 3 items simply stack in source order — caption, phone,
-   window — with no extra rule needed for that case. */
-.beat .container {
+/* ---------- Hero — reuses .hero .container's existing grid (marketing.css:
+   1.05fr/0.95fr, 56px gap, stacks with visual first below 900px) unchanged.
+   .hero-visual is stripped of its light gradient/card styling; .window-frame
+   supplies all the visual chrome instead. ---------- */
+.hero-copy h1 { font-size: clamp(2.4rem, 4.8vw, 3.8rem); }
+.hero-visual { background: none; border: none; box-shadow: none; padding: 0; border-radius: 0; }
+.window-frame--lg { max-width: 560px; margin-left: auto; }
+@media (max-width: 900px) { .window-frame--lg { max-width: 100%; margin: 0 auto; } }
+
+/* ---------- 3. Credibility strip — new, numbers-free by decision. ---------- */
+.credibility-grid {
   display: grid;
-  grid-template-columns: 0.7fr auto 1fr;
-  gap: 48px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  text-align: center;
+}
+.credibility-icon {
+  width: 48px; height: 48px; margin: 0 auto 16px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-primary-900);
+  color: var(--color-primary-400);
+}
+.credibility-item h3 { font-size: 1.02rem; font-weight: 600; color: var(--color-heading); margin-bottom: 6px; }
+.credibility-item p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.5; }
+@media (max-width: 640px) { .credibility-grid { grid-template-columns: 1fr; gap: 32px; } }
+
+/* ---------- 4. Features — three big alternating blocks, not
+   marketing.css's .feature-grid card grid (deliberately unused here: a
+   6-card icon grid is exactly the generic pattern this rebuild exists to
+   move away from — real screenshots need real room). ---------- */
+.feature-block {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 72px;
   align-items: center;
 }
-.beat-panes { display: contents; }
-.beat-caption { max-width: 340px; }
-.beat-caption .beat-eyebrow {
-  font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
-  margin-bottom: 10px; letter-spacing: 0.02em;
-}
-.beat-caption h2 {
-  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+.feature-block + .feature-block { margin-top: 112px; }
+.feature-block--reverse { grid-template-columns: 1.15fr 1fr; }
+.feature-block--reverse .feature-block-copy { order: 2; }
+.feature-block--reverse .feature-block-visual { order: 1; }
+.feature-block-copy h3 {
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
   font-weight: 700;
+  color: var(--color-heading);
   line-height: 1.25;
-  color: var(--text-main);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
-.beat-caption p { color: var(--text-muted); font-size: 1.02rem; line-height: 1.55; }
+.feature-block-copy p { font-size: 1.05rem; color: var(--text-muted); line-height: 1.6; max-width: 440px; }
+@media (max-width: 900px) {
+  .feature-block, .feature-block--reverse { grid-template-columns: 1fr; gap: 32px; }
+  .feature-block--reverse .feature-block-copy,
+  .feature-block--reverse .feature-block-visual { order: initial; }
+  .feature-block + .feature-block { margin-top: 64px; }
+  .feature-block-copy p { max-width: none; }
+}
 
-/* ---------- Phone frame (left pane) — real DOM, not a screenshot ---------- */
+/* ---------- Phone frame (real DOM) and window-chrome frame (wraps a real
+   product screenshot) — the page's one consistent way of presenting every
+   screenshot, carried forward from the earlier spike; kept verbatim, no
+   beat-specific naming was ever baked into these. ---------- */
 .phone-frame {
-  width: 320px;
+  width: 300px;
   margin: 0 auto;
   border-radius: 40px;
   background: #0D120E;
   border: 1px solid var(--border-light);
   padding: 10px;
   box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.02);
+  flex-shrink: 0;
 }
 .phone-screen {
-  background: #ECEFEA; /* real WhatsApp's light chat background — deliberate: this is
-                           the "light screen glowing on a dark field" the page is built
-                           around, so it stays light even though everything else is dark. */
+  background: #ECEFEA; /* real WhatsApp's light chat background — the
+                           deliberate "light screen against a dark field" */
   border-radius: 30px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 480px;
+  min-height: 460px;
 }
 .phone-statusbar {
   height: 28px;
@@ -118,8 +174,8 @@ body { background-color: var(--bg-app); }
   height: 52px;
   display: flex; align-items: center; gap: 10px;
   padding: 0 14px;
-  background: #075E54; /* WhatsApp's real header green — authentic to the app being
-                           screenshotted, not this page's own palette */
+  background: #075E54; /* WhatsApp's real header green — authentic to the
+                           app being screenshotted, not this page's palette */
   color: #fff;
 }
 .phone-chatheader .avatar {
@@ -129,131 +185,135 @@ body { background-color: var(--bg-app); }
   font-size: 0.75rem; font-weight: 700;
 }
 .phone-chatheader .name { font-size: 0.85rem; font-weight: 600; }
-.phone-messages {
-  flex: 1;
-  padding: 16px 12px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.bubble {
-  max-width: 78%;
-  padding: 8px 10px 6px;
-  border-radius: 10px;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  position: relative;
-}
-.bubble-out {
-  align-self: flex-end;
-  background: #D9FDD3; /* WhatsApp's real outbound-bubble green */
-  color: #111B21;
-  border-bottom-right-radius: 2px;
-}
-.bubble-in {
-  align-self: flex-start;
-  background: #FFFFFF;
-  color: #111B21;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 1px rgba(0,0,0,0.06);
-}
-.bubble .meta {
-  display: flex; align-items: center; justify-content: flex-end; gap: 3px;
-  margin-top: 3px;
-  font-size: 0.62rem;
-  color: rgba(17,27,33,0.5);
-}
+.phone-messages { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.bubble { max-width: 82%; padding: 8px 10px 6px; border-radius: 10px; font-size: 0.82rem; line-height: 1.4; position: relative; }
+.bubble-out { align-self: flex-end; background: #D9FDD3; color: #111B21; border-bottom-right-radius: 2px; }
+.bubble-in { align-self: flex-start; background: #FFFFFF; color: #111B21; border-bottom-left-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,0.06); }
+.bubble .meta { display: flex; align-items: center; justify-content: flex-end; gap: 3px; margin-top: 3px; font-size: 0.62rem; color: rgba(17,27,33,0.5); }
 .bubble .ticks { display: inline-flex; }
-.bubble .ticks svg { display: block; }
+.bubble-button {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 6px -10px -6px; padding: 9px 10px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  color: #0B84FE; font-size: 0.8rem; font-weight: 600;
+}
 
-/* ---------- Window-chrome frame (right pane) — wraps a real product screenshot ---------- */
-.window-frame {
-  border-radius: 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  overflow: hidden;
-  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.45);
-}
-.window-titlebar {
-  height: 36px;
-  display: flex; align-items: center; gap: 14px;
-  padding: 0 14px;
-  background: var(--landing-surface-2);
-  border-bottom: 1px solid var(--border-light);
-}
+.window-frame { border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border-light); overflow: hidden; box-shadow: var(--shadow-lg); }
+.window-titlebar { height: 36px; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: var(--landing-surface-2); border-bottom: 1px solid var(--border-light); }
 .window-dots { display: flex; gap: 6px; }
 .window-dots span { width: 10px; height: 10px; border-radius: 50%; background: #2E3B2C; }
-.window-url {
-  flex: 1;
-  text-align: center;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  background: #0D130E;
-  border-radius: 6px;
-  padding: 3px 10px;
-  max-width: 220px;
-  margin: 0 auto;
-}
+.window-url { flex: 1; text-align: center; font-size: 0.72rem; color: var(--text-muted); background: #0D130E; border-radius: 6px; padding: 3px 10px; max-width: 220px; margin: 0 auto; }
 .window-body { line-height: 0; }
 .window-body img { width: 100%; height: auto; display: block; }
-
-/* Stands in for the real screenshot until it exists — same box the <img>
-   will occupy, so dropping the real file in changes nothing structurally. */
 .screenshot-placeholder {
-  aspect-ratio: 570 / 460;
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
   text-align: center;
   font-size: 0.78rem;
-  line-height: 1.6; /* .window-body sets line-height:0 to collapse the gap
-                        under its real <img> — without this override that
-                        0 inherits into every line of this placeholder's
-                        own text, stacking every line on the same baseline
-                        (found by actually looking at the rendered
-                        screenshot, not just reading the CSS). */
+  line-height: 1.6; /* window-body sets line-height:0 to collapse the gap
+                        under a real <img> — this override stops that
+                        inheriting into the placeholder's own text and
+                        stacking every line on one baseline. */
   color: var(--text-muted);
-  background:
-    repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0 10px, transparent 10px 20px);
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0 10px, transparent 10px 20px);
 }
 
-/* ---------- Beat reveal — progressive enhancement, not a JS dependency.
-   Default state (no .js on <html>) is always fully visible: correct with
-   JS off, JS erroring, or JS disabled, not just under reduced-motion. Only
-   once landing.js confirms it's actually running does .js get added, and
-   only then do elements start hidden pending their own .is-active reveal.
-   prefers-reduced-motion collapses the transition to ~0 on top of that, for
-   a motion-sensitive visitor who still has JS enabled. ---------- */
-.beat-reveal { opacity: 1; transform: none; }
-html.js .beat-reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+/* marketing.css's .btn-secondary hardcodes a #ffffff background (not a
+   variable) with color: var(--text-main) for the text — on this dark
+   page --text-main is near-white, so the two Starter/Scale pricing cards'
+   "Book a demo" buttons rendered as invisible near-white-on-white text.
+   Found by actually looking at the rendered pricing section, not by
+   reading the CSS (the bug isn't visible from the source alone — the
+   colours are individually reasonable, they just don't work TOGETHER on
+   this page). Given a proper dark-appropriate secondary treatment instead
+   of trying to force the light one to work. */
+.btn-secondary {
+  background: var(--landing-surface-2);
+  border: 1px solid var(--border-light);
+  color: var(--text-main);
 }
-html.js .beat.is-active .beat-reveal { opacity: 1; transform: none; }
-
-/* Staggered children within a beat — phone settles first, then the window
-   pane, suggesting "the message caused this," not simultaneous appearance. */
-html.js .beat-caption.beat-reveal { transition-delay: 0.05s; }
-html.js .phone-frame.beat-reveal { transition-delay: 0.15s; }
-html.js .window-frame.beat-reveal { transition-delay: 0.55s; }
-
-/* Ticks/typing-indicator have their own, faster reveal, nested inside an
-   already-revealed bubble — opacity only, no transform, so they don't
-   re-trigger a layout shift once the bubble itself has settled. */
-.tick-reveal { opacity: 0; }
-html.js .beat.is-active .tick-reveal { opacity: 1; transition: opacity 0.25s ease; transition-delay: 0.7s; }
-
-@media (prefers-reduced-motion: reduce) {
-  html.js .beat-reveal,
-  html.js .tick-reveal {
-    transition-duration: 0.01ms !important;
-    transition-delay: 0s !important;
-  }
+.btn-secondary:hover:not(:disabled) {
+  background: #202B1E;
+  border-color: var(--color-primary-700);
 }
 
-/* ---------- Mobile: stack, phone first (already first in source order) ---------- */
+/* ---------- 6. Explainer — reuses marketing.css's .explainer-grid/
+   .explainer-card almost entirely; only the "legacy" tag's hardcoded
+   light-mode colours needed a dark equivalent. ---------- */
+.explainer-card.legacy .tag { background: rgba(253, 230, 138, 0.15); color: #FDE68A; }
+
+/* ---------- 5/8. Steps — reuses marketing.css's .steps-grid/.step-card.
+   .highlight's hardcoded light gradient needed a dark equivalent; the
+   switching section's 3-item variant needed its own column count, scoped
+   to desktop only so marketing.css's own 900px/640px collapse (already
+   correct) keeps governing narrower widths untouched. ---------- */
+.step-card.highlight { border-color: var(--color-primary-700); background: linear-gradient(180deg, rgba(74, 201, 89, 0.1), var(--bg-card) 65%); }
+@media (min-width: 901px) {
+  .steps-grid--3col { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ---------- 7. Static split-screen — the one section kept from the
+   earlier concept. No scroll choreography: everything here is visible by
+   default; only .fade-in (below) adds the gentle on-scroll settle. ---------- */
+.split-static-copy { max-width: 640px; margin: 0 auto 56px; text-align: center; }
+.split-static-copy h2 { margin-top: 10px; }
+.split-static-panes {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 56px;
+  align-items: center;
+  max-width: 980px;
+  margin: 0 auto;
+}
 @media (max-width: 900px) {
-  .beat { padding: 56px 0; }
-  .beat .container { grid-template-columns: 1fr; gap: 32px; }
-  .beat-caption { max-width: none; text-align: center; margin: 0 auto; }
+  .split-static-panes { grid-template-columns: 1fr; gap: 32px; justify-items: center; }
+}
+
+/* ---------- 9. Pricing note ---------- */
+.pricing-illustrative-note { text-align: center; font-size: 0.78rem; color: var(--text-muted); margin-top: 16px; }
+.compare-table-wrap { background: var(--bg-card); }
+
+/* ---------- Final CTA — marketing.css's .cta-band gradient was tuned for
+   a light page, where its dark band reads as a deliberate contrast
+   moment; on an already-dark page it needs a touch more of its own
+   presence to still read as one, rather than blending into the page. ---------- */
+.cta-band {
+  background: linear-gradient(135deg, var(--bg-card), #0E1710);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 0 0 1px rgba(74, 201, 89, 0.08), var(--shadow-lg);
+}
+
+/* ---------- Reveal — progressive enhancement, not a JS dependency.
+   Default state (no .js on <html>) is always fully visible: correct with
+   JS off, JS erroring, or JS disabled, not just under reduced-motion.
+   Restrained by design here, matching "hover states and gentle fade-in,
+   nothing more" — opacity + a small upward drift, one fixed duration, no
+   staggering/choreography. prefers-reduced-motion collapses it further,
+   to near-instant, for a motion-sensitive visitor who still has JS. ---------- */
+.fade-in { opacity: 1; transform: none; }
+html.js .fade-in {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+html.js .fade-in.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.js .fade-in { transition-duration: 0.01ms !important; }
+}
+
+/* ---------- Restrained hover states (cards already get marketing.css's
+   own .feature-card hover — unused here; these are the ones this page
+   actually renders). ---------- */
+.step-card, .price-card, .explainer-card, .credibility-item {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.step-card:hover, .explainer-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.price-card:hover { box-shadow: var(--shadow-lg); }
+.window-frame { transition: transform 0.2s ease; }
+.faq-item summary:hover { color: var(--color-primary-400); }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 900px) {
   .phone-frame { width: 260px; }
   .phone-screen { min-height: 400px; }
 }
