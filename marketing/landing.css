@@ -1,0 +1,259 @@
+/* ==========================================================================
+   Wasi — Landing page (split-scroll story). BEAT 1 SPIKE ONLY — see
+   landing.html's own header comment for scope. Dark-only by decision: no
+   light variant, no toggle. Loaded AFTER marketing.css, which still supplies
+   the Google Fonts import, the reset, .container, and .btn-primary (already
+   the right green for this page's CTAs — reused as-is, untouched here).
+   Everything below only redefines the shared tokens marketing.css's rules
+   already reference (so body/.btn-primary/.container pick up dark values
+   automatically, no !important fighting) and adds landing-page-only
+   components: the dark field, the phone frame, the window-chrome frame, and
+   the beat-reveal mechanism.
+
+   Colour decision (not mine to relitigate): green stays exactly where it
+   already lives in the product — CTA buttons, WhatsApp bubbles — and
+   nowhere else. No second accent hue. The two panes are told apart
+   structurally (phone silhouette vs. browser-window chrome), never by
+   colour.
+   ========================================================================== */
+
+:root {
+  /* Near-black with a faint green cast — echoes the product's own dark
+     sidebar (#0E2916) without introducing a new brand hue. */
+  --bg-app: #0A0F0C;
+  --bg-card: #121A14;
+  --text-main: #F3F6F3;
+  --text-muted: #8FA096;
+  --border-light: #22301F;
+  --color-heading: #F3F6F3;
+  --landing-surface-2: #182018;
+}
+
+body { background-color: var(--bg-app); }
+
+/* ---------- Minimal preview header (full nav comes later — see build order) ---------- */
+.landing-preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(10, 15, 12, 0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.landing-preview-bar .wordmark { font-weight: 700; color: var(--text-main); font-size: 1rem; }
+.landing-preview-bar .preview-tag {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-primary-700); background: var(--color-primary-50);
+  padding: 3px 9px; border-radius: 9999px;
+}
+
+/* ---------- Beat scaffold ---------- */
+.beat {
+  padding: 96px 0;
+  overflow: hidden;
+}
+/* 3 effective grid items — caption, phone, window — not 2. .beat-panes
+   wraps the phone+window pair in HTML purely for organization; display:
+   contents removes it from the box model so its two children become
+   direct grid items of .container alongside .beat-caption, sitting in 3
+   columns on desktop. On mobile (below) the grid collapses to 1 column,
+   and because .beat-panes contributes nothing of its own to the box
+   model, all 3 items simply stack in source order — caption, phone,
+   window — with no extra rule needed for that case. */
+.beat .container {
+  display: grid;
+  grid-template-columns: 0.7fr auto 1fr;
+  gap: 48px;
+  align-items: center;
+}
+.beat-panes { display: contents; }
+.beat-caption { max-width: 340px; }
+.beat-caption .beat-eyebrow {
+  font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+  margin-bottom: 10px; letter-spacing: 0.02em;
+}
+.beat-caption h2 {
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+.beat-caption p { color: var(--text-muted); font-size: 1.02rem; line-height: 1.55; }
+
+/* ---------- Phone frame (left pane) — real DOM, not a screenshot ---------- */
+.phone-frame {
+  width: 320px;
+  margin: 0 auto;
+  border-radius: 40px;
+  background: #0D120E;
+  border: 1px solid var(--border-light);
+  padding: 10px;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.02);
+}
+.phone-screen {
+  background: #ECEFEA; /* real WhatsApp's light chat background — deliberate: this is
+                           the "light screen glowing on a dark field" the page is built
+                           around, so it stays light even though everything else is dark. */
+  border-radius: 30px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+}
+.phone-statusbar {
+  height: 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  font-size: 0.68rem; font-weight: 600; color: #1F2937;
+}
+.phone-chatheader {
+  height: 52px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px;
+  background: #075E54; /* WhatsApp's real header green — authentic to the app being
+                           screenshotted, not this page's own palette */
+  color: #fff;
+}
+.phone-chatheader .avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700;
+}
+.phone-chatheader .name { font-size: 0.85rem; font-weight: 600; }
+.phone-messages {
+  flex: 1;
+  padding: 16px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bubble {
+  max-width: 78%;
+  padding: 8px 10px 6px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  position: relative;
+}
+.bubble-out {
+  align-self: flex-end;
+  background: #D9FDD3; /* WhatsApp's real outbound-bubble green */
+  color: #111B21;
+  border-bottom-right-radius: 2px;
+}
+.bubble-in {
+  align-self: flex-start;
+  background: #FFFFFF;
+  color: #111B21;
+  border-bottom-left-radius: 2px;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.06);
+}
+.bubble .meta {
+  display: flex; align-items: center; justify-content: flex-end; gap: 3px;
+  margin-top: 3px;
+  font-size: 0.62rem;
+  color: rgba(17,27,33,0.5);
+}
+.bubble .ticks { display: inline-flex; }
+.bubble .ticks svg { display: block; }
+
+/* ---------- Window-chrome frame (right pane) — wraps a real product screenshot ---------- */
+.window-frame {
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.45);
+}
+.window-titlebar {
+  height: 36px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 14px;
+  background: var(--landing-surface-2);
+  border-bottom: 1px solid var(--border-light);
+}
+.window-dots { display: flex; gap: 6px; }
+.window-dots span { width: 10px; height: 10px; border-radius: 50%; background: #2E3B2C; }
+.window-url {
+  flex: 1;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: #0D130E;
+  border-radius: 6px;
+  padding: 3px 10px;
+  max-width: 220px;
+  margin: 0 auto;
+}
+.window-body { line-height: 0; }
+.window-body img { width: 100%; height: auto; display: block; }
+
+/* Stands in for the real screenshot until it exists — same box the <img>
+   will occupy, so dropping the real file in changes nothing structurally. */
+.screenshot-placeholder {
+  aspect-ratio: 570 / 460;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.6; /* .window-body sets line-height:0 to collapse the gap
+                        under its real <img> — without this override that
+                        0 inherits into every line of this placeholder's
+                        own text, stacking every line on the same baseline
+                        (found by actually looking at the rendered
+                        screenshot, not just reading the CSS). */
+  color: var(--text-muted);
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0 10px, transparent 10px 20px);
+}
+
+/* ---------- Beat reveal — progressive enhancement, not a JS dependency.
+   Default state (no .js on <html>) is always fully visible: correct with
+   JS off, JS erroring, or JS disabled, not just under reduced-motion. Only
+   once landing.js confirms it's actually running does .js get added, and
+   only then do elements start hidden pending their own .is-active reveal.
+   prefers-reduced-motion collapses the transition to ~0 on top of that, for
+   a motion-sensitive visitor who still has JS enabled. ---------- */
+.beat-reveal { opacity: 1; transform: none; }
+html.js .beat-reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+html.js .beat.is-active .beat-reveal { opacity: 1; transform: none; }
+
+/* Staggered children within a beat — phone settles first, then the window
+   pane, suggesting "the message caused this," not simultaneous appearance. */
+html.js .beat-caption.beat-reveal { transition-delay: 0.05s; }
+html.js .phone-frame.beat-reveal { transition-delay: 0.15s; }
+html.js .window-frame.beat-reveal { transition-delay: 0.55s; }
+
+/* Ticks/typing-indicator have their own, faster reveal, nested inside an
+   already-revealed bubble — opacity only, no transform, so they don't
+   re-trigger a layout shift once the bubble itself has settled. */
+.tick-reveal { opacity: 0; }
+html.js .beat.is-active .tick-reveal { opacity: 1; transition: opacity 0.25s ease; transition-delay: 0.7s; }
+
+@media (prefers-reduced-motion: reduce) {
+  html.js .beat-reveal,
+  html.js .tick-reveal {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* ---------- Mobile: stack, phone first (already first in source order) ---------- */
+@media (max-width: 900px) {
+  .beat { padding: 56px 0; }
+  .beat .container { grid-template-columns: 1fr; gap: 32px; }
+  .beat-caption { max-width: none; text-align: center; margin: 0 auto; }
+  .phone-frame { width: 260px; }
+  .phone-screen { min-height: 400px; }
+}

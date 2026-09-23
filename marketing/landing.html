@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Wasi — Landing page preview (Beat 1 spike)</title>
+  <!--
+    BEAT 1 SPIKE ONLY. Not linked from anywhere, not the live marketing
+    page — marketing/index.html is untouched and still what the domain
+    serves (decision: build at a separate URL, review live, swap last).
+
+    This page exists to answer one question before the other 6 beats get
+    built: does the phone-frame / window-chrome split, the scroll reveal,
+    the dark-only theme, and the mobile stack actually feel right, on a
+    real phone, before investing in the rest.
+
+    The right pane's screenshot is a placeholder — dashed box, exact
+    dimensions the real capture needs to be (see .screenshot-placeholder in
+    landing.css and the img alt text below) — everything else here is real
+    and final: the phone pane is genuine DOM (see marketing/landing.css's
+    own header comment for why), the reveal mechanism, and the dark theme
+    are all as they'll ship.
+  -->
+  <link rel="stylesheet" href="/breakpoints.css" />
+  <link rel="stylesheet" href="/marketing/marketing.css" />
+  <link rel="stylesheet" href="/marketing/landing.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!--
+    Adds .js to <html> BEFORE first paint — inline, not deferred, so
+    there's no flash of content appearing then being hidden for animation.
+    landing.css's .beat-reveal rules only hide anything once this class is
+    present; with JS off, erroring, or disabled, this line never runs and
+    every beat simply renders in its final, fully visible state. This is
+    the actual no-JS fallback — prefers-reduced-motion (also handled) is a
+    separate, narrower case: JS present, but transitions collapsed to ~0.
+  -->
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+  <div class="landing-preview-bar">
+    <span class="wordmark">wasi</span>
+    <span class="preview-tag">Preview — Beat 1 of 7</span>
+  </div>
+
+  <!-- ================= BEAT 1 — "Every message lands in one inbox." ================= -->
+  <section class="beat" id="beat-1">
+    <div class="container">
+
+      <div class="beat-caption beat-reveal">
+        <div class="beat-eyebrow">Saturday, 10:47pm</div>
+        <h2>Every message lands in one inbox.</h2>
+        <p>A customer messages your WhatsApp number at any hour. It's in Wasi immediately — unassigned, waiting, nothing lost.</p>
+      </div>
+
+      <div class="beat-panes">
+        <!-- Left: the phone — real DOM, not a screenshot. Deepa's own
+             outbound WhatsApp bubble, exactly as it renders on her phone:
+             ticks are a sender-side signal, so this bubble carries them;
+             a reply FROM the business would not (see landing.css's own
+             .bubble-in / .bubble-out split). -->
+        <div class="phone-frame beat-reveal">
+          <div class="phone-screen">
+            <div class="phone-statusbar">
+              <span>10:47</span>
+              <span>●●●●&nbsp; 4G &nbsp;🔋</span>
+            </div>
+            <div class="phone-chatheader">
+              <div class="avatar">VA</div>
+              <div class="name">Vetri Academy</div>
+            </div>
+            <div class="phone-messages">
+              <div class="bubble bubble-out">
+                Hi, is the weekend NEET batch still open?
+                <div class="meta">
+                  10:47 PM
+                  <!-- Gray double-check = delivered, not read. Deliberately
+                       not blue: nothing in beat 1's own moment (10:47pm,
+                       message just sent) has been read yet — blue read-
+                       ticks are beat 5's own, later, right-pane-only
+                       concept (see this file's header comment). -->
+                  <span class="ticks tick-reveal">
+                    <svg width="15" height="10" viewBox="0 0 16 11" fill="none">
+                      <path d="M1 5.5 4.5 9 11 1" stroke="#8696A0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M5 5.5 8.5 9 15 1" stroke="#8696A0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: the window — a real product screenshot wrapped in
+             CSS-drawn browser chrome (the pane's own visual identity,
+             not colour — see landing.css's top-of-file comment). -->
+        <div class="window-frame beat-reveal">
+          <div class="window-titlebar">
+            <div class="window-dots"><span></span><span></span><span></span></div>
+            <div class="window-url">app.wasi.com/chat</div>
+          </div>
+          <div class="window-body">
+            <div class="screenshot-placeholder">
+              PLACEHOLDER — 570×460 @1x (1140×920 capture)<br />
+              Chat view, "Unassigned" queue tab active, Deepa R.'s row visible with a "1" unread badge, no assignee pill.
+            </div>
+            <!-- Once the real capture exists, replace the placeholder div
+                 above with:
+                 <img src="img/beat1-inbox.webp" width="570" height="460"
+                      alt="Wasi inbox showing the Unassigned queue, with a new unread conversation from Deepa R." loading="lazy" />
+            -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <script src="/marketing/landing.js"></script>
+</body>
+</html>
