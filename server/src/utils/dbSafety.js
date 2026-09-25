@@ -37,8 +37,47 @@ const OVERRIDE_TOKEN = 'yes-i-understand-the-risk';
 // is the deliberate, loud, per-invocation escape hatch: it still writes to
 // the real database, so use it consciously, and it warns on every use so
 // that stays visible instead of becoming an invisible habit.
+// True under Node's own built-in test runner (node --test sets
+// NODE_TEST_CONTEXT on every child process it spawns — confirmed directly,
+// not assumed: reproduced with this exact repo's own `npm test` invocation,
+// `node --test --test-concurrency=1`) or an explicit NODE_ENV=test. Checked
+// as an OR of both signals since this project's own npm test script does
+// NOT set NODE_ENV (and .env sets NODE_ENV=development, loaded by every
+// test file's own dotenv.config() call) — NODE_TEST_CONTEXT is what
+// actually fires today; NODE_ENV=test is honored too for a future/different
+// test invocation method that sets it explicitly instead.
+function isTestContext() {
+  return process.env.NODE_ENV === 'test' || !!process.env.NODE_TEST_CONTEXT;
+}
+
 function assertNotProductionDatabase(databaseUrl = process.env.DATABASE_URL) {
   if (process.env.NODE_ENV === 'production') return;
+
+  // Hard backstop, independent of the production-fingerprint check below —
+  // a test run must never reach a real database at all, full stop, not even
+  // via ALLOW_SHARED_PRODUCTION_DB. This project has no separate test
+  // database today, so this throws unconditionally for any test that
+  // actually calls pool.query()/pool.connect() (a stubs-only test — the
+  // established pattern for new tests, see coexistenceEchoIngestion.test.js
+  // — never reaches this at all, since it never calls either). Real
+  // consequence, stated explicitly rather than discovered later: this DOES
+  // currently break every existing test in this suite that deliberately
+  // uses ALLOW_SHARED_PRODUCTION_DB against the shared instance (a
+  // repeatedly-documented, real pattern this project has relied on — see
+  // CLAUDE.md) — until TEST_DATABASE_URL is stood up, only newly-written
+  // stubs-only tests can run under `npm test` without this throwing.
+  if (isTestContext() && !process.env.TEST_DATABASE_URL) {
+    throw new Error(
+      'Refusing to connect: running under a test context (NODE_TEST_CONTEXT or NODE_ENV=test) ' +
+      'with no TEST_DATABASE_URL set. This project has no separate test database — DATABASE_URL ' +
+      'is the same instance as production — so a test must either (a) never call ' +
+      'pool.query()/pool.connect() at all (stub every repo function it touches instead), or ' +
+      '(b) set TEST_DATABASE_URL to a real, separate database before running. ' +
+      'ALLOW_SHARED_PRODUCTION_DB is NOT honored here even if set — a test run must never reach ' +
+      'production, full stop.'
+    );
+  }
+
   const fp = fingerprint(databaseUrl);
   if (!fp || !KNOWN_PRODUCTION_DATABASES.includes(fp)) return;
 

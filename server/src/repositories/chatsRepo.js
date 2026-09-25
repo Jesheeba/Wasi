@@ -273,25 +273,99 @@ async function insertEcho(db, clientId, chatId, { metaMessageId, body, sentAt, s
   return rows[0] || null;
 }
 
+// Monotonic status guard, added 2026-09-25 — not echo-specific (WhatsApp
+// status webhooks aren't guaranteed to arrive in order for any outbound
+// message, echo or otherwise), but flagged as urgent by the coexistence
+// work: an echo now starts life at 'delivered' immediately (insertEcho),
+// skipping 'sent' entirely, so a later 'sent' webhook Meta still emits for
+// that same id would previously have silently regressed the row and lied
+// to the client's UI about whether their message actually landed.
+//
+// Covers the complete value set messages.status has ever allowed (migration
+// 006's own CHECK constraint, unchanged since): 'sent' -> 'delivered' ->
+// 'read' is a strict ladder that never moves backwards — an incoming status
+// at or below the row's current rank is logged, not written. 'failed' is a
+// separate terminal branch, not on the ladder: it's only accepted while the
+// row isn't already 'delivered'/'read' (a message Meta already confirmed
+// delivered cannot subsequently fail — seeing that combination is logged as
+// an anomaly, not applied as a state change: no status write, no
+// error_reason/meta_error_code write, no failed_at stamp). 'pending' is
+// never accepted from a webhook at all — Meta's real status webhooks only
+// ever report sent/delivered/read/failed; 'pending' only ever comes from
+// insertOutboundPending, before any webhook has run.
+const STATUS_LADDER_RANK = { sent: 1, delivered: 2, read: 3 };
+
+// Pure and separately testable (no DB stubbing needed) — see
+// server/test/messageStatusMonotonicGuard.test.js.
+function decideStatusTransition(currentStatus, incomingStatus) {
+  if (incomingStatus === 'pending') {
+    return { accept: false, reason: `status webhook reported 'pending', which Meta never sends — ignoring` };
+  }
+  if (incomingStatus === 'failed') {
+    if (currentStatus === 'delivered' || currentStatus === 'read') {
+      return { accept: false, reason: `'failed' arrived after the row was already '${currentStatus}' — treating as anomalous, not changing status` };
+    }
+    return { accept: true };
+  }
+  const incomingRank = STATUS_LADDER_RANK[incomingStatus];
+  const currentRank = STATUS_LADDER_RANK[currentStatus] || 0;
+  // An incoming status this ladder doesn't recognize (not one of the 5
+  // values messages.status has ever allowed) is accepted as-is, same as
+  // before this guard existed — never silently drop a genuinely new value.
+  if (incomingRank === undefined) return { accept: true };
+  if (incomingRank <= currentRank) {
+    return {
+      accept: false,
+      reason: incomingRank < currentRank
+        ? `out-of-order status '${incomingStatus}' arrived while already '${currentStatus}' — recording the event, not moving the row backwards`
+        : undefined, // an exact repeat (e.g. a redelivered 'sent' after 'sent') is a normal no-op, not worth logging
+    };
+  }
+  return { accept: true };
+}
+
 // Delivery/read/failed receipts arrive for a meta_message_id we may not have
 // (send raced ahead of the webhook, or it's an inbound-message receipt we
 // don't track) — a no-op update is expected, not an error. Only ever called
 // from metaWebhook.js, on the privileged connection.
 async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorReason, metaErrorCode) {
-  // delivered_at/read_at/failed_at: stamped only the first time a message
-  // reaches that status (coalesce keeps the original time on a duplicate
-  // webhook delivery, which Meta is known to send) — see migration
-  // 072_messages_status_timestamps.js for why these exist at all.
+  const { rows: existingRows } = await db.query(
+    'select status from messages where client_id = $1 and meta_message_id = $2',
+    [clientId, metaMessageId]
+  );
+  if (existingRows.length === 0) return null;
+
+  const decision = decideStatusTransition(existingRows[0].status, status);
+  if (decision.reason) {
+    console.warn(`metaWebhook: ${decision.reason}`, { clientId, metaMessageId, currentStatus: existingRows[0].status, incomingStatus: status });
+  }
+
+  const newStatus = decision.accept ? status : existingRows[0].status;
+  // A blocked 'failed' (decision.accept === false for status === 'failed')
+  // must not write error_reason/meta_error_code/failed_at either — the row
+  // is staying 'delivered'/'read', so persisting failure detail against it
+  // would contradict its own status. Every other accepted transition
+  // behaves exactly as before this guard existed.
+  const recordFailureDetail = decision.accept && status === 'failed';
+
+  // delivered_at/read_at: stamped only the first time a message reaches
+  // that status (coalesce keeps the original time on a duplicate webhook
+  // delivery, which Meta is known to send) — see migration
+  // 072_messages_status_timestamps.js for why these exist at all. Keyed on
+  // the INCOMING status, not the guard's decision — a late 'delivered'
+  // arriving after 'read' is already recorded still proves delivery
+  // happened, even though the ladder correctly keeps the headline status at
+  // 'read'.
   const { rows } = await db.query(
     `update messages set
        status = $3,
-       error_reason = coalesce($4, error_reason),
-       meta_error_code = coalesce($5, meta_error_code),
-       delivered_at = case when $3 = 'delivered' then coalesce(delivered_at, now()) else delivered_at end,
-       read_at = case when $3 = 'read' then coalesce(read_at, now()) else read_at end,
-       failed_at = case when $3 = 'failed' then coalesce(failed_at, now()) else failed_at end
+       error_reason = case when $7 then coalesce($4, error_reason) else error_reason end,
+       meta_error_code = case when $7 then coalesce($5, meta_error_code) else meta_error_code end,
+       delivered_at = case when $6 = 'delivered' then coalesce(delivered_at, now()) else delivered_at end,
+       read_at = case when $6 = 'read' then coalesce(read_at, now()) else read_at end,
+       failed_at = case when $7 then coalesce(failed_at, now()) else failed_at end
      where client_id = $1 and meta_message_id = $2 returning *`,
-    [clientId, metaMessageId, status, errorReason || null, metaErrorCode || null]
+    [clientId, metaMessageId, newStatus, errorReason || null, metaErrorCode || null, status, recordFailureDetail]
   );
   return rows[0] || null;
 }
@@ -314,4 +388,5 @@ module.exports = {
   insertInbound,
   insertEcho,
   updateStatusByMetaId,
+  decideStatusTransition,
 };

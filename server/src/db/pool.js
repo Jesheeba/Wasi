@@ -1,11 +1,6 @@
 const { Pool } = require('pg');
 const { assertNotProductionDatabase } = require('../utils/dbSafety');
 
-// Throws immediately (before any query, before any test even starts) if
-// DATABASE_URL points at a known-production database and this isn't the
-// real production process. See dbSafety.js.
-assertNotProductionDatabase();
-
 // Local dev Postgres (docker-compose / embedded-postgres) has no TLS listener;
 // every hosted Postgres we deploy against (Supabase, Render, etc.) requires it.
 const isLocal = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '');
@@ -38,5 +33,44 @@ const pool = new Pool({
 pool.on('error', (err) => {
   console.error('pg pool: idle client error (non-fatal, pool recovers automatically):', err.message);
 });
+
+// Safety guard moved from require-time to call-time (2026-09-25) — a
+// stubs-only test that requires this module transitively (e.g. via a route
+// file it imports, or via a repo module whose functions it then replaces
+// entirely with stubs before calling anything) used to be unable to load at
+// all in this shared-prod-DB environment, even though it poses zero real
+// risk: it never actually calls .query()/.connect(). Confirmed by grep
+// before making this change: pool.query() and pool.connect() are the ONLY
+// two ways any code in this repo ever reaches the database — no other file
+// constructs its own Pool, no lower-level API is used anywhere — so
+// wrapping exactly these two public entry points gives the identical
+// protection at the moment real I/O would actually happen, not weaker
+// protection deferred to whenever it's convenient. Holding a reference to
+// `pool`, or requiring this module and never calling either method, is now
+// free.
+//
+// Checked once, not on every call — process.env doesn't change mid-process,
+// so re-running the parse/fingerprint/env-var check on every single query
+// would be pure overhead, and (more importantly) would make
+// ALLOW_SHARED_PRODUCTION_DB's loud warning banner print on every query
+// instead of once per process, which would bury a real production
+// investigation session's own output in noise.
+let dbSafetyChecked = false;
+function ensureDbSafety() {
+  if (dbSafetyChecked) return;
+  assertNotProductionDatabase();
+  dbSafetyChecked = true;
+}
+
+const originalQuery = pool.query.bind(pool);
+const originalConnect = pool.connect.bind(pool);
+pool.query = (...args) => {
+  ensureDbSafety();
+  return originalQuery(...args);
+};
+pool.connect = (...args) => {
+  ensureDbSafety();
+  return originalConnect(...args);
+};
 
 module.exports = { pool };
