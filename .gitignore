@@ -9,3 +9,5 @@ serve.log
 scraped_pages/
 .DS_Store
 npm-debug.log*
+_tmp_*
+AISENSY_END_TO_END_ARCHITECTURE_AND_FLOWS.md
