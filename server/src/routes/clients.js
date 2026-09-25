@@ -110,6 +110,7 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   const temporaryPassword = generatePassword();
   const password_hash = await hashPassword(temporaryPassword);
   const client = await clientsRepo.update(pool, req.params.id, { password_hash });
+  await clientsRepo.bumpTokenVersion(pool, req.params.id);
 
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'client_password_reset', target: `${client.id}: ${client.email}` });
 

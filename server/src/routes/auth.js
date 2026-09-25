@@ -95,6 +95,7 @@ router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   }
   const password_hash = await hashPassword(password);
   await clientsRepo.update(pool, consumed.subject_id, { password_hash });
+  await clientsRepo.bumpTokenVersion(pool, consumed.subject_id);
   res.json({ message: 'Password updated — you can log in now.' });
 }));
 

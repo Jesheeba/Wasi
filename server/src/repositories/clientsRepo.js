@@ -101,4 +101,15 @@ async function listUnpaidActive(db) {
   return rows;
 }
 
-module.exports = { list, findById, findByEmail, slugExists, create, update, remove, listActive, listUnpaidActive };
+// Session invalidation (password reset item 3) — same reasoning as
+// adminUsersRepo.bumpTokenVersion: a separate call, not folded into
+// update(), so a caller changing password_hash is the one deciding to also
+// kill every live session, not an implicit side effect of update() itself.
+async function bumpTokenVersion(db, id) {
+  await db.query('update clients set token_version = token_version + 1 where id = $1', [id]);
+}
+
+module.exports = {
+  list, findById, findByEmail, slugExists, create, update, remove, listActive, listUnpaidActive,
+  bumpTokenVersion,
+};

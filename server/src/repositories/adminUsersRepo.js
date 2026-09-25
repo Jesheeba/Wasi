@@ -29,4 +29,14 @@ async function updatePassword(id, password_hash) {
   await pool.query('update admin_users set password_hash = $2 where id = $1', [id, password_hash]);
 }
 
-module.exports = { list, findByEmail, findById, create, updatePassword };
+// Session invalidation (password reset item 3) — called alongside every
+// password write so every token issued before it stops verifying on the
+// very next request. Not folded into updatePassword() itself: a caller that
+// only ever wants the row's password changed, not its live sessions killed,
+// should be free to call updatePassword() alone (none exist today, but the
+// two aren't the same operation and shouldn't be forced together).
+async function bumpTokenVersion(id) {
+  await pool.query('update admin_users set token_version = token_version + 1 where id = $1', [id]);
+}
+
+module.exports = { list, findByEmail, findById, create, updatePassword, bumpTokenVersion };
