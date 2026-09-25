@@ -1328,6 +1328,51 @@
                     <li><code>client_id</code> must match the account the API key belongs to.</li>
                   </ul>
                 </div>
+
+                <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">
+                  <div style="font-weight:600; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+                    <i data-lucide="book-open" style="width:16px;"></i> Full API Integration Guide
+                  </div>
+                  <div style="font-size:0.8rem; color:#374151; line-height:1.7;">
+                    <div style="margin-bottom:0.9rem;">
+                      <strong>Templates — <code>GET/POST /api/v1/templates</code></strong>
+                      <p style="color:#6B7280; margin:0.25rem 0 0;">Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send. <code>GET /api/v1/templates/:id</code> returns the full definition of one template.</p>
+                    </div>
+                    <div style="margin-bottom:0.9rem;">
+                      <strong>Read endpoints</strong>
+                      <p style="color:#6B7280; margin:0.25rem 0 0;"><code>GET /api/v1/messages/:id/status</code> (delivery status by the Hub-assigned id, not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code>, <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code>.</p>
+                    </div>
+                    <div style="margin-bottom:0.9rem;">
+                      <strong>Error handling</strong>
+                      <p style="color:#6B7280; margin:0.25rem 0 0;">Every error comes back in one shape: <code>{ "error": { "code": "...", "message": "...", ... } }</code> — a stable <code>code</code> to branch on, plus endpoint-specific extra fields (e.g. <code>metaError</code> when Meta itself rejected something, <code>details</code> for validation failures). Check <code>error.code</code> before assuming <code>error.metaError</code> is present.</p>
+                    </div>
+                    <div style="margin-bottom:0.9rem;">
+                      <strong>Webhooks — inbound forwarding</strong>
+                      <p style="color:#6B7280; margin:0.25rem 0 0;">Once your WhatsApp account is connected, Wasi can forward inbound events to a URL of your choosing — contact support to have it set up. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> (HMAC-SHA256 of the raw JSON body, keyed by a per-client secret) — verify this before trusting a delivery. Event types: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
+                    </div>
+                    <div style="margin-bottom:0.9rem;">
+                      <strong>Rate limits</strong>
+                      <p style="color:#6B7280; margin:0.25rem 0 0;">The Hub API is capped at 300 requests/minute, currently scoped per source IP. Every response carries live <code>X-RateLimit-Limit</code> / <code>X-RateLimit-Remaining</code> / <code>X-RateLimit-Reset</code> headers so you can self-throttle before hitting the limit.</p>
+                    </div>
+                    <div style="margin-bottom:0.9rem;">
+                      <strong>Security recommendations</strong>
+                      <ul style="margin:0.25rem 0 0; padding-left:1.1rem; color:#6B7280; line-height:1.6;">
+                        <li>Never commit an API key or webhook secret to source control — load them from environment variables.</li>
+                        <li>If a key is compromised, delete it above and issue a new one — deletion takes effect immediately.</li>
+                        <li>Always verify the <code>x-wasi-signature-256</code> header before acting on a forwarded webhook payload.</li>
+                        <li><code>client_id</code> is a UUID, not a secret — but still avoid logging your API key or webhook secret.</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <strong>Testing workflow &amp; Postman collection</strong>
+                      <p style="color:#6B7280; margin:0.25rem 0 0;">Start with <code>GET /api/v1/templates</code> to confirm auth works before attempting a send, then send a <code>type: "text"</code> message to your own test number inside an active 24-hour window before wiring up template sends. Ready-to-import Postman collection (placeholder values, no real credentials):
+                        <a href="/postman/Wasi-Hub-API.postman_collection.json" target="_blank" rel="noopener" style="color:#4F46E5;">Wasi-Hub-API.postman_collection.json</a>
+                        &nbsp;·&nbsp;
+                        <a href="/postman/Wasi-Hub-API.postman_environment.json" target="_blank" rel="noopener" style="color:#4F46E5;">Wasi-Hub-API.postman_environment.json</a>
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Sub-page 8: TAG MANAGER -->
