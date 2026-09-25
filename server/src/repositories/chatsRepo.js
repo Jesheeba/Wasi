@@ -225,6 +225,54 @@ async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt
   return rows[0] || null;
 }
 
+// Coexistence echo ingestion (smb_message_echoes) — a message the BUSINESS
+// sent from their own phone (the WhatsApp Business app), which this app
+// never originated and never called Meta to send. Deliberately its own
+// function, not a variant of insertInbound (direction is 'in' there,
+// unconditionally) or insertOutboundPending (hardcodes status='pending' on
+// the assumption a later markSent/markFailed call is coming from THIS app's
+// own send path — for an echo, nothing will ever call either, since the
+// send already fully happened on the phone before we ever heard about it;
+// reusing insertOutboundPending would leave the row stuck showing "sending"
+// forever). Idempotent on the echo's own Meta-assigned id, same on-conflict
+// pattern as insertInbound, so a redelivered webhook can't duplicate a row.
+// Sets chats.unread_count = 0, not "does not touch it" — this is a
+// deliberate product call, not the original draft's assumption. An echo is
+// proof the business already saw and answered the thread from their own
+// phone; leaving unread_count alone would show a client who handles
+// everything on their phone a badge for conversations they've already
+// answered, which is the exact "this inbox is wrong" feeling this whole
+// build exists to fix. This is a real, narrow exception to the invariant
+// app.js's own comment (around its unread_count=0 PATCH) documents —
+// "chats.unread_count only ever increments server-side [on an inbound
+// message]; the client zeroes it" — an echo is the one case where the
+// SERVER now has direct proof of resolution without any client ever
+// opening the chat, so it zeroes it here instead of waiting for a PATCH
+// that may never come if the client keeps answering entirely from their
+// phone. Deliberately zeroes rather than decrements — an echo means the
+// whole thread up to this point has been addressed, not just this one
+// message. Chat creation/lookup for a not-yet-seen contact is the caller's
+// job (mirrors handleInboundMessages' own contactsRepo.upsertByPhone +
+// findOrCreateByContact sequence), not this function's —
+// findOrCreateByContact already covers "a business can start a conversation
+// from their phone."
+async function insertEcho(db, clientId, chatId, { metaMessageId, body, sentAt, source = 'whatsapp_app' }) {
+  const { rows } = await db.query(
+    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at, source)
+     values ($1, $2, 'out', $3, 'delivered', $4, coalesce($5, now()), $6)
+     on conflict (meta_message_id) do nothing
+     returning *`,
+    [chatId, clientId, body, metaMessageId, sentAt || null, source]
+  );
+  if (rows[0]) {
+    await db.query(
+      `update chats set last_message_at = now(), unread_count = 0 where client_id = $1 and id = $2`,
+      [clientId, chatId]
+    );
+  }
+  return rows[0] || null;
+}
+
 // Delivery/read/failed receipts arrive for a meta_message_id we may not have
 // (send raced ahead of the webhook, or it's an inbound-message receipt we
 // don't track) — a no-op update is expected, not an error. Only ever called
@@ -264,5 +312,6 @@ module.exports = {
   markSent,
   markFailed,
   insertInbound,
+  insertEcho,
   updateStatusByMetaId,
 };

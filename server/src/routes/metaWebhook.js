@@ -310,6 +310,16 @@ async function handleInboundMessages(waba, value) {
         direction: _direction, error_reason: _errorReason, meta_error_code: _metaErrorCode,
         meta_error_subcode: _metaErrorSubcode,
         referral: _referral, delivered_at: _deliveredAt, read_at: _readAt, failed_at: _failedAt,
+        // source (migration 080_messages_source.js) is dropped for the same
+        // reason as direction above — chatsRepo.insertInbound never sets it,
+        // so it's always the column default ('api') on every inbound row,
+        // pure redundancy with the event name itself. Real signal (an
+        // echo's 'whatsapp_app') only ever appears on an OUTBOUND row from
+        // handleMessageEchoes, which this destructure never runs against —
+        // per CLAUDE.md's own webhook-contract convention, this is a
+        // deliberate exclusion decision, not a byproduct of adding the
+        // column.
+        source: _source,
         ...forwardableMessage
       } = inserted;
       await enqueueForwards(waba, 'message.received', {
@@ -320,6 +330,54 @@ async function handleInboundMessages(waba, value) {
         message: { ...forwardableMessage, interactive: interactiveReply },
       });
     }
+  }
+}
+
+// Coexistence echo ingestion (smb_message_echoes) — Phase 1, echo ingestion
+// only (see CLAUDE.md/the handover for this build). Per Meta's docs the
+// array arrives under value.message_echoes (not value.messages), each entry
+// shaped like an inbound message object but representing something the
+// BUSINESS sent from their own phone (the WhatsApp Business app), which
+// this app never originated. `to` is the customer's number — the chat this
+// belongs to — `from` is the business's own number, unused here (the chat
+// is already scoped by waba/client, not by which of the business's own
+// numbers sent it).
+//
+// Mirrors handleInboundMessages' body-extraction shape so an echoed
+// interactive/button reply (a business rep tapping a quick-reply on their
+// own phone, in principle) still renders something readable, but an
+// unrecognized/unstructured type is explicitly logged here — never silently
+// dropped — since an echo predates any local record of what was sent, so
+// there's no fallback source of truth for its content the way an outbound
+// send we originated would have (its own body is already in the DB before
+// Meta is ever called).
+async function handleMessageEchoes(waba, value) {
+  const clientId = waba.client_id;
+  for (const echo of value.message_echoes || []) {
+    const phone = echo.to;
+    if (!phone) {
+      console.warn('metaWebhook: smb_message_echoes entry with no `to` — cannot resolve a chat, skipping', { wabaId: waba.waba_id, echoId: echo.id });
+      continue;
+    }
+
+    const buttonReply = echo.interactive?.button_reply;
+    const listReply = echo.interactive?.list_reply;
+    const templateButtonText = echo.button?.text;
+    const recognized = echo.text?.body || buttonReply?.title || listReply?.title || templateButtonText;
+    if (recognized === undefined) {
+      console.warn('metaWebhook: smb_message_echoes entry with an unrecognized/unstructured type — storing best-effort, not dropping', {
+        wabaId: waba.waba_id, echoId: echo.id, type: echo.type,
+      });
+    }
+    const body = recognized || `[${echo.type || 'unknown'}]`;
+
+    const contact = await contactsRepo.upsertByPhone(pool, clientId, { phone, name: phone, wa_id: phone });
+    const chat = await chatsRepo.findOrCreateByContact(pool, clientId, contact);
+    await chatsRepo.insertEcho(pool, clientId, chat.id, {
+      metaMessageId: echo.id,
+      body,
+      sentAt: echo.timestamp ? new Date(Number(echo.timestamp) * 1000).toISOString() : null,
+    });
   }
 }
 
@@ -500,6 +558,22 @@ router.post('/', asyncHandler(async (req, res) => {
           await handleStatuses(waba, value);
           handled = true;
         }
+        // Coexistence echo ingestion — checked by value shape (same pattern
+        // as messages/statuses above: "field name alone can't distinguish
+        // them"), not registered in WABA_SCOPED_FIELD_HANDLERS below on
+        // purpose — a field-keyed entry there would double-process this
+        // same array whenever it's actually present, since this check
+        // already runs first. `field` is still recorded into `fieldsSeen`
+        // (below) regardless, so a real smb_message_echoes delivery whose
+        // array turns out to be shaped differently than Meta's docs say —
+        // this codebase has been burned before by trusting an unconfirmed
+        // Meta payload shape, see handleUnmappedWabaEvent's own history —
+        // still surfaces loudly via the "unhandled payload" warning instead
+        // of silently vanishing.
+        if (waba && Array.isArray(value?.message_echoes) && value.message_echoes.length > 0) {
+          await handleMessageEchoes(waba, value);
+          handled = true;
+        }
 
         // These fields, unlike messages/statuses, genuinely are distinct by
         // name — field-based dispatch is correct here. Guarded on `waba`
@@ -582,3 +656,9 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
+// Exposed for stub-only unit tests (server/test/coexistenceEchoIngestion.test.js)
+// — everything else in this file is only reachable through a full HTTP
+// request with a valid Meta signature, which this specific handler's own
+// logic (ingestion shape/idempotency/contact-and-chat resolution) doesn't
+// need to exercise.
+module.exports.handleMessageEchoes = handleMessageEchoes;

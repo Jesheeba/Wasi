@@ -1163,6 +1163,22 @@ body {
   gap: 5px;
 }
 
+/* Coexistence echo (a reply sent from the WhatsApp Business app on the
+   client's own phone, not through Wasi) — same bubble side/shape as any
+   other outbound message, but visually distinct so it isn't mistaken for
+   something Wasi sent: a dashed left accent instead of msg-out's solid
+   fill, plus the small "Sent from phone" label rendered inline in msg-time. */
+.msg-echo {
+  background: var(--bg-subtle, #f4f4f5);
+  color: var(--text-main);
+  border: 1px dashed var(--color-primary-300, #c7d2fe);
+}
+
+.msg-echo-label {
+  font-style: italic;
+  white-space: nowrap;
+}
+
 /* WhatsApp's own convention: single/double grey tick for sent/delivered,
    double tick turns blue only once the customer has actually read it. */
 .msg-status {

@@ -830,13 +830,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Every bubble still gets a hover/tap tooltip with the full date+time
   // (item 3) via data-full-time, and a screen-reader-only <time> when the
   // visible one is suppressed, so grouping never costs accessibility.
+  // source === 'whatsapp_app' means this outbound message is a Coexistence
+  // echo (routes/metaWebhook.js's handleMessageEchoes) — a reply the
+  // business sent from their own phone via the WhatsApp Business app, which
+  // this app never originated and never called Meta to send. Visually
+  // distinguished so a client doesn't mistake it for something sent through
+  // Wasi (it has no retry/status lifecycle the way a message this app sent
+  // does — statusBadge already only renders ticks for direction === 'out'
+  // generally, which an echo also satisfies, but its status is always
+  // hardcoded 'delivered' at insert, never 'pending'/'failed').
   function renderMessageBubble(m, showMeta) {
     const bodyHtml = m.body.replace(/</g, '&lt;');
+    const isEcho = m.source === 'whatsapp_app';
     const metaHtml = showMeta
-      ? `<div class="msg-time"><time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
+      ? `<div class="msg-time">${isEcho ? '<span class="msg-echo-label" title="Sent from the WhatsApp Business app on your phone, not through Wasi">📱 Sent from phone</span>' : ''}<time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
       : `<time class="sr-only" datetime="${m.sent_at}">${fullTimeLabel(m.sent_at)}</time>`;
     return `
-      <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}" data-message-id="${m.id}" data-full-time="${escapeAttr(fullTimeLabel(m.sent_at))}" tabindex="0">
+      <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}${isEcho ? ' msg-echo' : ''}" data-message-id="${m.id}" data-full-time="${escapeAttr(fullTimeLabel(m.sent_at))}" tabindex="0">
         <div>${bodyHtml}</div>
         ${metaHtml}
       </div>`;
