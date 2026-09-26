@@ -3,12 +3,14 @@ const { ZodError } = require('zod');
 const multer = require('multer');
 const clientsRepo = require('../repositories/clientsRepo');
 const wabasRepo = require('../repositories/wabasRepo');
+const instagramAccountsRepo = require('../repositories/instagramAccountsRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const metaClient = require('../utils/metaClient');
 const { discoverWabaAndPhoneNumber, completeWabaConnection } = require('../services/wabaConnectionService');
+const { discoverInstagramAccount, completeInstagramConnection } = require('../services/instagramConnectionService');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { wabaConnectSchema, wabaConnectIncompleteSchema, businessProfileUpdateSchema } = require('../utils/validate');
+const { wabaConnectSchema, wabaConnectIncompleteSchema, instagramConnectSchema, businessProfileUpdateSchema } = require('../utils/validate');
 
 const router = Router();
 
@@ -30,6 +32,15 @@ router.get('/config', (req, res) => {
     appId: process.env.META_APP_ID || null,
     configId: process.env.META_CONFIG_ID || null,
     configured: Boolean(process.env.META_APP_ID && process.env.META_CONFIG_ID),
+    // Instagram DM Automation, Phase 1 — a separate Facebook Login for
+    // Business configuration scoped to Page/Instagram management
+    // permissions, distinct from META_CONFIG_ID's WhatsApp Embedded Signup
+    // wizard. Needs its own Meta App Review approval before this is usable
+    // for a real (non-developer-role) Instagram account — see this app's
+    // own PAYMENT_REMINDER_WABA_ID/Meta Official Template Library precedent
+    // for other features gated the same way.
+    igConfigId: process.env.META_IG_CONFIG_ID || null,
+    igConfigured: Boolean(process.env.META_APP_ID && process.env.META_IG_CONFIG_ID),
   });
 });
 
@@ -332,6 +343,93 @@ router.post('/whatsapp/connect-incomplete', asyncHandler(async (req, res) => {
     target: `${clientId}: waba_id ${waba_id}`,
   });
   res.json({ recorded: true });
+}));
+
+router.get('/instagram/status', asyncHandler(async (req, res) => {
+  const account = await instagramAccountsRepo.findByClientId(req.clientId);
+  if (!account) return res.json({ connected: false });
+  const { access_token_encrypted, ...safe } = account;
+  res.json({ connected: safe.status === 'connected', account: safe });
+}));
+
+// Instagram DM Automation, Phase 1 — mirrors /whatsapp/connect's guaranteed-
+// audit-trail-on-every-path discipline, but discovery here has no
+// multi-round ambiguity the way WABA/phone discovery did (see
+// discoverInstagramAccount's own comment): GET /me/accounts is the
+// authoritative source, so the only real branch is "more than one Page has
+// a linked Instagram account" — recorded the same way (needs_manual_resolution
+// + connect_diagnostics), but Phase 1 has no admin picker UI for it yet
+// (unlike WABA's resolve-waba route) since real-world testing hasn't shown
+// it's needed — flagged in CLAUDE.md's Known Gaps, not silently missing.
+router.post('/instagram/connect', asyncHandler(async (req, res) => {
+  const clientId = req.clientId;
+  let code;
+
+  try {
+    ({ code } = instagramConnectSchema.parse(req.body));
+
+    await instagramAccountsRepo.upsertForClient(clientId, { status: 'connecting' });
+
+    const shortLivedToken = await metaClient.exchangeCodeForToken(code);
+    const accessToken = await metaClient.exchangeForLongLivedToken(shortLivedToken);
+
+    const discovery = await discoverInstagramAccount({ accessToken });
+
+    if (discovery.needsManualResolution) {
+      await instagramAccountsRepo.upsertForClient(clientId, {
+        status: 'needs_manual_resolution',
+        // Explicit JSON.stringify — pg does NOT auto-serialize a raw JS
+        // object/array for a jsonb column (see onboarding.js's WhatsApp
+        // connect route's identical comment, and CLAUDE.md's account of the
+        // production incident this exact mistake once caused elsewhere).
+        connect_diagnostics: JSON.stringify(discovery.diagnostics),
+      });
+      await auditLogRepo.record({
+        actor_type: 'client',
+        actor_id: clientId,
+        action: 'instagram_connect_needs_manual_resolution',
+        target: `${clientId}: ${discovery.reason} — ${JSON.stringify(discovery.diagnostics)}`,
+      });
+      return res.status(409).json({
+        error: 'More than one of your Facebook Pages has a linked Instagram account, and we could not tell which one to connect automatically.',
+        detail: 'Contact support to finish connecting the right one.',
+        code: 'needs_manual_resolution',
+      });
+    }
+
+    const { account } = await completeInstagramConnection(req.db, clientId, discovery);
+
+    await auditLogRepo.record({
+      actor_type: 'client',
+      actor_id: clientId,
+      action: 'instagram_connected',
+      target: clientId,
+    });
+
+    const { access_token_encrypted, ...safeAccount } = account;
+    res.json({ connected: true, account: safeAccount });
+  } catch (err) {
+    const isValidationError = err instanceof ZodError;
+    const message = isValidationError
+      ? `Invalid request: ${err.issues.map((i) => `${i.path.join('.') || '(body)'} — ${i.message}`).join('; ')}`
+      : err.message;
+
+    await instagramAccountsRepo.upsertForClient(clientId, { status: 'failed' }).catch((e) => {
+      console.error('onboarding: failed to record instagram_accounts status=failed after a connect failure (non-fatal, audit log write still proceeds):', e.message);
+    });
+
+    await auditLogRepo.record({
+      actor_type: 'client',
+      actor_id: clientId,
+      action: 'instagram_connect_failed',
+      target: `${clientId}: ${message}`,
+    });
+    res.status(isValidationError ? 400 : 502).json({
+      error: 'Instagram connection failed',
+      detail: message,
+      hint: isValidationError ? undefined : 'This usually means META_APP_ID/META_APP_SECRET/META_IG_CONFIG_ID are not configured for a real Meta app yet, or the Instagram scopes have not been approved by Meta App Review.',
+    });
+  }
 }));
 
 module.exports = router;

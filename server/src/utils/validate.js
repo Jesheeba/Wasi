@@ -140,6 +140,23 @@ const wabaConnectIncompleteSchema = z.object({
   waba_id: z.string().min(1),
 });
 
+// Instagram DM Automation, Phase 1 (server/src/routes/onboarding.js's
+// POST /instagram/connect). Simpler than wabaConnectSchema — Instagram
+// linking has no Coexistence-style postMessage that might omit an id
+// (GET /me/accounts is the authoritative source of which Page/Instagram
+// account got linked, resolved server-side by instagramConnectionService.js
+// once the code is exchanged), so only the authorization code is required.
+const instagramConnectSchema = z.object({
+  code: z.string().min(1),
+});
+
+// Instagram DM Automation, Phase 1 — text-only send (routes/instagram.js).
+// No `type`/template fields the way messageSendSchema has: the Instagram
+// Messaging API has no message-template/approval concept at all.
+const instagramMessageSendSchema = z.object({
+  body: z.string().min(1),
+});
+
 // PLAN.md item 25, Part A — admin picks a candidate WABA out of the
 // connect_diagnostics a needs_manual_resolution row recorded (admin.js's
 // resolve-waba route). phoneNumberId is optional, not always known yet:
@@ -788,6 +805,8 @@ module.exports = {
   checkoutSchema,
   wabaConnectSchema,
   wabaConnectIncompleteSchema,
+  instagramConnectSchema,
+  instagramMessageSendSchema,
   resolveWabaSchema,
   businessProfileUpdateSchema,
   broadcastCreateSchema,

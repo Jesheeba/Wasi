@@ -919,6 +919,7 @@ function parseTemplateComponents(components) {
 }
 
 module.exports = {
+  graphFetch,
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   debugToken,

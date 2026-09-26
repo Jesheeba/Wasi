@@ -746,6 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!state.metaLibraryEntries.length) loadMetaTemplateLibrary();
       else renderMetaLibraryGrid();
     }
+    if (targetView === 'instagram') renderInstagramConnectStatus();
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
     if (targetView === 'payments') renderPaymentsTable();
@@ -6125,6 +6126,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'tags') renderTagsManager();
       if (secKey === 'canned-responses') renderCannedResponsesTable();
       if (secKey === 'whatsapp') renderWhatsAppSettings();
+      if (secKey === 'instagram') renderInstagramConnectStatus();
       if (secKey === 'team') renderTeamTable();
       if (secKey === 'attributes') renderAttributesTable();
       if (secKey === 'wallet') renderWallet();
@@ -6265,6 +6267,170 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = 'Connect WhatsApp';
       }
     });
+  }
+
+  // --- Instagram DM Automation, Phase 1: connect status + basic inbox ---
+  // Renders into BOTH the main-nav Instagram view and the Settings >
+  // Instagram sub-page (two separate DOM locations, hence the `-settings-`
+  // suffixed ids) — whichever is actually on screen updates; the other is a
+  // harmless no-op write to elements the user isn't looking at right now.
+  // Mirrors renderWhatsAppSettings's status-check-then-connect-button shape,
+  // but simpler: no Profile/Message Link/Channel Settings sub-tabs (no
+  // equivalent to WhatsApp's Business Profile API for Instagram), no
+  // multi-minute Coexistence-style progress messaging (instagramSignup.js's
+  // connect() is a plain FB.login(), no postMessage wizard to wait on).
+  async function renderInstagramConnectStatus() {
+    const targets = [
+      { title: 'instagram-status-title', subtitle: 'instagram-status-subtitle', action: 'instagram-status-action', inbox: 'instagram-inbox' },
+      { title: 'instagram-settings-status-title', subtitle: 'instagram-settings-status-subtitle', action: 'instagram-settings-status-action' },
+    ];
+
+    let status;
+    try {
+      status = await authFetch('/api/onboarding/instagram/status');
+    } catch (err) {
+      for (const t of targets) {
+        const titleEl = document.getElementById(t.title);
+        if (titleEl) titleEl.textContent = 'Could not check connection status';
+      }
+      return;
+    }
+
+    for (const t of targets) {
+      const titleEl = document.getElementById(t.title);
+      const subtitleEl = document.getElementById(t.subtitle);
+      const actionEl = document.getElementById(t.action);
+      const inboxEl = t.inbox ? document.getElementById(t.inbox) : null;
+      if (!titleEl) continue;
+
+      if (status.connected && status.account) {
+        titleEl.textContent = status.account.ig_username ? `@${status.account.ig_username}` : 'Instagram Business Account';
+        if (subtitleEl) subtitleEl.textContent = 'Connected';
+        if (actionEl) actionEl.innerHTML = '<span class="status-badge active" style="padding:4px 14px;font-weight:700;">Active</span>';
+        if (inboxEl) {
+          inboxEl.style.display = 'block';
+          loadInstagramConversations();
+        }
+      } else if (status.account?.status === 'needs_manual_resolution') {
+        titleEl.textContent = 'Instagram connection needs manual resolution';
+        if (subtitleEl) subtitleEl.textContent = 'More than one Instagram account was found — contact support to finish connecting.';
+        if (actionEl) actionEl.innerHTML = '';
+        if (inboxEl) inboxEl.style.display = 'none';
+      } else {
+        titleEl.textContent = 'No Instagram account connected';
+        if (subtitleEl) subtitleEl.textContent = '';
+        if (actionEl) {
+          actionEl.innerHTML = '<button type="button" class="btn-primary instagram-connect-btn" style="padding:8px 16px;">Connect Instagram</button>';
+        }
+        if (inboxEl) inboxEl.style.display = 'none';
+      }
+    }
+
+    refreshIcons();
+    document.querySelectorAll('.instagram-connect-btn').forEach((btn) => {
+      btn.addEventListener('click', () => connectInstagram(btn));
+    });
+  }
+
+  async function connectInstagram(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      const config = await authFetch('/api/onboarding/config');
+      if (!config.igConfigured) {
+        showToast('Instagram connection is not configured on this platform yet — contact your admin.');
+        return;
+      }
+      const { code } = await window.WasiInstagramSignup.connect({
+        appId: config.appId,
+        configId: config.igConfigId,
+      });
+      btn.textContent = 'Finishing setup…';
+      await authFetch('/api/onboarding/instagram/connect', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+        timeoutMs: 30_000,
+      });
+      showToast('Instagram connected!');
+      await renderInstagramConnectStatus();
+    } catch (err) {
+      reportError(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Connect Instagram';
+    }
+  }
+
+  let instagramActiveConversationId = null;
+
+  async function loadInstagramConversations() {
+    const listEl = document.getElementById('instagram-conversation-list');
+    if (!listEl) return;
+    let conversations;
+    try {
+      conversations = await authFetch('/api/instagram/conversations');
+    } catch (err) {
+      listEl.innerHTML = `<div style="padding:1rem;color:#EF4444;font-size:0.8rem;">${escapeHtml(err.message)}</div>`;
+      return;
+    }
+    if (!conversations.length) {
+      listEl.innerHTML = '<div style="padding:1rem;color:#9CA3AF;font-size:0.8rem;">No Instagram DMs yet.</div>';
+      return;
+    }
+    listEl.innerHTML = conversations.map((c) => `
+      <div class="chat-list-item${c.id === instagramActiveConversationId ? ' active' : ''}" data-conversation-id="${c.id}" style="cursor:pointer; padding:0.75rem 1rem; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(c.ig_username ? '@' + c.ig_username : c.ig_scoped_id)}</div>
+        </div>
+        ${c.unread_count > 0 ? `<span class="status-badge" style="background:#DCFCE7;color:#166534;">${c.unread_count}</span>` : ''}
+      </div>
+    `).join('');
+    listEl.querySelectorAll('[data-conversation-id]').forEach((el) => {
+      el.addEventListener('click', () => openInstagramConversation(el.dataset.conversationId));
+    });
+  }
+
+  async function openInstagramConversation(conversationId) {
+    instagramActiveConversationId = conversationId;
+    document.getElementById('instagram-thread-empty').style.display = 'none';
+    const activeEl = document.getElementById('instagram-thread-active');
+    activeEl.style.display = 'flex';
+
+    const conversations = await authFetch('/api/instagram/conversations').catch(() => []);
+    const conversation = conversations.find((c) => c.id === conversationId);
+    document.getElementById('instagram-thread-username').textContent = conversation?.ig_username ? `@${conversation.ig_username}` : (conversation?.ig_scoped_id || '');
+
+    const messages = await authFetch(`/api/instagram/conversations/${conversationId}/messages`).catch(() => []);
+    const messagesEl = document.getElementById('instagram-thread-messages');
+    messagesEl.innerHTML = messages.map((m) => `
+      <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}">${escapeHtml(m.body || '')}</div>
+    `).join('');
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    authFetch(`/api/instagram/conversations/${conversationId}/mark-read`, { method: 'POST' }).catch(() => {});
+    loadInstagramConversations();
+  }
+
+  document.getElementById('instagram-reply-send-btn')?.addEventListener('click', sendInstagramReply);
+  document.getElementById('instagram-reply-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendInstagramReply();
+  });
+
+  async function sendInstagramReply() {
+    if (!instagramActiveConversationId) return;
+    const input = document.getElementById('instagram-reply-input');
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    try {
+      await authFetch(`/api/instagram/conversations/${instagramActiveConversationId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      });
+      openInstagramConversation(instagramActiveConversationId);
+    } catch (err) {
+      reportError(err);
+    }
   }
 
   // Fills the Profile / Message Link / Channel Settings inner tabs (Settings

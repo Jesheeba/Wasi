@@ -40,6 +40,7 @@ const templateLibraryRouter = require('./routes/templateLibrary');
 const contactListsRouter = require('./routes/contactLists');
 const contactSegmentsRouter = require('./routes/contactSegments');
 const cannedResponsesRouter = require('./routes/cannedResponses');
+const instagramRouter = require('./routes/instagram');
 const apiV1MessagesRouter = require('./routes/apiV1Messages');
 const apiV1TemplatesRouter = require('./routes/apiV1Templates');
 const apiV1ConversationsRouter = require('./routes/apiV1Conversations');
@@ -182,6 +183,7 @@ function createApp() {
   app.use('/api/api-keys', requireClientAuth, withTenantContext, apiKeysRouter);
   app.use('/api/template-library', requireClientOrTeamAuth, withTenantContext, templateLibraryRouter);
   app.use('/api/canned-responses', requireClientOrTeamAuth, withTenantContext, cannedResponsesRouter);
+  app.use('/api/instagram', requireClientOrTeamAuth, withTenantContext, instagramRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);
@@ -223,6 +225,7 @@ function createApp() {
   app.get('/breakpoints.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'breakpoints.css')));
   app.get('/app.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'app.js')));
   app.get('/embeddedSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'embeddedSignup.js')));
+  app.get('/instagramSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'instagramSignup.js')));
   // Served as-is from its real location (server/src/utils/, not a
   // frontend-owned file) so the Create/Edit Template modal's live "flag
   // while typing" validation (app.js) runs the EXACT same functions

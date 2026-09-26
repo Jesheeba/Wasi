@@ -644,34 +644,55 @@
           </div>
         </div>
 
-        <!-- 8. INSTAGRAM VIEW -->
+        <!-- 8. INSTAGRAM VIEW — Phase 1 (connect + basic inbox). Automation
+             rules (Story Mention/DM/Comment auto-reply) are deliberately out
+             of scope for this phase; the fake "Instagram Rules" card that
+             used to sit here (hardcoded, no backend) has been removed
+             entirely rather than left half-real. -->
         <div id="view-instagram" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
               <h1 class="page-title">Instagram DM Automation</h1>
-              <p class="page-subtitle">Auto-reply to Story Mentions, DMs, and Comments</p>
+              <p class="page-subtitle">Reply to Instagram Direct Messages from your connected account</p>
             </div>
           </div>
 
-          <!-- No Instagram integration exists anywhere in this codebase
-               (no OAuth flow, no API routes, no repo) — this used to claim
-               "@wasi_official ... Connected" plus two fake "Active"
-               automation rules regardless. Left honest until the feature is
-               actually built: not connected, no rules possible yet. -->
-          <div class="channel-status-card">
+          <div class="channel-status-card" id="instagram-status-card">
             <div class="channel-info-left">
               <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
               <div>
-                <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">No Instagram account connected</div>
-                <div style="font-size: 0.8rem; color: #6B7280;">This feature isn't available yet</div>
+                <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;" id="instagram-status-title">Loading…</div>
+                <div style="font-size: 0.8rem; color: #6B7280;" id="instagram-status-subtitle"></div>
               </div>
             </div>
-            <span class="status-badge" style="padding: 4px 14px; font-weight: 700; background: #F1F5F9; color: #64748B;">Not Connected</span>
+            <div id="instagram-status-action"></div>
           </div>
 
-          <div class="table-card" style="padding: 1.5rem;">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Instagram Rules</h3>
-            <div style="text-align:center;color:#9CA3AF;padding:1rem 0;">Connect an Instagram account to create automation rules.</div>
+          <!-- Shown only once instagram_accounts.status === 'connected' -->
+          <div id="instagram-inbox" style="display:none; height: calc(100vh - 220px);">
+            <div style="display: flex; height: 100%; border: 1px solid var(--border-light); border-radius: 10px; overflow: hidden; background: #fff;">
+              <div class="chat-list-panel" style="border-right: 1px solid var(--border-light);">
+                <div class="chat-list-header">
+                  <div style="font-weight:600; font-size:0.85rem;">Conversations</div>
+                </div>
+                <div class="chat-list" id="instagram-conversation-list" style="flex: 1; overflow-y: auto;"></div>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column;">
+                <div id="instagram-thread-empty" style="flex:1; display:flex; align-items:center; justify-content:center; color:#9CA3AF; font-size:0.85rem;">
+                  Select a conversation to view messages
+                </div>
+                <div id="instagram-thread-active" style="display:none; flex:1; flex-direction: column;">
+                  <div class="chat-header">
+                    <div style="font-size: 0.875rem; font-weight: 600;" id="instagram-thread-username"></div>
+                  </div>
+                  <div style="flex:1; overflow-y:auto; padding:1rem;" id="instagram-thread-messages"></div>
+                  <div style="display:flex; gap:0.5rem; padding:0.75rem; border-top:1px solid var(--border-light);">
+                    <input type="text" id="instagram-reply-input" class="chat-input" placeholder="Type a message..." autocomplete="off" />
+                    <button type="button" class="btn-primary" style="width:auto; padding:0 1.25rem;" id="instagram-reply-send-btn">Send</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1208,17 +1229,15 @@
               <!-- Sub-page 3: INSTAGRAM CHANNEL -->
               <div id="sec-view-instagram" class="sec-content-view" style="display: none;">
                 <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Instagram Settings</h2>
-                <!-- Same "no real integration exists" honesty fix as the
-                     main-nav Instagram view. -->
-                <div class="channel-status-card">
+                <div class="channel-status-card" id="instagram-settings-status-card">
                   <div class="channel-info-left">
                     <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
                     <div>
-                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">No Instagram account connected</div>
-                      <div style="font-size: 0.8rem; color: #6B7280;">This feature isn't available yet</div>
+                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;" id="instagram-settings-status-title">Loading…</div>
+                      <div style="font-size: 0.8rem; color: #6B7280;" id="instagram-settings-status-subtitle"></div>
                     </div>
                   </div>
-                  <span class="status-badge" style="padding: 4px 14px; font-weight: 700; background: #F1F5F9; color: #64748B;">Not Connected</span>
+                  <div id="instagram-settings-status-action"></div>
                 </div>
               </div>
 
@@ -2387,6 +2406,7 @@
        different URL, not a conditional-request negotiation. Bump the value
        whenever embeddedSignup.js changes — same discipline as app.js below. -->
   <script src="/embeddedSignup.js?v=20260908b"></script>
+  <script src="/instagramSignup.js?v=20260926a"></script>
   <!-- Cache-busting query string — this file has been edited many times in a
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old

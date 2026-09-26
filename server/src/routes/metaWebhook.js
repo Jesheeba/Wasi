@@ -3,6 +3,9 @@ const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const wabasRepo = require('../repositories/wabasRepo');
+const instagramAccountsRepo = require('../repositories/instagramAccountsRepo');
+const instagramConversationsRepo = require('../repositories/instagramConversationsRepo');
+const instagramMessagesRepo = require('../repositories/instagramMessagesRepo');
 const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const consentRepo = require('../repositories/consentRepo');
@@ -480,6 +483,38 @@ async function handleAccountUpdate(waba, value) {
 // *is* verified. Rather than guess a DB update against an unconfirmed shape,
 // this records the full payload to the audit log so nothing is silently
 // lost; upgrade to a real column update once a live payload confirms the shape.
+// Instagram DM Automation, Phase 1 — genuinely different payload shape from
+// WhatsApp's (entry.changes[].value.messages), not a variant of it: the
+// Messenger/Instagram Platform delivers inbound DMs under entry.messaging[],
+// an array of { sender:{id}, recipient:{id}, timestamp, message:{mid, text} }
+// events, with no "changes"/"field" wrapper at all. entry.id here is the
+// receiving Page's id, resolved against instagram_accounts.page_id (not
+// wabas.waba_id) — this function is only ever called once that lookup has
+// already succeeded (see the dispatch loop below).
+//
+// No enqueueForwards call — Phase 1 is inbox-only, client-webhook forwarding
+// of Instagram events is deliberately deferred (see the implementation
+// plan's "explicitly out of scope" section).
+async function handleInstagramEntry(igAccount, entry) {
+  for (const event of entry.messaging || []) {
+    const senderId = event.sender?.id;
+    const messageText = event.message?.text;
+    const metaMessageId = event.message?.mid;
+    if (!senderId || !event.message) continue; // e.g. a read receipt / postback, not a DM — no text/mid to store
+
+    const conversation = await instagramConversationsRepo.findOrCreateByIgScopedId(
+      pool, igAccount.client_id, igAccount.id, senderId
+    );
+    const inserted = await instagramMessagesRepo.insertInbound(
+      pool, igAccount.client_id, conversation.id, messageText || null, metaMessageId || null
+    );
+    if (inserted) {
+      await instagramConversationsRepo.touchLastMessageAt(pool, conversation.id, true);
+    }
+  }
+  return true;
+}
+
 async function handleUnmappedWabaEvent(field, entryId, value) {
   await auditLogRepo.record({
     actor_type: 'meta_webhook',
@@ -535,6 +570,37 @@ router.post('/', asyncHandler(async (req, res) => {
       if (waba) wabaIdsTouched.add(waba.id);
     } catch (err) {
       console.error('metaWebhook: failed to resolve waba for entry', entry.id, err.message);
+    }
+
+    // Instagram DM Automation, Phase 1 — Instagram/Messenger Platform
+    // deliveries arrive as entry.messaging[], a shape WhatsApp's payloads
+    // never use, so this only ever runs for an entry the WABA lookup above
+    // didn't match (entry.id there is a Page id, not a waba_id). Additive,
+    // not a replacement for anything above — no existing WhatsApp branch
+    // changes. fieldsSeen/handled bookkeeping doesn't apply here since
+    // there's no field/change wrapper to record; this entry's own success/
+    // failure is tracked directly against anyChangeFailed instead.
+    if (!waba && Array.isArray(entry.messaging) && entry.messaging.length > 0) {
+      try {
+        const igAccount = await instagramAccountsRepo.findByPageId(entry.id);
+        if (igAccount) {
+          await handleInstagramEntry(igAccount, entry);
+          fieldsSeen.push('instagram_messaging');
+        } else {
+          console.warn(`metaWebhook: unhandled Instagram/Page payload — entry=${entry.id} matches neither a waba nor an instagram_account`);
+        }
+      } catch (err) {
+        anyChangeFailed = true;
+        failedFields.push(`instagram_messaging: ${err.message}`);
+        console.error('metaWebhook FAILURE (instagram):', { entryId: entry.id, error: err.message, stack: err.stack });
+      }
+      await auditLogRepo.record({
+        actor_type: 'meta_webhook',
+        actor_id: null,
+        action: 'instagram_messaging',
+        target: entry.id || null,
+      });
+      continue; // this entry has no entry.changes to also process
     }
 
     for (const change of entry.changes || []) {
@@ -662,3 +728,4 @@ module.exports = router;
 // logic (ingestion shape/idempotency/contact-and-chat resolution) doesn't
 // need to exercise.
 module.exports.handleMessageEchoes = handleMessageEchoes;
+module.exports.handleInstagramEntry = handleInstagramEntry;
