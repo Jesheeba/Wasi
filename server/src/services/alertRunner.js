@@ -289,6 +289,50 @@ async function checkPendingFailedConsentWrites() {
   }];
 }
 
+// 10. Dormant client — connected, receiving real inbound WhatsApp traffic,
+// but zero outbound replies in 7 days. This is the exact gap that let a
+// client with 1,342 unanswered messages go unnoticed for 20 days: nothing
+// before this ever checked "is anyone on the other end actually
+// responding," only whether the pipe itself was healthy.
+async function checkDormantNoOutbound() {
+  const { rows } = await pool.query(`
+    select w.id as waba_row_id, w.waba_id, c.id as client_id, c.name as client_name,
+      (select count(*)::int from messages m where m.client_id = c.id and m.direction = 'in' and m.sent_at > now() - interval '7 days') as inbound_7d,
+      (select count(*)::int from messages m where m.client_id = c.id and m.direction = 'out' and m.sent_at > now() - interval '7 days') as outbound_7d
+    from wabas w join clients c on c.id = w.client_id
+    where w.status = 'connected'
+  `);
+  return rows
+    .filter((r) => r.inbound_7d > 0 && r.outbound_7d === 0)
+    .map((r) => ({
+      dedupKey: r.client_id,
+      severity: 'critical',
+      message: `${r.client_name} has received ${r.inbound_7d} inbound WhatsApp message(s) in the last 7 days but sent zero outbound replies — nobody appears to be responding.`,
+      details: r,
+    }));
+}
+
+// 11. A client's WhatsApp has been connected for more than 3 days but
+// clients.last_login_at is still null — plausibly nobody at that business
+// has ever actually opened the CRM, distinct from checkDormantNoOutbound
+// above (which needs real inbound traffic first; this catches an account
+// that's been silent from day one, before any traffic exists to judge).
+async function checkNeverLoggedInStale() {
+  const { rows } = await pool.query(`
+    select distinct on (c.id) c.id as client_id, c.name as client_name, w.verified_at as connected_since
+    from wabas w join clients c on c.id = w.client_id
+    where w.status = 'connected' and c.last_login_at is null and w.verified_at is not null
+      and w.verified_at < now() - interval '3 days'
+    order by c.id, w.verified_at asc
+  `);
+  return rows.map((r) => ({
+    dedupKey: r.client_id,
+    severity: 'warning',
+    message: `${r.client_name}'s WhatsApp account has been connected since ${new Date(r.connected_since).toISOString().slice(0, 10)} but nobody has ever logged into the CRM.`,
+    details: r,
+  }));
+}
+
 async function maybeSendDailyDigest() {
   const today = new Date().toISOString().slice(0, 10);
   if (await alertEventsRepo.existsAny('daily_digest', today)) return;
@@ -334,6 +378,8 @@ async function tick() {
     await reconcile('auth_class_error', await checkAuthClassErrors());
     await replayFailedConsentWrites();
     await reconcile('consent_opt_out_pending_replay', await checkPendingFailedConsentWrites());
+    await reconcile('dormant_no_outbound', await checkDormantNoOutbound());
+    await reconcile('never_logged_in_stale', await checkNeverLoggedInStale());
     await maybeSendDailyDigest();
   } catch (err) {
     console.error('alertRunner tick failed:', err.message);
@@ -364,4 +410,6 @@ module.exports = {
   checkAuthClassErrors,
   replayFailedConsentWrites,
   checkPendingFailedConsentWrites,
+  checkDormantNoOutbound,
+  checkNeverLoggedInStale,
 };

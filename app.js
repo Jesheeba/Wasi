@@ -341,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (location.hash) location.hash = '';
     appShell.style.display = 'none';
     authView.style.display = 'flex';
+    stopSendabilityBannerPolling();
   }
 
   function showToast(message) {
@@ -405,6 +406,80 @@ document.addEventListener('DOMContentLoaded', () => {
   function stopPolling() {
     clearInterval(pollTimer);
     pollTimer = null;
+  }
+
+  // --- Sendability banner ("why can't my client send" gap) ---
+  // A client whose WABA is blocked/limited by Meta used to see a completely
+  // normal app — the only person who could find out why was an admin
+  // running a script. The data already exists on the wabas row (sendable,
+  // sendable_reason, health_status, probe_error_code — GET
+  // /api/onboarding/whatsapp/status already returns it, no new Meta call
+  // needed); this just renders it as plain English via the shared
+  // server/src/utils/sendabilityMessages.js (also used by admin's
+  // client-detail view and the chat-send error path below, so all three
+  // read identical wording, never a hand-duplicated copy).
+  let sendabilityBannerTimer = null;
+
+  function renderSendabilityBanner(waba) {
+    const banner = document.getElementById('sendability-banner');
+    if (!banner) return;
+    const info = window.sendabilityMessages ? window.sendabilityMessages.describeSendability(waba) : null;
+    if (!info) {
+      banner.className = 'sendability-banner';
+      banner.innerHTML = '';
+    } else {
+      // Not dismissible by design — no close button, on purpose. This is a
+      // state ("your account currently can't send"), not a notification.
+      banner.className = `sendability-banner visible severity-${info.severity}`;
+      banner.innerHTML = `
+        <span class="sendability-banner-headline">${escapeHtml(info.headline)}</span>
+        ${info.code != null ? `<span class="sendability-banner-code">#${escapeHtml(String(info.code))}</span>` : ''}
+        <span class="sendability-banner-action">${escapeHtml(info.action)}</span>
+      `;
+    }
+    updateSendabilityBannerLayout();
+  }
+
+  // Measures the banner's real rendered height (its text can wrap to more
+  // than one line at narrow widths) into a CSS custom property index.css
+  // uses to reserve space for it — see index.css's #app-shell/.main-wrapper/
+  // .mobile-sidebar-toggle comments for why this can't just be a fixed
+  // guessed pixel value.
+  function updateSendabilityBannerLayout() {
+    const banner = document.getElementById('sendability-banner');
+    const height = banner && banner.classList.contains('visible') ? banner.offsetHeight : 0;
+    document.documentElement.style.setProperty('--sendability-banner-h', `${height}px`);
+  }
+
+  window.addEventListener('resize', () => {
+    if (document.getElementById('sendability-banner')?.classList.contains('visible')) {
+      updateSendabilityBannerLayout();
+    }
+  });
+
+  async function refreshSendabilityBanner() {
+    try {
+      const status = await authFetch('/api/onboarding/whatsapp/status');
+      renderSendabilityBanner(status.connected ? status.waba : null);
+    } catch (_err) {
+      // Transient poll failure — leave whatever was last shown standing
+      // rather than flicker a real banner off over a network blip.
+    }
+  }
+
+  // sendabilityMonitorRunner.js refreshes the underlying data hourly (see
+  // its own STALE_AFTER_MS) — polling this every 5 minutes is plenty to
+  // surface a change promptly without hammering the endpoint, and it runs
+  // regardless of which view is open (unlike startPolling's chat-only poll),
+  // since this banner is meant to be visible everywhere in the app.
+  function startSendabilityBannerPolling() {
+    if (sendabilityBannerTimer) return;
+    sendabilityBannerTimer = setInterval(refreshSendabilityBanner, 5 * 60 * 1000);
+  }
+  function stopSendabilityBannerPolling() {
+    clearInterval(sendabilityBannerTimer);
+    sendabilityBannerTimer = null;
+    renderSendabilityBanner(null);
   }
 
   // item 5.5 (+ this follow-up) — deliberately narrow scope: hides/disables
@@ -490,6 +565,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const requestedView = location.hash.slice(1);
     switchView(VALID_VIEWS.has(requestedView) ? requestedView : 'chat');
     startPolling();
+    refreshSendabilityBanner();
+    startSendabilityBannerPolling();
   }
 
   loginForm?.addEventListener('submit', async (e) => {
@@ -6754,6 +6831,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // its body. A plain error with neither just shows err.message either way
   // — same message, dialog or toast depending on its own length.
   function reportError(err, { title } = {}) {
+    // A chat-send failure carries the real Meta error code (see
+    // server/src/routes/chats.js's metaErrorCode field, added alongside the
+    // sendability banner) — translate it to the exact same plain English
+    // the banner and admin's client-detail view use, instead of Meta's raw
+    // string, before falling through to the generic handling below.
+    const metaErrorCode = err?.body && err.body.metaErrorCode != null ? err.body.metaErrorCode : null;
+    if (metaErrorCode !== null && window.sendabilityMessages) {
+      const info = window.sendabilityMessages.describeErrorCode(metaErrorCode);
+      const detail = `${info.action}${info.code != null ? ` (Meta error #${info.code})` : ''}`;
+      if (shouldUseErrorDialog(detail)) {
+        showErrorDialog({ title: title || info.headline, message: detail });
+      } else {
+        showToast(`${info.headline} ${detail}`);
+      }
+      return;
+    }
+
     const category = err?.message || 'Something went wrong.';
     const hasDetails = !!(err?.body && Array.isArray(err.body.details) && err.body.details.length && err.body.details.every((d) => typeof d === 'string'));
     const details = hasDetails ? err.body.details : null;

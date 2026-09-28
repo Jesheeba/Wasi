@@ -10,7 +10,8 @@ const SAFE_COLUMNS = `id, name, email, status, tenant_slug, created_at, email_ve
   developer_name, developer_phone, developer_email,
   integration_requirements, additional_notes,
   activated_at, payment_status, payment_marked_unpaid_at,
-  payment_warning_sent_at, auto_suspended_for_nonpayment, last_reminder_sent_on`;
+  payment_warning_sent_at, auto_suspended_for_nonpayment, last_reminder_sent_on,
+  last_login_at`;
 
 async function list(db) {
   const { rows } = await db.query(`select ${SAFE_COLUMNS} from clients order by created_at desc`);
@@ -109,7 +110,15 @@ async function bumpTokenVersion(db, id) {
   await db.query('update clients set token_version = token_version + 1 where id = $1', [id]);
 }
 
+// Dormant-client visibility — set on every successful owner login
+// (routes/auth.js's POST /login), same naming/shape as
+// teamMembersRepo.touchLastLogin. Always called with the privileged pool
+// (login runs before req.clientId/req.db exist), same as findByEmail above.
+async function touchLastLogin(db, id) {
+  await db.query('update clients set last_login_at = now() where id = $1', [id]);
+}
+
 module.exports = {
   list, findById, findByEmail, slugExists, create, update, remove, listActive, listUnpaidActive,
-  bumpTokenVersion,
+  bumpTokenVersion, touchLastLogin,
 };

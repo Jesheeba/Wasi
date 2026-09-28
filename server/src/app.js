@@ -235,6 +235,12 @@ function createApp() {
   // consent hardening Phase 2's shared opt-in confirmation wording (see
   // consentStatement.js's own module comment).
   app.get('/consentStatement.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'consentStatement.js')));
+  // Same static-asset pattern again — the "why can't my client send" banner
+  // (root CRM app) and admin's client-detail view both need the exact same
+  // plain-English mapping of a Meta sendability error code, not two
+  // hand-written copies that can drift apart. See sendabilityMessages.js's
+  // own module comment.
+  app.get('/sendabilityMessages.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'sendabilityMessages.js')));
   app.use('/marketing', express.static(path.join(REPO_ROOT, 'marketing')));
   app.use('/admin', express.static(path.join(REPO_ROOT, 'admin')));
   // Postman collection + environment template for the admin panel's API

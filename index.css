@@ -27,6 +27,13 @@
   --sidebar-width: 250px;
   --sidebar-collapsed-width: 72px;
   --header-height: 64px;
+  /* Set from JS (app.js's updateSendabilityBannerLayout) to the persistent
+     sendability banner's real rendered height, or 0px when it's hidden —
+     never hardcoded, since wrapped banner text at narrow widths changes it.
+     #app-shell reserves this much space via padding-top so the banner never
+     overlaps app content; the mobile hamburger toggle shifts down by the
+     same amount so it never overlaps the banner either. */
+  --sendability-banner-h: 0px;
 }
 
 * {
@@ -212,6 +219,71 @@ body {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  /* Reserves space for #sendability-banner (border-box, via the global
+     `* { box-sizing: border-box }` rule) instead of the banner overlapping
+     content — see .main-wrapper/.main-content below, which switch from a
+     hardcoded 100vh to 100% specifically so they shrink to fit this. */
+  padding-top: var(--sendability-banner-h);
+}
+
+/* Persistent sendability banner (root CRM app only — admin renders the same
+   wording inline on its Client Detail page instead of a sticky top bar).
+   Three severities, deliberately distinct: 'blocked' (broken, red),
+   'limited' (degraded, amber), 'capped' (soft informational notice, blue —
+   the TIER_250 case). Non-dismissible by design: no close button anywhere
+   in this block, on purpose — see app.js's renderSendabilityBanner. */
+.sendability-banner {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-bottom: 1px solid transparent;
+}
+.sendability-banner.visible {
+  display: flex;
+}
+.sendability-banner-headline {
+  font-weight: 600;
+}
+.sendability-banner-code {
+  opacity: 0.65;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.sendability-banner-action {
+  margin-left: auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sendability-banner.severity-blocked {
+  background: #FEF2F2;
+  border-bottom-color: #FCA5A5;
+  color: #7F1D1D;
+}
+.sendability-banner.severity-limited {
+  background: #FFFBEB;
+  border-bottom-color: #FDE68A;
+  color: #78350F;
+}
+.sendability-banner.severity-capped {
+  background: #EFF6FF;
+  border-bottom-color: #BFDBFE;
+  color: #1E3A8A;
+}
+@media (max-width: 640px) {
+  .sendability-banner {
+    /* Clears the mobile hamburger toggle's own footprint (top:12px..56px,
+       shifted further by --sendability-banner-h above) — same reasoning as
+       .chat-list-header's fix for the identical class of overlap. */
+    padding-left: 3.25rem;
+  }
+  .sendability-banner-action {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
 }
 
 /* Navigation Sidebar - Dark Forest Green Theme matching app.kwic.in */
@@ -312,7 +384,10 @@ body {
 .mobile-sidebar-toggle {
   display: none;
   position: fixed;
-  top: 12px;
+  /* Shifts down by the sendability banner's height (0px when it's hidden)
+     so the two never overlap — this button is position:fixed relative to
+     the viewport, unaffected by #app-shell's own padding-top. */
+  top: calc(12px + var(--sendability-banner-h));
   left: 12px;
   z-index: 25;
   width: 44px;
@@ -370,7 +445,12 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* 100% of #app-shell's own (possibly banner-shrunk) height, not a
+     viewport-relative 100vh — a vh unit ignores #app-shell's padding-top
+     entirely and would push this box's bottom off-screen by exactly the
+     banner's height. Identical to 100vh when the banner is hidden (the
+     default), since #app-shell is 100vh with zero padding-top then. */
+  height: 100%;
   overflow: hidden;
   background-color: var(--bg-app);
 }

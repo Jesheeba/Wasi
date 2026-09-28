@@ -60,6 +60,7 @@ router.post('/login', authLimiter, asyncHandler(async (req, res) => {
   const valid = await comparePassword(password, client.password_hash);
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
+  await clientsRepo.touchLastLogin(pool, client.id);
   const token = signClientToken(client);
   const { password_hash: _omit, ...safeClient } = client;
   res.json({ token, client: safeClient });

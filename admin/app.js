@@ -923,6 +923,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
 
       <div style="margin-top:1rem; padding-top:0.85rem; border-top:1px solid var(--border,#E2E8F0);">
         <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.35rem;">Sendability Monitoring</div>
+        ${clientSendabilityBannerHtml(waba)}
         <div class="detail-row"><span class="detail-row-label">Sendable</span><span class="detail-row-value">${waba.sendable === true ? '<span class="status-badge status-approved">Yes</span>' : waba.sendable === false ? `<span class="status-badge status-rejected" title="${escapeHtml(waba.sendable_reason || '')}">No</span>` : waba.sendable_checked_at ? `<span class="status-badge status-pending" title="${escapeHtml(waba.sendable_reason || '')}">Unknown</span>` : '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>'}</span></div>
         ${waba.sendable !== true && waba.sendable_reason ? `<div class="inline-warning" style="margin:0.4rem 0;">${escapeHtml(waba.sendable_reason)}</div>` : ''}
         ${waba.sendable_checked_at ? `<div class="detail-row"><span class="detail-row-label">Sendable Checked</span><span class="detail-row-value">${formatDate(waba.sendable_checked_at)}</span></div>` : ''}
@@ -1557,6 +1558,26 @@ async function loadWabas() {
 // actually send), so this renders as an informational flag with an explicit
 // "unconfirmed" note, never as a red "cannot send" badge — only the send
 // probe (Layer 3, not yet built) gets to make that claim.
+// "What the client sees" — the exact same plain-English banner
+// (server/src/utils/sendabilityMessages.js) the root CRM app shows above
+// its own app shell, rendered inline here instead of as a sticky top bar
+// (admin manages many clients, not just this one, so a persistent
+// full-width admin banner doesn't make sense the way it does client-side).
+// Renders nothing when the client wouldn't see a banner either — this is
+// meant to answer "what does this client see," not duplicate every raw
+// field already shown below it.
+function clientSendabilityBannerHtml(waba) {
+  const info = window.sendabilityMessages ? window.sendabilityMessages.describeSendability(waba) : null;
+  if (!info) return '';
+  return `
+    <div class="sendability-banner visible severity-${info.severity}" style="border-radius:8px; margin-bottom:0.6rem;">
+      <span class="sendability-banner-headline">${escapeHtml(info.headline)}</span>
+      ${info.code != null ? `<span class="sendability-banner-code">#${escapeHtml(String(info.code))}</span>` : ''}
+      <span class="sendability-banner-action">${escapeHtml(info.action)}</span>
+    </div>
+  `;
+}
+
 function registrationBadgeHtml(waba) {
   if (!waba.registration_checked_at) {
     return '<span style="color:var(--text-muted); font-size:0.8rem;">Not checked yet</span>';
@@ -1619,7 +1640,7 @@ function renderWabasTable(rows) {
 async function loadPlatformOverview() {
   setInlineError('platform-overview-error', null);
   const tbody = document.getElementById('platform-overview-table-body');
-  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">Loading…</td></tr>';
+  tbody.innerHTML = '<tr class="table-empty-row"><td colspan="10">Loading…</td></tr>';
 
   try {
     const rows = await apiFetch('/api/admin/clients-overview');
@@ -1631,10 +1652,28 @@ async function loadPlatformOverview() {
   }
 }
 
+// Task B — dormant-client visibility. Resend isn't configured (see this
+// page's own "Alerts are not configured" banner), so an alert that only
+// ever exists as an unsent email is the exact failure mode this closes:
+// dormant_no_outbound_7d/never_logged_in_stale (server/src/routes/admin.js's
+// clients-overview query — the same two conditions alertRunner.js's
+// checkDormantNoOutbound/checkNeverLoggedIn raise as real alerts) are always
+// visible here regardless of whether any notification channel works.
+function attentionBadgesHtml(r) {
+  const badges = [];
+  if (r.dormant_no_outbound_7d) {
+    badges.push('<span class="status-badge status-rejected" title="Receiving inbound WhatsApp messages but nobody has sent an outbound reply in 7 days">Not responding</span>');
+  }
+  if (r.never_logged_in_stale) {
+    badges.push('<span class="status-badge status-pending" title="WhatsApp has been connected for more than 3 days and nobody has ever logged into the CRM">Never logged in</span>');
+  }
+  return badges.length ? badges.join(' ') : '—';
+}
+
 function renderPlatformOverview(rows) {
   const tbody = document.getElementById('platform-overview-table-body');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="8">No clients yet.</td></tr>';
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="10">No clients yet.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((r) => `
@@ -1647,6 +1686,8 @@ function renderPlatformOverview(rows) {
       <td>${escapeHtml(r.plan || '—')}</td>
       <td>${r.subscription_status ? statusBadge(r.subscription_status) : '—'}</td>
       <td>${formatDate(r.connected_date)}</td>
+      <td>${r.last_login_at ? formatDate(r.last_login_at) : '<span style="color:var(--text-muted); font-size:0.8rem;">Never</span>'}</td>
+      <td>${attentionBadgesHtml(r)}</td>
     </tr>
   `).join('');
 

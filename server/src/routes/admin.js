@@ -525,11 +525,30 @@ router.post('/clients/:id/hub-forward/regenerate-secret', asyncHandler(async (re
 // /api/super-admin/clients view — folded in here since there's now a single
 // admin dashboard, not a separate cross-tenant one. Still queries via `pool`
 // (not req.db) like the rest of this router; nothing about that changed. ---
+// last_login_at and the two dormancy flags below back the "make a dormant
+// client visible" fix — a client with 1,342 unanswered messages went 20
+// days unnoticed because nothing here ever surfaced whether anyone was
+// actually using (or responding through) the account. Computed directly
+// here, not read from alert_events, so this is always live the moment the
+// page loads rather than lagging alertRunner's own 5-minute tick — same two
+// conditions as alertRunner.js's checkDormantNoOutbound/checkNeverLoggedIn,
+// deliberately duplicated rather than shared: this is a read for display,
+// that file's version is the one with real alerting/notification side
+// effects, and keeping them structurally separate means a change to one
+// can't accidentally suppress the other's alert.
 router.get('/clients-overview', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select c.id, c.name, c.email, c.status as client_status, c.tenant_slug, c.created_at as connected_date,
+           c.last_login_at,
            w.waba_id, w.phone_number_id, w.status as waba_status, w.quality_rating,
-           s.plan, s.status as subscription_status
+           s.plan, s.status as subscription_status,
+           (w.status = 'connected'
+             and exists (select 1 from messages m where m.client_id = c.id and m.direction = 'in' and m.sent_at > now() - interval '7 days')
+             and not exists (select 1 from messages m where m.client_id = c.id and m.direction = 'out' and m.sent_at > now() - interval '7 days')
+           ) as dormant_no_outbound_7d,
+           (w.status = 'connected' and c.last_login_at is null and w.verified_at is not null
+             and w.verified_at < now() - interval '3 days'
+           ) as never_logged_in_stale
     from clients c
     left join lateral (select * from wabas where client_id = c.id order by created_at desc limit 1) w on true
     left join lateral (select * from subscriptions where client_id = c.id order by created_at desc limit 1) s on true

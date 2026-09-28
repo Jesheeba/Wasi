@@ -314,6 +314,8 @@
                     <th>Plan</th>
                     <th>Subscription Status</th>
                     <th>Connected</th>
+                    <th>Last Login</th>
+                    <th>Attention</th>
                   </tr>
                 </thead>
                 <tbody id="platform-overview-table-body"></tbody>
@@ -1014,6 +1016,11 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
 
   <div class="toast-container" id="toast-container"></div>
 
+  <!-- Same served-raw plain-English sendability wording the root CRM app's
+       client-facing banner uses (server/src/utils/sendabilityMessages.js) —
+       so admin's client-detail view shows exactly what the client sees, not
+       a hand-duplicated copy. Must load before app.js. -->
+  <script src="/sendabilityMessages.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

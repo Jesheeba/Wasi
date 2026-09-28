@@ -93,6 +93,16 @@
   </div>
 
 
+  <!-- Persistent "why can't I send" banner (app.js's renderSendabilityBanner)
+       — shown whenever the connected WABA's sendable/health_status/
+       messaging_tier data (GET /api/onboarding/whatsapp/status, already
+       fetched, no new Meta call needed) says sending is blocked, limited, or
+       capped. Not dismissible while the condition holds — this is a state,
+       not a notification. Sits above #app-shell in normal document flow;
+       #app-shell reserves space for it via padding-top (see index.css) so
+       it never overlaps the app's own content. -->
+  <div id="sendability-banner" class="sendability-banner" role="status"></div>
+
   <!-- ================= MAIN APPLICATION SHELL ================= -->
   <div id="app-shell" style="display: none;">
 
@@ -187,7 +197,7 @@
     <div class="main-wrapper">
 
       <!-- Dynamic View Containers -->
-      <main class="main-content" style="padding: 0; height: 100vh;">
+      <main class="main-content" style="padding: 0; height: 100%;">
 
         <!-- 1. CHAT VIEW (3-Column Workspace) -->
         <div id="view-chat" class="view-container active" style="height: 100vh;">
@@ -2376,6 +2386,13 @@
        routes/contacts.js stores in consent_events.evidence, never a
        hand-duplicated copy. Must load before app.js. -->
   <script src="/consentStatement.js"></script>
+  <!-- Same served-raw pattern again — the persistent "why can't I send"
+       banner and the chat-send error surface both call
+       window.sendabilityMessages.describeSendability/describeErrorCode, the
+       exact same functions admin's client-detail view uses server-side-free
+       (this file is served static, no server dependency either way). Must
+       load before app.js. -->
+  <script src="/sendabilityMessages.js"></script>
   <!-- Cache-busting query string, added 2026-09-05 — embeddedSignup.js had
        NONE at all until a real deploy served stale (pre-fix) code to a real
        client despite a plain refresh: it's served via a bare res.sendFile()

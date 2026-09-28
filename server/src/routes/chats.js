@@ -216,7 +216,12 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
   } catch (err) {
     if (err instanceof messagingService.MessagingError) {
       const status = err.code === 'send_failed' ? 502 : 409;
-      return res.status(status).json({ error: err.message, code: err.code });
+      // metaErrorCode (Meta's raw numeric code, when this failure came from
+      // a real Graph API rejection — see messagingService.js's own
+      // err.metaError comment) lets the client translate this into the same
+      // plain English the sendability banner uses (server/src/utils/
+      // sendabilityMessages.js) instead of showing Meta's raw string.
+      return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
     }
     throw err;
   }
@@ -239,7 +244,7 @@ router.post('/:id/messages/:messageId/retry', requireRole('Admin', 'Manager', 'A
   } catch (err) {
     if (err instanceof messagingService.MessagingError) {
       const status = err.code === 'send_failed' ? 502 : 409;
-      return res.status(status).json({ error: err.message, code: err.code });
+      return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
     }
     throw err;
   }
