@@ -410,52 +410,76 @@
 
         <!-- 2. CONTACTS VIEW -->
         <div id="view-contacts" class="view-container" style="padding: 1.5rem;">
-          <div class="page-title-bar">
+          <div class="page-title-bar contacts-page-header">
             <div>
               <h1 class="page-title">Contacts</h1>
-              <p class="page-subtitle">Manage customer database, tags, and custom attributes</p>
+              <p class="page-subtitle">Manage your customer database, tags and consent</p>
             </div>
-            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-add-contact-modal">
-              <i data-lucide="user-plus"></i> Add Contact
-            </button>
+            <div class="contacts-actions">
+              <input type="file" id="import-contacts-csv-file" accept=".csv" style="display:none;" />
+              <button class="btn-secondary" id="import-contacts-csv-btn"><i data-lucide="upload"></i> Import CSV</button>
+              <button class="btn-secondary" id="export-contacts-csv-btn"><i data-lucide="download"></i> Export CSV</button>
+              <button class="btn-primary btn-auto" id="open-add-contact-modal">
+                <i data-lucide="user-plus"></i> Add Contact
+              </button>
+            </div>
           </div>
+          <div id="import-contacts-csv-status" class="contacts-import-status" role="status" aria-live="polite"></div>
           <div class="table-card">
-            <div class="table-header-tools">
-              <div class="search-box">
+            <div class="table-toolbar contacts-toolbar">
+              <div class="search-box grow">
                 <i data-lucide="search" style="width: 16px; color: var(--text-muted);"></i>
-                <input type="text" id="contact-search" placeholder="Search contacts..." />
+                <input type="text" id="contact-search" placeholder="Search by name, phone or tag" aria-label="Search contacts" />
               </div>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <!-- Consent hardening Phase 2 — bulk opt-in. Hidden (no
-                     "display:none" needed, [hidden] does it) whenever
-                     nothing is selected; shown by app.js's
-                     updateContactsBulkToolbar once at least one row is
-                     checked. Owner/Admin/Manager only — app.js hides this
-                     for an Agent, matching the server's own requireRole
-                     gate on POST /api/contacts/bulk-consent (a hidden
-                     button is a UX nicety, not the real gate). -->
-                <span id="contacts-selected-count" style="font-size: 0.78rem; color: var(--text-muted);" hidden></span>
-                <button class="btn-secondary" id="contacts-bulk-opt-in-btn" hidden><i data-lucide="check-check" style="width:14px;"></i> Mark as opted in</button>
-                <input type="file" id="import-contacts-csv-file" accept=".csv" style="display:none;" />
-                <button class="btn-secondary" id="import-contacts-csv-btn"><i data-lucide="upload"></i> Import CSV</button>
-                <button class="btn-secondary" id="export-contacts-csv-btn"><i data-lucide="download"></i> Export CSV</button>
-                <span id="import-contacts-csv-status" style="font-size: 0.78rem;"></span>
-              </div>
+              <select class="form-input contacts-filter" id="contacts-tag-filter" aria-label="Filter by tag">
+                <option value="">All tags</option>
+              </select>
+              <select class="form-input contacts-filter" id="contacts-consent-filter" aria-label="Filter by consent">
+                <option value="">All consent</option>
+                <option value="opted_in">Opted in</option>
+                <option value="opted_out">Opted out</option>
+                <option value="unknown">Unknown</option>
+              </select>
             </div>
-            <table class="data-table">
+            <!-- Consent hardening Phase 2 — bulk opt-in. Shown by app.js's
+                 updateContactsBulkToolbar once at least one row is checked.
+                 Owner/Admin/Manager only — app.js hides the button for an
+                 Agent, matching the server's own requireRole gate on
+                 POST /api/contacts/bulk-consent (a hidden button is a UX
+                 nicety, not the real gate). -->
+            <div class="contacts-bulk-bar" id="contacts-bulk-bar" hidden>
+              <span id="contacts-selected-count" class="contacts-selected-count" hidden></span>
+              <button type="button" class="btn-ghost btn-sm" id="contacts-select-all-matching" hidden></button>
+              <span class="grow-spacer"></span>
+              <button type="button" class="btn-ghost btn-sm" id="contacts-clear-selection">Clear</button>
+              <button class="btn-secondary btn-sm" id="contacts-bulk-opt-in-btn" hidden><i data-lucide="check-check" class="icon-14"></i> Mark as opted in</button>
+            </div>
+            <table class="data-table stack-mobile contacts-table">
               <thead>
                 <tr>
-                  <th style="width:32px;"><input type="checkbox" id="contacts-select-all" title="Select all"></th>
+                  <th class="contacts-col-check"><input type="checkbox" id="contacts-select-all" title="Select all on this page" aria-label="Select all contacts on this page"></th>
                   <th>Name</th>
-                  <th>Phone Number</th>
-                  <th>Tags</th>
+                  <th>Phone</th>
                   <th>Status</th>
-                  <th>Opt-In</th>
-                  <th>Created Date</th>
+                  <th>Tags</th>
+                  <th>Consent</th>
+                  <th>Added</th>
+                  <th class="contacts-col-actions"><span class="sr-only">Actions</span></th>
                 </tr>
               </thead>
-              <tbody id="contacts-table-body"></tbody>
+              <tbody id="contacts-table-body">
+                <tr class="contacts-skeleton-row"><td colspan="8"><span class="skeleton" style="height:16px;width:60%;"></span></td></tr>
+                <tr class="contacts-skeleton-row"><td colspan="8"><span class="skeleton" style="height:16px;width:45%;"></span></td></tr>
+                <tr class="contacts-skeleton-row"><td colspan="8"><span class="skeleton" style="height:16px;width:55%;"></span></td></tr>
+              </tbody>
             </table>
+            <div class="pagination" id="contacts-pagination" hidden>
+              <span id="contacts-page-info"></span>
+              <div class="pagination-btns">
+                <button type="button" class="btn-secondary btn-sm" id="contacts-prev-page">Previous</button>
+                <button type="button" class="btn-secondary btn-sm" id="contacts-next-page">Next</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1538,44 +1562,51 @@
        second implementation. contacts.tag_id (the primary tag) has no UI
        here either, by explicit decision — this panel only ever shows what
        items 7/8 already built. -->
-  <div id="modal-contact-detail" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 class="modal-title" id="contact-detail-name">Contact</h3>
-        <button class="close-modal-btn" data-close-modal="modal-contact-detail"><i data-lucide="x"></i></button>
+  <div id="modal-contact-detail" class="modal-overlay contact-drawer-overlay">
+    <div class="modal-box contact-drawer" role="dialog" aria-modal="true" aria-labelledby="contact-detail-name">
+      <div class="contact-drawer-header">
+        <div class="contact-drawer-avatar" id="contact-detail-avatar" aria-hidden="true">?</div>
+        <div class="contact-drawer-who">
+          <h3 class="contact-drawer-name" id="contact-detail-name">Contact</h3>
+          <div class="contact-drawer-phone" id="contact-detail-phone"></div>
+        </div>
+        <button class="close-modal-btn" data-close-modal="modal-contact-detail" aria-label="Close contact details"><i data-lucide="x"></i></button>
       </div>
-      <div style="font-size: 0.8rem; color: #6B7280; margin: -8px 0 14px;" id="contact-detail-phone"></div>
+      <div class="contact-drawer-body">
+
+      <dl class="contact-kv" id="contact-detail-summary" aria-label="Contact summary"></dl>
 
       <!-- Consent hardening Phase 2 — per-contact opt-in/opt-out control.
            Rendered by app.js's renderContactOptInInto; "Mark opted in"
            reuses the exact same confirmation modal (#modal-bulk-opt-in)
            bulk opt-in uses, just with a single-id array — one flow, not
            two parallel implementations. -->
-      <div style="margin-bottom: 14px;">
-        <div class="details-section-title">Opt-In Status</div>
+      <details class="contact-drawer-section" open>
+        <summary class="details-section-title">Opt-In Status</summary>
         <div id="contact-detail-optin" style="font-size: 0.825rem;"></div>
-      </div>
+      </details>
 
-      <div>
-        <div class="details-section-title">Tags</div>
+      <details class="contact-drawer-section" open>
+        <summary class="details-section-title">Tags</summary>
         <div class="contact-tags-wrapper" id="contact-detail-tags-wrapper">
           <div style="display: flex; gap: 6px; flex-wrap: wrap;" class="contact-tags-chips" id="contact-detail-tags-chips"></div>
           <select class="form-input contact-tags-select" id="contact-detail-tags-select" style="font-size: 0.75rem; padding: 3px 6px; height: auto; margin-top: 6px;">
             <option value="">+ Add tag…</option>
           </select>
         </div>
-      </div>
+      </details>
 
-      <div style="margin-top: 14px;">
-        <div class="details-section-title">Attributes</div>
+      <details class="contact-drawer-section" open>
+        <summary class="details-section-title">Attributes</summary>
         <div id="contact-detail-attributes" style="font-size: 0.825rem; color: #9CA3AF;"></div>
-      </div>
+      </details>
 
       <!-- PLAN.md item 10 — Contact 360 activity timeline. Read-only,
            merges messages/broadcast sends/flow entries/consent events. -->
-      <div style="margin-top: 14px;">
-        <div class="details-section-title">Activity</div>
+      <details class="contact-drawer-section" open>
+        <summary class="details-section-title">Activity</summary>
         <div id="contact-detail-timeline" class="modal-inner-scroll" style="font-size: 0.8rem; color: #9CA3AF;"></div>
+      </details>
       </div>
     </div>
   </div>

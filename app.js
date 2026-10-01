@@ -849,8 +849,16 @@ document.addEventListener('DOMContentLoaded', () => {
       renderContacts();
       authFetch('/api/contacts').then(contacts => {
         state.contacts = contacts.map(adaptContact);
+        contactsView.loadState = 'ready';
         if (state.currentView === 'contacts') renderContacts();
-      }).catch(() => {});
+      }).catch(() => {
+        // Keep showing whatever is already loaded; only surface the error
+        // state when there is nothing to show.
+        if (!state.contacts.length && state.currentView === 'contacts') {
+          contactsView.loadState = 'error';
+          renderContacts();
+        }
+      });
     }
     if (targetView === 'campaigns') renderBroadcasts();
     if (targetView === 'automation') { renderAutomation(); renderFlowsList(); }
@@ -1726,12 +1734,29 @@ document.addEventListener('DOMContentLoaded', () => {
       : '<span>No activity yet.</span>';
   }
 
+  // Stage 5 — key/value summary at the top of the contact drawer; only
+  // fields the contacts API already returns (no invented data).
+  function renderContactSummary(contact) {
+    const el = document.getElementById('contact-detail-summary');
+    if (!el) return;
+    const badge = OPT_IN_BADGE[contact.optInStatus] || OPT_IN_BADGE.unknown;
+    const statusCls = String(contact.status || '').toLowerCase() === 'active' ? 'badge-success' : 'badge-neutral';
+    el.innerHTML = `
+      <dt>Status</dt><dd><span class="badge ${statusCls}">${esc(contact.status || '—')}</span></dd>
+      <dt>Consent</dt><dd><span class="badge ${badge.cls}">${esc(badge.label)}</span></dd>
+      <dt>Tag</dt><dd>${contact.tag && contact.tag !== '—' ? `<span class="tag-badge">${esc(contact.tag)}</span>` : '<span class="contacts-muted">—</span>'}</dd>
+      <dt>Added</dt><dd>${esc(contact.created || '—')}</dd>`;
+  }
+
   function openContactDetailPanel(contactId) {
     const contact = state.contacts.find(c => c.id === contactId);
     if (!contact) return;
     state.activeContactDetailId = contactId;
     document.getElementById('contact-detail-name').textContent = contact.name;
     document.getElementById('contact-detail-phone').textContent = contact.phone;
+    const avatarEl = document.getElementById('contact-detail-avatar');
+    if (avatarEl) avatarEl.textContent = contactInitials(contact.name);
+    renderContactSummary(contact);
     document.getElementById('modal-contact-detail')?.classList.add('open');
     renderContactOptInInto(document.getElementById('contact-detail-optin'), contact);
     renderContactAttributesInto(document.getElementById('contact-detail-attributes'), contactId, () => state.activeContactDetailId !== contactId);
@@ -1770,8 +1795,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     container.innerHTML = `
-      <span class="status-badge" style="background: ${badge.bg}; color: ${badge.color};">${badge.label}</span>
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${detail}</div>
+      <span class="badge ${badge.cls}">${esc(badge.label)}</span>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${esc(detail)}</div>
       ${actionsHtml}
     `;
     refreshIcons();
@@ -1803,6 +1828,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  document.getElementById('contacts-table-body')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'TR') return;
+    const row = e.target.closest('tr[data-contact-id]');
+    if (row) openContactDetailPanel(row.dataset.contactId);
+  });
 
   document.getElementById('contacts-table-body')?.addEventListener('click', (e) => {
     // Consent hardening Phase 2 — checking a row's own selection checkbox
@@ -2547,79 +2578,206 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Contacts Table ---
+  // UI redesign Stage 5 — filters/pagination are client-side over the already
+  // loaded state.contacts (no API change). renderContacts() is the public
+  // entry point (resets selection, as before); drawContacts() repaints the
+  // current page without touching selection (used for paging).
+  const CONTACTS_PAGE_SIZE = 25;
+  const contactsView = { q: '', tag: '', consent: '', page: 1, loadState: 'ready' };
+
   const OPT_IN_BADGE = {
-    opted_in: { label: 'Opted In', bg: '#DCFCE7', color: '#15803D' },
-    opted_out: { label: 'Opted Out', bg: '#FEE2E2', color: '#B91C1C' },
-    unknown: { label: 'Unknown', bg: '#F1F5F9', color: '#475569' }
+    opted_in: { label: 'Opted In', cls: 'badge-success' },
+    opted_out: { label: 'Opted Out', cls: 'badge-danger' },
+    unknown: { label: 'Unknown', cls: 'badge-neutral' }
   };
 
+  function getFilteredContacts() {
+    const q = contactsView.q.trim().toLowerCase();
+    return state.contacts.filter((c) => {
+      if (contactsView.consent && c.optInStatus !== contactsView.consent) return false;
+      if (contactsView.tag && c.tag !== contactsView.tag) return false;
+      if (q) {
+        const hay = `${c.name} ${c.phone} ${c.tag}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function contactInitials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
+  function populateContactsTagFilter() {
+    const select = document.getElementById('contacts-tag-filter');
+    if (!select) return;
+    const names = Array.from(new Set(state.contacts.map((c) => c.tag).filter((t) => t && t !== '—'))).sort();
+    if (contactsView.tag && !names.includes(contactsView.tag)) contactsView.tag = '';
+    select.innerHTML = '<option value="">All tags</option>' +
+      names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    select.value = contactsView.tag;
+  }
+
   function renderContacts() {
-    const contactsTableBody = document.getElementById('contacts-table-body');
-    if (!contactsTableBody) return;
+    if (!document.getElementById('contacts-table-body')) return;
 
     // Consent hardening Phase 2 — a fresh contact list may not contain the
-    // same ids the previous one did (a filter/search change never mutates
-    // state.contacts itself, but a reload/refresh does), so selection is
-    // cleared on every real re-render rather than carried forward stale.
+    // same ids the previous one did, so selection is cleared on every real
+    // re-render rather than carried forward stale.
     state.selectedContactIds.clear();
+    populateContactsTagFilter();
+    drawContacts();
     updateContactsBulkToolbar();
+  }
 
-    if (!state.contacts.length) {
-      contactsTableBody.innerHTML = '<tr><td colspan="7" style="padding:1rem;color:#6B7280;text-align:center;">No contacts yet. Contacts appear here once someone messages your connected WhatsApp number.</td></tr>';
+  function contactsStateRow(innerHtml) {
+    return `<tr class="contacts-state-row"><td colspan="8">${innerHtml}</td></tr>`;
+  }
+
+  function drawContacts() {
+    const body = document.getElementById('contacts-table-body');
+    const pager = document.getElementById('contacts-pagination');
+    if (!body) return;
+
+    if (contactsView.loadState === 'loading') {
+      if (pager) pager.hidden = true;
+      body.innerHTML = [60, 45, 55, 40].map((w) =>
+        `<tr class="contacts-skeleton-row"><td colspan="8"><span class="skeleton" style="height:16px;width:${w}%;"></span></td></tr>`).join('');
+      return;
+    }
+    if (contactsView.loadState === 'error') {
+      if (pager) pager.hidden = true;
+      body.innerHTML = contactsStateRow(`
+        <div class="error-state">
+          <div>Couldn't load your contacts.</div>
+          <button type="button" class="btn-secondary" id="contacts-retry-btn">Try again</button>
+        </div>`);
       return;
     }
 
-    contactsTableBody.innerHTML = '';
-    state.contacts.forEach(c => {
+    if (!state.contacts.length) {
+      if (pager) pager.hidden = true;
+      body.innerHTML = contactsStateRow(`
+        <div class="empty-state">
+          <i data-lucide="users" class="empty-icon"></i>
+          <div class="empty-title">No contacts yet</div>
+          <div>Add a contact, import a CSV, or wait for someone to message your connected WhatsApp number.</div>
+          <div class="contacts-empty-actions">
+            <button type="button" class="btn-primary" id="contacts-empty-add">Add contact</button>
+            <button type="button" class="btn-secondary" id="contacts-empty-import">Import CSV</button>
+          </div>
+        </div>`);
+      refreshIcons();
+      return;
+    }
+
+    const filtered = getFilteredContacts();
+    if (!filtered.length) {
+      if (pager) pager.hidden = true;
+      body.innerHTML = contactsStateRow(`
+        <div class="empty-state">
+          <i data-lucide="search-x" class="empty-icon"></i>
+          <div class="empty-title">No contacts match</div>
+          <div>Try a different search or clear the filters.</div>
+          <div class="contacts-empty-actions">
+            <button type="button" class="btn-secondary" id="contacts-clear-filters">Clear filters</button>
+          </div>
+        </div>`);
+      refreshIcons();
+      return;
+    }
+
+    const pages = Math.max(1, Math.ceil(filtered.length / CONTACTS_PAGE_SIZE));
+    if (contactsView.page > pages) contactsView.page = pages;
+    if (contactsView.page < 1) contactsView.page = 1;
+    const start = (contactsView.page - 1) * CONTACTS_PAGE_SIZE;
+    const pageItems = filtered.slice(start, start + CONTACTS_PAGE_SIZE);
+
+    body.innerHTML = pageItems.map((c) => {
       const badge = OPT_IN_BADGE[c.optInStatus] || OPT_IN_BADGE.unknown;
       const detail = c.optInSource
         ? `${c.optInSource}${c.optInAt ? ' · ' + c.optInAt.slice(0, 10) : ''}`
-        : '—';
-      // PLAN.md item 8.5 — data-contact-id + cursor:pointer make the whole
-      // row open the contact detail panel (see the delegated click
-      // listener near openContactDetailPanel below, which ignores clicks
-      // on the new checkbox below so selecting a row doesn't also open it).
-      const tr = `
-        <tr data-contact-id="${c.id}" style="cursor: pointer;">
-          <td><input type="checkbox" class="contacts-row-checkbox" data-contact-id="${c.id}"></td>
-          <td style="font-weight: 600;">${c.name}</td>
-          <td>${c.phone}</td>
-          <td><span class="tag-badge">${c.tag}</span></td>
-          <td><span class="status-badge active">${c.status}</span></td>
-          <td>
-            <span class="status-badge" style="background: ${badge.bg}; color: ${badge.color};" title="${detail}">${badge.label}</span>
-            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${detail}</div>
+        : '';
+      const statusCls = String(c.status || '').toLowerCase() === 'active' ? 'badge-success' : 'badge-neutral';
+      const checked = state.selectedContactIds.has(c.id) ? ' checked' : '';
+      // PLAN.md item 8.5 — data-contact-id makes the whole row open the
+      // contact detail panel (delegated click listener near
+      // openContactDetailPanel, which ignores clicks on the checkbox so
+      // selecting a row doesn't also open it).
+      return `
+        <tr data-contact-id="${esc(c.id)}" tabindex="0" class="contacts-row${checked ? ' is-selected' : ''}">
+          <td class="contacts-col-check" data-label=""><input type="checkbox" class="contacts-row-checkbox" data-contact-id="${esc(c.id)}" aria-label="Select ${esc(c.name)}"${checked}></td>
+          <td data-label="Name" class="contacts-name-td"><span class="contacts-name-cell"><span class="contacts-avatar" aria-hidden="true">${esc(contactInitials(c.name))}</span><span class="contacts-name">${esc(c.name)}</span></span></td>
+          <td data-label="Phone" class="contacts-phone">${esc(c.phone)}</td>
+          <td data-label="Status"><span class="badge ${statusCls}">${esc(c.status)}</span></td>
+          <td data-label="Tags">${c.tag && c.tag !== '—' ? `<span class="tag-badge">${esc(c.tag)}</span>` : '<span class="contacts-muted">—</span>'}</td>
+          <td data-label="Consent">
+            <span class="contacts-consent"><span class="badge ${badge.cls}"${detail ? ` title="${esc(detail)}"` : ''}>${esc(badge.label)}</span>${detail ? `<span class="contacts-consent-detail">${esc(detail)}</span>` : ''}</span>
           </td>
-          <td>${c.created}</td>
-        </tr>
-      `;
-      contactsTableBody.innerHTML += tr;
-    });
+          <td data-label="Added" class="contacts-muted">${esc(c.created)}</td>
+          <td class="contacts-col-actions" data-label=""><button type="button" class="btn-ghost btn-sm" aria-label="View ${esc(c.name)}">View</button></td>
+        </tr>`;
+    }).join('');
+
+    if (pager) {
+      pager.hidden = filtered.length <= CONTACTS_PAGE_SIZE;
+      const info = document.getElementById('contacts-page-info');
+      if (info) info.textContent = `${start + 1}–${start + pageItems.length} of ${filtered.length}${filtered.length !== state.contacts.length ? ` (filtered from ${state.contacts.length})` : ''}`;
+      const prev = document.getElementById('contacts-prev-page');
+      const next = document.getElementById('contacts-next-page');
+      if (prev) prev.disabled = contactsView.page <= 1;
+      if (next) next.disabled = contactsView.page >= pages;
+    }
+  }
+
+  async function reloadContactsWithState() {
+    contactsView.loadState = 'loading';
+    drawContacts();
+    try {
+      await refreshContacts();
+      contactsView.loadState = 'ready';
+    } catch (err) {
+      contactsView.loadState = 'error';
+    }
+    renderContacts();
   }
 
   // Consent hardening Phase 2 — shows/hides the "N selected" + "Mark as
   // opted in" toolbar controls, and keeps the header select-all checkbox's
   // checked/indeterminate state honest against the actual per-row
-  // selection (not just "did the user click select-all last"). Owner/
-  // Admin/Manager only, matching the server's own requireRole gate on
-  // POST /api/contacts/bulk-consent — an Agent never sees this button at
-  // all, rather than seeing it and hitting a 403.
+  // selection. Owner/Admin/Manager only, matching the server's own
+  // requireRole gate on POST /api/contacts/bulk-consent — an Agent never
+  // sees this button at all, rather than seeing it and hitting a 403.
   function updateContactsBulkToolbar() {
     const count = state.selectedContactIds.size;
     const countEl = document.getElementById('contacts-selected-count');
     const btn = document.getElementById('contacts-bulk-opt-in-btn');
+    const bar = document.getElementById('contacts-bulk-bar');
     const canBulkOptIn = state.actorRole !== 'Agent';
+    if (bar) bar.hidden = count === 0;
     if (countEl) {
       countEl.hidden = count === 0;
       countEl.textContent = `${count} selected`;
     }
     if (btn) btn.hidden = count === 0 || !canBulkOptIn;
 
+    const filtered = getFilteredContacts();
+    const pageIds = Array.from(document.querySelectorAll('#contacts-table-body .contacts-row-checkbox')).map((cb) => cb.dataset.contactId);
+    const selectedOnPage = pageIds.filter((id) => state.selectedContactIds.has(id)).length;
     const selectAll = document.getElementById('contacts-select-all');
     if (selectAll) {
-      const total = state.contacts.length;
-      selectAll.checked = total > 0 && count === total;
-      selectAll.indeterminate = count > 0 && count < total;
+      selectAll.checked = pageIds.length > 0 && selectedOnPage === pageIds.length;
+      selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < pageIds.length;
+    }
+    // Offer "select all N matching" once the whole page is selected and
+    // there are more matching contacts on other pages.
+    const allMatching = document.getElementById('contacts-select-all-matching');
+    if (allMatching) {
+      const more = filtered.length > count && pageIds.length > 0 && selectedOnPage === pageIds.length && filtered.length > pageIds.length;
+      allMatching.hidden = !more;
+      allMatching.textContent = `Select all ${filtered.length} contacts`;
     }
   }
 
@@ -2629,24 +2787,76 @@ document.addEventListener('DOMContentLoaded', () => {
     const id = checkbox.dataset.contactId;
     if (checkbox.checked) state.selectedContactIds.add(id);
     else state.selectedContactIds.delete(id);
+    checkbox.closest('tr')?.classList.toggle('is-selected', checkbox.checked);
     updateContactsBulkToolbar();
   });
 
   document.getElementById('contacts-select-all')?.addEventListener('change', (e) => {
-    if (e.target.checked) {
-      state.contacts.forEach((c) => state.selectedContactIds.add(c.id));
-    } else {
-      state.selectedContactIds.clear();
-    }
-    document.querySelectorAll('#contacts-table-body .contacts-row-checkbox').forEach((cb) => {
-      cb.checked = state.selectedContactIds.has(cb.dataset.contactId);
+    const boxes = document.querySelectorAll('#contacts-table-body .contacts-row-checkbox');
+    boxes.forEach((cb) => {
+      cb.checked = e.target.checked;
+      cb.closest('tr')?.classList.toggle('is-selected', cb.checked);
+      if (e.target.checked) state.selectedContactIds.add(cb.dataset.contactId);
+      else state.selectedContactIds.delete(cb.dataset.contactId);
     });
+    updateContactsBulkToolbar();
+  });
+
+  document.getElementById('contacts-select-all-matching')?.addEventListener('click', () => {
+    getFilteredContacts().forEach((c) => state.selectedContactIds.add(c.id));
+    updateContactsBulkToolbar();
+  });
+
+  document.getElementById('contacts-clear-selection')?.addEventListener('click', () => {
+    state.selectedContactIds.clear();
+    document.querySelectorAll('#contacts-table-body .contacts-row-checkbox').forEach((cb) => { cb.checked = false; });
     updateContactsBulkToolbar();
   });
 
   document.getElementById('contacts-bulk-opt-in-btn')?.addEventListener('click', () => {
     if (state.selectedContactIds.size === 0) return;
     openOptInConfirmModal(Array.from(state.selectedContactIds));
+  });
+
+  // Filters / search / paging all reset to page 1 (except paging itself) and
+  // clear selection, since the selected ids may no longer be visible.
+  function applyContactsFilterChange() {
+    contactsView.page = 1;
+    state.selectedContactIds.clear();
+    drawContacts();
+    updateContactsBulkToolbar();
+  }
+  document.getElementById('contact-search')?.addEventListener('input', (e) => {
+    contactsView.q = e.target.value;
+    applyContactsFilterChange();
+  });
+  document.getElementById('contacts-tag-filter')?.addEventListener('change', (e) => {
+    contactsView.tag = e.target.value;
+    applyContactsFilterChange();
+  });
+  document.getElementById('contacts-consent-filter')?.addEventListener('change', (e) => {
+    contactsView.consent = e.target.value;
+    applyContactsFilterChange();
+  });
+  document.getElementById('contacts-prev-page')?.addEventListener('click', () => {
+    contactsView.page -= 1; drawContacts(); updateContactsBulkToolbar();
+  });
+  document.getElementById('contacts-next-page')?.addEventListener('click', () => {
+    contactsView.page += 1; drawContacts(); updateContactsBulkToolbar();
+  });
+
+  // Delegated handlers for the state rows' CTAs (rebuilt on every draw).
+  document.getElementById('contacts-table-body')?.addEventListener('click', (e) => {
+    if (e.target.closest('#contacts-retry-btn')) { reloadContactsWithState(); return; }
+    if (e.target.closest('#contacts-empty-add')) { document.getElementById('open-add-contact-modal')?.click(); return; }
+    if (e.target.closest('#contacts-empty-import')) { document.getElementById('import-contacts-csv-btn')?.click(); return; }
+    if (e.target.closest('#contacts-clear-filters')) {
+      contactsView.q = ''; contactsView.tag = ''; contactsView.consent = '';
+      const s = document.getElementById('contact-search'); if (s) s.value = '';
+      const t = document.getElementById('contacts-tag-filter'); if (t) t.value = '';
+      const c = document.getElementById('contacts-consent-filter'); if (c) c.value = '';
+      applyContactsFilterChange();
+    }
   });
 
   // --- Broadcasts Table ---
@@ -6220,14 +6430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     }
-  });
-
-  // --- Contacts Search Filter ---
-  document.getElementById('contact-search')?.addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    document.querySelectorAll('#contacts-table-body tr').forEach(row => {
-      row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
   });
 
   // --- Contacts Import CSV ---
