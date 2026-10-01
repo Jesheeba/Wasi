@@ -935,537 +935,346 @@
           </div>
         </div>
 
-        <!-- 12. ANALYTICS & REPORTS VIEW (Matching exact screenshot https://app.kwic.in/app/reports/message) -->
-        <div id="view-analytics" class="view-container" style="height: 100vh;">
-          <div class="reports-layout">
+        <!-- 12. ANALYTICS VIEW — real numbers only. /api/analytics/messages
+             returns 7-day totals (no per-day series), so there is no chart:
+             an honest "daily trend isn't available yet" panel instead of the
+             hard-coded made-up curve that used to live here. -->
+        <div id="view-analytics" class="view-container analytics-view">
+          <div class="page-header analytics-page-header">
+            <div class="page-header-text">
+              <h1 class="page-title">Analytics</h1>
+              <p class="page-subtitle">Track your performance and growth</p>
+            </div>
+            <div class="page-actions">
+              <button type="button" class="btn-secondary btn-auto" id="refresh-reports-btn" aria-label="Refresh report data"><i data-lucide="rotate-cw"></i> Refresh</button>
+            </div>
+          </div>
 
-            <!-- Secondary Reports Navigation Sidebar -->
-            <div class="reports-sec-sidebar">
-              <div class="sec-nav-header">Message</div>
-              <div class="sec-nav-list">
-                <a class="sec-nav-item active" data-rep-view="message">
-                  <span>Message</span>
-                </a>
-                <a class="sec-nav-item" data-rep-view="tags">
-                  <span>Tags</span>
-                </a>
-                <a class="sec-nav-item" data-rep-view="campaign">
-                  <span>Campaign</span>
-                </a>
-                <!-- item 5/5.5 — Admin/Manager only (hidden for Agent by
-                     applyRoleGating, app.js), matching GET /api/analytics/sla's
-                     own server-side role gate. -->
-                <a class="sec-nav-item" data-rep-view="sla">
-                  <span>Team / SLA</span>
-                </a>
-                <!-- Flow / API / Live Chat / Operator Stats sub-tabs removed
-                     — no backend behind any of them, just hardcoded stat
-                     cards presented as real reporting data. -->
-              </div>
+          <div class="tabs analytics-tabs" role="tablist" aria-label="Analytics reports">
+            <button type="button" class="tab active" role="tab" id="rep-tab-message" data-rep-view="message" aria-selected="true" aria-controls="rep-view-message">Message</button>
+            <button type="button" class="tab" role="tab" id="rep-tab-tags" data-rep-view="tags" aria-selected="false" aria-controls="rep-view-tags" tabindex="-1">Tags</button>
+            <button type="button" class="tab" role="tab" id="rep-tab-campaign" data-rep-view="campaign" aria-selected="false" aria-controls="rep-view-campaign" tabindex="-1">Campaign</button>
+            <!-- item 5/5.5 — Admin/Manager only (hidden for Agent by
+                 applyRoleGating, app.js), matching GET /api/analytics/sla's
+                 own server-side role gate. -->
+            <button type="button" class="tab" role="tab" id="rep-tab-sla" data-rep-view="sla" aria-selected="false" aria-controls="rep-view-sla" tabindex="-1">Team / SLA</button>
+          </div>
+
+          <!-- MESSAGE -->
+          <div id="rep-view-message" class="rep-content-view active" role="tabpanel" aria-labelledby="rep-tab-message">
+            <p class="analytics-range-note">Last 7 days, live from your account.</p>
+            <div id="message-analytics-error" class="error-state analytics-error" role="alert" hidden>
+              <div id="message-analytics-error-text">Couldn&rsquo;t load message analytics.</div>
+              <button type="button" class="btn-secondary btn-auto" id="message-analytics-retry">Try again</button>
+            </div>
+            <div class="analytics-summary" id="message-analytics-tiles" aria-label="Message totals, last 7 days">
+              <div class="analytics-tile"><div class="analytics-tile-label">Sent</div><div class="analytics-tile-value" id="metric-sent">&ndash;</div><div class="analytics-tile-sub">Outgoing messages accepted by WhatsApp</div></div>
+              <div class="analytics-tile tile-success"><div class="analytics-tile-label">Delivered</div><div class="analytics-tile-value" id="metric-delivered">&ndash;</div><div class="analytics-tile-sub" id="metric-delivered-sub">&nbsp;</div></div>
+              <div class="analytics-tile tile-info"><div class="analytics-tile-label">Read</div><div class="analytics-tile-value" id="metric-read">&ndash;</div><div class="analytics-tile-sub" id="metric-read-sub">&nbsp;</div></div>
+              <div class="analytics-tile tile-danger"><div class="analytics-tile-label">Failed</div><div class="analytics-tile-value" id="metric-failed">&ndash;</div><div class="analytics-tile-sub" id="metric-failed-sub">&nbsp;</div></div>
+              <div class="analytics-tile"><div class="analytics-tile-label">Incoming</div><div class="analytics-tile-value" id="metric-incoming">&ndash;</div><div class="analytics-tile-sub">Messages from your contacts</div></div>
+              <div class="analytics-tile"><div class="analytics-tile-label">Outgoing</div><div class="analytics-tile-value" id="metric-outgoing">&ndash;</div><div class="analytics-tile-sub">Messages you sent</div></div>
             </div>
 
-            <!-- Reports Main Panel -->
-            <div class="settings-main-area" style="padding: 1.5rem 2rem;">
-
-              <!-- Sub-page 1: MESSAGE ANALYTICS (Matching screenshot https://app.kwic.in/app/reports/message) -->
-              <div id="rep-view-message" class="rep-content-view active">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-                  <h2 style="font-size: 1.25rem; font-weight: 700; color: #1F2937; display: flex; align-items: center; gap: 6px;">
-                    Message <i data-lucide="info" style="width: 16px; color: #9CA3AF;"></i>
-                  </h2>
-
-                  <div style="display: flex; gap: 8px; align-items: center;">
-                    <button class="btn-secondary" style="height: 36px; padding: 0 10px;" id="refresh-reports-btn"><i data-lucide="rotate-cw" style="width: 14px;"></i></button>
-                    <div style="display: flex; align-items: center; gap: 8px; background: white; border: 1px solid var(--border-light); padding: 0 12px; height: 36px; border-radius: 8px; font-size: 0.85rem; color: #374151; font-weight: 500;">
-                      <i data-lucide="calendar" style="width: 14px; color: #6B7280;"></i>
-                      <span>Past 7 days</span>
-                      <i data-lucide="chevron-down" style="width: 14px;"></i>
-                      <span style="color: #9CA3AF; margin-left: 8px;">25 Jul 2026 - 01 Aug 2026</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 6 Metrics Cards -->
-                <div class="metrics-cards-grid">
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Sent <i data-lucide="info" style="width: 14px;"></i></div>
-                    <div class="metric-card-val" id="metric-sent">—</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Delivered <i data-lucide="info" style="width: 14px;"></i></div>
-                    <div class="metric-card-val" id="metric-delivered">—</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Read <i data-lucide="info" style="width: 14px;"></i></div>
-                    <div class="metric-card-val" id="metric-read">—</div>
-                  </div>
-
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Failed <i data-lucide="info" style="width: 14px;"></i></div>
-                    <div class="metric-card-val" id="metric-failed">—</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Incoming <i data-lucide="info" style="width: 14px;"></i></div>
-                    <div class="metric-card-val" id="metric-incoming">—</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Outgoing <i data-lucide="info" style="width: 14px;"></i></div>
-                    <div class="metric-card-val" id="metric-outgoing">—</div>
-                  </div>
-                </div>
-                <p style="font-size:0.75rem;color:#9CA3AF;margin-top:0.5rem;">Last 7 days, live from your account.</p>
-
-                <!-- Messages (daily) Line Chart Card -->
-                <div class="chart-card-box">
-                  <div class="chart-header-row">
-                    <div>
-                      <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937;">Messages <span style="font-size: 0.85rem; font-weight: 400; color: #6B7280;">(daily)</span></h3>
-                      <div style="font-size: 0.75rem; color: #9CA3AF;">Past 7 days</div>
-                    </div>
-                    <div class="chart-legend">
-                      <span><span class="legend-dot" style="background: #38BDF8;"></span> Incoming</span>
-                      <span><span class="legend-dot" style="background: #F59E0B;"></span> Outgoing</span>
-                    </div>
-                  </div>
-
-                  <div style="width: 100%; height: 260px; position: relative;">
-                    <svg width="100%" height="100%" viewBox="0 0 700 220" preserveAspectRatio="none" style="overflow: visible;">
-                      <line x1="40" y1="20" x2="680" y2="20" stroke="#F1F5F9" stroke-width="1"/>
-                      <text x="15" y="24" font-size="11" fill="#9CA3AF">600</text>
-
-                      <line x1="40" y1="70" x2="680" y2="70" stroke="#F1F5F9" stroke-width="1"/>
-                      <text x="15" y="74" font-size="11" fill="#9CA3AF">400</text>
-
-                      <line x1="40" y1="120" x2="680" y2="120" stroke="#F1F5F9" stroke-width="1"/>
-                      <text x="15" y="124" font-size="11" fill="#9CA3AF">200</text>
-
-                      <line x1="40" y1="170" x2="680" y2="170" stroke="#E2E8F0" stroke-width="1"/>
-                      <text x="25" y="174" font-size="11" fill="#9CA3AF">0</text>
-
-                      <text x="40" y="195" font-size="11" fill="#6B7280">Sun Jul 26</text>
-                      <text x="145" y="195" font-size="11" fill="#6B7280">Mon Jul 27</text>
-                      <text x="250" y="195" font-size="11" fill="#6B7280">Tue Jul 28</text>
-                      <text x="355" y="195" font-size="11" fill="#6B7280">Wed Jul 29</text>
-                      <text x="460" y="195" font-size="11" fill="#6B7280">Thu Jul 30</text>
-                      <text x="565" y="195" font-size="11" fill="#6B7280">Fri Jul 31</text>
-                      <text x="645" y="195" font-size="11" fill="#6B7280">Sat Aug 01</text>
-
-                      <path d="M 40,170 Q 300,168 565,160 Q 620,157 670,125" fill="none" stroke="#38BDF8" stroke-width="2.5"/>
-                      <circle cx="670" cy="125" r="3" fill="#38BDF8"/>
-
-                      <path d="M 40,170 C 250,169 460,165 565,150 Q 620,100 670,40" fill="none" stroke="#F59E0B" stroke-width="2.5"/>
-                      <circle cx="670" cy="40" r="3" fill="#F59E0B"/>
-                    </svg>
-                  </div>
-                </div>
+            <div class="chart-card-box analytics-trend-card">
+              <h2 class="analytics-card-title">Messages over time</h2>
+              <div class="empty-state analytics-trend-empty">
+                <i data-lucide="trending-up" class="empty-icon"></i>
+                <div class="empty-title">Daily trend isn&rsquo;t available yet</div>
+                <div>Reporting currently covers 7-day totals only. A day-by-day chart will appear here once per-day data is available.</div>
               </div>
-
-              <!-- Sub-page 2: TAGS ANALYTICS -->
-              <div id="rep-view-tags" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Tag Performance Analytics</h2>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Tag Name</th><th>Contacts Count</th><th>Conversion Rate</th><th>Status</th></tr></thead>
-                    <tbody id="tag-analytics-tbody">
-                      <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Sub-page 3: CAMPAIGN ANALYTICS -->
-              <div id="rep-view-campaign" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Campaign Analytics</h2>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Campaign Name</th><th>Sent</th><th>Delivered Rate</th><th>Read Rate</th></tr></thead>
-                    <tbody id="campaign-analytics-tbody">
-                      <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Sub-page 3b: SLA / FIRST RESPONSE TIME (item 5/5.5) -->
-              <div id="rep-view-sla" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Team Response Time</h2>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Team Member</th><th>Avg. First Response</th><th>Avg. Resolution Time</th><th>Replies Tracked</th></tr></thead>
-                    <tbody id="sla-analytics-tbody">
-                      <tr><td colspan="4" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Sub-page 4: FLOW ANALYTICS -->
-              <div id="rep-view-flow" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">WhatsApp Flow Submissions</h2>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Flow Title</th><th>Submissions</th><th>Completion Rate</th><th>Drop-off Step</th></tr></thead>
-                    <tbody>
-                      <tr><td style="font-weight:600;">Lead Qualification Form</td><td>342</td><td>89.5%</td><td>Step 3 (Budget)</td></tr>
-                      <tr><td style="font-weight:600;">Appointment Scheduler</td><td>185</td><td>94.2%</td><td>Step 2 (Time Slot)</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Sub-page 5: API ANALYTICS -->
-              <div id="rep-view-api" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Webhook Performance</h2>
-                <div class="metrics-cards-grid" style="grid-template-columns: repeat(4, 1fr);">
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">API Calls</div>
-                    <div class="metric-card-val">14,280</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Success Rate</div>
-                    <div class="metric-card-val" style="color:#16A34A;">99.4%</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Avg Latency</div>
-                    <div class="metric-card-val">120ms</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Errors</div>
-                    <div class="metric-card-val" style="color:#EF4444;">12</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Sub-page 6: LIVE CHAT ANALYTICS -->
-              <div id="rep-view-live-chat" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Live Chat Widget Analytics</h2>
-                <div class="metrics-cards-grid">
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Total Chats Initiated</div>
-                    <div class="metric-card-val">320</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">Avg Response Time</div>
-                    <div class="metric-card-val">45s</div>
-                  </div>
-                  <div class="metric-card-simple">
-                    <div class="metric-card-title">CSAT Satisfaction</div>
-                    <div class="metric-card-val" style="color:#16A34A;">4.8 / 5.0</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Sub-page 7: OPERATOR STATS -->
-              <div id="rep-view-operator-stats" class="rep-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Operator & Agent Performance</h2>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Agent Name</th><th>Assigned Chats</th><th>Closed Chats</th><th>Avg Response Time</th><th>CSAT</th></tr></thead>
-                    <tbody>
-                      <tr><td style="font-weight:600;">Riyaz</td><td>142</td><td>138</td><td>1.8 mins</td><td>4.9/5</td></tr>
-                      <tr><td style="font-weight:600;">Mohamed</td><td>98</td><td>92</td><td>2.4 mins</td><td>4.7/5</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
             </div>
+          </div>
 
+          <!-- TAGS -->
+          <div id="rep-view-tags" class="rep-content-view" role="tabpanel" aria-labelledby="rep-tab-tags" hidden>
+            <div class="table-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>Tag</th><th>Contacts</th><th>Engaged</th></tr></thead>
+                <tbody id="tag-analytics-tbody">
+                  <tr class="analytics-state-row"><td colspan="3" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="analytics-footnote">&ldquo;Engaged&rdquo; is the share of a tag&rsquo;s contacts you have sent at least one message to.</p>
+          </div>
+
+          <!-- CAMPAIGN -->
+          <div id="rep-view-campaign" class="rep-content-view" role="tabpanel" aria-labelledby="rep-tab-campaign" hidden>
+            <div class="table-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>Campaign</th><th>Sent</th><th>Delivery rate</th><th>Read rate</th></tr></thead>
+                <tbody id="campaign-analytics-tbody">
+                  <tr class="analytics-state-row"><td colspan="4" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- SLA / FIRST RESPONSE TIME (item 5/5.5) -->
+          <div id="rep-view-sla" class="rep-content-view" role="tabpanel" aria-labelledby="rep-tab-sla" hidden>
+            <div class="table-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>Team member</th><th>Avg. first response</th><th>Avg. resolution time</th><th>Replies tracked</th></tr></thead>
+                <tbody id="sla-analytics-tbody">
+                  <tr class="analytics-state-row"><td colspan="4" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <!-- 13. ACCOUNT SETTINGS VIEW (Matching exact screenshot https://app.kwic.in/app/settings/whatsapp) -->
-        <div id="view-settings" class="view-container" style="height: 100vh;">
+        <!-- 13. ACCOUNT SETTINGS VIEW -->
+        <div id="view-settings" class="view-container settings-view">
           <div class="settings-layout">
 
-            <!-- Secondary Settings Navigation Sidebar -->
-            <div class="secondary-sidebar">
-              <div class="sec-nav-header">Account Settings</div>
+            <!-- Secondary Settings Navigation: grouped on desktop, one
+                 horizontally-scrolling row (group labels inline) at <=900px -->
+            <nav class="secondary-sidebar" aria-label="Settings sections">
+              <div class="sec-nav-header">Settings</div>
 
-              <div>
-                <div class="sec-nav-group-title">Channels</div>
-                <div class="sec-nav-list">
-                  <a class="sec-nav-item active" data-sec-view="whatsapp">
-                    <i data-lucide="message-circle" style="color: #25D366;"></i>
-                    <span>Whatsapp</span>
-                  </a>
-                  <!-- Live Chat settings removed — the widget customizer
-                       (color pickers, welcome message) has no backend to
-                       save to and nothing renders it anywhere a visitor
-                       would see. -->
-                  <a class="sec-nav-item" data-sec-view="instagram">
-                    <i data-lucide="camera" style="color: #E1306C;"></i>
-                    <span>Instagram</span>
-                  </a>
+              <div class="sec-nav-groups">
+                <div class="sec-nav-group">
+                  <div class="sec-nav-group-title">Channels</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item active" data-sec-view="whatsapp" role="button" tabindex="0">
+                      <i data-lucide="message-circle"></i>
+                      <span>WhatsApp</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="sec-nav-group">
+                  <div class="sec-nav-group-title">Team &amp; access</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item" data-sec-view="team" role="button" tabindex="0">
+                      <i data-lucide="users"></i>
+                      <span>Team</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="sec-nav-group">
+                  <div class="sec-nav-group-title">Billing</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item" data-sec-view="wallet" role="button" tabindex="0">
+                      <i data-lucide="wallet"></i>
+                      <span>Wallet</span>
+                    </a>
+                    <a class="sec-nav-item" data-sec-view="subscription" role="button" tabindex="0">
+                      <i data-lucide="credit-card"></i>
+                      <span>Subscription</span>
+                    </a>
+                    <a class="sec-nav-item" data-sec-view="billing" role="button" tabindex="0">
+                      <i data-lucide="file-text"></i>
+                      <span>Billing</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="sec-nav-group">
+                  <div class="sec-nav-group-title">Developer</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item" data-sec-view="developer" role="button" tabindex="0">
+                      <i data-lucide="terminal"></i>
+                      <span>Developer / API</span>
+                    </a>
+                    <a class="sec-nav-item" data-sec-view="webhook" role="button" tabindex="0">
+                      <i data-lucide="share-2"></i>
+                      <span>Webhook</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="sec-nav-group">
+                  <div class="sec-nav-group-title">Workspace</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item" data-sec-view="tags" role="button" tabindex="0">
+                      <i data-lucide="tag"></i>
+                      <span>Tags</span>
+                    </a>
+                    <a class="sec-nav-item" data-sec-view="canned-responses" role="button" tabindex="0">
+                      <i data-lucide="message-square-text"></i>
+                      <span>Canned Responses</span>
+                    </a>
+                    <a class="sec-nav-item" data-sec-view="attributes" role="button" tabindex="0">
+                      <i data-lucide="sliders"></i>
+                      <span>Attributes</span>
+                    </a>
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <div class="sec-nav-group-title">General</div>
-                <div class="sec-nav-list">
-                  <a class="sec-nav-item" data-sec-view="team">
-                    <i data-lucide="users"></i>
-                    <span>Manage Team</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="wallet">
-                    <i data-lucide="wallet"></i>
-                    <span>Wallet</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="subscription">
-                    <i data-lucide="dollar-sign"></i>
-                    <span>My Subscription</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="developer">
-                    <i data-lucide="terminal"></i>
-                    <span>Developer</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="tags">
-                    <i data-lucide="tag"></i>
-                    <span>Tag Manager</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="canned-responses">
-                    <i data-lucide="message-circle"></i>
-                    <span>Canned Responses</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="attributes">
-                    <i data-lucide="sliders"></i>
-                    <span>Attributes</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="webhook">
-                    <i data-lucide="share-2"></i>
-                    <span>Webhook</span>
-                  </a>
-                  <a class="sec-nav-item" data-sec-view="billing">
-                    <i data-lucide="file-text"></i>
-                    <span>Billing</span>
-                  </a>
-                </div>
-              </div>
-            </div>
+            </nav>
 
             <!-- Settings Dynamic Content Panel -->
             <div class="settings-main-area" id="settings-dynamic-content">
 
-              <!-- Sub-page 1: WHATSAPP SETTINGS -->
+              <!-- WHATSAPP -->
               <div id="sec-view-whatsapp" class="sec-content-view active">
-                <h2 style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Channels</h2>
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">WhatsApp</h2>
+                    <p class="page-subtitle">Connect your business number and manage how it appears</p>
+                  </div>
+                </div>
 
                 <!-- Real content (connected channel card, or the Connect
                      WhatsApp button) is rendered by renderWhatsAppSettings()
-                     (app.js) — on Settings view open now, not only on a
-                     sub-nav click. This is a loading state, not a fake
-                     connected channel: it used to hardcode a fake business
-                     name, fake ID, fake phone number, and a fake green
-                     "Active" badge here, which a brand-new client with no
-                     real WABA would see as real, indefinitely, since
-                     nothing forced this markup to be overwritten before
-                     that fix. -->
-                <div class="channel-status-card">
-                  <div style="padding: 1rem; color: #6B7280;">Checking connection…</div>
-                </div>
-
-                <div class="inner-tabs-list">
-                  <button class="inner-tab-btn active" data-inner-tab="profile">Profile</button>
-                  <button class="inner-tab-btn" data-inner-tab="automation">Automation</button>
-                  <button class="inner-tab-btn" data-inner-tab="catalog">Catalog</button>
-                  <button class="inner-tab-btn" data-inner-tab="message-link">Message Link</button>
-                  <button class="inner-tab-btn" data-inner-tab="channel-settings">Settings</button>
-                  <button class="inner-tab-btn" data-inner-tab="embed">Embed</button>
-                </div>
-
-                <div id="inner-tab-profile" class="inner-tab-panel active">
-                  <!-- Real content rendered by renderWhatsAppProfileTabs() (app.js).
-                       Used to be hardcoded fake business data (name "Wasi", fake
-                       phone number, fake address/email/description) shown to every
-                       client regardless of whether — or which — number they'd
-                       connected. -->
-                  <div id="whatsapp-profile-content">
-                    <div style="padding: 1rem; color: #6B7280;">Loading…</div>
-                  </div>
-                </div>
-
-                <div id="inner-tab-automation" class="inner-tab-panel">
-                  <div class="profile-form-card" style="max-width: 600px;">
-                    <p style="font-size: 0.875rem; color: #6B7280;">Configure per-channel auto-reply and away-message rules for this WhatsApp number. Manage keyword rules in the main <strong>Automation</strong> section.</p>
-                  </div>
-                </div>
-
-                <div id="inner-tab-catalog" class="inner-tab-panel">
-                  <div class="profile-form-card" style="max-width: 600px;">
-                    <p style="font-size: 0.875rem; color: #6B7280;">Product catalog synced for this channel is managed under <strong>Ecommerce</strong>.</p>
-                  </div>
-                </div>
-
-                <div id="inner-tab-message-link" class="inner-tab-panel">
-                  <div id="whatsapp-message-link-content" class="profile-form-card" style="max-width: 600px;">
-                    <div style="color: #6B7280;">Loading…</div>
-                  </div>
-                </div>
-
-                <div id="inner-tab-channel-settings" class="inner-tab-panel">
-                  <div id="whatsapp-channel-settings-content" class="profile-form-card" style="max-width: 600px;">
-                    <div style="color: #6B7280;">Loading…</div>
-                  </div>
-                </div>
-
-                <div id="inner-tab-embed" class="inner-tab-panel">
-                  <div class="profile-form-card" style="max-width: 600px;">
-                    <label class="form-label">Embed Snippet</label>
-                    <textarea class="form-input" style="height: 90px; padding: 10px;" readonly>&lt;script src="https://cdn.yourcrm.example/widget.js" data-id="000000000000000000000001"&gt;&lt;/script&gt;</textarea>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Sub-page 2: LIVE CHAT WIDGET -->
-              <div id="sec-view-live-chat" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Live Chat Widget Customizer</h2>
-                <div style="display: flex; gap: 2rem; align-items: start;">
-                  <div class="profile-form-card" style="flex: 1;">
-                    <div class="form-group">
-                      <label class="form-label">Widget Primary Color</label>
-                      <input type="color" class="form-input" value="#4AC959" style="height: 42px; padding: 4px;" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Greeting Message</label>
-                      <input type="text" class="form-input" value="Hi! How can we help you today?" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Widget Position</label>
-                      <select class="form-input"><option value="bottom-right" selected>Bottom Right</option><option value="bottom-left">Bottom Left</option></select>
-                    </div>
-                  </div>
-                  <div class="livechat-preview-box">
-                    <div class="livechat-header">
-                      <div class="avatar" style="width: 32px; height: 32px; font-size: 0.75rem; background: white; color: #4AC959;">K</div>
-                      <div>
-                        <div style="font-weight: 700; font-size: 0.875rem;">Wasi Support</div>
-                        <div style="font-size: 0.7rem; opacity: 0.9;">Online</div>
-                      </div>
-                    </div>
-                    <div style="padding: 1.25rem; background: #F9FAFB; height: 140px; font-size: 0.85rem; color: #374151;">
-                      <div class="msg-bubble msg-in" style="font-size: 0.8rem;">Hi! How can we help you today?</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Sub-page 3: INSTAGRAM CHANNEL -->
-              <div id="sec-view-instagram" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Instagram Settings</h2>
-                <!-- Same "no real integration exists" honesty fix as the
-                     main-nav Instagram view. -->
+                     (app.js) — on Settings view open, not only on a sub-nav
+                     click. This is only a loading state; never a fake
+                     connected channel. -->
                 <div class="channel-status-card">
                   <div class="channel-info-left">
-                    <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
-                    <div>
-                      <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">No Instagram account connected</div>
-                      <div style="font-size: 0.8rem; color: #6B7280;">This feature isn't available yet</div>
-                    </div>
+                    <span class="skeleton settings-skeleton-circle"></span>
+                    <div class="settings-skeleton-lines"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>
                   </div>
-                  <span class="status-badge" style="padding: 4px 14px; font-weight: 700; background: #F1F5F9; color: #64748B;">Not Connected</span>
+                </div>
+
+                <div class="tabs inner-tabs-list" role="tablist" aria-label="WhatsApp channel settings">
+                  <button type="button" class="tab inner-tab-btn active" role="tab" aria-selected="true" data-inner-tab="profile">Profile</button>
+                  <button type="button" class="tab inner-tab-btn" role="tab" aria-selected="false" tabindex="-1" data-inner-tab="message-link">Message Link</button>
+                  <button type="button" class="tab inner-tab-btn" role="tab" aria-selected="false" tabindex="-1" data-inner-tab="channel-settings">Settings</button>
+                </div>
+
+                <div id="inner-tab-profile" class="inner-tab-panel active" role="tabpanel">
+                  <!-- Real content rendered by renderWhatsAppProfileTabs() (app.js). -->
+                  <div id="whatsapp-profile-content">
+                    <div class="settings-loading"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>
+                  </div>
+                </div>
+
+                <div id="inner-tab-message-link" class="inner-tab-panel" role="tabpanel">
+                  <div id="whatsapp-message-link-content" class="profile-form-card settings-card-narrow">
+                    <div class="settings-loading"><span class="skeleton settings-skeleton-line"></span></div>
+                  </div>
+                </div>
+
+                <div id="inner-tab-channel-settings" class="inner-tab-panel" role="tabpanel">
+                  <div id="whatsapp-channel-settings-content" class="profile-form-card settings-card-narrow">
+                    <div class="settings-loading"><span class="skeleton settings-skeleton-line"></span></div>
+                  </div>
                 </div>
               </div>
 
-              <!-- Sub-page 4: TEAM MANAGEMENT -->
+              <!-- TEAM -->
               <div id="sec-view-team" class="sec-content-view" style="display: none;">
-                <div class="page-title-bar">
-                  <h2 style="font-size: 1.25rem; font-weight: 700;">Manage Team Members</h2>
-                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-invite-member-modal"><i data-lucide="user-plus"></i> Invite Member</button>
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Team</h2>
+                    <p class="page-subtitle">Invite teammates and control what they can access</p>
+                  </div>
+                  <div class="page-actions">
+                    <button class="btn-primary btn-auto" id="open-invite-member-modal"><i data-lucide="user-plus"></i> Invite Member</button>
+                  </div>
                 </div>
                 <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                  <table class="data-table stack-mobile">
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
                     <tbody id="team-table-body">
-                      <tr><td>Riyaz</td><td>riyaz@example.com</td><td>Admin</td><td><span class="status-badge active">Active</span></td><td>Owner</td></tr>
-                      <tr><td>Mohamed</td><td>mohamed@example.com</td><td>Manager</td><td><span class="status-badge active">Active</span></td><td>Edit</td></tr>
+                      <tr class="analytics-state-row"><td colspan="4" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              <!-- Sub-page 5: WALLET -->
+              <!-- WALLET -->
               <div id="sec-view-wallet" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">WhatsApp Conversation Wallet</h2>
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Wallet</h2>
+                    <p class="page-subtitle">Credit used for WhatsApp conversation charges</p>
+                  </div>
+                </div>
                 <div class="wallet-card">
                   <div>
-                    <div style="font-size: 0.875rem; opacity: 0.8;">Available Credit Balance</div>
-                    <div style="font-size: 2.25rem; font-weight: 700; margin-top: 4px;" id="wallet-balance-display">₹ 4,850.00</div>
+                    <div class="wallet-label">Available credit balance</div>
+                    <div class="wallet-balance" id="wallet-balance-display"><span class="skeleton wallet-skeleton"></span></div>
                   </div>
-                  <button class="btn-primary" style="width: auto; padding: 0 20px; background: #4AC959; color: #0E2916; font-weight: 700;" id="open-recharge-modal">+ Recharge Balance</button>
+                  <button class="btn-primary btn-auto wallet-recharge-btn" id="open-recharge-modal"><i data-lucide="plus"></i> Recharge Balance</button>
                 </div>
               </div>
 
-              <!-- Sub-page 6: SUBSCRIPTION -->
+              <!-- SUBSCRIPTION -->
               <div id="sec-view-subscription" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">My Subscription Plan</h2>
-                <!-- renderSubscriptionTab() (app.js) replaces this — was
-                     hardcoded fake "Pro Business Plan" / Active regardless
-                     of whether GET /api/billing/subscription (real, already
-                     existed) returned anything at all. -->
-                <div class="profile-form-card" style="max-width: 600px;" id="subscription-content">
-                  <div style="color: #6B7280;">Loading…</div>
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Subscription</h2>
+                    <p class="page-subtitle">Your current plan</p>
+                  </div>
+                </div>
+                <!-- renderSubscriptionTab() (app.js) fills this from the real
+                     GET /api/billing/subscription. -->
+                <div class="profile-form-card settings-card-narrow" id="subscription-content">
+                  <div class="settings-loading"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>
                 </div>
               </div>
 
-              <!-- Sub-page 7: DEVELOPER -->
+              <!-- DEVELOPER -->
               <div id="sec-view-developer" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">API & Access Tokens</h2>
-                <div class="profile-form-card" style="max-width: 640px;">
-                  <p style="color:#6B7280; font-size:0.85rem; margin:0 0 1rem; line-height:1.5;">
-                    Hub API keys let your own CRM, an AI assistant like Claude (see "Connect to Claude" below), or a no-code tool like Zapier send WhatsApp messages and read your data through Wasi. Each key's raw value is shown once, right when it's created — you can revoke or remove any key below at any time.
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Developer / API</h2>
+                    <p class="page-subtitle">API keys, AI-assistant access and integration docs</p>
+                  </div>
+                </div>
+
+                <div class="profile-form-card settings-card-wide">
+                  <h3 class="settings-card-title">API keys</h3>
+                  <p class="settings-help">
+                    Hub API keys let your own CRM, an AI assistant like Claude (see &ldquo;Connect to Claude&rdquo; below), or a no-code tool like Zapier send WhatsApp messages and read your data through Wasi. Each key&rsquo;s raw value is shown once, right when it&rsquo;s created &mdash; you can revoke or remove any key below at any time.
                   </p>
-                  <div id="api-keys-error" class="inline-error" style="display:none; margin-bottom:0.75rem;"></div>
+                  <div id="api-keys-error" class="alert alert-danger" role="alert" hidden></div>
                   <!-- New key's raw value is shown here exactly once, right after
                        creation — never re-fetchable afterward (only key_hash is
                        stored server-side, see apiKeysRepo.js). -->
-                  <div id="new-api-key-reveal" style="display:none; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:0.75rem; margin-bottom:0.75rem;">
-                    <div style="font-size:0.8rem; color:#166534; margin-bottom:0.4rem;">New key created — copy it now, it won't be shown again:</div>
-                    <div style="display:flex; gap:0.5rem;">
-                      <input id="new-api-key-value" type="text" readonly style="flex:1; font-family:monospace; font-size:0.8rem; padding:0.4rem 0.6rem; border:1px solid #D1D5DB; border-radius:6px; background:#fff;">
-                      <button type="button" class="btn-secondary btn-sm" id="copy-new-api-key-btn">Copy</button>
+                  <div id="new-api-key-reveal" class="alert alert-success api-key-reveal" hidden>
+                    <div class="api-key-reveal-body">
+                      <div class="api-key-reveal-title">New key created &mdash; copy it now, it won&rsquo;t be shown again:</div>
+                      <div class="api-key-reveal-row">
+                        <input id="new-api-key-value" type="text" class="form-input api-key-value" readonly aria-label="New API key">
+                        <button type="button" class="btn-secondary btn-sm" id="copy-new-api-key-btn">Copy</button>
+                      </div>
                     </div>
                   </div>
-                  <table class="data-table" style="width:100%;">
-                    <thead><tr><th>App</th><th>Status</th><th>Last Used</th><th>Created</th><th></th></tr></thead>
-                    <tbody id="api-keys-table-body">
-                      <tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
-                    </tbody>
-                  </table>
-                  <button type="button" class="btn-secondary btn-sm" id="new-api-key-btn" style="margin-top:0.75rem;">+ New API Key</button>
+                  <div class="settings-table-wrap">
+                    <table class="data-table">
+                      <thead><tr><th>App</th><th>Status</th><th>Last used</th><th>Created</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                      <tbody id="api-keys-table-body">
+                        <tr class="analytics-state-row"><td colspan="5" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div><button type="button" class="btn-secondary btn-sm" id="new-api-key-btn"><i data-lucide="plus" class="icon-14"></i> New API Key</button></div>
                 </div>
 
-                <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">
-                  <div style="font-weight:600; margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
-                    <i data-lucide="sparkles" style="width:16px;"></i> Connect to Claude
-                  </div>
-                  <p style="color:#6B7280; font-size:0.85rem; margin:0 0 0.75rem; line-height:1.5;">
-                    Give Claude (or any MCP-compatible AI assistant) direct access to send WhatsApp messages, check delivery status, and read your templates and conversations — using one of the API keys above. No custom integration code required.
+                <div class="profile-form-card settings-card-wide">
+                  <h3 class="settings-card-title"><i data-lucide="sparkles" class="icon-16"></i> Connect to Claude</h3>
+                  <p class="settings-help">
+                    Give Claude (or any MCP-compatible AI assistant) direct access to send WhatsApp messages, check delivery status, and read your templates and conversations &mdash; using one of the API keys above. No custom integration code required.
                   </p>
-                  <p style="font-size:0.8rem; color:#6B7280; margin:0 0 0.5rem;">Add this to your MCP client's configuration:</p>
-                  <div class="code-block-wrapper" style="position:relative;">
-                    <pre id="mcp-config-snippet" style="background:#0F172A; color:#E2E8F0; font-size:0.75rem; padding:0.85rem; border-radius:8px; overflow-x:auto; margin:0; white-space:pre-wrap; word-break:break-all;">Loading…</pre>
-                    <button type="button" class="btn-secondary btn-sm" id="copy-mcp-config-btn"><i data-lucide="copy" style="width:12px;"></i> Copy</button>
+                  <p class="settings-help">Add this to your MCP client&rsquo;s configuration:</p>
+                  <div class="code-block-wrapper">
+                    <pre id="mcp-config-snippet" class="code-block">Loading…</pre>
+                    <button type="button" class="btn-secondary btn-sm" id="copy-mcp-config-btn"><i data-lucide="copy" class="icon-14"></i> Copy</button>
                   </div>
                 </div>
 
-                <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">
-                  <div style="font-weight:600; margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
-                    <i data-lucide="code" style="width:16px;"></i> API Docs — send a WhatsApp message
-                  </div>
-                  <p style="color:#6B7280; font-size:0.85rem; margin:0 0 0.75rem; line-height:1.5;">
+                <div class="profile-form-card settings-card-wide">
+                  <h3 class="settings-card-title"><i data-lucide="code" class="icon-16"></i> API docs &mdash; send a WhatsApp message</h3>
+                  <p class="settings-help">
                     Call the Hub API directly from your own CRM or backend using one of the API keys above.
                   </p>
-                  <div style="font-size:0.8rem; color:#374151; margin-bottom:0.6rem; line-height:1.7;">
-                    <div><strong>Base URL:</strong> <code id="api-docs-base-url" style="background:#F3F4F6; padding:0.1rem 0.4rem; border-radius:4px;">…</code></div>
-                    <div><strong>Endpoint:</strong> <code style="background:#F3F4F6; padding:0.1rem 0.4rem; border-radius:4px;">POST /api/v1/messages</code></div>
-                    <div><strong>Auth header:</strong> <code style="background:#F3F4F6; padding:0.1rem 0.4rem; border-radius:4px;">Authorization: Bearer &lt;api_key&gt;</code></div>
+                  <div class="settings-kv">
+                    <div><strong>Base URL:</strong> <code class="inline-code" id="api-docs-base-url">…</code></div>
+                    <div><strong>Endpoint:</strong> <code class="inline-code">POST /api/v1/messages</code></div>
+                    <div><strong>Auth header:</strong> <code class="inline-code">Authorization: Bearer &lt;api_key&gt;</code></div>
                   </div>
-                  <p style="font-size:0.8rem; color:#6B7280; margin:0 0 0.5rem;">Example request (template message):</p>
-                  <div class="code-block-wrapper" style="position:relative;">
-                    <pre id="api-docs-curl-snippet" style="background:#0F172A; color:#E2E8F0; font-size:0.75rem; padding:0.85rem; border-radius:8px; overflow-x:auto; margin:0; white-space:pre-wrap; word-break:break-all;">Loading…</pre>
-                    <button type="button" class="btn-secondary btn-sm" id="copy-api-docs-curl-btn"><i data-lucide="copy" style="width:12px;"></i> Copy</button>
+                  <p class="settings-help">Example request (template message):</p>
+                  <div class="code-block-wrapper">
+                    <pre id="api-docs-curl-snippet" class="code-block">Loading…</pre>
+                    <button type="button" class="btn-secondary btn-sm" id="copy-api-docs-curl-btn"><i data-lucide="copy" class="icon-14"></i> Copy</button>
                   </div>
-                  <ul style="font-size:0.8rem; color:#6B7280; margin:0.75rem 0 0; padding-left:1.1rem; line-height:1.6;">
+                  <ul class="settings-list">
                     <li><code>type: "template"</code> requires an approved template; use <code>type: "text"</code> with a <code>"body"</code> field instead of <code>template</code>/<code>params</code> only within 24h of the contact's last inbound message.</li>
                     <li><code>params</code> maps a template's named placeholders (e.g. <code>{{1}}</code>) to values.</li>
                     <li>Optional <code>headerMediaUrl</code> — a public HTTPS URL to your own file, for a template with an IMAGE/VIDEO/DOCUMENT header.</li>
@@ -1473,129 +1282,148 @@
                   </ul>
                 </div>
 
-                <div class="profile-form-card" style="max-width: 640px; margin-top:1rem;">
-                  <div style="font-weight:600; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
-                    <i data-lucide="book-open" style="width:16px;"></i> Full API Integration Guide
-                  </div>
-                  <div style="font-size:0.8rem; color:#374151; line-height:1.7;">
-                    <div style="margin-bottom:0.9rem;">
+                <div class="profile-form-card settings-card-wide">
+                  <h3 class="settings-card-title"><i data-lucide="book-open" class="icon-16"></i> Full API integration guide</h3>
+                  <div class="settings-guide">
+                    <div class="settings-guide-item">
                       <strong>Templates — <code>GET/POST /api/v1/templates</code></strong>
-                      <p style="color:#6B7280; margin:0.25rem 0 0;">Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send. <code>GET /api/v1/templates/:id</code> returns the full definition of one template.</p>
+                      <p>Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send. <code>GET /api/v1/templates/:id</code> returns the full definition of one template.</p>
                     </div>
-                    <div style="margin-bottom:0.9rem;">
+                    <div class="settings-guide-item">
                       <strong>Read endpoints</strong>
-                      <p style="color:#6B7280; margin:0.25rem 0 0;"><code>GET /api/v1/messages/:id/status</code> (delivery status by the Hub-assigned id, not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code>, <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code>.</p>
+                      <p><code>GET /api/v1/messages/:id/status</code> (delivery status by the Hub-assigned id, not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code>, <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code>.</p>
                     </div>
-                    <div style="margin-bottom:0.9rem;">
+                    <div class="settings-guide-item">
                       <strong>Error handling</strong>
-                      <p style="color:#6B7280; margin:0.25rem 0 0;">Every error comes back in one shape: <code>{ "error": { "code": "...", "message": "...", ... } }</code> — a stable <code>code</code> to branch on, plus endpoint-specific extra fields (e.g. <code>metaError</code> when Meta itself rejected something, <code>details</code> for validation failures). Check <code>error.code</code> before assuming <code>error.metaError</code> is present.</p>
+                      <p>Every error comes back in one shape: <code>{ "error": { "code": "...", "message": "...", ... } }</code> — a stable <code>code</code> to branch on, plus endpoint-specific extra fields (e.g. <code>metaError</code> when Meta itself rejected something, <code>details</code> for validation failures). Check <code>error.code</code> before assuming <code>error.metaError</code> is present.</p>
                     </div>
-                    <div style="margin-bottom:0.9rem;">
+                    <div class="settings-guide-item">
                       <strong>Webhooks — inbound forwarding</strong>
-                      <p style="color:#6B7280; margin:0.25rem 0 0;">Once your WhatsApp account is connected, Wasi can forward inbound events to a URL of your choosing — contact support to have it set up. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> (HMAC-SHA256 of the raw JSON body, keyed by a per-client secret) — verify this before trusting a delivery. Event types: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
+                      <p>Once your WhatsApp account is connected, Wasi can forward inbound events to a URL of your choosing — contact support to have it set up. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> (HMAC-SHA256 of the raw JSON body, keyed by a per-client secret) — verify this before trusting a delivery. Event types: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
                     </div>
-                    <div style="margin-bottom:0.9rem;">
+                    <div class="settings-guide-item">
                       <strong>Rate limits</strong>
-                      <p style="color:#6B7280; margin:0.25rem 0 0;">The Hub API is capped at 300 requests/minute, currently scoped per source IP. Every response carries live <code>X-RateLimit-Limit</code> / <code>X-RateLimit-Remaining</code> / <code>X-RateLimit-Reset</code> headers so you can self-throttle before hitting the limit.</p>
+                      <p>The Hub API is capped at 300 requests/minute, currently scoped per source IP. Every response carries live <code>X-RateLimit-Limit</code> / <code>X-RateLimit-Remaining</code> / <code>X-RateLimit-Reset</code> headers so you can self-throttle before hitting the limit.</p>
                     </div>
-                    <div style="margin-bottom:0.9rem;">
+                    <div class="settings-guide-item">
                       <strong>Security recommendations</strong>
-                      <ul style="margin:0.25rem 0 0; padding-left:1.1rem; color:#6B7280; line-height:1.6;">
+                      <ul class="settings-list">
                         <li>Never commit an API key or webhook secret to source control — load them from environment variables.</li>
                         <li>If a key is compromised, delete it above and issue a new one — deletion takes effect immediately.</li>
                         <li>Always verify the <code>x-wasi-signature-256</code> header before acting on a forwarded webhook payload.</li>
                         <li><code>client_id</code> is a UUID, not a secret — but still avoid logging your API key or webhook secret.</li>
                       </ul>
                     </div>
-                    <div>
+                    <div class="settings-guide-item">
                       <strong>Testing workflow &amp; Postman collection</strong>
-                      <p style="color:#6B7280; margin:0.25rem 0 0;">Start with <code>GET /api/v1/templates</code> to confirm auth works before attempting a send, then send a <code>type: "text"</code> message to your own test number inside an active 24-hour window before wiring up template sends. Ready-to-import Postman collection (placeholder values, no real credentials):
-                        <a href="/postman/Wasi-Hub-API.postman_collection.json" target="_blank" rel="noopener" style="color:#4F46E5;">Wasi-Hub-API.postman_collection.json</a>
+                      <p>Start with <code>GET /api/v1/templates</code> to confirm auth works before attempting a send, then send a <code>type: "text"</code> message to your own test number inside an active 24-hour window before wiring up template sends. Ready-to-import Postman collection (placeholder values, no real credentials):
+                        <a href="/postman/Wasi-Hub-API.postman_collection.json" target="_blank" rel="noopener">Wasi-Hub-API.postman_collection.json</a>
                         &nbsp;·&nbsp;
-                        <a href="/postman/Wasi-Hub-API.postman_environment.json" target="_blank" rel="noopener" style="color:#4F46E5;">Wasi-Hub-API.postman_environment.json</a>
+                        <a href="/postman/Wasi-Hub-API.postman_environment.json" target="_blank" rel="noopener">Wasi-Hub-API.postman_environment.json</a>
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- Sub-page 8: TAG MANAGER -->
+              <!-- TAGS -->
               <div id="sec-view-tags" class="sec-content-view" style="display: none;">
-                <div class="page-title-bar">
-                  <h2 style="font-size: 1.25rem; font-weight: 700;">Tag Manager</h2>
-                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-tag-modal"><i data-lucide="plus"></i> Add Tag</button>
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Tags</h2>
+                    <p class="page-subtitle">Label contacts so you can filter and target them</p>
+                  </div>
+                  <div class="page-actions">
+                    <button class="btn-primary btn-auto" id="open-add-tag-modal"><i data-lucide="plus"></i> Add Tag</button>
+                  </div>
                 </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;" id="tags-manager-list"></div>
+                <div class="settings-tag-list" id="tags-manager-list"></div>
               </div>
 
-              <!-- Sub-page 8b: CANNED RESPONSES (item 4/5.5) -->
+              <!-- CANNED RESPONSES (item 4/5.5) -->
               <div id="sec-view-canned-responses" class="sec-content-view" style="display: none;">
-                <div class="page-title-bar">
-                  <h2 style="font-size: 1.25rem; font-weight: 700;">Canned Responses</h2>
-                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-canned-response-modal"><i data-lucide="plus"></i> Add Canned Response</button>
-                </div>
-                <p style="font-size: 0.85rem; color: #6B7280; margin-bottom: 1rem;">Type <code>/</code> in the chat composer to insert one of these instantly.</p>
-                <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Shortcut</th><th>Message</th><th></th></tr></thead>
-                    <tbody id="canned-responses-table-body"></tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Sub-page 9: ATTRIBUTES (Fixes the exact screenshot issue!) -->
-              <div id="sec-view-attributes" class="sec-content-view" style="display: none;">
-                <div class="page-title-bar">
-                  <h2 style="font-size: 1.25rem; font-weight: 700;">Custom Contact Attributes</h2>
-                  <button class="btn-primary" style="width: auto; padding: 0 16px;" id="open-add-attribute-modal"><i data-lucide="plus"></i> Add Attribute</button>
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Canned Responses</h2>
+                    <p class="page-subtitle">Type <code class="inline-code">/</code> in the chat composer to insert one of these instantly</p>
+                  </div>
+                  <div class="page-actions">
+                    <button class="btn-primary btn-auto" id="open-add-canned-response-modal"><i data-lucide="plus"></i> Add Canned Response</button>
+                  </div>
                 </div>
                 <div class="table-card">
-                  <table class="data-table">
-                    <thead><tr><th>Attribute Name</th><th>Key</th><th>Field Type</th><th>Description</th></tr></thead>
-                    <tbody id="attributes-table-body">
-                      <tr><td style="font-weight:600;">City</td><td>custom_city</td><td>Text</td><td>Customer home location</td></tr>
-                      <tr><td style="font-weight:600;">Lead Score</td><td>custom_lead_score</td><td>Number</td><td>AI Lead Priority Rating</td></tr>
-                      <tr><td style="font-weight:600;">Order ID</td><td>custom_order_id</td><td>Text</td><td>Latest purchase order number</td></tr>
+                  <table class="data-table stack-mobile">
+                    <thead><tr><th>Shortcut</th><th>Message</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                    <tbody id="canned-responses-table-body">
+                      <tr class="analytics-state-row"><td colspan="3" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              <!-- Sub-page 10: WEBHOOK -->
-              <div id="sec-view-webhook" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Webhook Callbacks</h2>
-                <div class="profile-form-card" style="max-width: 600px;">
-                  <div class="form-group">
-                    <label class="form-label">Webhook URL</label>
-                    <input type="text" class="form-input" id="webhook-url-input" value="https://api.yourcrm.example/v1/webhook" />
+              <!-- ATTRIBUTES -->
+              <div id="sec-view-attributes" class="sec-content-view" style="display: none;">
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Attributes</h2>
+                    <p class="page-subtitle">Custom fields you can store on every contact</p>
                   </div>
-                  <div class="form-group">
-                    <label class="form-label">Signing Secret (verify the <code>x-wasi-signature-256</code> header with this)</label>
-                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                      <input type="text" class="form-input" id="webhook-secret-display" readonly value="Save a URL to generate one" style="font-family:monospace;" />
-                      <button type="button" class="btn-secondary" id="copy-webhook-secret-btn" style="display:none; width:auto; padding:0 12px; flex-shrink:0;"><i data-lucide="copy"></i></button>
-                      <button type="button" class="btn-secondary" id="regenerate-webhook-secret-btn" style="display:none; width:auto; padding:0 12px; flex-shrink:0;" title="Regenerate secret"><i data-lucide="refresh-cw"></i></button>
-                    </div>
-                    <div id="webhook-secret-hint" style="font-size:0.78rem; color:var(--text-muted, #64748b); margin-top:0.35rem;"></div>
+                  <div class="page-actions">
+                    <button class="btn-primary btn-auto" id="open-add-attribute-modal"><i data-lucide="plus"></i> Add Attribute</button>
                   </div>
-                  <button class="btn-primary" style="width: auto; padding: 0 20px;" id="save-webhook-btn">Save Webhook</button>
+                </div>
+                <div class="table-card">
+                  <table class="data-table stack-mobile">
+                    <thead><tr><th>Attribute name</th><th>Key</th><th>Field type</th></tr></thead>
+                    <tbody id="attributes-table-body">
+                      <tr class="analytics-state-row"><td colspan="3" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <!-- Sub-page 11: BILLING -->
+              <!-- WEBHOOK -->
+              <div id="sec-view-webhook" class="sec-content-view" style="display: none;">
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Webhook</h2>
+                    <p class="page-subtitle">Receive WhatsApp events at your own endpoint</p>
+                  </div>
+                </div>
+                <div class="profile-form-card settings-card-narrow">
+                  <div class="form-group">
+                    <label class="form-label" for="webhook-url-input">Webhook URL</label>
+                    <input type="url" class="form-input" id="webhook-url-input" placeholder="https://your-server.example.com/webhook" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="webhook-secret-display">Signing secret (verify the <code>x-wasi-signature-256</code> header with this)</label>
+                    <div class="settings-inline-row">
+                      <input type="text" class="form-input settings-mono" id="webhook-secret-display" readonly value="Save a URL to generate one" />
+                      <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="copy-webhook-secret-btn" aria-label="Copy signing secret" hidden><i data-lucide="copy"></i></button>
+                      <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="regenerate-webhook-secret-btn" title="Regenerate secret" aria-label="Regenerate signing secret" hidden><i data-lucide="refresh-cw"></i></button>
+                    </div>
+                    <div id="webhook-secret-hint" class="form-hint"></div>
+                  </div>
+                  <div><button class="btn-primary btn-auto" id="save-webhook-btn">Save Webhook</button></div>
+                </div>
+              </div>
+
+              <!-- BILLING -->
               <div id="sec-view-billing" class="sec-content-view" style="display: none;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Billing & Invoices</h2>
-                <!-- renderBillingTab() (app.js) replaces this from real
-                     GET /api/billing/invoices — was a single hardcoded fake
-                     "Paid" invoice with a dead PDF link, shown regardless of
-                     whether the client had ever actually been billed. No
-                     real PDF export exists, so the Download column and
-                     dead link are dropped rather than faked again. -->
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Billing</h2>
+                    <p class="page-subtitle">Invoices for your plan and wallet</p>
+                  </div>
+                </div>
+                <!-- renderBillingTab() (app.js) fills this from real
+                     GET /api/billing/invoices. No real PDF export exists, so
+                     there is deliberately no Download column. -->
                 <div class="table-card">
-                  <table class="data-table">
+                  <table class="data-table stack-mobile">
                     <thead><tr><th>Invoice</th><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead>
                     <tbody id="billing-invoices-body">
-                      <tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>
+                      <tr class="analytics-state-row"><td colspan="5" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -1605,6 +1433,7 @@
 
           </div>
         </div>
+
 
       </main>
     </div>

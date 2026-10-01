@@ -4632,10 +4632,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const tagsManagerList = document.getElementById('tags-manager-list');
     if (!tagsManagerList) return;
 
-    tagsManagerList.innerHTML = '';
-    Object.values(state.tagsById).forEach(tag => {
-      tagsManagerList.innerHTML += `<span class="tag-badge" style="font-size: 0.875rem; padding: 6px 14px; background: ${tag.bg}; color: ${tag.color};">${tag.name}</span>`;
-    });
+    const tags = Object.values(state.tagsById);
+    tagsManagerList.innerHTML = tags.length
+      ? tags.map(tag => `<span class="tag-badge" style="background: ${esc(tag.bg)}; color: ${esc(tag.color)};">${esc(tag.name)}</span>`).join('')
+      : '<div class="empty-state"><div class="empty-title">No tags yet</div><div>Add a tag to start labelling contacts.</div></div>';
   }
 
   async function refreshTags() {
@@ -6144,12 +6144,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // shows up in either picker until the next full session refresh.
       state.teamMembers = await authFetch('/api/team-members');
     } catch (err) {
-      reportError(err);
+      tbody.innerHTML = analyticsErrorRow(4, err.message || 'Couldn’t load your team.', 'team-load-retry');
+      document.getElementById('team-load-retry')?.addEventListener('click', renderTeamTable);
       return;
     }
     tbody.innerHTML = state.teamMembers.length ? state.teamMembers.map(m => `
-      <tr><td>${m.name}</td><td>${m.email}</td><td>${m.role}</td><td><span class="status-badge ${m.status === 'active' ? 'active' : ''}">${m.status === 'active' ? 'Active' : 'Invited'}</span></td><td>—</td></tr>
-    `).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No team members yet</td></tr>';
+      <tr>
+        <td data-label="Name" class="analytics-name">${esc(m.name)}</td>
+        <td data-label="Email">${esc(m.email)}</td>
+        <td data-label="Role"><span class="badge badge-neutral">${esc(m.role)}</span></td>
+        <td data-label="Status"><span class="badge ${m.status === 'active' ? 'badge-success' : 'badge-warning'}">${m.status === 'active' ? 'Active' : 'Invited'}</span></td>
+      </tr>
+    `).join('') : analyticsEmptyRow(4, 'No team members yet', 'Invite a teammate to share the inbox.');
   }
 
   document.getElementById('open-invite-member-modal')?.addEventListener('click', () => {
@@ -6188,16 +6194,17 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       state.cannedResponses = await authFetch('/api/canned-responses');
     } catch (err) {
-      reportError(err);
+      tbody.innerHTML = analyticsErrorRow(3, err.message || 'Couldn’t load canned responses.', 'canned-load-retry');
+      document.getElementById('canned-load-retry')?.addEventListener('click', renderCannedResponsesTable);
       return;
     }
     tbody.innerHTML = state.cannedResponses.length ? state.cannedResponses.map(c => `
       <tr>
-        <td style="font-weight:600;">${escapeHtml(c.shortcut)}</td>
-        <td style="color:#6B7280;">${escapeHtml((c.body || '').slice(0, 80))}</td>
-        <td><button type="button" class="btn-secondary delete-canned-response-btn" data-canned-id="${c.id}" style="width:auto; height:28px; padding:0 10px; font-size:0.75rem;">Delete</button></td>
+        <td data-label="Shortcut" class="analytics-name">${esc(c.shortcut)}</td>
+        <td data-label="Message" class="settings-muted-cell">${esc((c.body || '').slice(0, 80))}</td>
+        <td data-label="" class="api-key-actions"><button type="button" class="btn-secondary btn-sm btn-auto delete-canned-response-btn" data-canned-id="${esc(c.id)}" aria-label="Delete canned response ${esc(c.shortcut)}">Delete</button></td>
       </tr>
-    `).join('') : '<tr><td colspan="3" style="text-align:center;color:#9CA3AF;">No canned responses yet</td></tr>';
+    `).join('') : analyticsEmptyRow(3, 'No canned responses yet', 'Add one, then type / in a chat to insert it.');
 
     tbody.querySelectorAll('.delete-canned-response-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -6248,10 +6255,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // newly-defined attribute without waiting for a full session refresh.
       state.contactAttributes = await authFetch('/api/contact-attributes');
       tbody.innerHTML = state.contactAttributes.length ? state.contactAttributes.map(a => `
-        <tr><td style="font-weight:600;">${a.name}</td><td>${a.name.toLowerCase().replace(/\s+/g, '_')}</td><td>${a.type}</td><td>—</td></tr>
-      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No custom attributes yet</td></tr>';
+        <tr>
+          <td data-label="Attribute name" class="analytics-name">${esc(a.name)}</td>
+          <td data-label="Key"><code class="inline-code">${esc(a.name.toLowerCase().replace(/\s+/g, '_'))}</code></td>
+          <td data-label="Field type">${esc(a.type)}</td>
+        </tr>
+      `).join('') : analyticsEmptyRow(3, 'No custom attributes yet', 'Add an attribute to store extra details on each contact.');
     } catch (err) {
-      reportError(err);
+      tbody.innerHTML = analyticsErrorRow(3, err.message || 'Couldn’t load attributes.', 'attributes-load-retry');
+      document.getElementById('attributes-load-retry')?.addEventListener('click', renderAttributesTable);
     }
   }
 
@@ -6333,6 +6345,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const { balance } = await authFetch('/api/wallet');
       balanceEl.textContent = '₹ ' + Number(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 });
     } catch (err) {
+      balanceEl.textContent = '—';
       reportError(err);
     }
   }
@@ -6340,16 +6353,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Real GET /api/billing/subscription — was hardcoded fake "Pro Business
   // Plan" / Active regardless of whether the client had ever subscribed.
   const SUBSCRIPTION_STATUS_STYLE = {
-    active: { bg: '#DCFCE7', color: '#15803D', label: 'Active' },
-    pending_payment: { bg: '#FEF3C7', color: '#B45309', label: 'Pending Payment' },
-    cancelled: { bg: '#F1F5F9', color: '#64748B', label: 'Cancelled' },
-    failed: { bg: '#FEE2E2', color: '#B91C1C', label: 'Failed' },
+    active: { cls: 'badge-success', label: 'Active' },
+    pending_payment: { cls: 'badge-warning', label: 'Pending Payment' },
+    cancelled: { cls: 'badge-neutral', label: 'Cancelled' },
+    failed: { cls: 'badge-danger', label: 'Failed' },
   };
 
   async function renderSubscriptionTab() {
     const container = document.getElementById('subscription-content');
     if (!container) return;
-    container.innerHTML = '<div style="color:#6B7280;">Loading…</div>';
+    container.innerHTML = '<div class="settings-loading"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>';
     try {
       const [subscription, plans] = await Promise.all([
         authFetch('/api/billing/subscription'),
@@ -6358,61 +6371,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!subscription) {
         container.innerHTML = `
-          <div style="color:#6B7280; margin-bottom:1rem;">No active subscription yet.</div>
-          <button class="btn-primary" style="width: auto; padding: 0 20px;" id="upgrade-subscription-btn">Choose a Plan</button>
+          <p class="settings-muted">No active subscription yet.</p>
+          <div><button class="btn-primary btn-auto" id="upgrade-subscription-btn">Choose a Plan</button></div>
         `;
       } else {
         const plan = plans.find(p => p.id === subscription.plan);
-        const style = SUBSCRIPTION_STATUS_STYLE[subscription.status] || { bg: '#F1F5F9', color: '#64748B', label: subscription.status };
+        const style = SUBSCRIPTION_STATUS_STYLE[subscription.status] || { cls: 'badge-neutral', label: subscription.status };
         const limitText = plan?.conversation_limit == null ? 'Unlimited conversations/month' : `${Number(plan.conversation_limit).toLocaleString('en-IN')} conversations/month`;
         container.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="settings-plan-head">
             <div>
-              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937;">${escapeHtml(subscription.plan)} Plan</div>
-              <div style="font-size: 0.85rem; color: #6B7280;">${plan ? `₹${plan.price_inr}/month · ${limitText}` : ''}</div>
+              <div class="settings-plan-name">${escapeHtml(subscription.plan)} Plan</div>
+              <div class="channel-meta">${plan ? `₹${esc(plan.price_inr)}/month · ${esc(limitText)}` : ''}</div>
             </div>
-            <span class="status-badge" style="font-weight: 700; padding: 6px 14px; background:${style.bg}; color:${style.color};">${escapeHtml(style.label)}</span>
+            <span class="badge ${style.cls}">${escapeHtml(style.label)}</span>
           </div>
-          <button class="btn-primary" style="width: auto; padding: 0 20px; margin-top: 1rem;" id="upgrade-subscription-btn">Change Plan</button>
+          <div><button class="btn-primary btn-auto" id="upgrade-subscription-btn">Change Plan</button></div>
         `;
       }
       document.getElementById('upgrade-subscription-btn')?.addEventListener('click', () => {
         showToast('Redirecting to plan upgrade...');
       });
     } catch (err) {
-      container.innerHTML = `<div style="color:#EF4444;">${escapeHtml(err.message)}</div>`;
+      container.innerHTML = `<div class="settings-error"><span>${escapeHtml(err.message)}</span><button type="button" class="btn-secondary btn-sm" id="subscription-load-retry">Try again</button></div>`;
+      document.getElementById('subscription-load-retry')?.addEventListener('click', renderSubscriptionTab);
     }
   }
 
   // Real GET /api/billing/invoices — was a single hardcoded fake "Paid"
   // invoice with a dead PDF link regardless of real billing history.
   const INVOICE_STATUS_STYLE = {
-    paid: { bg: '#DCFCE7', color: '#15803D', label: 'Paid' },
-    created: { bg: '#FEF3C7', color: '#B45309', label: 'Pending' },
-    failed: { bg: '#FEE2E2', color: '#B91C1C', label: 'Failed' },
-    refunded: { bg: '#F1F5F9', color: '#64748B', label: 'Refunded' },
+    paid: { cls: 'badge-success', label: 'Paid' },
+    created: { cls: 'badge-warning', label: 'Pending' },
+    failed: { cls: 'badge-danger', label: 'Failed' },
+    refunded: { cls: 'badge-neutral', label: 'Refunded' },
   };
 
   async function renderBillingTab() {
     const tbody = document.getElementById('billing-invoices-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">Loading…</td></tr>';
+    tbody.innerHTML = analyticsLoadingRow(5);
     try {
       const invoices = await authFetch('/api/billing/invoices');
       tbody.innerHTML = invoices.length ? invoices.map(inv => {
-        const style = INVOICE_STATUS_STYLE[inv.status] || { bg: '#F1F5F9', color: '#64748B', label: inv.status };
+        const style = INVOICE_STATUS_STYLE[inv.status] || { cls: 'badge-neutral', label: inv.status };
         return `
           <tr>
-            <td style="font-weight:600;">${escapeHtml(inv.id.slice(0, 8))}</td>
-            <td>${(inv.created_at || '').slice(0, 10)}</td>
-            <td>${escapeHtml(inv.plan)}</td>
-            <td>₹ ${Number(inv.amount_inr).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            <td><span class="status-badge" style="background:${style.bg}; color:${style.color};">${escapeHtml(style.label)}</span></td>
+            <td data-label="Invoice" class="analytics-name">${escapeHtml(inv.id.slice(0, 8))}</td>
+            <td data-label="Date">${esc((inv.created_at || '').slice(0, 10))}</td>
+            <td data-label="Plan">${escapeHtml(inv.plan)}</td>
+            <td data-label="Amount">₹ ${esc(Number(inv.amount_inr).toLocaleString('en-IN', { minimumFractionDigits: 2 }))}</td>
+            <td data-label="Status"><span class="badge ${style.cls}">${escapeHtml(style.label)}</span></td>
           </tr>
         `;
-      }).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No invoices yet</td></tr>';
+      }).join('') : analyticsEmptyRow(5, 'No invoices yet', 'Invoices for plan payments and wallet recharges will appear here.');
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#EF4444;">${escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = analyticsErrorRow(5, err.message || 'Couldn’t load invoices.', 'billing-load-retry');
+      document.getElementById('billing-load-retry')?.addEventListener('click', renderBillingTab);
     }
   }
 
@@ -6692,8 +6707,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const innerTabBtns = document.querySelectorAll('.inner-tab-btn');
   innerTabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      innerTabBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      innerTabBtns.forEach(b => {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.tabIndex = on ? 0 : -1;
+      });
       document.querySelectorAll('.inner-tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `inner-tab-${btn.dataset.innerTab}`);
       });
@@ -6724,40 +6743,40 @@ document.addEventListener('DOMContentLoaded', () => {
   // contacting support; see server/src/routes/apiKeys.js's module comment).
   function apiKeyStatusBadge(key) {
     return key.revoked_at
-      ? '<span class="status-badge">Revoked</span>'
-      : '<span class="status-badge active">Active</span>';
+      ? '<span class="badge badge-neutral">Revoked</span>'
+      : '<span class="badge badge-success">Active</span>';
   }
 
   async function renderApiKeysManager() {
     const tbody = document.getElementById('api-keys-table-body');
     const errorEl = document.getElementById('api-keys-error');
     if (!tbody) return;
-    if (errorEl) errorEl.style.display = 'none';
+    if (errorEl) errorEl.hidden = true;
 
     try {
       const keys = await authFetch('/api/api-keys');
       const activeCount = keys.filter((k) => !k.revoked_at).length;
 
       if (!keys.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;">No API keys yet — click "+ New API Key" above to create one.</td></tr>';
+        tbody.innerHTML = analyticsEmptyRow(5, 'No API keys yet', 'Click “New API Key” below to create one.');
         return;
       }
 
       tbody.innerHTML = keys.map((k) => {
         const isOnlyActiveKey = !k.revoked_at && activeCount <= 1;
         const lockTitle = 'This is your only active key. Contact support to add a replacement before removing this one.';
-        const revokeBtn = k.revoked_at ? '' : `<button class="btn-secondary btn-sm" data-revoke-key="${k.id}" ${isOnlyActiveKey ? `disabled title="${lockTitle}"` : ''}>Revoke</button>`;
-        const deleteBtn = `<button class="btn-secondary btn-sm" data-delete-key="${k.id}" style="margin-left:0.4rem;" ${isOnlyActiveKey ? `disabled title="${lockTitle}"` : ''}>Remove</button>`;
+        const revokeBtn = k.revoked_at ? '' : `<button class="btn-secondary btn-sm" data-revoke-key="${esc(k.id)}" ${isOnlyActiveKey ? `disabled title="${esc(lockTitle)}"` : ''}>Revoke</button>`;
+        const deleteBtn = `<button class="btn-secondary btn-sm" data-delete-key="${esc(k.id)}" ${isOnlyActiveKey ? `disabled title="${esc(lockTitle)}"` : ''}>Remove</button>`;
         const lockNote = isOnlyActiveKey
-          ? `<tr><td colspan="5" style="font-size:0.75rem; color:#B45309; padding-top:0; padding-bottom:0.6rem;">${escapeHtml(lockTitle)}</td></tr>`
+          ? `<tr class="api-keys-lock-note"><td colspan="5">${escapeHtml(lockTitle)}</td></tr>`
           : '';
         return `
           <tr>
-            <td style="font-weight:600;">${escapeHtml(k.app_name)}</td>
+            <td class="analytics-name">${escapeHtml(k.app_name)}</td>
             <td>${apiKeyStatusBadge(k)}</td>
-            <td>${k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</td>
-            <td>${(k.created_at || '').slice(0, 10)}</td>
-            <td style="text-align:right;">${revokeBtn}${deleteBtn}</td>
+            <td>${k.last_used_at ? esc(new Date(k.last_used_at).toLocaleDateString()) : 'Never'}</td>
+            <td>${esc((k.created_at || '').slice(0, 10))}</td>
+            <td class="api-key-actions">${revokeBtn}${deleteBtn}</td>
           </tr>
           ${lockNote}
         `;
@@ -6766,7 +6785,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       if (errorEl) {
         errorEl.textContent = err.message;
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
       }
     }
   }
@@ -6784,7 +6803,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const valueEl = document.getElementById('new-api-key-value');
           if (revealEl && valueEl) {
             valueEl.value = created.key;
-            revealEl.style.display = '';
+            revealEl.hidden = false;
           }
           showToast('API key created');
           renderApiKeysManager();
@@ -6919,18 +6938,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!webhook || !webhook.has_secret) {
       secretDisplay.value = 'Save a URL to generate one';
-      copyBtn.style.display = 'none';
-      regenBtn.style.display = 'none';
+      copyBtn.hidden = true;
+      regenBtn.hidden = true;
       hint.textContent = '';
       return;
     }
 
     secretDisplay.value = '•'.repeat(8) + (webhook.secret_last4 || '????');
-    regenBtn.style.display = '';
+    regenBtn.hidden = false;
     regenBtn.onclick = () => regenerateWebhookSecret();
 
     if (revealedSecret) {
-      copyBtn.style.display = '';
+      copyBtn.hidden = false;
       copyBtn.onclick = () => {
         navigator.clipboard.writeText(revealedSecret)
           .then(() => showToast('Secret copied to clipboard'))
@@ -6938,7 +6957,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       hint.textContent = "New secret generated — copy it now, it won't be shown again.";
     } else {
-      copyBtn.style.display = 'none';
+      copyBtn.hidden = true;
       hint.textContent = 'Only the last 4 characters are shown after generation. Regenerate to get a fresh copyable secret.';
     }
   }
@@ -7053,104 +7072,142 @@ document.addEventListener('DOMContentLoaded', () => {
     URL.revokeObjectURL(url);
   });
 
-  // --- Secondary Sidebar Navigation inside Reports ---
+  // --- Analytics tabs (shared .tabs component) ---
   const repNavItems = document.querySelectorAll('[data-rep-view]');
   const repViews = document.querySelectorAll('.rep-content-view');
+
+  function selectReportTab(repKey) {
+    repNavItems.forEach(i => {
+      const on = i.dataset.repView === repKey;
+      i.classList.toggle('active', on);
+      i.setAttribute('aria-selected', on ? 'true' : 'false');
+      i.tabIndex = on ? 0 : -1;
+    });
+    repViews.forEach(v => { v.hidden = v.id !== `rep-view-${repKey}`; });
+    if (repKey === 'message') renderMessageAnalytics();
+    if (repKey === 'tags') renderTagAnalytics();
+    if (repKey === 'campaign') renderCampaignAnalytics();
+    if (repKey === 'sla') renderSlaAnalytics();
+    refreshIcons();
+  }
 
   repNavItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      const repKey = item.dataset.repView;
-
-      repNavItems.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-
-      repViews.forEach(v => {
-        if (v.id === `rep-view-${repKey}`) {
-          v.style.display = 'block';
-        } else {
-          v.style.display = 'none';
-        }
-      });
-      if (repKey === 'message') renderMessageAnalytics();
-      if (repKey === 'tags') renderTagAnalytics();
-      if (repKey === 'campaign') renderCampaignAnalytics();
-      if (repKey === 'sla') renderSlaAnalytics();
-      refreshIcons();
+      selectReportTab(item.dataset.repView);
     });
   });
 
-  // --- Reports: real data (spec Phase 3 — replaces hardcoded numbers) ---
+  // --- Reports: real data only ---
+  // Table state helpers: skeleton while loading, an honest empty state, and
+  // an error with a retry — never a silent blank table.
+  function analyticsStateRow(cols, innerHtml) {
+    return `<tr class="analytics-state-row"><td colspan="${cols}" class="analytics-state-cell">${innerHtml}</td></tr>`;
+  }
+  function analyticsLoadingRow(cols) {
+    return analyticsStateRow(cols, '<span class="skeleton analytics-skeleton"></span>');
+  }
+  function analyticsEmptyRow(cols, title, hint) {
+    return analyticsStateRow(cols, `<div class="empty-title">${esc(title)}</div>${hint ? `<div>${esc(hint)}</div>` : ''}`);
+  }
+  function analyticsErrorRow(cols, message, retryId) {
+    return analyticsStateRow(cols, `<div class="error-state"><div>${esc(message)}</div><button type="button" class="btn-secondary btn-auto" id="${retryId}">Try again</button></div>`);
+  }
+
+  const MESSAGE_TILE_IDS = ['metric-sent', 'metric-delivered', 'metric-read', 'metric-failed', 'metric-incoming', 'metric-outgoing'];
+  const formatCount = (n) => Number(n || 0).toLocaleString('en-IN');
+  const percentOf = (part, whole) => (whole > 0 ? `${Math.round((part / whole) * 100)}% of sent` : ' ');
+
   async function renderMessageAnalytics() {
+    const errorEl = document.getElementById('message-analytics-error');
+    if (errorEl) errorEl.hidden = true;
+    MESSAGE_TILE_IDS.forEach((id) => document.getElementById(id)?.closest('.analytics-tile')?.classList.add('is-loading'));
     try {
       const m = await authFetch('/api/analytics/messages');
       const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-      set('metric-sent', m.sent);
-      set('metric-delivered', m.delivered);
-      set('metric-read', m.read);
-      set('metric-failed', m.failed);
-      set('metric-incoming', m.incoming);
-      set('metric-outgoing', m.outgoing);
+      set('metric-sent', formatCount(m.sent));
+      set('metric-delivered', formatCount(m.delivered));
+      set('metric-read', formatCount(m.read));
+      set('metric-failed', formatCount(m.failed));
+      set('metric-incoming', formatCount(m.incoming));
+      set('metric-outgoing', formatCount(m.outgoing));
+      set('metric-delivered-sub', percentOf(m.delivered, m.sent));
+      set('metric-read-sub', percentOf(m.read, m.sent));
+      set('metric-failed-sub', percentOf(m.failed, m.sent));
     } catch (err) {
-      reportError(err);
+      MESSAGE_TILE_IDS.forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = '–'; });
+      if (errorEl) {
+        document.getElementById('message-analytics-error-text').textContent = err.message || 'Couldn’t load message analytics.';
+        errorEl.hidden = false;
+      } else {
+        reportError(err);
+      }
+    } finally {
+      MESSAGE_TILE_IDS.forEach((id) => document.getElementById(id)?.closest('.analytics-tile')?.classList.remove('is-loading'));
     }
   }
+  document.getElementById('message-analytics-retry')?.addEventListener('click', renderMessageAnalytics);
 
   async function renderTagAnalytics() {
     const tbody = document.getElementById('tag-analytics-tbody');
     if (!tbody) return;
+    tbody.innerHTML = analyticsLoadingRow(3);
     try {
       const tags = await authFetch('/api/analytics/tags');
       tbody.innerHTML = tags.length ? tags.map(t => `
         <tr>
-          <td><span class="tag-badge" style="background:${t.bg || '#F3F4F6'};color:${t.color || '#374151'};">${t.name}</span></td>
-          <td>${t.contact_count}</td>
-          <td>${t.conversion_rate}%</td>
-          <td><span class="status-badge active">Active</span></td>
+          <td data-label="Tag"><span class="tag-badge" style="background:${esc(t.bg || '#F3F4F6')};color:${esc(t.color || '#374151')};">${esc(t.name)}</span></td>
+          <td data-label="Contacts">${esc(formatCount(t.contact_count))}</td>
+          <td data-label="Engaged">${esc(t.conversion_rate)}%</td>
         </tr>
-      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No tags yet</td></tr>';
+      `).join('') : analyticsEmptyRow(3, 'No tags yet', 'Create tags in Settings to see how each one performs.');
     } catch (err) {
-      reportError(err);
+      tbody.innerHTML = analyticsErrorRow(3, err.message || 'Couldn’t load tag analytics.', 'tag-analytics-retry');
+      document.getElementById('tag-analytics-retry')?.addEventListener('click', renderTagAnalytics);
     }
   }
 
   async function renderCampaignAnalytics() {
     const tbody = document.getElementById('campaign-analytics-tbody');
     if (!tbody) return;
+    tbody.innerHTML = analyticsLoadingRow(4);
     try {
       const broadcasts = await authFetch('/api/broadcasts');
       tbody.innerHTML = broadcasts.length ? broadcasts.map(b => `
         <tr>
-          <td style="font-weight:600;">${b.title}</td>
-          <td>${b.delivered_count}</td>
-          <td>${b.delivered_rate}%</td>
-          <td>${b.read_rate}%</td>
+          <td data-label="Campaign" class="analytics-name">${esc(b.title)}</td>
+          <td data-label="Sent">${esc(formatCount(b.delivered_count))}</td>
+          <td data-label="Delivery rate">${esc(b.delivered_rate)}%</td>
+          <td data-label="Read rate">${esc(b.read_rate)}%</td>
         </tr>
-      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No campaigns yet</td></tr>';
+      `).join('') : analyticsEmptyRow(4, 'No campaigns yet', 'Launch a campaign to see delivery and read rates here.');
     } catch (err) {
-      reportError(err);
+      tbody.innerHTML = analyticsErrorRow(4, err.message || 'Couldn’t load campaign analytics.', 'campaign-analytics-retry');
+      document.getElementById('campaign-analytics-retry')?.addEventListener('click', renderCampaignAnalytics);
     }
   }
 
   // item 5/5.5 — GET /api/analytics/sla is Admin/Manager only server-side;
-  // an Agent never sees this tab at all (applyRoleGating hides the nav
-  // item), but if they somehow land here directly the request just 403s
-  // and shows a toast, same as any other role-gated fetch in this app.
+  // an Agent never sees this tab at all (applyRoleGating hides it), but if
+  // they somehow land here directly the request just 403s and the table
+  // shows the error with a retry.
   async function renderSlaAnalytics() {
     const tbody = document.getElementById('sla-analytics-tbody');
     if (!tbody) return;
+    tbody.innerHTML = analyticsLoadingRow(4);
     try {
       const { byTeamMember } = await authFetch('/api/analytics/sla');
       tbody.innerHTML = byTeamMember.length ? byTeamMember.map(r => `
         <tr>
-          <td style="font-weight:600;">${escapeHtml(r.teamMemberName || 'Owner')}</td>
-          <td>${r.avgFirstResponseSeconds != null ? Math.round(r.avgFirstResponseSeconds / 60) + ' min' : '—'}</td>
-          <td>${r.avgResolutionSeconds != null ? Math.round(r.avgResolutionSeconds / 60) + ' min' : '—'}</td>
-          <td>${r.firstResponseCount}</td>
+          <td data-label="Team member" class="analytics-name">${esc(r.teamMemberName || 'Owner')}</td>
+          <td data-label="Avg. first response">${r.avgFirstResponseSeconds != null ? Math.round(r.avgFirstResponseSeconds / 60) + ' min' : '—'}</td>
+          <td data-label="Avg. resolution time">${r.avgResolutionSeconds != null ? Math.round(r.avgResolutionSeconds / 60) + ' min' : '—'}</td>
+          <td data-label="Replies tracked">${esc(r.firstResponseCount)}</td>
         </tr>
-      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#9CA3AF;">No tracked replies yet</td></tr>';
+      `).join('') : analyticsEmptyRow(4, 'No tracked replies yet', 'Response times appear once your team starts replying to chats.');
     } catch (err) {
-      reportError(err);
+      tbody.innerHTML = analyticsErrorRow(4, err.message || 'Couldn’t load response times.', 'sla-analytics-retry');
+      document.getElementById('sla-analytics-retry')?.addEventListener('click', renderSlaAnalytics);
     }
   }
 
@@ -7159,12 +7216,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const secViews = document.querySelectorAll('.sec-content-view');
 
   secNavItems.forEach(item => {
+    // Nav entries are <a role="button">; make Enter/Space activate them.
+    item.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); }
+    });
     item.addEventListener('click', (e) => {
       e.preventDefault();
       const secKey = item.dataset.secView;
 
       secNavItems.forEach(i => i.classList.remove('active'));
       item.classList.add('active');
+      // At <=900px the nav is a horizontally scrolling row — keep the
+      // chosen entry in view.
+      item.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 
       secViews.forEach(v => {
         if (v.id === `sec-view-${secKey}`) {
@@ -7195,13 +7259,18 @@ document.addEventListener('DOMContentLoaded', () => {
   async function renderWhatsAppSettings() {
     const card = document.querySelector('#sec-view-whatsapp .channel-status-card');
     if (!card) return;
-    card.innerHTML = '<div style="padding:1rem;color:#6B7280;">Checking connection…</div>';
+    card.innerHTML = `
+      <div class="channel-info-left">
+        <span class="skeleton settings-skeleton-circle"></span>
+        <div class="settings-skeleton-lines"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>
+      </div>`;
 
     let status;
     try {
       status = await authFetch('/api/onboarding/whatsapp/status');
     } catch (err) {
-      card.innerHTML = `<div style="padding:1rem;color:#EF4444;">${esc(err.message)}</div>`;
+      card.innerHTML = `<div class="settings-error"><span>${esc(err.message)}</span><button type="button" class="btn-secondary btn-sm" id="settings-wa-status-retry">Try again</button></div>`;
+      document.getElementById('settings-wa-status-retry')?.addEventListener('click', renderWhatsAppSettings);
       renderWhatsAppProfileTabs(null);
       return;
     }
@@ -7213,12 +7282,12 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="channel-info-left">
           <div class="wa-icon-circle"><i data-lucide="phone-call"></i></div>
           <div>
-            <div style="font-weight:700;font-size:1.05rem;color:#1F2937;">${esc(status.waba.display_name || 'WhatsApp Business')}</div>
-            <div style="font-size:0.8rem;color:#6B7280;">Phone ID: ${esc(status.waba.phone_number_id)}</div>
-            <div style="font-size:0.875rem;font-weight:600;color:#374151;margin-top:2px;">Quality: ${esc(status.waba.quality_rating || 'Unknown')}</div>
+            <div class="channel-name">${esc(status.waba.display_name || 'WhatsApp Business')}</div>
+            <div class="channel-meta">Phone ID: ${esc(status.waba.phone_number_id)}</div>
+            <div class="channel-meta"><strong>Quality:</strong> ${esc(status.waba.quality_rating || 'Unknown')}</div>
           </div>
         </div>
-        <span class="status-badge active" style="padding:4px 14px;font-weight:700;">Active</span>
+        <span class="badge badge-success">Active</span>
       `;
       refreshIcons();
       return;
@@ -7226,10 +7295,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     card.innerHTML = `
       <div class="channel-info-left">
-        <div class="wa-icon-circle"><i data-lucide="phone-off"></i></div>
-        <div style="font-weight:700;font-size:1.05rem;color:#1F2937;">No WhatsApp number connected</div>
+        <div class="wa-icon-circle is-off"><i data-lucide="phone-off"></i></div>
+        <div class="channel-name">No WhatsApp number connected</div>
       </div>
-      <button type="button" class="btn-primary" id="settings-connect-wa-btn" style="padding:8px 16px;">Connect WhatsApp</button>
+      <button type="button" class="btn-primary btn-auto" id="settings-connect-wa-btn">Connect WhatsApp</button>
     `;
     refreshIcons();
 
@@ -7291,13 +7360,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // browser or server, exactly the failure class this item exists
             // to close. showToast() auto-dismisses after 2.2s — nowhere
             // near enough time to read and copy down a WABA ID — so this
-            // one deliberately uses a blocking alert() instead, the one
-            // case in this app where that's the right call over a toast.
+            // uses the persistent error dialog (which has a Copy button for
+            // exactly this), not a toast and no longer a native alert().
             console.error('Failed to record incomplete WhatsApp connection:', recordErr.message);
-            window.alert(
-              `Meta linked your WhatsApp account, but we also failed to record that on our end — nothing was saved automatically.\n\n` +
-              `Please contact support with this WhatsApp Business Account ID:\n\n${err.waba_id}`
-            );
+            showErrorDialog({
+              title: 'WhatsApp linked, but not saved',
+              message:
+                `Meta linked your WhatsApp account, but we also failed to record that on our end — nothing was saved automatically.\n\n` +
+                `Please contact support with this WhatsApp Business Account ID:\n\n${err.waba_id}`,
+            });
           }
           return;
         }
@@ -7340,7 +7411,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const waba = status && status.connected ? status.waba : null;
 
     if (!waba) {
-      const notConnected = '<div style="color:#6B7280;">Connect a WhatsApp number above to see its profile here.</div>';
+      const notConnected = '<p class="settings-muted">Connect a WhatsApp number above to see its profile here.</p>';
       if (profileEl) profileEl.innerHTML = notConnected;
       if (linkEl) linkEl.innerHTML = notConnected;
       if (settingsEl) settingsEl.innerHTML = notConnected;
@@ -7352,7 +7423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const phoneLabel = phone || `Phone ID ${waba.phone_number_id} (dialable number not available — reconnect to fetch it)`;
 
     if (profileEl) {
-      profileEl.innerHTML = '<div style="padding:1rem;color:#6B7280;">Loading business profile…</div>';
+      profileEl.innerHTML = '<div class="settings-loading"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>';
       renderBusinessProfileForm(waba);
     }
 
@@ -7364,7 +7435,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="text" class="form-input" readonly value="https://wa.me/${attrEscape(phone.replace(/[^\d]/g, ''))}" />
           </div>
         `
-        : '<div style="color:#6B7280;">Dialable phone number not available yet — reconnect this WhatsApp number to fetch it.</div>';
+        : '<p class="settings-muted">Dialable phone number not available yet — reconnect this WhatsApp number to fetch it.</p>';
     }
 
     if (settingsEl) {
@@ -7408,11 +7479,12 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       result = await authFetch('/api/onboarding/whatsapp/business-profile');
     } catch (err) {
-      container.innerHTML = `<div style="padding:1rem;color:#EF4444;">${escapeHtml(err.message)}</div>`;
+      container.innerHTML = `<div class="settings-error"><span>${escapeHtml(err.message)}</span><button type="button" class="btn-secondary btn-sm" id="bp-load-retry">Try again</button></div>`;
+      document.getElementById('bp-load-retry')?.addEventListener('click', () => renderBusinessProfileForm(waba));
       return;
     }
     if (!result.connected) {
-      container.innerHTML = '<div style="color:#6B7280;">Connect a WhatsApp number above to see its profile here.</div>';
+      container.innerHTML = '<p class="settings-muted">Connect a WhatsApp number above to see its profile here.</p>';
       return;
     }
 
@@ -7461,8 +7533,8 @@ document.addEventListener('DOMContentLoaded', () => {
               <input type="text" class="form-input" id="bp-website-1" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[1] || '')}" />
             </div>
           </div>
-          <button type="button" class="btn-primary" id="bp-save-btn" style="width: auto; padding: 0 20px;" disabled>Save Changes</button>
-          <span id="bp-save-status" style="margin-left: 10px; font-size: 0.8rem; color: #6B7280;"></span>
+          <div class="settings-inline-row"><button type="button" class="btn-primary btn-auto" id="bp-save-btn" disabled>Save Changes</button>
+          <span id="bp-save-status" class="form-hint" role="status"></span></div>
         </div>
 
         <div class="whatsapp-preview-card">
@@ -7474,7 +7546,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">${escapeHtml(name)}</div>
           <div style="font-size: 0.85rem; font-weight: 600; color: #4B5563; margin-top: 2px;">${escapeHtml(phoneLabel)}</div>
           <div style="font-size: 0.75rem; color: #9CA3AF; margin-top: 6px;">${pictureUrl ? 'A profile picture is already set.' : 'No profile picture set.'}</div>
-          <button type="button" class="btn-secondary" id="bp-replace-picture-btn" style="margin-top: 10px; width: auto; padding: 0 14px;">Replace picture</button>
+          <button type="button" class="btn-secondary btn-auto" id="bp-replace-picture-btn" style="margin-top: 10px;">Replace picture</button>
           <input type="file" id="bp-picture-file-input" accept="image/jpeg,image/png" style="display:none;" />
           <div id="bp-picture-status" style="font-size: 0.75rem; color: #6B7280; margin-top: 6px;"></div>
         </div>

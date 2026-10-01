@@ -558,6 +558,7 @@ body {
 .settings-layout {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-app);
   overflow: hidden;
 }
@@ -685,34 +686,9 @@ body {
   align-items: start;
 }
 
-.inner-tabs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.inner-tab-btn {
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #4B5563;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.inner-tab-btn:hover {
-  background: #F3F4F6;
-}
-
-.inner-tab-btn.active {
-  background: var(--color-primary-100);
-  color: var(--color-primary-900);
-  font-weight: 600;
-}
+/* Settings > WhatsApp inner tabs use the shared .tabs / .tab component
+   (design-system.css); only spacing lives here. */
+.inner-tabs-list { margin-bottom: var(--sp-4); }
 
 .profile-form-card {
   background: white;
@@ -777,24 +753,6 @@ body {
   flex-shrink: 0;
   color: #6B7280;
   margin-top: 2px;
-}
-
-/* Reports Sub-navigation & Analytics Layout matching screenshot https://app.kwic.in/app/reports/message */
-.reports-layout {
-  display: flex;
-  height: 100vh;
-  background: var(--bg-app);
-  overflow: hidden;
-}
-
-.reports-sec-sidebar {
-  width: 220px;
-  background: #FFFFFF;
-  border-right: 1px solid var(--border-light);
-  padding: 1.25rem 0.875rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
 }
 
 .metrics-cards-grid {
@@ -954,35 +912,21 @@ body {
 
 /* Wallet & Recharge Balance Cards */
 .wallet-card {
-  background: linear-gradient(135deg, #0E2916 0%, #173E21 100%);
+  background: var(--brand-dark);
   color: white;
-  border-radius: 20px;
-  padding: 1.75rem;
-  box-shadow: 0 10px 25px rgba(14, 41, 22, 0.2);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5) var(--sp-6);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--sp-4);
   margin-bottom: 1.5rem;
+  max-width: 640px;
 }
-
-/* Live Chat Widget Customizer Box */
-.livechat-preview-box {
-  width: 320px;
-  background: #FFFFFF;
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-  border: 1px solid var(--border-light);
-  overflow: hidden;
-}
-
-.livechat-header {
-  background: var(--color-primary-600);
-  color: white;
-  padding: 1rem 1.25rem;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.wallet-label { font-size: var(--fs-body); opacity: 0.8; }
+.wallet-balance { font-size: 2.25rem; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; min-height: 2.9rem; }
+.wallet-skeleton { display: inline-block; width: 160px; height: 2rem; background: rgba(255, 255, 255, 0.18); animation: none; }
+.wallet-recharge-btn { background: var(--brand); color: var(--brand-dark); font-weight: 600; flex-shrink: 0; }
 
 
 /* Page Views */
@@ -1637,41 +1581,6 @@ body {
     row-gap: 0.75rem;
   }
 
-  /* Settings' and Analytics' secondary nav sidebars (.secondary-sidebar:
-     240px fixed, .reports-sec-sidebar: 220px fixed) — collapse from a
-     permanent left column into a horizontally-scrollable strip above the
-     content, the same visible-scrollbar-affordance treatment as
-     .data-table above, rather than leaving a cramped ~135px-wide main
-     content area. */
-  .settings-layout,
-  .reports-layout {
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-  }
-
-  .secondary-sidebar,
-  .reports-sec-sidebar {
-    width: 100%;
-    height: auto;
-    overflow: visible;
-    border-right: none;
-    border-bottom: 1px solid var(--border-light);
-  }
-
-  .sec-nav-list {
-    flex-direction: row;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
-  }
-
-  .sec-nav-item {
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
   .settings-main-area {
     padding: 1.25rem 1rem;
   }
@@ -1710,7 +1619,7 @@ body {
   .nav-item,
   .sec-nav-item,
   .filter-tab,
-  .inner-tab-btn,
+  .tab,
   .flow-view-btn,
   .msg-retry-btn {
     min-height: 44px;
@@ -2849,3 +2758,152 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
   .flow-editor-delete { padding: 0 10px; }
   .flow-editor-body { padding: var(--sp-3); }
 }
+
+/* ===================================================================
+   Analytics + Settings — UI redesign Stages 9-10
+   =================================================================== */
+#view-analytics [hidden], .settings-main-area [hidden] { display: none !important; }
+
+/* ---- Analytics ---- */
+.analytics-view { padding: 1.5rem; }
+.analytics-page-header { flex-shrink: 0; margin-bottom: var(--sp-4); }
+.analytics-tabs { margin-bottom: var(--sp-4); flex-shrink: 0; }
+.analytics-range-note { margin: 0 0 var(--sp-3); font-size: var(--fs-label); color: var(--text-muted); }
+.analytics-summary {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.analytics-tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4) var(--sp-5); min-width: 0; }
+.analytics-tile-label { font-size: var(--fs-label); color: var(--text-muted); font-weight: 500; }
+.analytics-tile-value { font-size: 1.75rem; font-weight: 600; line-height: 1.25; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.analytics-tile-sub { font-size: var(--fs-caption); color: var(--text-muted); margin-top: 2px; min-height: 1.1em; }
+.analytics-tile.tile-success .analytics-tile-value { color: var(--success); }
+.analytics-tile.tile-info .analytics-tile-value { color: var(--info); }
+.analytics-tile.tile-danger .analytics-tile-value { color: var(--danger); }
+.analytics-tile.is-loading .analytics-tile-value { color: transparent; background: #EEF0F2; border-radius: var(--r-sm); width: 4ch; }
+.analytics-card-title { margin: 0 0 var(--sp-2); font-size: var(--fs-card); font-weight: 600; color: var(--text); }
+.analytics-trend-card { padding: var(--sp-5); flex-shrink: 0; }
+.analytics-trend-empty { padding: var(--sp-6) var(--sp-4); }
+.analytics-error { margin-bottom: var(--sp-4); background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--r-lg); }
+.analytics-footnote { margin: var(--sp-3) 0 0; font-size: var(--fs-caption); color: var(--text-muted); }
+.analytics-skeleton { width: 100%; height: 16px; max-width: 360px; margin: 0 auto; }
+.data-table.stack-mobile td.analytics-state-cell { display: table-cell; text-align: center; color: var(--text-muted); padding: var(--sp-5) var(--sp-4); }
+.analytics-state-row:hover td { background: transparent !important; }
+.analytics-state-cell .error-state { padding: 0; }
+.analytics-name { font-weight: 600; color: var(--text); }
+
+/* ---- Settings: shell + nav ---- */
+.sec-nav-groups { display: flex; flex-direction: column; gap: var(--sp-5); }
+.sec-nav-group { display: flex; flex-direction: column; }
+.sec-nav-item { color: var(--neutral); }
+.sec-nav-item i, .sec-nav-item svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
+.sec-nav-item.active { background: var(--brand-soft); color: var(--brand-dark); }
+.sec-nav-item.active svg { color: var(--brand-dark); }
+.sec-nav-item:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.settings-main-area { background: var(--bg-app); }
+.settings-page-header { margin-bottom: var(--sp-4); }
+.settings-page-header .page-title { margin: 0; }
+
+/* ---- Settings: cards + content ---- */
+.profile-form-card { border-color: var(--border); box-shadow: none; border-radius: var(--r-lg); }
+.settings-card-narrow { max-width: 640px; }
+.settings-card-wide { max-width: 760px; margin-bottom: var(--sp-4); }
+.settings-card-title { margin: 0; font-size: var(--fs-card); font-weight: 600; color: var(--text); display: flex; align-items: center; gap: var(--sp-2); }
+.settings-help { margin: 0; font-size: var(--fs-label); color: var(--text-muted); line-height: 1.55; }
+.settings-muted { margin: 0; font-size: var(--fs-body); color: var(--text-muted); }
+.settings-kv { font-size: var(--fs-label); color: var(--text); line-height: 1.8; }
+.settings-list { margin: 0; padding-left: 1.1rem; font-size: var(--fs-label); color: var(--text-muted); line-height: 1.6; }
+.settings-guide { display: flex; flex-direction: column; gap: var(--sp-4); font-size: var(--fs-label); color: var(--text); line-height: 1.6; }
+.settings-guide-item p { margin: 4px 0 0; color: var(--text-muted); }
+.settings-guide-item .settings-list { margin-top: 4px; }
+.settings-guide a { color: var(--info); }
+.inline-code, .settings-guide code, .settings-list code, .settings-help code {
+  font-family: var(--font-mono); font-size: 0.92em; background: var(--neutral-bg);
+  padding: 1px 6px; border-radius: 4px; word-break: break-word;
+}
+.settings-table-wrap { overflow-x: auto; }
+.settings-inline-row { display: flex; align-items: center; gap: var(--sp-2); }
+.settings-inline-row .form-input { flex: 1 1 auto; min-width: 0; }
+.settings-mono { font-family: var(--font-mono); }
+.settings-icon-btn { padding: 0 12px; flex-shrink: 0; }
+.settings-tag-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.settings-tag-list .empty-state { width: 100%; }
+.settings-tag-list .tag-badge { font-size: var(--fs-body); padding: 6px 14px; }
+.settings-loading { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-2) 0; }
+.settings-skeleton-line { height: 14px; width: 100%; max-width: 320px; }
+.settings-skeleton-line.short { max-width: 180px; }
+.settings-skeleton-circle { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; }
+.settings-skeleton-lines { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; flex: 1; }
+.settings-error { color: var(--danger); font-size: var(--fs-body); display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.settings-plan-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.settings-plan-name { font-size: var(--fs-section); font-weight: 600; color: var(--text); }
+
+.channel-status-card { border-color: var(--border); box-shadow: none; border-radius: var(--r-lg); gap: var(--sp-4); max-width: 760px; }
+.channel-info-left { min-width: 0; flex: 1; }
+.channel-name { font-weight: 600; font-size: var(--fs-card); color: var(--text); overflow-wrap: anywhere; }
+.channel-meta { font-size: var(--fs-label); color: var(--text-muted); }
+.channel-meta strong { color: var(--text); font-weight: 600; }
+.wa-icon-circle { background: var(--brand); flex-shrink: 0; }
+.wa-icon-circle.is-off { background: var(--neutral-bg); color: var(--text-muted); }
+
+.api-key-reveal { margin: 0; }
+.api-key-reveal-body { flex: 1; min-width: 0; }
+.api-key-reveal-title { font-size: var(--fs-label); margin-bottom: var(--sp-2); }
+.api-key-reveal-row { display: flex; gap: var(--sp-2); }
+.api-key-value { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--fs-label); background: #fff; }
+.code-block-wrapper { position: relative; }
+.code-block {
+  background: #0F172A; color: #E2E8F0; font-family: var(--font-mono); font-size: var(--fs-caption);
+  padding: var(--sp-4); border-radius: var(--r-md); overflow-x: auto; margin: 0; white-space: pre-wrap; word-break: break-all;
+}
+.code-block-wrapper > .btn-secondary { position: absolute; top: var(--sp-2); right: var(--sp-2); }
+.api-keys-lock-note td { font-size: var(--fs-caption); color: var(--warning); padding-top: 0 !important; padding-bottom: var(--sp-3) !important; }
+.api-key-actions { text-align: right; white-space: nowrap; }
+.api-key-actions .btn-secondary + .btn-secondary { margin-left: var(--sp-2); }
+
+@media (max-width: 900px) {
+  .analytics-view { padding: 1rem; }
+  .settings-card-wide, .settings-card-narrow, .wallet-card, .channel-status-card { max-width: none; }
+}
+@media (max-width: 640px) {
+  .analytics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .analytics-tile { padding: var(--sp-3) var(--sp-4); }
+  .analytics-tile-value { font-size: 1.5rem; }
+  .settings-page-header .page-actions { width: 100%; }
+  .settings-page-header .page-actions .btn-primary { flex: 1 1 auto; justify-content: center; }
+  .code-block-wrapper > .btn-secondary { position: static; margin-bottom: var(--sp-2); }
+  .code-block-wrapper { display: flex; flex-direction: column; align-items: flex-end; }
+  .code-block-wrapper .code-block { align-self: stretch; }
+  .data-table.stack-mobile td.analytics-state-cell { display: block; }
+  .analytics-state-row { border: none !important; margin: 0 !important; padding: 0 !important; }
+  .api-key-reveal-row { flex-direction: column; }
+}
+.settings-muted-cell { color: var(--text-muted); }
+.analytics-state-cell .empty-title { font-size: var(--fs-card); font-weight: 600; color: var(--text); margin-bottom: 4px; }
+
+/* Settings secondary nav: at <=900px the left column collapses into one
+   horizontally-scrolling row above the content (group labels inline). Lives
+   at the end of the file so it wins over the base .sec-nav-* rules. */
+@media (max-width: 900px) {
+  .settings-layout {
+    flex-direction: column; height: auto; min-height: 100vh; min-height: 100dvh; overflow: visible;
+  }
+  .secondary-sidebar {
+    width: 100%; height: auto; overflow: visible; border-right: none;
+    border-bottom: 1px solid var(--border); gap: var(--sp-2); padding: var(--sp-3) var(--sp-4);
+  }
+  .sec-nav-header { padding-left: 56px; min-height: 44px; display: flex; align-items: center; margin-bottom: 0; }
+  .sec-nav-groups {
+    flex-direction: row; align-items: center; gap: var(--sp-5); overflow-x: auto;
+    -webkit-overflow-scrolling: touch; padding-bottom: 4px;
+  }
+  .sec-nav-group { flex-direction: row; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
+  .sec-nav-group-title { margin-bottom: 0; padding-left: 0; white-space: nowrap; }
+  .sec-nav-list { flex-direction: row; padding-bottom: 0; }
+  .sec-nav-item { white-space: nowrap; flex-shrink: 0; }
+  .settings-main-area { padding: 1.25rem 1rem; overflow: visible; }
+  .profile-workspace-grid { grid-template-columns: 1fr; }
+}
+.analytics-state-cell { text-align: center; }
+.channel-info-left { flex: 1 1 200px; }
+.channel-status-card { flex-wrap: wrap; }
