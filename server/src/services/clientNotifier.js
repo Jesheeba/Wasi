@@ -28,7 +28,7 @@ async function resolveRecipientPhone(client) {
   return digits || null;
 }
 
-// Every billing message is sent FROM the Wasi Demo Client's WABA � by direct
+// Every billing message is sent FROM the Wasi Demo Client's WABA - by direct
 // instruction, that account is Wasi's own sender identity. The default is that
 // client's connected WABA, so a deployed server works with no extra config;
 // PAYMENT_REMINDER_WABA_ID, when set, overrides it (to move the sender to a
@@ -60,15 +60,7 @@ async function sendTemplateToClient(client, { name, language = 'en_US', bodyPara
     throw new ClientNotifyError(`${client.name} (${client.id}) has no contact_phone and no connected WhatsApp number on file — nothing to send to.`);
   }
 
-  const wabaId = process.env.PAYMENT_REMINDER_WABA_ID;
-  if (!wabaId) {
-    throw new ClientNotifyError('PAYMENT_REMINDER_WABA_ID is not configured — see .env.example.');
-  }
-
-  const waba = await wabasRepo.findByWabaId(wabaId);
-  if (!waba || !waba.access_token_encrypted) {
-    throw new ClientNotifyError('PAYMENT_REMINDER_WABA_ID does not match a connected WABA.');
-  }
+  const waba = await resolveSenderWaba();
 
   const accessToken = decrypt(waba.access_token_encrypted);
   // Returns Meta's message id (wamid) so the caller can log it and match

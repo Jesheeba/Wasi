@@ -58,3 +58,32 @@ test('recipient falls back to the connected WABA number (digits only) when no co
   wabasRepo.findByClientId = async () => null;
   assert.equal(await clientNotifier.resolveRecipientPhone({ id: 'c3', contact_phone: null }), null);
 });
+
+test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REMINDER_WABA_ID is unset', async () => {
+  const metaClient = require('../src/utils/metaClient');
+  const { encrypt } = require('../src/utils/encryption');
+  const realSendTpl = metaClient.sendTemplateMessage;
+  const saved = process.env.PAYMENT_REMINDER_WABA_ID;
+  const savedSecret = process.env.SERVER_SECRET;
+  process.env.SERVER_SECRET = 'test-only-secret-not-a-real-key';
+  delete process.env.PAYMENT_REMINDER_WABA_ID;
+  let call = null;
+  wabasRepo.findByClientId = async (id) => {
+    return id === '00000000-0000-0000-0000-000000000001'
+      ? { phone_number_id: 'PN1', access_token_encrypted: encrypt('tok') } : null;
+  };
+  metaClient.sendTemplateMessage = async (...args) => { call = args; return 'wamid.Y'; };
+  try {
+    const id = await clientNotifier.sendTemplateToClient(
+      { id: 'cX', name: 'X', contact_phone: '919999900009' },
+      { name: 'wasi_payment_reminder', bodyParams: { client_name: 'X' } });
+    assert.equal(id, 'wamid.Y');
+    assert.equal(call[0], 'PN1');
+    assert.equal(call[1], 'tok');
+    assert.equal(call[2], '919999900009');
+  } finally {
+    metaClient.sendTemplateMessage = realSendTpl;
+    if (saved !== undefined) process.env.PAYMENT_REMINDER_WABA_ID = saved;
+    if (savedSecret === undefined) delete process.env.SERVER_SECRET; else process.env.SERVER_SECRET = savedSecret;
+  }
+});
