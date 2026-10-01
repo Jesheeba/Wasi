@@ -92,7 +92,7 @@ test('a short, real server error (wrong password) stays a toast, not the error d
 
   const toast = page.locator('.toast').first();
   await assert.doesNotReject(() => toast.waitFor({ state: 'attached', timeout: 3000 }));
-  assert.equal(await toast.textContent(), 'Invalid email or password');
+  assert.equal(await toast.locator('.toast-msg').textContent(), 'Invalid email or password');
 
   // .modal-overlay only ever toggles opacity/pointer-events via .open
   // (index.css), never display:none — confirm the dialog's .open class was

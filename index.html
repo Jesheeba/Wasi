@@ -7,6 +7,7 @@
   <meta name="description" content="Securely log in or sign up to access your account." />
   <link rel="stylesheet" href="/breakpoints.css" />
   <link rel="stylesheet" href="index.css" />
+  <link rel="stylesheet" href="/design-system.css" />
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -127,66 +128,61 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <a class="nav-item active" data-view="chat">
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <div class="nav-group-label">Inbox</div>
+        <a class="nav-item active" data-view="chat" role="button" tabindex="0">
           <i data-lucide="message-square"></i>
           <span class="nav-text">Chat</span>
         </a>
-        <a class="nav-item" data-view="contacts">
+        <div class="nav-group-label">Audience</div>
+        <a class="nav-item" data-view="contacts" role="button" tabindex="0">
           <i data-lucide="users"></i>
           <span class="nav-text">Contacts</span>
         </a>
-        <a class="nav-item" data-view="campaigns">
+        <div class="nav-group-label">Engage</div>
+        <a class="nav-item" data-view="campaigns" role="button" tabindex="0">
           <i data-lucide="megaphone"></i>
           <span class="nav-text">Campaigns</span>
         </a>
-        <a class="nav-item" data-view="template">
+        <a class="nav-item" data-view="template" role="button" tabindex="0">
           <i data-lucide="layout"></i>
-          <span class="nav-text">Template</span>
+          <span class="nav-text">Templates</span>
         </a>
-        <a class="nav-item" data-view="template-library">
+        <a class="nav-item" data-view="template-library" role="button" tabindex="0">
           <i data-lucide="book-open"></i>
           <span class="nav-text">Template Library</span>
         </a>
-        <a class="nav-item" data-view="automation">
+        <a class="nav-item" data-view="automation" role="button" tabindex="0">
           <i data-lucide="bot"></i>
           <span class="nav-text">Automation</span>
         </a>
-        <!-- Ecommerce, Whatsapp Flows, CTWA nav items removed — no backend
-             exists for any of them (no OAuth, no API routes, no repo; the
-             "Whatsapp Flows" here is a different, unrelated static mock
-             from the real flow-builder under Automation). A missing menu
-             item is honest; these were fake dashboards with hardcoded
-             numbers behind a working-looking nav link. Restore only once
-             each is a real, backed feature. -->
-        <a class="nav-item" data-view="instagram">
-          <i data-lucide="camera"></i>
-          <span class="nav-text">Instagram</span>
-        </a>
-        <a class="nav-item" data-view="integrations">
-          <i data-lucide="puzzle"></i>
-          <span class="nav-text">Integrations</span>
-        </a>
-        <a class="nav-item" data-view="payments">
+        <div class="nav-group-label">Business</div>
+        <a class="nav-item" data-view="payments" role="button" tabindex="0">
           <i data-lucide="credit-card"></i>
           <span class="nav-text">Payments</span>
         </a>
-        <a class="nav-item" data-view="analytics">
+        <a class="nav-item" data-view="analytics" role="button" tabindex="0">
           <i data-lucide="bar-chart-2"></i>
           <span class="nav-text">Analytics</span>
         </a>
-        <a class="nav-item" data-view="support">
+        <a class="nav-item" data-view="support" role="button" tabindex="0">
           <i data-lucide="life-buoy"></i>
           <span class="nav-text">Support</span>
         </a>
+        <!-- Instagram and Integrations were "Not connected" placeholder pages
+             (no backend). Removed from the primary nav (UI redesign Stage 3);
+             their view-instagram / view-integrations containers are left in
+             the DOM, unreachable, until each is a real feature. Ecommerce,
+             Whatsapp Flows and CTWA were removed earlier for the same reason. -->
       </nav>
 
       <div class="sidebar-bottom">
-        <a class="nav-item" data-view="settings">
+        <div class="nav-group-label">Settings</div>
+        <a class="nav-item" data-view="settings" role="button" tabindex="0">
           <i data-lucide="settings"></i>
           <span class="nav-text">Settings</span>
         </a>
-        <div class="nav-item" id="user-profile-item" style="cursor: pointer;">
+        <div class="nav-item" id="user-profile-item" style="cursor: pointer;" role="button" tabindex="0" aria-label="Account menu — log out">
           <div class="avatar" style="width: 26px; height: 26px; font-size: 0.75rem; background: #4AC959; color: #0E2916;">M</div>
           <span class="nav-text" style="font-weight: 600; color: #FFFFFF;">Mohamed</span>
         </div>
@@ -2373,7 +2369,7 @@
     </div>
   </div>
 
-  <div id="toast-container" class="toast-container"></div>
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Same file server/src/utils/templateParams.js requires() server-side —
        served raw so the Create/Edit Template modal's live validation

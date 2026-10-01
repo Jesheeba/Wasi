@@ -221,6 +221,7 @@ function createApp() {
   app.get('/index.html', (req, res) => res.sendFile(path.join(REPO_ROOT, 'index.html')));
   app.get('/index.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'index.css')));
   app.get('/breakpoints.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'breakpoints.css')));
+  app.get('/design-system.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'design-system.css')));
   app.get('/app.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'app.js')));
   app.get('/embeddedSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'embeddedSignup.js')));
   // Served as-is from its real location (server/src/utils/, not a

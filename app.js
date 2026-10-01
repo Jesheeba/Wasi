@@ -344,18 +344,41 @@ document.addEventListener('DOMContentLoaded', () => {
     stopSendabilityBannerPolling();
   }
 
-  function showToast(message) {
+  // Shared HTML escaper (UI redesign Stage 2): `esc` is the short name for
+  // escapeHtml below; every dynamic value placed in an innerHTML template string
+  // must go through it.
+  const esc = (v) => escapeHtml(v);
+  window.esc = esc;
+
+  // type: 'info' (default) | 'success' | 'error'. Errors stay longer and carry
+  // a close button; #toast-container is an aria-live region. Existing
+  // showToast(message) call sites keep working unchanged.
+  function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
     const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
-    setTimeout(() => {
+    toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    const msg = document.createElement('span');
+    msg.className = 'toast-msg';
+    msg.textContent = message;
+    toast.appendChild(msg);
+    const dismiss = () => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 200);
-    }, 2200);
+    };
+    if (type === 'error') {
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'toast-close';
+      close.setAttribute('aria-label', 'Dismiss');
+      close.textContent = '×';
+      close.addEventListener('click', dismiss);
+      toast.appendChild(close);
+    }
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(dismiss, type === 'error' ? 6000 : 2800);
   }
 
   // --- Auth Handlers ---
@@ -842,6 +865,14 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const view = item.dataset.view;
       if (view) switchView(view);
+    });
+  });
+
+  // Keyboard access (Enter/Space) for the role="button" nav items and the
+  // profile item — they're <a>/<div> without href, so not natively activatable.
+  document.querySelectorAll('.nav-item[role="button"]').forEach((el) => {
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
     });
   });
 
@@ -4617,7 +4648,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function escapeHtml(str) {
-    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   // Surfaces the most specific reason available in a thrown authFetch error
@@ -6227,7 +6258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       status = await authFetch('/api/onboarding/whatsapp/status');
     } catch (err) {
-      card.innerHTML = `<div style="padding:1rem;color:#EF4444;">${err.message}</div>`;
+      card.innerHTML = `<div style="padding:1rem;color:#EF4444;">${esc(err.message)}</div>`;
       renderWhatsAppProfileTabs(null);
       return;
     }
@@ -6239,9 +6270,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="channel-info-left">
           <div class="wa-icon-circle"><i data-lucide="phone-call"></i></div>
           <div>
-            <div style="font-weight:700;font-size:1.05rem;color:#1F2937;">${status.waba.display_name || 'WhatsApp Business'}</div>
-            <div style="font-size:0.8rem;color:#6B7280;">Phone ID: ${status.waba.phone_number_id}</div>
-            <div style="font-size:0.875rem;font-weight:600;color:#374151;margin-top:2px;">Quality: ${status.waba.quality_rating || 'Unknown'}</div>
+            <div style="font-weight:700;font-size:1.05rem;color:#1F2937;">${esc(status.waba.display_name || 'WhatsApp Business')}</div>
+            <div style="font-size:0.8rem;color:#6B7280;">Phone ID: ${esc(status.waba.phone_number_id)}</div>
+            <div style="font-size:0.875rem;font-weight:600;color:#374151;margin-top:2px;">Quality: ${esc(status.waba.quality_rating || 'Unknown')}</div>
           </div>
         </div>
         <span class="status-badge active" style="padding:4px 14px;font-weight:700;">Active</span>
@@ -6621,6 +6652,69 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // --- Modal accessibility (UI redesign Stage 2) ---
+  // Applied to every .modal-overlay without touching any individual modal's
+  // open/close code: dialog semantics, focus moved in on open and restored on
+  // close, a Tab focus trap, and Escape-to-close (via the modal's own close
+  // button when it has one, so any cleanup it wires there still runs).
+  // Click-outside-to-close is deliberately NOT added — a stray click would
+  // silently discard a half-filled form.
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const modalReturnFocus = new WeakMap();
+  const isShown = (el) => el.offsetParent !== null || el.getClientRects().length > 0;
+
+  document.querySelectorAll('.modal-overlay').forEach((overlay) => {
+    const box = overlay.querySelector('.modal-box');
+    if (box) {
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      const title = box.querySelector('.modal-title');
+      if (title) {
+        if (!title.id) title.id = `${overlay.id || 'modal'}-title-auto`;
+        box.setAttribute('aria-labelledby', title.id);
+      }
+    }
+    overlay.querySelectorAll('.close-modal-btn').forEach((b) => {
+      if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', 'Close');
+    });
+    new MutationObserver(() => {
+      if (overlay.classList.contains('open')) {
+        if (!modalReturnFocus.has(overlay)) modalReturnFocus.set(overlay, document.activeElement);
+        setTimeout(() => {
+          if (overlay.contains(document.activeElement)) return;
+          const first = Array.from(overlay.querySelectorAll(FOCUSABLE)).find(isShown);
+          (first || box)?.focus?.({ preventScroll: true });
+        }, 30);
+      } else if (modalReturnFocus.has(overlay)) {
+        const prev = modalReturnFocus.get(overlay);
+        modalReturnFocus.delete(overlay);
+        if (prev && prev.isConnected && typeof prev.focus === 'function') prev.focus({ preventScroll: true });
+      }
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== 'Tab') return;
+    const open = Array.from(document.querySelectorAll('.modal-overlay.open'));
+    const top = open[open.length - 1];
+    if (!top) return;
+    if (e.key === 'Escape') {
+      const closeBtn = top.querySelector('[data-close-modal]');
+      if (closeBtn) closeBtn.click(); else top.classList.remove('open');
+      e.preventDefault();
+      return;
+    }
+    const items = Array.from(top.querySelectorAll(FOCUSABLE)).filter(isShown);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !top.contains(document.activeElement))) {
+      last.focus(); e.preventDefault();
+    } else if (!e.shiftKey && (document.activeElement === last || !top.contains(document.activeElement))) {
+      first.focus(); e.preventDefault();
+    }
+  });
+
   // --- Confirm / Prompt dialog (UI/UX consistency pass, Group 2/3) ---
   // Ported from admin/app.js's showConfirm so this app's native
   // confirm()/prompt() calls get the same themed modal every other action
@@ -6633,7 +6727,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-confirm-body').innerHTML = body;
     const actionBtn = document.getElementById('modal-confirm-action-btn');
     actionBtn.textContent = confirmLabel;
-    actionBtn.style.background = danger ? '#DC2626' : 'var(--color-primary)';
+    actionBtn.style.background = danger ? 'var(--danger-solid, #DC2626)' : 'var(--color-primary)';
 
     // Re-cloned on every open so a previous call's click listener never
     // stacks on top of this one (same precedent as admin's showConfirm).
@@ -6843,7 +6937,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (shouldUseErrorDialog(detail)) {
         showErrorDialog({ title: title || info.headline, message: detail });
       } else {
-        showToast(`${info.headline} ${detail}`);
+        showToast(`${info.headline} ${detail}`, 'error');
       }
       return;
     }
@@ -6857,7 +6951,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (shouldUseErrorDialog(measureText, details)) {
       showErrorDialog({ title: title || category, message: detailText || category, details });
     } else {
-      showToast(measureText);
+      showToast(measureText, 'error');
     }
   }
 
