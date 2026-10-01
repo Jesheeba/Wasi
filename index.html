@@ -196,48 +196,57 @@
       <main class="main-content" style="padding: 0; height: 100%;">
 
         <!-- 1. CHAT VIEW (3-Column Workspace) -->
-        <div id="view-chat" class="view-container active" style="height: 100vh;">
-          <div style="display: flex; height: 100%;">
+        <div id="view-chat" class="view-container active chat-view">
+          <div class="chat-layout">
 
-            <!-- Left Chat List Sidebar -->
+            <!-- Column 1: conversations -->
             <div class="chat-list-panel">
               <div class="chat-list-header">
-                <button class="btn-secondary" style="font-size: 0.8rem; height: 34px;" id="start-new-chat-btn">
-                  <i data-lucide="plus" style="width:14px;"></i>
-                </button>
-                <div class="filter-dropdown">
-                  <button class="btn-secondary" style="font-size: 0.8rem; height: 34px;" id="chat-filters-btn">
-                    <i data-lucide="sliders-horizontal" style="width:14px;"></i> Filters
-                  </button>
-                  <div class="filter-dropdown-panel" id="chat-filters-panel">
-                    <button class="filter-option active" data-tag-filter="all">All Chats</button>
-                    <button class="filter-option" data-tag-filter="Lead">Lead</button>
-                    <button class="filter-option" data-tag-filter="Customer">Customer</button>
-                    <button class="filter-option" data-tag-filter="VIP">VIP</button>
+                <h2 class="chat-list-title">Conversations</h2>
+                <div class="chat-list-header-actions">
+                  <div class="filter-dropdown">
+                    <button type="button" class="btn-secondary chat-tool-btn" id="chat-filters-btn" aria-haspopup="true" aria-expanded="false" aria-label="Filter conversations by tag">
+                      <i data-lucide="sliders-horizontal" class="icon-14"></i> <span>Filters</span>
+                    </button>
+                    <div class="filter-dropdown-panel" id="chat-filters-panel">
+                      <button type="button" class="filter-option active" data-tag-filter="all">All Chats</button>
+                    </div>
                   </div>
+                  <button type="button" class="btn-secondary chat-tool-btn chat-tool-btn-icon" id="start-new-chat-btn" aria-label="Start a new conversation" title="New conversation">
+                    <i data-lucide="plus" class="icon-14"></i>
+                  </button>
                 </div>
+              </div>
+
+              <div class="chat-search">
+                <i data-lucide="search" class="icon-14 chat-search-icon" aria-hidden="true"></i>
+                <input type="search" id="chat-search-input" class="chat-search-input" placeholder="Search by name or number" aria-label="Search conversations" autocomplete="off" />
               </div>
 
               <!-- item 2/5.5 — queue tabs, independent of the tag filter
                    above (both apply together in renderChatList). Default
                    'All' keeps existing single-owner behavior unchanged for
                    an account with no team members yet. -->
-              <div id="chat-queue-tabs" style="display: flex; gap: 4px; padding: 0 1rem 0.5rem; border-bottom: 1px solid var(--border-light); overflow-x: auto;">
-                <button class="queue-tab-btn" data-queue-filter="unassigned" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">Unassigned</button>
-                <button class="queue-tab-btn" data-queue-filter="mine" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">Mine</button>
-                <button class="queue-tab-btn active" data-queue-filter="all" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">All</button>
-                <button class="queue-tab-btn" data-queue-filter="resolved" style="font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-light); background: #fff; color: #475569; cursor: pointer; white-space: nowrap;">Resolved</button>
+              <div id="chat-queue-tabs" class="chat-queue-tabs" role="group" aria-label="Conversation queue">
+                <button type="button" class="queue-tab-btn" data-queue-filter="unassigned">Unassigned</button>
+                <button type="button" class="queue-tab-btn" data-queue-filter="mine">Mine</button>
+                <button type="button" class="queue-tab-btn active" data-queue-filter="all">All</button>
+                <button type="button" class="queue-tab-btn" data-queue-filter="resolved">Resolved</button>
               </div>
 
-              <div class="chat-list" id="inbox-chat-list" style="flex: 1; overflow-y: auto;">
-                <!-- Chat list items populated by JS -->
+              <div class="chat-list" id="inbox-chat-list" aria-busy="true">
+                <!-- Loading skeleton; replaced by renderChatList() -->
+                <div class="chat-skeleton-row"><span class="skeleton chat-skeleton-avatar"></span><span class="chat-skeleton-lines"><span class="skeleton"></span><span class="skeleton"></span></span></div>
+                <div class="chat-skeleton-row"><span class="skeleton chat-skeleton-avatar"></span><span class="chat-skeleton-lines"><span class="skeleton"></span><span class="skeleton"></span></span></div>
+                <div class="chat-skeleton-row"><span class="skeleton chat-skeleton-avatar"></span><span class="chat-skeleton-lines"><span class="skeleton"></span><span class="skeleton"></span></span></div>
+                <div class="chat-skeleton-row"><span class="skeleton chat-skeleton-avatar"></span><span class="chat-skeleton-lines"><span class="skeleton"></span><span class="skeleton"></span></span></div>
               </div>
             </div>
 
             <!-- Empty Placeholder View -->
-            <div id="chat-empty-placeholder" style="flex: 1; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center;">
-              <div style="margin-bottom: 1.5rem;">
-                <svg width="120" height="100" viewBox="0 0 120 100" fill="none">
+            <div id="chat-empty-placeholder" class="chat-empty-placeholder">
+              <div class="chat-empty-art">
+                <svg width="120" height="100" viewBox="0 0 120 100" fill="none" aria-hidden="true">
                   <path d="M15 45C15 22.9086 32.9086 5 55 5C77.0914 5 95 22.9086 95 45C95 67.0914 77.0914 85 55 85C46.8521 85 39.2612 82.5574 32.9372 78.3601L15 85L21.8415 67.576C17.5254 61.1645 15 53.3855 15 45Z" fill="#4AC959"/>
                   <path d="M40 70C40 50.1177 56.1177 34 76 34C95.8823 34 112 50.1177 112 70C112 89.8823 95.8823 106 76 106C68.6669 106 61.833 103.802 56.1404 100.024L40 106L46.1574 90.3184C42.2729 84.547 40 77.547 40 70Z" fill="#ACE6B3" fill-opacity="0.6"/>
                   <circle cx="42" cy="45" r="4.5" fill="white"/>
@@ -245,48 +254,70 @@
                   <circle cx="68" cy="45" r="4.5" fill="white"/>
                 </svg>
               </div>
-              <h2 style="font-size: 1.5rem; font-weight: 700; color: #1F2937; margin-bottom: 0.5rem;">Start Managing Your Messages</h2>
-              <p style="font-size: 0.925rem; color: #6B7280; max-width: 480px; line-height: 1.5; margin-bottom: 1.75rem;">
-                Select a conversation from your list or start a new chat to engage with your customers. Your inbox is ready for action!
+              <h2 class="chat-empty-title">Start managing your messages</h2>
+              <p class="chat-empty-text">
+                Select a conversation from your list or start a new chat to engage with your customers.
               </p>
-              <button class="btn-primary" style="width: auto; padding: 0 24px; height: 42px; font-size: 0.9rem;" id="new-conversation-trigger">
+              <button type="button" class="btn-primary btn-auto chat-empty-cta" id="new-conversation-trigger">
                 Start a new conversation
               </button>
             </div>
 
-            <!-- Active Chat Workspace + Right Contact Drawer -->
-            <div id="chat-active-workspace" style="display: none; flex: 1;">
-              <div style="flex: 1; display: flex; flex-direction: column; background: #FAFDFB;">
+            <!-- Column 2: conversation + Column 3: contact drawer -->
+            <div id="chat-active-workspace" class="chat-workspace">
+              <div class="chat-conversation">
                 <div class="chat-header">
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <!-- Mobile-only (below 640px, index.css) — returns to the
+                  <div class="chat-header-who">
+                    <!-- Mobile-only (<=900px, index.css) — returns to the
                          chat list without touching the desktop 3-column
                          layout or openActiveChat's own state. -->
                     <button type="button" id="chat-back-to-list-btn" class="chat-back-btn" aria-label="Back to chat list"><i data-lucide="arrow-left"></i></button>
                     <div class="chat-avatar" id="active-chat-avatar"></div>
-                    <div>
-                      <div style="font-size: 0.875rem; font-weight: 600;" id="active-chat-name"></div>
-                      <div style="font-size: 0.75rem; color: #22C55E; font-weight: 500;">WhatsApp Business</div>
+                    <div class="chat-header-text">
+                      <div class="chat-header-name" id="active-chat-name"></div>
+                      <div class="chat-header-sub">
+                        <span class="chat-header-channel">WhatsApp Business</span>
+                        <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
+                      </div>
                     </div>
                   </div>
-                  <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
-                </div>
 
-                <!-- item 2/5.5 — assignment + status controls. select#chat-assign-select
-                     lists the client's real team roster (state.teamMembers);
-                     resolve/reopen are separate buttons since only one is ever
-                     relevant to a given chat's current status. -->
-                <div id="chat-action-bar" style="display: flex; align-items: center; gap: 8px; padding: 8px 1.25rem; border-top: 1px solid var(--border-light); flex-wrap: wrap;">
-                  <span id="chat-status-badge" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;"></span>
-                  <select id="chat-assign-select" class="form-input" style="height: 30px; font-size: 0.78rem; padding: 0 8px; width: auto; max-width: 180px;">
-                    <option value="">Assign to…</option>
-                  </select>
-                  <button type="button" id="chat-unassign-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px; display:none;">Unassign</button>
-                  <button type="button" id="chat-resolve-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px;">Resolve</button>
-                  <button type="button" id="chat-reopen-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px; display:none;">Reopen</button>
-                  <button type="button" id="chat-notes-toggle-btn" class="btn-secondary" style="height: 30px; font-size: 0.78rem; padding: 0 10px; margin-left: auto;">
-                    <i data-lucide="sticky-note" style="width:13px;"></i> Notes
-                  </button>
+                  <!-- item 2/5.5 — status + assignment controls. ONE primary
+                       action (Resolve when open / Reopen when resolved) stays
+                       visible; everything else lives in the overflow menu.
+                       select#chat-assign-select lists the client's real team
+                       roster (state.teamMembers). -->
+                  <div id="chat-action-bar" class="chat-header-actions">
+                    <span id="chat-status-badge" class="badge badge-success"></span>
+                    <button type="button" id="chat-resolve-btn" class="btn-secondary chat-primary-action">
+                      <i data-lucide="check-circle-2" class="icon-14"></i> Resolve
+                    </button>
+                    <button type="button" id="chat-reopen-btn" class="btn-secondary chat-primary-action" style="display:none;">
+                      <i data-lucide="rotate-ccw" class="icon-14"></i> Reopen
+                    </button>
+                    <div class="menu" id="chat-more-menu">
+                      <button type="button" class="btn-secondary chat-icon-btn" id="chat-more-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="More conversation actions" title="More actions">
+                        <i data-lucide="more-horizontal"></i>
+                      </button>
+                      <div class="menu-list chat-menu-list" role="menu" aria-labelledby="chat-more-menu-btn">
+                        <label class="chat-menu-field" for="chat-assign-select">
+                          <span class="chat-menu-label">Assign to</span>
+                          <select id="chat-assign-select" class="form-input">
+                            <option value="">Assign to…</option>
+                          </select>
+                        </label>
+                        <button type="button" id="chat-unassign-btn" class="menu-item" role="menuitem" style="display:none;">
+                          <i data-lucide="user-minus" class="icon-14"></i> Unassign
+                        </button>
+                        <button type="button" id="chat-notes-toggle-btn" class="menu-item" role="menuitem">
+                          <i data-lucide="sticky-note" class="icon-14"></i> Internal notes
+                        </button>
+                      </div>
+                    </div>
+                    <button type="button" class="btn-secondary chat-icon-btn" id="chat-info-toggle-btn" aria-label="Show contact details" aria-expanded="false" title="Contact details">
+                      <i data-lucide="panel-right"></i>
+                    </button>
+                  </div>
                 </div>
 
                 <div class="chat-messages" id="chat-messages-container"></div>
@@ -296,38 +327,43 @@
                      surfaced this before; a plain-text send outside the window
                      used to just fail with a toast easy to miss (see
                      sendCurrentMessage's optimistic input-clear). -->
-                <div id="chat-window-status" style="display: none; padding: 6px 1.25rem; font-size: 0.78rem; font-weight: 600; border-top: 1px solid var(--border-light);"></div>
+                <div id="chat-window-status" class="chat-window-status" role="status" style="display: none;"></div>
 
-                <div style="position: relative;">
-                  <div id="template-slash-picker" style="display: none; position: absolute; bottom: 100%; left: 1.25rem; right: 1.25rem; margin-bottom: 6px; background: white; border: 1px solid var(--border-light); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 260px; overflow-y: auto; z-index: 30;"></div>
+                <div class="chat-composer">
+                  <div id="template-slash-picker" class="chat-popover" style="display: none;"></div>
                   <div class="chat-input-bar">
                     <!-- Disabled, not removed — used to insert a fake sent-message
                          bubble for whatever file was picked, with no upload and
                          no backend support at all (no media message type exists
                          server-side). Re-enable once real media send is built. -->
-                    <button class="btn-secondary" style="border: none; padding: 6px;" id="chat-attachment-btn" disabled title="Media messages — coming soon"><i data-lucide="paperclip"></i></button>
-                    <input type="text" id="chat-message-input" class="chat-input" placeholder="Type a message or '/' for templates..." autocomplete="off" />
-                    <button class="btn-primary" style="width: 40px; padding: 0;" id="send-msg-btn"><i data-lucide="send"></i></button>
+                    <button type="button" class="btn-secondary chat-attach-btn" id="chat-attachment-btn" disabled title="Media messages — coming soon" aria-label="Attach media (coming soon)"><i data-lucide="paperclip"></i></button>
+                    <input type="text" id="chat-message-input" class="chat-input" placeholder="Type a message or '/' for templates..." aria-label="Message" autocomplete="off" />
+                    <button type="button" class="btn-primary chat-send-btn" id="send-msg-btn" aria-label="Send message"><i data-lucide="send"></i></button>
                   </div>
                 </div>
               </div>
 
+              <div class="chat-drawer-backdrop" id="chat-drawer-backdrop"></div>
+
               <!-- Right Contact Details Drawer — avatar initials, tag, and
-                   header pill are now set from the real contact (see
-                   openActiveChat, app.js). A contact has exactly one tag
-                   (contacts.tag_id, a single FK), so this never showed two
-                   real tags — the "Lead" + "High Intent" pair here was
-                   always fake, for every contact. -->
-              <div class="contact-details-sidebar">
+                   header pill are set from the real contact (see
+                   openActiveChat, app.js). A contact has exactly one primary
+                   tag (contacts.tag_id) plus additive multi-tags below. Inline
+                   on wide screens, a slide-over sheet below 1280px. -->
+              <aside class="contact-details-sidebar" id="chat-contact-drawer" aria-label="Contact details">
+                <div class="contact-drawer-top">
+                  <span class="contact-drawer-title">Contact details</span>
+                  <button type="button" class="btn-ghost chat-icon-btn" id="chat-drawer-close-btn" aria-label="Close contact details"><i data-lucide="x"></i></button>
+                </div>
                 <div class="details-card-header">
-                  <div class="avatar" id="drawer-contact-avatar" style="width: 56px; height: 56px; font-size: 1.25rem; background: var(--color-primary-100); color: var(--color-primary-900); margin-bottom: 8px;"></div>
-                  <div style="font-weight: 700; font-size: 1rem; color: #1F2937;" id="drawer-contact-name"></div>
-                  <div style="font-size: 0.8rem; color: #6B7280;" id="drawer-contact-phone"></div>
+                  <div class="avatar contact-drawer-avatar" id="drawer-contact-avatar"></div>
+                  <div class="contact-drawer-name" id="drawer-contact-name"></div>
+                  <div class="contact-drawer-phone" id="drawer-contact-phone"></div>
                 </div>
 
-                <div>
+                <div class="contact-drawer-section">
                   <div class="details-section-title">Tags</div>
-                  <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="drawer-contact-tags"></div>
+                  <div class="chat-chip-row" id="drawer-contact-tags"></div>
                   <!-- PLAN.md item 8 — additive multi-tags (contact_tags),
                        separate from the single primary tag above
                        (contacts.tag_id, untouched by this section). Item
@@ -338,37 +374,35 @@
                        wrapper at render time, read by one shared delegated
                        listener instead of a per-surface one. -->
                   <div class="contact-tags-wrapper" id="drawer-contact-tags-wrapper">
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;" class="contact-tags-chips" id="drawer-contact-extra-tags"></div>
-                    <select id="drawer-add-tag-select" class="form-input contact-tags-select" style="font-size: 0.75rem; padding: 3px 6px; height: auto; margin-top: 6px;">
+                    <div class="contact-tags-chips chat-chip-row chat-chip-row-spaced" id="drawer-contact-extra-tags"></div>
+                    <select id="drawer-add-tag-select" class="form-input contact-tags-select chat-add-tag-select" aria-label="Add tag">
                       <option value="">+ Add tag…</option>
                     </select>
                   </div>
                 </div>
 
                 <!-- PLAN.md item 7 — real per-contact custom attribute
-                     values (contact_attribute_values), replacing the old
-                     honest "not tracked yet" placeholder. Item 8.5
-                     generalized this container's render logic
-                     (renderContactAttributesInto, app.js) to also drive the
-                     Contacts-view detail panel below. -->
-                <div>
+                     values (contact_attribute_values). Item 8.5 generalized
+                     this container's render logic (renderContactAttributesInto,
+                     app.js) to also drive the Contacts-view detail panel. -->
+                <div class="contact-drawer-section">
                   <div class="details-section-title">Attributes</div>
-                  <div id="drawer-contact-attributes" style="font-size: 0.825rem; color: #9CA3AF;">Per-contact attributes aren't tracked yet.</div>
+                  <div id="drawer-contact-attributes" class="contact-drawer-muted">Per-contact attributes aren't tracked yet.</div>
                 </div>
 
-                <!-- item 3/5.5 — internal notes, toggled by #chat-notes-toggle-btn.
-                     Collapsed by default so it doesn't clutter the drawer for
-                     every chat open — most chats won't have notes. -->
-                <div id="chat-notes-section" style="display: none;">
+                <!-- item 3/5.5 — internal notes, toggled by #chat-notes-toggle-btn
+                     (in the header overflow menu). Collapsed by default so it
+                     doesn't clutter the drawer for every chat open. -->
+                <div id="chat-notes-section" class="contact-drawer-section" style="display: none;">
                   <div class="details-section-title">Internal Notes</div>
-                  <div id="chat-notes-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; max-height: 220px; overflow-y: auto;"></div>
-                  <div style="position: relative;">
-                    <div id="note-mention-picker" style="display: none; position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 6px; background: white; border: 1px solid var(--border-light); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto; z-index: 30;"></div>
-                    <textarea id="chat-note-input" class="form-input" placeholder="Add an internal note — type @ to mention a teammate" style="min-height: 56px; font-size: 0.82rem; resize: vertical;"></textarea>
+                  <div id="chat-notes-list" class="chat-notes-list"></div>
+                  <div class="chat-note-compose">
+                    <div id="note-mention-picker" class="chat-popover chat-popover-sm" style="display: none;"></div>
+                    <textarea id="chat-note-input" class="form-input chat-note-input" placeholder="Add an internal note — type @ to mention a teammate" aria-label="Internal note"></textarea>
                   </div>
-                  <button type="button" id="chat-note-submit-btn" class="btn-primary" style="height: 32px; font-size: 0.78rem; margin-top: 6px;">Add Note</button>
+                  <button type="button" id="chat-note-submit-btn" class="btn-primary chat-note-submit">Add Note</button>
                 </div>
-              </div>
+              </aside>
             </div>
 
           </div>

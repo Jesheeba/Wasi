@@ -156,6 +156,8 @@ test('5. assigning a chat to the team member makes it appear in THEIR "Mine" que
   const agent = roster.find((m) => m.name === `${SUITE_PREFIX}Agent`);
   assert.ok(agent, 'the invited agent must exist in the roster');
 
+  // Assign lives in the header's overflow menu (UI redesign Stage 4).
+  await ownerPage.click('#chat-more-menu-btn');
   await ownerPage.selectOption('#chat-assign-select', agent.id);
   await ownerPage.waitForTimeout(500);
 
@@ -174,6 +176,8 @@ test('6. internal notes: posting a note with an @mention renders it with the men
   await ownerPage.click(`[data-chat-id="${chat.id}"]`);
   await ownerPage.waitForTimeout(300);
 
+  // Notes toggle lives in the header's overflow menu (UI redesign Stage 4).
+  await ownerPage.click('#chat-more-menu-btn');
   await ownerPage.click('#chat-notes-toggle-btn');
   await ownerPage.waitForTimeout(300);
   await ownerPage.fill('#chat-note-input', `Please check this @${SUITE_PREFIX}Age`);

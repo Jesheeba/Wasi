@@ -323,3 +323,7 @@ textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .view-container > .page-header,
   .page-title-bar { padding-left: 56px; min-height: 44px; }
 }
+
+/* ------------------------------------------------------ small utilities */
+.icon-14 { width: 14px; height: 14px; flex-shrink: 0; }
+.icon-16 { width: 16px; height: 16px; flex-shrink: 0; }

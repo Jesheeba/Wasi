@@ -443,6 +443,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // read identical wording, never a hand-duplicated copy).
   let sendabilityBannerTimer = null;
 
+  const SENDABILITY_DISMISS_KEY = 'sendability_banner_dismissed';
+  function isSendabilityBannerDismissed(key) {
+    try { return sessionStorage.getItem(SENDABILITY_DISMISS_KEY) === key; } catch (_e) { return false; }
+  }
+  function rememberSendabilityBannerDismissed(key) {
+    try { sessionStorage.setItem(SENDABILITY_DISMISS_KEY, key); } catch (_e) { /* storage unavailable - just hides until next refresh */ }
+  }
+
   function renderSendabilityBanner(waba) {
     const banner = document.getElementById('sendability-banner');
     if (!banner) return;
@@ -451,14 +459,30 @@ document.addEventListener('DOMContentLoaded', () => {
       banner.className = 'sendability-banner';
       banner.innerHTML = '';
     } else {
-      // Not dismissible by design — no close button, on purpose. This is a
-      // state ("your account currently can't send"), not a notification.
-      banner.className = `sendability-banner visible severity-${info.severity}`;
-      banner.innerHTML = `
-        <span class="sendability-banner-headline">${escapeHtml(info.headline)}</span>
-        ${info.code != null ? `<span class="sendability-banner-code">#${escapeHtml(String(info.code))}</span>` : ''}
-        <span class="sendability-banner-action">${escapeHtml(info.action)}</span>
-      `;
+      // Dismissible (changed by direct request - it was non-dismissible
+      // before). Dismissal is remembered for this browser session only, and
+      // only for this exact state (severity + code + headline): reloading in a
+      // new session, or the state changing to something different, shows it
+      // again, so a newly-blocked account is never hidden by an old dismissal.
+      const key = `${info.severity}|${info.code ?? ''}|${info.headline}`;
+      if (isSendabilityBannerDismissed(key)) {
+        banner.className = 'sendability-banner';
+        banner.innerHTML = '';
+      } else {
+        banner.className = `sendability-banner visible severity-${info.severity}`;
+        banner.innerHTML = `
+          <span class="sendability-banner-headline">${escapeHtml(info.headline)}</span>
+          ${info.code != null ? `<span class="sendability-banner-code">#${escapeHtml(String(info.code))}</span>` : ''}
+          <span class="sendability-banner-action">${escapeHtml(info.action)}</span>
+          <button type="button" class="sendability-banner-close" aria-label="Dismiss" title="Dismiss">&times;</button>
+        `;
+        banner.querySelector('.sendability-banner-close').addEventListener('click', () => {
+          rememberSendabilityBannerDismissed(key);
+          banner.className = 'sendability-banner';
+          banner.innerHTML = '';
+          updateSendabilityBannerLayout();
+        });
+      }
     }
     updateSendabilityBannerLayout();
   }
@@ -793,8 +817,13 @@ document.addEventListener('DOMContentLoaded', () => {
       renderChatList(state.chatTagFilter);
       authFetch('/api/chats').then(chats => {
         state.chats = chats.map(adaptChat);
+        state.chatListError = false;
         if (state.currentView === 'chat') renderChatList(state.chatTagFilter);
-      }).catch(() => {});
+      }).catch(() => {
+        // Only surfaces (as a retry state) when there is nothing cached to show.
+        state.chatListError = true;
+        if (state.currentView === 'chat') renderChatList(state.chatTagFilter);
+      });
 
       // teamMembers/cannedResponses/contactAttributes only otherwise load
       // once at session start (loadInitialData) — an agent's tab can stay
@@ -901,7 +930,59 @@ document.addEventListener('DOMContentLoaded', () => {
   // state.activeChatId or the desktop inline display toggles, so reopening
   // the same chat (or the desktop layout) is unaffected.
   document.getElementById('chat-back-to-list-btn')?.addEventListener('click', () => {
-    document.getElementById('view-chat')?.classList.remove('chat-mobile-conversation-open');
+    document.getElementById('view-chat')?.classList.remove('chat-mobile-conversation-open', 'chat-drawer-open');
+    syncChatDrawerAria();
+  });
+
+  // Contact drawer: inline column on wide screens, slide-over sheet below
+  // 1280px (index.css). The class lives on #view-chat; these are no-ops
+  // visually at widths where the drawer is always inline.
+  function syncChatDrawerAria() {
+    const open = document.getElementById('view-chat')?.classList.contains('chat-drawer-open');
+    document.getElementById('chat-info-toggle-btn')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function setChatDrawerOpen(open) {
+    document.getElementById('view-chat')?.classList.toggle('chat-drawer-open', !!open);
+    syncChatDrawerAria();
+    if (open) document.getElementById('chat-drawer-close-btn')?.focus?.();
+  }
+  document.getElementById('chat-info-toggle-btn')?.addEventListener('click', () => {
+    setChatDrawerOpen(!document.getElementById('view-chat').classList.contains('chat-drawer-open'));
+  });
+  document.getElementById('chat-drawer-close-btn')?.addEventListener('click', () => {
+    setChatDrawerOpen(false);
+    document.getElementById('chat-info-toggle-btn')?.focus?.();
+  });
+  document.getElementById('chat-drawer-backdrop')?.addEventListener('click', () => setChatDrawerOpen(false));
+
+  // Overflow menu in the conversation header (design-system .menu). Closes on
+  // outside click, Escape (focus returns to the trigger), and after a menu
+  // action; the Assign <select> stays open while being used.
+  const chatMoreMenu = document.getElementById('chat-more-menu');
+  const chatMoreMenuBtn = document.getElementById('chat-more-menu-btn');
+  function setChatMenuOpen(open) {
+    if (!chatMoreMenu) return;
+    chatMoreMenu.classList.toggle('open', !!open);
+    chatMoreMenuBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  chatMoreMenuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setChatMenuOpen(!chatMoreMenu.classList.contains('open'));
+  });
+  chatMoreMenu?.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-item')) setChatMenuOpen(false);
+  });
+  chatMoreMenu?.addEventListener('change', (e) => {
+    if (e.target.id === 'chat-assign-select') setChatMenuOpen(false);
+  });
+  document.addEventListener('click', (e) => {
+    if (chatMoreMenu && chatMoreMenu.classList.contains('open') && !chatMoreMenu.contains(e.target)) setChatMenuOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (chatMoreMenu?.classList.contains('open')) { setChatMenuOpen(false); chatMoreMenuBtn?.focus(); return; }
+    const view = document.getElementById('view-chat');
+    if (view?.classList.contains('chat-drawer-open')) setChatDrawerOpen(false);
   });
 
   // Status ticks mirror WhatsApp's own convention; 'failed' gets a retry
@@ -1151,15 +1232,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window_.open) {
       const remaining = new Date(window_.closesAt).getTime() - Date.now();
       banner.style.display = '';
-      banner.style.background = '#F0FDF4';
-      banner.style.color = '#15803D';
+      banner.classList.add('is-open'); banner.classList.remove('is-closed');
       banner.textContent = `Session window open — closes in ${formatDuration(remaining)}. Free-form text and templates both work.`;
       if (chatMessageInput) { chatMessageInput.disabled = false; chatMessageInput.placeholder = "Type a message or '/' for templates..."; }
       if (sendMsgBtn) sendMsgBtn.disabled = false;
     } else {
       banner.style.display = '';
-      banner.style.background = '#FEF2F2';
-      banner.style.color = '#B91C1C';
+      banner.classList.add('is-closed'); banner.classList.remove('is-open');
       banner.textContent = window_.lastInboundAt
         ? 'Session window closed — free-form text will fail. Type / to send a template instead.'
         : 'No inbound message yet from this contact — only a template can start the conversation.';
@@ -1192,6 +1271,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // the chat list to the active conversation. No-op at desktop widths —
     // nothing there reads this class.
     document.getElementById('view-chat')?.classList.add('chat-mobile-conversation-open');
+    document.getElementById('view-chat')?.classList.remove('chat-drawer-open');
+    syncChatDrawerAria();
+    document.querySelectorAll('#inbox-chat-list .chat-item').forEach((el) => {
+      el.classList.toggle('active', el.dataset.chatId === chat.id);
+    });
 
     const initials = initialsFor(chat.name);
     document.getElementById('active-chat-avatar').innerText = initials;
@@ -1210,7 +1294,7 @@ document.addEventListener('DOMContentLoaded', () => {
     headerTag.innerText = hasTag ? chat.tag : '';
     document.getElementById('drawer-contact-tags').innerHTML = hasTag
       ? `<span class="tag-badge">${escapeHtml(chat.tag)}</span>`
-      : '<span style="font-size:0.8rem;color:#9CA3AF;">No tag assigned</span>';
+      : '<span class="contact-drawer-muted">No tag assigned</span>';
 
     renderContactAttributesInto(document.getElementById('drawer-contact-attributes'), chat.contactId, () => state.activeChatId !== chat.id);
     renderContactTagsInto(document.getElementById('drawer-contact-tags-wrapper'), chat.contactId, () => state.activeChatId !== chat.id);
@@ -1254,8 +1338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusBadge = document.getElementById('chat-status-badge');
     const isResolved = chat.status === 'resolved';
     statusBadge.textContent = isResolved ? 'Resolved' : 'Open';
-    statusBadge.style.background = isResolved ? '#F1F5F9' : '#DCFCE7';
-    statusBadge.style.color = isResolved ? '#475569' : '#166534';
+    statusBadge.className = isResolved ? 'badge badge-neutral' : 'badge badge-success';
 
     const select = document.getElementById('chat-assign-select');
     select.innerHTML = '<option value="">Assign to…</option>' +
@@ -1347,14 +1430,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!state.activeChatNotes.length) {
-      list.innerHTML = '<div style="font-size:0.78rem; color:#9CA3AF;">No internal notes on this chat yet.</div>';
+      list.innerHTML = '<div class="chat-note-empty">No internal notes on this chat yet.</div>';
       return;
     }
     list.innerHTML = state.activeChatNotes.map(n => `
-      <div style="background:#F8FAFC; border:1px solid var(--border-light); border-radius:8px; padding:8px 10px;">
-        <div style="font-size:0.72rem; font-weight:700; color:#475569;">${escapeHtml(n.author ? n.author.name : 'You')}</div>
-        <div style="font-size:0.8rem; color:#1F2937; white-space:pre-wrap;">${escapeHtml(n.body)}</div>
-        ${n.mentions && n.mentions.length ? `<div style="font-size:0.7rem; color:#16A34A; margin-top:4px;">${n.mentions.map(m => '@' + escapeHtml(m.name)).join(' ')}</div>` : ''}
+      <div class="chat-note">
+        <div class="chat-note-author">${escapeHtml(n.author ? n.author.name : 'You')}</div>
+        <div class="chat-note-body">${escapeHtml(n.body)}</div>
+        ${n.mentions && n.mentions.length ? `<div class="chat-note-mentions">${n.mentions.map(m => '@' + escapeHtml(m.name)).join(' ')}</div>` : ''}
       </div>
     `).join('');
   }
@@ -1363,6 +1446,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const section = document.getElementById('chat-notes-section');
     const nowVisible = section.style.display === 'none';
     section.style.display = nowVisible ? '' : 'none';
+    // Below 1280px the drawer is a sheet — reveal it so the notes are seen.
+    if (nowVisible) setChatDrawerOpen(true);
     if (nowVisible) await renderChatNotes();
   });
 
@@ -2262,24 +2347,50 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatFiltersBtn = document.getElementById('chat-filters-btn');
   const chatFiltersPanel = document.getElementById('chat-filters-panel');
 
+  function setChatFiltersOpen(open) {
+    chatFiltersPanel?.classList.toggle('open', !!open);
+    chatFiltersBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
   chatFiltersBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    chatFiltersPanel?.classList.toggle('open');
+    setChatFiltersOpen(!chatFiltersPanel.classList.contains('open'));
   });
 
   document.addEventListener('click', (e) => {
-    if (chatFiltersPanel && !chatFiltersPanel.contains(e.target) && e.target !== chatFiltersBtn) {
-      chatFiltersPanel.classList.remove('open');
+    if (chatFiltersPanel && !chatFiltersPanel.contains(e.target) && !chatFiltersBtn.contains(e.target)) {
+      setChatFiltersOpen(false);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && chatFiltersPanel?.classList.contains('open')) {
+      setChatFiltersOpen(false);
+      chatFiltersBtn?.focus();
     }
   });
 
-  chatFiltersPanel?.querySelectorAll('.filter-option').forEach(btn => {
-    btn.addEventListener('click', () => {
-      chatFiltersPanel.querySelectorAll('.filter-option').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderChatList(btn.dataset.tagFilter);
-      chatFiltersPanel.classList.remove('open');
-    });
+  // Options are the account's real tags (state.tagsById, loaded app-wide and
+  // refreshed on tag changes), not a hard-coded Lead/Customer/VIP list. A chat
+  // row's tag is the tag NAME (adaptChat), so the filter value is the name.
+  // Delegated, because the option list is rebuilt whenever the tag set changes.
+  let chatFilterOptionsKey = null;
+  function renderChatFilterOptions() {
+    if (!chatFiltersPanel) return;
+    const names = Object.values(state.tagsById || {}).map(t => t.name).filter(Boolean);
+    const key = names.join('\u0001') + '|' + (state.chatTagFilter || 'all');
+    if (key === chatFilterOptionsKey) return;
+    chatFilterOptionsKey = key;
+    const current = state.chatTagFilter || 'all';
+    chatFiltersPanel.innerHTML =
+      `<button type="button" class="filter-option${current === 'all' ? ' active' : ''}" data-tag-filter="all">All Chats</button>` +
+      names.map(n => `<button type="button" class="filter-option${current === n ? ' active' : ''}" data-tag-filter="${esc(n)}">${esc(n)}</button>`).join('');
+    chatFiltersBtn?.classList.toggle('has-filter', current !== 'all');
+  }
+  chatFiltersPanel?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.filter-option');
+    if (!btn) return;
+    renderChatList(btn.dataset.tagFilter);
+    setChatFiltersOpen(false);
   });
 
   // Chat attachment button is disabled in index.html (no upload backend
@@ -2299,61 +2410,134 @@ document.addEventListener('DOMContentLoaded', () => {
     return chat.status !== 'resolved'; // 'all' — matches the pre-5.5 behavior of showing every chat, minus resolved noise
   }
 
+  function chatListEmptyHtml(hasAnyChats, filtersActive) {
+    if (!hasAnyChats) {
+      return `<div class="empty-state">
+        <i data-lucide="message-square" class="empty-icon" aria-hidden="true"></i>
+        <div class="empty-title">No conversations yet</div>
+        <div>Conversations appear here once someone messages your WhatsApp number, or start one yourself.</div>
+        <button type="button" class="btn-primary btn-auto" data-chat-list-action="new">Start a new conversation</button>
+      </div>`;
+    }
+    return `<div class="empty-state">
+      <i data-lucide="inbox" class="empty-icon" aria-hidden="true"></i>
+      <div class="empty-title">No conversations match</div>
+      <div>${filtersActive ? 'Nothing fits the current search, tag filter or queue.' : 'Nothing in this queue right now.'}</div>
+      ${filtersActive ? '<button type="button" class="btn-secondary" data-chat-list-action="clear">Clear filters</button>' : ''}
+    </div>`;
+  }
+
   function renderChatList(tagFilter) {
     const inboxChatList = document.getElementById('inbox-chat-list');
     if (!inboxChatList) return;
 
-    const filter = tagFilter || state.chatTagFilter || 'all';
+    let filter = tagFilter || state.chatTagFilter || 'all';
+    // A previously chosen tag that no longer exists falls back to All.
+    if (filter !== 'all' && !Object.values(state.tagsById || {}).some(t => t.name === filter)) filter = 'all';
     state.chatTagFilter = filter;
     const queueFilter = state.chatQueueFilter || 'all';
+    const searchTerm = (state.chatSearch || '').trim().toLowerCase();
+    renderChatFilterOptions();
+    chatFiltersBtn?.classList.toggle('has-filter', filter !== 'all');
 
     document.querySelectorAll('.queue-tab-btn').forEach((btn) => {
       const active = btn.dataset.queueFilter === queueFilter;
       btn.classList.toggle('active', active);
-      btn.style.background = active ? 'var(--color-primary-600, #16A34A)' : '#fff';
-      btn.style.color = active ? '#fff' : '#475569';
-      btn.style.borderColor = active ? 'var(--color-primary-600, #16A34A)' : 'var(--border-light)';
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
 
-    inboxChatList.innerHTML = '';
-    state.chats
+    inboxChatList.setAttribute('aria-busy', 'false');
+
+    if (state.chatListError && !state.chats.length) {
+      inboxChatList.innerHTML = `<div class="error-state" role="alert">
+        <div>We couldn't load your conversations.</div>
+        <button type="button" class="btn-secondary" data-chat-list-action="retry">Try again</button>
+      </div>`;
+      refreshIcons();
+      return;
+    }
+
+    const visible = state.chats
       .filter(c => filter === 'all' || c.tag === filter)
       .filter(c => matchesQueueFilter(c, queueFilter))
-      .forEach(chat => {
+      .filter(c => !searchTerm || (c.name || '').toLowerCase().includes(searchTerm) || (c.phone || '').toLowerCase().includes(searchTerm));
+
+    if (!visible.length) {
+      const filtersActive = filter !== 'all' || queueFilter !== 'all' || !!searchTerm;
+      inboxChatList.innerHTML = chatListEmptyHtml(state.chats.length > 0, filtersActive);
+      refreshIcons();
+      return;
+    }
+
+    inboxChatList.innerHTML = visible.map(chat => {
       const assignee = state.teamMembers.find(m => m.id === chat.assignedTeamMemberId);
       const assignBadge = chat.status === 'resolved'
-        ? '<span style="font-size:0.62rem; font-weight:700; color:#6B7280; background:#F1F5F9; border-radius:8px; padding:1px 6px;">RESOLVED</span>'
-        : (assignee ? `<span style="font-size:0.62rem; font-weight:700; color:#166534; background:#DCFCE7; border-radius:8px; padding:1px 6px;">${escapeHtml(assignee.name)}</span>` : '');
-      const itemHTML = `
-        <div class="chat-item" data-chat-id="${chat.id}" style="padding: 12px 16px; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="chat-avatar" style="width: 36px; height: 36px; font-size: 0.8rem; background: #E2E8F0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-              <i data-lucide="user" style="width:16px; color:#475569;"></i>
-            </div>
-            <div>
-              <div style="font-size: 0.85rem; font-weight: 600; color: #1F2937;">${chat.name}</div>
-              <div style="font-size: 0.75rem; color: #6B7280; display:flex; align-items:center; gap:6px;">WhatsApp ${assignBadge}</div>
-            </div>
+        ? '<span class="chat-assign-pill is-resolved">Resolved</span>'
+        : (assignee ? `<span class="chat-assign-pill is-assigned">${esc(assignee.name)}</span>` : '');
+      const unread = Number(chat.count) > 0;
+      const isActive = state.activeChatId === chat.id;
+      return `
+        <div class="chat-item${isActive ? ' active' : ''}${unread ? ' has-unread' : ''}" data-chat-id="${esc(chat.id)}" role="button" tabindex="0" aria-label="${esc(chat.name)}${unread ? ', ' + esc(chat.count) + ' unread' : ''}">
+          <div class="chat-avatar" aria-hidden="true">${esc(initialsFor(chat.name))}</div>
+          <div class="chat-item-main">
+            <div class="chat-item-name">${esc(chat.name)}</div>
+            <div class="chat-item-sub"><span>WhatsApp</span>${assignBadge}</div>
           </div>
-          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-            <span style="font-size: 0.7rem; color: #6B7280;">${chatListTimeLabel(chat.time)}</span>
-            <span style="background: #4AC959; color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 700; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${chat.count}</span>
+          <div class="chat-item-side">
+            <span class="chat-item-time">${esc(chatListTimeLabel(chat.time))}</span>
+            ${unread ? `<span class="chat-unread-badge">${esc(chat.count)}</span>` : ''}
           </div>
         </div>
       `;
-      inboxChatList.innerHTML += itemHTML;
-    });
-
-    document.querySelectorAll('.chat-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const id = item.dataset.chatId;
-        const selected = state.chats.find(c => c.id === id);
-        if (selected) openActiveChat(selected);
-      });
-    });
+    }).join('');
 
     refreshIcons();
   }
+
+  // Delegated once (the list is rebuilt via innerHTML on every render/poll).
+  (function bindChatListEvents() {
+    const list = document.getElementById('inbox-chat-list');
+    if (!list) return;
+    function openFromItem(item) {
+      const selected = state.chats.find(c => String(c.id) === item.dataset.chatId);
+      if (selected) openActiveChat(selected);
+    }
+    list.addEventListener('click', (e) => {
+      const action = e.target.closest('[data-chat-list-action]');
+      if (action) {
+        const kind = action.dataset.chatListAction;
+        if (kind === 'new') openNewConversationModal();
+        else if (kind === 'clear') {
+          state.chatQueueFilter = 'all';
+          state.chatSearch = '';
+          const input = document.getElementById('chat-search-input');
+          if (input) input.value = '';
+          renderChatList('all');
+        } else if (kind === 'retry') {
+          authFetch('/api/chats').then(chats => {
+            state.chats = chats.map(adaptChat);
+            state.chatListError = false;
+            renderChatList(state.chatTagFilter);
+          }).catch(() => { state.chatListError = true; renderChatList(state.chatTagFilter); });
+        }
+        return;
+      }
+      const item = e.target.closest('.chat-item');
+      if (item) openFromItem(item);
+    });
+    list.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const item = e.target.closest('.chat-item');
+      if (!item || e.target !== item) return;
+      e.preventDefault();
+      openFromItem(item);
+    });
+  })();
+
+  document.getElementById('chat-search-input')?.addEventListener('input', (e) => {
+    state.chatSearch = e.target.value;
+    renderChatList(state.chatTagFilter);
+  });
 
   document.querySelectorAll('.queue-tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
