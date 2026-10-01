@@ -14,6 +14,9 @@
 const metaClient = require('../utils/metaClient');
 const wabasRepo = require('../repositories/wabasRepo');
 const { decrypt } = require('../utils/encryption');
+const contactsRepo = require('../repositories/contactsRepo');
+const chatsRepo = require('../repositories/chatsRepo');
+const { pool } = require('../db/pool');
 
 class ClientNotifyError extends Error {}
 
@@ -48,6 +51,26 @@ async function resolveSenderWaba() {
   return waba;
 }
 
+// Records the sent message in the sender account's (Wasi Demo Client's) own
+// chat inbox, as an outbound message to the recipient, so it is visible on the
+// Demo client's dashboard like any other send. Delivery/read then update on
+// that message for free: metaWebhook's handleStatuses already updates
+// messages by meta_message_id for the WABA's client. Best-effort - the
+// message has already gone out, so a bookkeeping failure here must never be
+// reported as a failed send. Phone is stored digits-only, the same format
+// inbound webhooks use, so a client's reply lands in the same chat.
+async function mirrorToSenderInbox(waba, client, to, templateName, metaMessageId) {
+  try {
+    const phone = String(to).replace(/\D/g, '');
+    const contact = await contactsRepo.upsertByPhone(pool, waba.client_id, { phone, name: client.name });
+    const chat = await chatsRepo.findOrCreateByContact(pool, waba.client_id, contact);
+    const message = await chatsRepo.insertOutboundPending(pool, waba.client_id, chat.id, `[template: ${templateName}]`);
+    await chatsRepo.markSent(pool, waba.client_id, message.id, metaMessageId);
+  } catch (err) {
+    console.error(`clientNotifier: sent ${templateName} to ${client.name} but could not record it in the sender inbox:`, err.message);
+  }
+}
+
 // name/language/bodyParams describe an already-approved WhatsApp template
 // (see this feature's 3 candidate templates, held for review — Part C).
 // Every caller in this feature is best-effort by design (a reminder/warning
@@ -65,11 +88,13 @@ async function sendTemplateToClient(client, { name, language = 'en_US', bodyPara
   const accessToken = decrypt(waba.access_token_encrypted);
   // Returns Meta's message id (wamid) so the caller can log it and match
   // later delivered/read webhooks back to this send.
-  return metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, to, {
+  const metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, to, {
     name,
     language,
     components: metaClient.buildNamedBodyComponents(bodyParams),
   });
+  await mirrorToSenderInbox(waba, client, to, name, metaMessageId);
+  return metaMessageId;
 }
 
-module.exports = { sendTemplateToClient, resolveRecipientPhone, resolveSenderWaba, ClientNotifyError };
+module.exports = { sendTemplateToClient, resolveRecipientPhone, resolveSenderWaba, mirrorToSenderInbox, ClientNotifyError };

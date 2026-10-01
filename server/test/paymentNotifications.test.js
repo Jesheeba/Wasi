@@ -67,10 +67,17 @@ test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REM
   const savedSecret = process.env.SERVER_SECRET;
   process.env.SERVER_SECRET = 'test-only-secret-not-a-real-key';
   delete process.env.PAYMENT_REMINDER_WABA_ID;
-  let call = null;
+  let call = null; const mirrored = {};
+  const contactsRepo = require('../src/repositories/contactsRepo');
+  const chatsRepo = require('../src/repositories/chatsRepo');
+  const orig = { up: contactsRepo.upsertByPhone, foc: chatsRepo.findOrCreateByContact, ins: chatsRepo.insertOutboundPending, ms: chatsRepo.markSent };
+  contactsRepo.upsertByPhone = async (db, clientId, c) => { mirrored.clientId = clientId; mirrored.phone = c.phone; return { id: 'ct1' }; };
+  chatsRepo.findOrCreateByContact = async () => ({ id: 'ch1' });
+  chatsRepo.insertOutboundPending = async (db, cid, chatId, body) => { mirrored.body = body; return { id: 'm1' }; };
+  chatsRepo.markSent = async (db, cid, id, metaId) => { mirrored.metaId = metaId; return {}; };
   wabasRepo.findByClientId = async (id) => {
     return id === '00000000-0000-0000-0000-000000000001'
-      ? { phone_number_id: 'PN1', access_token_encrypted: encrypt('tok') } : null;
+      ? { client_id: '00000000-0000-0000-0000-000000000001', phone_number_id: 'PN1', access_token_encrypted: encrypt('tok') } : null;
   };
   metaClient.sendTemplateMessage = async (...args) => { call = args; return 'wamid.Y'; };
   try {
@@ -81,8 +88,13 @@ test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REM
     assert.equal(call[0], 'PN1');
     assert.equal(call[1], 'tok');
     assert.equal(call[2], '919999900009');
+    assert.equal(mirrored.clientId, '00000000-0000-0000-0000-000000000001');
+    assert.equal(mirrored.phone, '919999900009');
+    assert.equal(mirrored.body, '[template: wasi_payment_reminder]');
+    assert.equal(mirrored.metaId, 'wamid.Y');
   } finally {
     metaClient.sendTemplateMessage = realSendTpl;
+    contactsRepo.upsertByPhone = orig.up; chatsRepo.findOrCreateByContact = orig.foc; chatsRepo.insertOutboundPending = orig.ins; chatsRepo.markSent = orig.ms;
     if (saved !== undefined) process.env.PAYMENT_REMINDER_WABA_ID = saved;
     if (savedSecret === undefined) delete process.env.SERVER_SECRET; else process.env.SERVER_SECRET = savedSecret;
   }
