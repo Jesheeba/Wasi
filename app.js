@@ -881,17 +881,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
-    if (targetView === 'automation') { renderAutomation(); renderFlowsList(); }
+    if (targetView === 'automation') { setAutomationTab(automationView.tab); reloadAutomationWithState(); }
     if (targetView === 'template') {
       // Same staleness fix — a template synced after login (e.g. right
       // after connecting a WhatsApp number, which pulls in existing
       // approved templates from Meta) never appeared here until a full page
       // reload, since state.templates was never refetched on view switch.
-      renderTemplates();
-      authFetch('/api/templates').then(templates => {
-        state.templates = templates;
-        if (state.currentView === 'template') renderTemplates();
-      }).catch(() => {});
+      reloadTemplatesWithState();
     }
     if (targetView === 'template-library') {
       // Curated reference content, not live per-client data (unlike
@@ -3234,32 +3230,121 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Automation Rules ---
-  function renderAutomation() {
-    const automationRulesGrid = document.getElementById('automation-rules-grid');
-    if (!automationRulesGrid) return;
+  // Rules | Flows tabs share one header. Only fields the API already returns
+  // are shown (rule: title/trigger/action/flow_id/status/created_at;
+  // flow: name/status/updated_at). A flow's "trigger" is derived from the
+  // rule(s) that start it — a flow has no trigger column of its own.
+  const automationView = { tab: 'rules', loadState: 'ready' };
 
+  function formatAutomationDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function automationStateRow(colspan, inner) {
+    return `<tr class="automation-state-row"><td colspan="${colspan}">${inner}</td></tr>`;
+  }
+
+  function automationLoadingRows(colspan) {
+    return [60, 45, 55].map((w) =>
+      `<tr class="automation-skeleton-row"><td colspan="${colspan}"><span class="skeleton" style="height:16px;width:${w}%;"></span></td></tr>`).join('');
+  }
+
+  function automationErrorRow(colspan, what) {
+    return automationStateRow(colspan, `
+      <div class="error-state">
+        <div>Couldn't load your ${what}.</div>
+        <button type="button" class="btn-secondary" id="automation-retry-btn">Try again</button>
+      </div>`);
+  }
+
+  function setAutomationTab(tab) {
+    automationView.tab = tab === 'flows' ? 'flows' : 'rules';
+    document.querySelectorAll('.automation-tab').forEach((btn) => {
+      const active = btn.dataset.automationTab === automationView.tab;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.tabIndex = active ? 0 : -1;
+    });
+    const rulesPanel = document.getElementById('automation-panel-rules');
+    const flowsPanel = document.getElementById('automation-panel-flows');
+    if (rulesPanel) rulesPanel.hidden = automationView.tab !== 'rules';
+    if (flowsPanel) flowsPanel.hidden = automationView.tab !== 'flows';
+    // One primary action in the header at a time, matching the active tab.
+    const ruleBtn = document.getElementById('open-create-rule-modal');
+    const flowBtn = document.getElementById('open-create-bot-flow-btn');
+    if (ruleBtn) ruleBtn.hidden = automationView.tab !== 'rules';
+    if (flowBtn) flowBtn.hidden = automationView.tab !== 'flows';
+  }
+
+  document.querySelectorAll('.automation-tab').forEach((btn) => {
+    btn.addEventListener('click', () => setAutomationTab(btn.dataset.automationTab));
+  });
+  document.querySelector('.automation-tabs')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const tabs = [...document.querySelectorAll('.automation-tab')];
+    const next = tabs[(tabs.indexOf(document.activeElement) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    if (!next) return;
+    next.focus();
+    setAutomationTab(next.dataset.automationTab);
+  });
+
+  function reloadAutomationWithState() {
+    if (!state.automationRules.length && !state.flows.length) {
+      automationView.loadState = 'loading';
+      renderAutomation();
+      renderFlowsList();
+    }
+    return Promise.all([refreshAutomationRules(), refreshFlows()]).then(() => {
+      automationView.loadState = 'ready';
+    }).catch(() => {
+      if (!state.automationRules.length && !state.flows.length) automationView.loadState = 'error';
+    }).then(() => {
+      if (state.currentView === 'automation') { renderAutomation(); renderFlowsList(); }
+    });
+  }
+
+  document.getElementById('view-automation')?.addEventListener('click', (e) => {
+    if (e.target.closest('#automation-retry-btn')) { reloadAutomationWithState(); return; }
+    if (e.target.closest('#automation-empty-create-rule')) { document.getElementById('open-create-rule-modal')?.click(); return; }
+    if (e.target.closest('#automation-empty-create-flow')) { document.getElementById('open-create-bot-flow-btn')?.click(); }
+  });
+
+  function renderAutomation() {
+    const body = document.getElementById('automation-rules-grid');
+    if (!body) return;
+
+    if (automationView.loadState === 'loading') { body.innerHTML = automationLoadingRows(5); return; }
+    if (automationView.loadState === 'error') { body.innerHTML = automationErrorRow(5, 'rules'); return; }
     if (!state.automationRules.length) {
-      automationRulesGrid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">No rules yet.</div>';
+      body.innerHTML = automationStateRow(5, `
+        <div class="empty-state">
+          <i data-lucide="zap" class="empty-icon"></i>
+          <div class="empty-title">No rules yet</div>
+          <div>Create a keyword rule to auto-reply, or start a flow when someone messages you.</div>
+          <button type="button" class="btn-primary btn-auto" id="automation-empty-create-rule">Create your first rule</button>
+        </div>`);
+      refreshIcons();
       return;
     }
 
-    automationRulesGrid.innerHTML = '';
-    state.automationRules.forEach(rule => {
-      const actionLine = rule.flow_id
-        ? `<strong>Starts flow:</strong> ${escapeHtml(state.flows.find(f => f.id === rule.flow_id)?.name || 'Unknown flow')}`
-        : `<strong>Action:</strong> ${escapeHtml(rule.action || '')}`;
-      const card = `
-        <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <span style="font-weight: 700; font-size: 1rem; color: var(--color-heading);">${escapeHtml(rule.title)}</span>
-            <span class="status-badge active">${escapeHtml(rule.status)}</span>
-          </div>
-          <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;"><strong>Trigger:</strong> ${escapeHtml(rule.trigger)}</div>
-          <div style="font-size: 0.875rem; color: var(--text-muted);">${actionLine}</div>
-        </div>
-      `;
-      automationRulesGrid.innerHTML += card;
-    });
+    body.innerHTML = state.automationRules.map((rule) => {
+      const flowName = rule.flow_id ? (state.flows.find((f) => f.id === rule.flow_id)?.name || 'Unknown flow') : null;
+      const responds = rule.flow_id
+        ? `<span class="automation-target"><i data-lucide="workflow" class="icon-14"></i> Starts flow: <strong>${esc(flowName)}</strong></span>`
+        : `<span class="automation-reply" title="${esc(rule.action || '')}">${esc(rule.action || '')}</span>`;
+      const isActive = String(rule.status || '').toLowerCase() === 'active';
+      return `
+        <tr>
+          <td data-label="Rule"><span class="automation-name">${esc(rule.title)}</span></td>
+          <td data-label="Trigger"><span class="automation-trigger">${esc(rule.trigger)}</span></td>
+          <td data-label="Responds with">${responds}</td>
+          <td data-label="Status"><span class="badge ${isActive ? 'badge-success' : 'badge-neutral'}">${esc(rule.status)}</span></td>
+          <td data-label="Created" class="automation-date">${esc(formatAutomationDate(rule.created_at))}</td>
+        </tr>`;
+    }).join('');
+    refreshIcons();
   }
 
   // --- Flows (step-list editor) ---
@@ -3293,29 +3378,53 @@ document.addEventListener('DOMContentLoaded', () => {
     state.flows = await authFetch('/api/automation-flows');
   }
 
+  const FLOW_STATUS_BADGE = { active: 'badge-success', draft: 'badge-neutral', archived: 'badge-warning' };
+
   function renderFlowsList() {
-    const grid = document.getElementById('bot-flows-grid');
-    if (!grid) return;
+    const body = document.getElementById('bot-flows-grid');
+    if (!body) return;
+
+    if (automationView.loadState === 'loading') { body.innerHTML = automationLoadingRows(5); return; }
+    if (automationView.loadState === 'error') { body.innerHTML = automationErrorRow(5, 'flows'); return; }
     if (!state.flows.length) {
-      grid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">No flows yet.</div>';
+      body.innerHTML = automationStateRow(5, `
+        <div class="empty-state">
+          <i data-lucide="workflow" class="empty-icon"></i>
+          <div class="empty-title">No flows yet</div>
+          <div>Build a multi-step conversation with buttons, delays and actions.</div>
+          <button type="button" class="btn-primary btn-auto" id="automation-empty-create-flow">Create your first flow</button>
+        </div>`);
+      refreshIcons();
       return;
     }
-    grid.innerHTML = state.flows.map(f => `
-      <div class="flow-card" data-flow-id="${f.id}" style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm); cursor: pointer; overflow: hidden;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-          <span title="${escapeHtml(f.name)}" style="font-weight: 700; font-size: 1rem; color: var(--color-heading); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(f.name)}</span>
-          <span style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
-            <span class="status-badge ${f.status === 'active' ? 'active' : ''}">${escapeHtml(f.status)}</span>
-            <button type="button" class="delete-flow-card-btn" data-delete-flow="${f.id}" title="Delete flow" style="border: none; background: none; color: #DC2626; cursor: pointer; padding: 0.25rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
-          </span>
-        </div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Click to edit</div>
-      </div>
-    `).join('');
-    grid.querySelectorAll('[data-flow-id]').forEach(card => {
-      card.addEventListener('click', () => openFlowEditor(card.getAttribute('data-flow-id')));
+
+    body.innerHTML = state.flows.map((f) => {
+      const triggers = state.automationRules.filter((r) => r.flow_id === f.id).map((r) => r.trigger).filter(Boolean);
+      const triggerCell = triggers.length
+        ? triggers.map((t) => `<span class="automation-trigger">${esc(t)}</span>`).join(' ')
+        : '<span class="contacts-muted" title="No rule starts this flow">—</span>';
+      const status = String(f.status || '');
+      return `
+        <tr class="flow-card" data-flow-id="${esc(f.id)}" tabindex="0" aria-label="Open flow ${esc(f.name)}">
+          <td data-label="Flow"><span class="automation-name" title="${esc(f.name)}">${esc(f.name)}</span></td>
+          <td data-label="Trigger">${triggerCell}</td>
+          <td data-label="Status"><span class="badge ${FLOW_STATUS_BADGE[status] || 'badge-neutral'}">${esc(status ? status.charAt(0).toUpperCase() + status.slice(1) : '—')}</span></td>
+          <td data-label="Updated" class="automation-date">${esc(formatAutomationDate(f.updated_at))}</td>
+          <td class="automation-col-actions" data-label="">
+            <span class="automation-actions">
+              <button type="button" class="btn-ghost btn-sm edit-flow-card-btn" data-edit-flow="${esc(f.id)}" aria-label="Edit ${esc(f.name)}"><i data-lucide="pencil" class="icon-14"></i><span class="automation-edit-label"> Edit</span></button>
+              <button type="button" class="btn-ghost btn-sm tpl-action-danger delete-flow-card-btn" data-delete-flow="${esc(f.id)}" title="Delete flow" aria-label="Delete ${esc(f.name)}"><i data-lucide="trash-2" class="icon-14"></i></button>
+            </span>
+          </td>
+        </tr>`;
+    }).join('');
+    body.querySelectorAll('[data-flow-id]').forEach((row) => {
+      row.addEventListener('click', () => openFlowEditor(row.getAttribute('data-flow-id')));
+      row.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); row.click(); }
+      });
     });
-    grid.querySelectorAll('[data-delete-flow]').forEach(btn => {
+    body.querySelectorAll('[data-delete-flow]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         confirmAndDeleteFlow(btn.dataset.deleteFlow, () => {
@@ -3422,9 +3531,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const statusBadge = document.getElementById('bot-flow-editor-status-badge');
     statusBadge.textContent = graph.status;
-    statusBadge.className = `status-badge ${graph.status === 'active' ? 'active' : ''}`;
+    statusBadge.className = `badge ${FLOW_STATUS_BADGE[graph.status] || 'badge-neutral'}`;
     const toggleBtn = document.getElementById('bot-flow-editor-toggle-status-btn');
     toggleBtn.textContent = graph.status === 'active' ? 'Archive Flow' : 'Activate Flow';
+    toggleBtn.className = graph.status === 'active' ? 'btn-secondary btn-sm btn-auto' : 'btn-primary btn-sm btn-auto';
     // Only gate the draft/archived -> active direction — archiving an
     // already-active flow never fails validation, so it's never blocked
     // here. The server re-checks regardless (routes/automationFlows.js's
@@ -3439,18 +3549,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const banner = document.getElementById('bot-flow-editor-issues-banner');
     if (banner) {
       banner.innerHTML = issues.length
-        ? `<div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: #991B1B;">
+        ? `<div class="alert alert-danger flow-editor-issues" role="alert"><div>
             <strong>${issues.length} issue${issues.length === 1 ? '' : 's'} found</strong> — these would fail or misbehave at runtime and block activating this flow.
-            <ul style="margin: 0.4rem 0 0; padding-left: 1.2rem;">
+            <ul class="flow-editor-issues-list">
               ${issues.map(i => `<li>${escapeHtml(i.message)}</li>`).join('')}
             </ul>
-          </div>`
+          </div></div>`
         : '';
     }
 
     const container = document.getElementById('bot-flow-editor-nodes');
     if (!graph.nodes.length) {
-      container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; padding: 1rem 0;">No nodes yet — add one to get started.</div>';
+      container.innerHTML = '<div class="empty-state"><i data-lucide="workflow" class="empty-icon"></i><div class="empty-title">No nodes yet</div><div>Add a node to get started.</div></div>';
+      refreshIcons();
       return;
     }
 
@@ -3546,8 +3657,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const addNodeBtn = document.getElementById('bot-flow-editor-add-node-btn');
     if (!listEl || !canvasWrapEl) return;
     document.querySelectorAll('.flow-view-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.flowView === state.flowView);
+      const on = btn.dataset.flowView === state.flowView;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
     });
+    document.querySelector('#modal-bot-flow-editor .flow-editor-shell')?.classList.toggle('is-canvas', state.flowView === 'canvas');
     if (state.flowView === 'canvas') {
       listEl.style.display = 'none';
       canvasWrapEl.style.display = '';
@@ -3803,28 +3917,84 @@ document.addEventListener('DOMContentLoaded', () => {
     in_appeal: 'In Appeal',
   };
 
+  // Search/status/category are client-side filters over the already-loaded
+  // list (no new endpoint), same as Campaigns/Contacts. loadState drives the
+  // skeleton/error states: only 'loading' when there's nothing to show yet.
+  const templatesView = { q: '', status: '', category: '', loadState: 'ready' };
+  const TEMPLATE_STATUS_BADGE = {
+    approved: 'badge-success', pending: 'badge-warning', rejected: 'badge-danger',
+    disabled: 'badge-danger', paused: 'badge-neutral', pending_deletion: 'badge-neutral',
+    in_appeal: 'badge-info',
+  };
+
+  function getFilteredTemplates() {
+    const q = templatesView.q.trim().toLowerCase();
+    return state.templates.filter((t) =>
+      (!templatesView.status || (t.status || 'pending') === templatesView.status) &&
+      (!templatesView.category || t.category === templatesView.category) &&
+      (!q || (t.name || '').toLowerCase().includes(q) || (t.body || '').toLowerCase().includes(q))
+    );
+  }
+
   function renderTemplates() {
     const templatesGrid = document.getElementById('templates-grid');
     if (!templatesGrid) return;
 
+    if (templatesView.loadState === 'loading') {
+      templatesGrid.className = 'templates-grid';
+      templatesGrid.innerHTML = [55, 45, 60].map((w) =>
+        `<div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:${w}%;"></span><span class="skeleton" style="height:12px;width:90%;"></span><span class="skeleton" style="height:12px;width:65%;"></span></div>`).join('');
+      return;
+    }
+    if (templatesView.loadState === 'error') {
+      templatesGrid.className = 'templates-grid templates-grid-state';
+      templatesGrid.innerHTML = `
+        <div class="error-state">
+          <div>Couldn't load your templates.</div>
+          <button type="button" class="btn-secondary" id="templates-retry-btn">Try again</button>
+        </div>`;
+      return;
+    }
     if (!state.templates.length) {
-      templatesGrid.innerHTML = '<p style="padding:1rem;color:#6B7280;">No templates yet. Connect a WhatsApp number to sync approved templates, or create one from Meta Business Manager.</p>';
+      templatesGrid.className = 'templates-grid templates-grid-state';
+      templatesGrid.innerHTML = `
+        <div class="empty-state">
+          <i data-lucide="file-text" class="empty-icon"></i>
+          <div class="empty-title">No templates yet</div>
+          <div>Create a template, or connect a WhatsApp number to sync your approved templates from Meta.</div>
+          <button type="button" class="btn-primary btn-auto" id="templates-empty-create">Create your first template</button>
+        </div>`;
+      refreshIcons();
+      return;
+    }
+    const filtered = getFilteredTemplates();
+    if (!filtered.length) {
+      templatesGrid.className = 'templates-grid templates-grid-state';
+      templatesGrid.innerHTML = `
+        <div class="empty-state">
+          <i data-lucide="search-x" class="empty-icon"></i>
+          <div class="empty-title">No templates match</div>
+          <div>Try a different search or clear the filters.</div>
+          <button type="button" class="btn-secondary" id="templates-clear-filters">Clear filters</button>
+        </div>`;
+      refreshIcons();
       return;
     }
 
-    templatesGrid.innerHTML = state.templates.map((t) => {
+    templatesGrid.className = 'templates-grid';
+    templatesGrid.innerHTML = filtered.map((t) => {
       const status = t.status || 'pending';
-      const statusClass = status.replace(/_/g, '-');
       const statusLabel = TEMPLATE_STATUS_LABELS[status] || status;
+      const badgeCls = TEMPLATE_STATUS_BADGE[status] || 'badge-neutral';
       // Authentication templates have no author-written body — Meta
       // generates that text itself (see metaClient.js's
       // buildAuthenticationPayload) — so t.body is null for these, not a
       // display bug to work around with a fallback string.
       const bodyPreview = t.category === 'Authentication'
         ? 'Meta-generated verification message (code delivery, expiration notice, security disclaimer).'
-        : escapeHtml(t.body || '');
+        : esc(t.body || '');
       const rejectionNote = status === 'rejected' && t.rejection_reason
-        ? `<p class="template-rejection-reason">${escapeHtml(t.rejection_reason)}</p>`
+        ? `<p class="template-rejection-reason">${esc(t.rejection_reason)}</p>`
         : '';
       // orphaned_at: this row was previously confirmed to exist on Meta
       // (has a meta_template_id) but the last sync didn't find it there
@@ -3837,21 +4007,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
       return `
         <div class="template-card">
-          <div>
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(t.name)}</span>
-              <span class="template-badge ${statusClass}" style="flex-shrink: 0; white-space: nowrap;">${escapeHtml(statusLabel)}</span>
+          <div class="template-card-main">
+            <div class="template-card-head">
+              <span class="template-card-name">${esc(t.name)}</span>
+              <span class="badge ${badgeCls}">${esc(statusLabel)}</span>
             </div>
-            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${bodyPreview}</p>
+            <p class="template-card-body">${bodyPreview}</p>
             ${rejectionNote}
             ${orphanedNote}
           </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-            <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Category: ${escapeHtml(t.category)}</div>
-            <div style="display: flex; gap: 0.25rem;">
-              <button type="button" class="preview-template-btn" data-preview-template="${t.id}" title="Preview in chat" style="border: none; background: none; color: #4B5563; cursor: pointer; padding: 0.25rem;"><i data-lucide="eye" style="width: 14px;"></i></button>
-              <button type="button" class="edit-template-btn" data-edit-template="${t.id}" title="Edit template" style="border: none; background: none; color: #4B5563; cursor: pointer; padding: 0.25rem;"><i data-lucide="pencil" style="width: 14px;"></i></button>
-              <button type="button" class="delete-template-btn" data-delete-template="${t.id}" title="Delete template" style="border: none; background: none; color: #DC2626; cursor: pointer; padding: 0.25rem;"><i data-lucide="trash-2" style="width: 14px;"></i></button>
+          <div class="template-card-foot">
+            <span class="template-card-meta">${esc(t.category)}${t.language ? ' · ' + esc(t.language) : ''}</span>
+            <div class="template-card-actions">
+              <button type="button" class="btn-ghost btn-sm tpl-action preview-template-btn" data-preview-template="${esc(t.id)}" title="Preview in chat" aria-label="Preview ${esc(t.name)}"><i data-lucide="eye" class="icon-14"></i></button>
+              <button type="button" class="btn-ghost btn-sm tpl-action edit-template-btn" data-edit-template="${esc(t.id)}" title="Edit template" aria-label="Edit ${esc(t.name)}"><i data-lucide="pencil" class="icon-14"></i></button>
+              <button type="button" class="btn-ghost btn-sm tpl-action tpl-action-danger delete-template-btn" data-delete-template="${esc(t.id)}" title="Delete template" aria-label="Delete ${esc(t.name)}"><i data-lucide="trash-2" class="icon-14"></i></button>
             </div>
           </div>
         </div>
@@ -3859,6 +4029,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
     refreshIcons();
   }
+
+  function reloadTemplatesWithState() {
+    if (!state.templates.length) { templatesView.loadState = 'loading'; renderTemplates(); }
+    return authFetch('/api/templates').then((templates) => {
+      state.templates = templates;
+      templatesView.loadState = 'ready';
+      if (state.currentView === 'template') renderTemplates();
+    }).catch(() => {
+      // Keep showing whatever is already loaded; surface the error state
+      // only when there is nothing to show.
+      if (!state.templates.length) templatesView.loadState = 'error';
+      if (state.currentView === 'template') renderTemplates();
+    });
+  }
+
+  document.getElementById('template-search')?.addEventListener('input', (e) => {
+    templatesView.q = e.target.value;
+    renderTemplates();
+  });
+  document.getElementById('template-status-filter')?.addEventListener('change', (e) => {
+    templatesView.status = e.target.value;
+    renderTemplates();
+  });
+  document.getElementById('template-category-filter')?.addEventListener('change', (e) => {
+    templatesView.category = e.target.value;
+    renderTemplates();
+  });
 
   // --- Template Library (wasi-master-plan.md §2) ---
   // "Use this Template" reuses the EXISTING Create Template modal/submit
@@ -3909,15 +4106,15 @@ document.addEventListener('DOMContentLoaded', () => {
       : escapeHtml((t.body || '').length > 90 ? `${t.body.slice(0, 90)}…` : (t.body || ''));
     const selected = state.librarySelectedEntry?.id === t.id ? ' selected' : '';
     return `
-      <div class="template-card library-template-card${selected}" data-library-id="${t.id}">
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(t.title)}</span>
-            <span class="template-badge approved" style="flex-shrink: 0; white-space: nowrap;">${escapeHtml(t.category)}</span>
+      <div class="template-card library-template-card${selected}" data-library-id="${esc(t.id)}" role="button" tabindex="0" aria-pressed="${selected ? 'true' : 'false'}">
+        <div class="template-card-main">
+          <div class="template-card-head">
+            <span class="template-card-name">${esc(t.title)}</span>
+            <span class="badge badge-neutral template-badge">${esc(t.category)}</span>
           </div>
-          <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${preview}</p>
+          <p class="template-card-body">${preview}</p>
         </div>
-        <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">${escapeHtml(t.use_case.replace(/_/g, ' '))}</div>
+        <div class="template-card-meta">${esc(t.use_case.replace(/_/g, ' '))}</div>
       </div>
     `;
   }
@@ -3932,7 +4129,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const entries = filteredLibraryEntries();
 
     if (!entries.length) {
-      grid.innerHTML = '<p style="padding:1rem;color:#6B7280;">No templates match these filters.</p>';
+      grid.innerHTML = `<div class="empty-state"><i data-lucide="search-x" class="empty-icon"></i><div class="empty-title">No templates match</div><div>Try a different category or use case.</div></div>`;
+      refreshIcons();
       return;
     }
 
@@ -3942,12 +4140,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter((section) => section.items.length > 0);
 
     grid.innerHTML = sections.map(({ industry, items }) => `
-      <div class="library-industry-section" data-industry="${escapeHtml(industry)}" style="margin-bottom: 1.75rem;">
-        <h3 style="margin: 0 0 0.85rem; font-size: 1rem; display:flex; align-items:baseline; gap:0.5rem;">
-          ${escapeHtml(industry)}
-          <span style="font-weight: 400; color: #6B7280; font-size: 0.8rem;">${items.length} template${items.length === 1 ? '' : 's'}</span>
+      <div class="library-industry-section" data-industry="${esc(industry)}">
+        <h3 class="library-section-title">
+          ${esc(industry)}
+          <span class="library-section-count">${items.length} template${items.length === 1 ? '' : 's'}</span>
         </h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+        <div class="templates-grid">
           ${items.map(libraryTemplateCardHtml).join('')}
         </div>
       </div>
@@ -3955,7 +4153,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     grid.querySelectorAll('[data-library-id]').forEach((card) => {
       card.addEventListener('click', () => selectLibraryEntry(card.dataset.libraryId));
+      card.addEventListener('keydown', onLibraryCardKeydown);
     });
+  }
+
+  // Below the tablet breakpoint the preview stacks under the list, off-screen
+  // after a card tap — bring it into view.
+  function revealPreviewOnNarrow(panelId) {
+    if (!window.matchMedia('(max-width: 900px)').matches) return;
+    document.getElementById(panelId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Cards are role=button divs — Enter/Space must select like a click.
+  function onLibraryCardKeydown(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    e.currentTarget.click();
   }
 
   function selectLibraryEntry(id) {
@@ -3964,6 +4177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.librarySelectedEntry = entry;
     renderLibraryGrid();
     renderLibraryPreview(entry);
+    revealPreviewOnNarrow('library-preview-panel');
   }
 
   // Same WhatsApp-bubble preview markup/CSS as the Create Template modal's
@@ -4002,12 +4216,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     panel.innerHTML = `
       <div class="library-preview-meta">${escapeHtml(entry.industry)} &middot; ${escapeHtml(entry.use_case.replace(/_/g, ' '))} &middot; ${escapeHtml(entry.category)}</div>
-      <h3 style="margin:0 0 0.75rem;">${escapeHtml(entry.title)}</h3>
+      <h3 class="library-preview-title">${esc(entry.title)}</h3>
       <div class="template-preview-frame">
         <div class="msg-bubble msg-out template-preview-bubble" id="library-preview-bubble"></div>
       </div>
-      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem;">Pre-vetted against Meta's policy — first-attempt approval rates are higher, but this is not a guarantee of approval. Review and customize before submitting.</p>
-      <button type="button" class="btn-primary" style="margin-top:0.5rem;" id="use-library-template-btn">Use This Template</button>
+      <p class="library-preview-note">Pre-vetted against Meta's policy — first-attempt approval rates are higher, but this is not a guarantee of approval. Review and customize before submitting.</p>
+      <button type="button" class="btn-primary btn-block" id="use-library-template-btn">Use This Template</button>
     `;
     const bubble = document.getElementById('library-preview-bubble');
     if (bubble) bubble.innerHTML = bubbleHtml;
@@ -4022,7 +4236,13 @@ document.addEventListener('DOMContentLoaded', () => {
       populateLibraryFilterOptions();
       renderLibraryGrid();
     } catch (err) {
-      if (grid) grid.innerHTML = '<p style="padding:1rem;color:#B91C1C;">Could not load the template library. Please try again.</p>';
+      if (grid) {
+        grid.innerHTML = '<div class="error-state"><div>Couldn\'t load the template library.</div><button type="button" class="btn-secondary" id="library-retry-btn">Try again</button></div>';
+        document.getElementById('library-retry-btn')?.addEventListener('click', () => {
+          grid.innerHTML = '<div class="templates-grid"><div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:55%;"></span><span class="skeleton" style="height:12px;width:90%;"></span></div></div>';
+          loadTemplateLibrary();
+        });
+      }
     }
   }
 
@@ -4045,13 +4265,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.library-source-tab').forEach((btn) => {
       const active = btn.dataset.librarySource === source;
       btn.classList.toggle('active', active);
-      btn.classList.toggle('btn-primary', active);
-      btn.classList.toggle('btn-secondary', !active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.tabIndex = active ? 0 : -1;
     });
   }
 
   document.querySelectorAll('.library-source-tab').forEach((btn) => {
     btn.addEventListener('click', () => switchLibrarySource(btn.dataset.librarySource));
+  });
+  // Arrow keys move between the two tabs (WAI-ARIA tablist pattern).
+  document.querySelector('.library-tabs')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const tabs = [...document.querySelectorAll('.library-source-tab')];
+    const next = tabs[(tabs.indexOf(document.activeElement) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    if (!next) return;
+    next.focus();
+    switchLibrarySource(next.dataset.librarySource);
   });
 
   async function loadMetaTemplateLibrary() {
@@ -4069,7 +4298,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       renderMetaLibraryGrid();
     } catch (err) {
-      if (grid) grid.innerHTML = '<p style="padding:1rem;color:#B91C1C;">Could not load Meta\'s template library. Please try again.</p>';
+      if (grid) {
+        grid.innerHTML = '<div class="error-state"><div>Couldn\'t load Meta\'s template library.</div><button type="button" class="btn-secondary" id="meta-library-retry-btn">Try again</button></div>';
+        document.getElementById('meta-library-retry-btn')?.addEventListener('click', loadMetaTemplateLibrary);
+      }
     }
   }
 
@@ -4088,7 +4320,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const entries = filteredMetaLibraryEntries();
 
     if (!entries.length) {
-      grid.innerHTML = '<p style="padding:1rem;color:#6B7280;">No templates match these filters.</p>';
+      grid.innerHTML = `<div class="empty-state"><i data-lucide="search-x" class="empty-icon"></i><div class="empty-title">No templates match</div><div>Try a different search or use case.</div></div>`;
+      refreshIcons();
       return;
     }
 
@@ -4096,21 +4329,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const selected = state.metaLibrarySelectedEntry?.id === e.id ? ' selected' : '';
       const preview = escapeHtml((e.body || '').length > 90 ? `${e.body.slice(0, 90)}…` : (e.body || ''));
       return `
-        <div class="template-card library-template-card${selected}" data-meta-library-id="${e.id}">
-          <div>
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <span style="font-weight: 700; word-break: break-word; min-width: 0;">${escapeHtml(e.name)}</span>
-              <span class="template-badge approved" style="flex-shrink: 0; white-space: nowrap;">Meta Official</span>
+        <div class="template-card library-template-card${selected}" data-meta-library-id="${esc(e.id)}" role="button" tabindex="0" aria-pressed="${selected ? 'true' : 'false'}">
+          <div class="template-card-main">
+            <div class="template-card-head">
+              <span class="template-card-name">${esc(e.name)}</span>
+              <span class="badge badge-success template-badge">Meta Official</span>
             </div>
-            <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.4;">${preview}</p>
+            <p class="template-card-body">${preview}</p>
           </div>
-          <div style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">${escapeHtml((e.usecase || '').replace(/_/g, ' ') || 'General')}</div>
+          <div class="template-card-meta">${esc((e.usecase || '').replace(/_/g, ' ') || 'General')}</div>
         </div>
       `;
     }).join('');
 
     grid.querySelectorAll('[data-meta-library-id]').forEach((card) => {
       card.addEventListener('click', () => selectMetaLibraryEntry(card.dataset.metaLibraryId));
+      card.addEventListener('keydown', onLibraryCardKeydown);
     });
   }
 
@@ -4120,6 +4354,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.metaLibrarySelectedEntry = entry;
     renderMetaLibraryGrid();
     renderMetaLibraryPreview(entry);
+    revealPreviewOnNarrow('meta-library-preview-panel');
   }
 
   // Same template-preview-bubble markup as everything else in this app
@@ -4141,12 +4376,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     panel.innerHTML = `
       <div class="library-preview-meta">${escapeHtml((entry.usecase || '').replace(/_/g, ' ') || 'General')} &middot; Meta Official &middot; Utility</div>
-      <h3 style="margin:0 0 0.75rem;">${escapeHtml(entry.name)}</h3>
+      <h3 class="library-preview-title">${esc(entry.name)}</h3>
       <div class="template-preview-frame">
         <div class="msg-bubble msg-out template-preview-bubble" id="meta-library-preview-bubble"></div>
       </div>
-      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem;">Written and pre-approved by Meta — skips the normal review wait entirely. Content can't be edited; only the name and button destinations below.</p>
-      <button type="button" class="btn-primary" style="margin-top:0.5rem;" id="use-meta-library-template-btn">Use This Template</button>
+      <p class="library-preview-note">Written and pre-approved by Meta — skips the normal review wait entirely. Content can't be edited; only the name and button destinations below.</p>
+      <button type="button" class="btn-primary btn-block" id="use-meta-library-template-btn">Use This Template</button>
     `;
     const bubble = document.getElementById('meta-library-preview-bubble');
     if (bubble) bubble.innerHTML = renderTemplateBubbleMarkup(bubbleShim, {});
@@ -5188,6 +5423,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const editBtn = e.target.closest('[data-edit-template]');
     const deleteBtn = e.target.closest('[data-delete-template]');
 
+    if (e.target.closest('#templates-retry-btn')) { reloadTemplatesWithState(); return; }
+    if (e.target.closest('#templates-empty-create')) { document.getElementById('open-create-template-modal')?.click(); return; }
+    if (e.target.closest('#templates-clear-filters')) {
+      templatesView.q = ''; templatesView.status = ''; templatesView.category = '';
+      const search = document.getElementById('template-search');
+      const statusSel = document.getElementById('template-status-filter');
+      const catSel = document.getElementById('template-category-filter');
+      if (search) search.value = '';
+      if (statusSel) statusSel.value = '';
+      if (catSel) catSel.value = '';
+      renderTemplates();
+      return;
+    }
+
     if (previewBtn) {
       const template = state.templates.find((t) => t.id === previewBtn.dataset.previewTemplate);
       if (template) openTemplateChatPreview(template);
@@ -6063,30 +6312,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     }
-  });
-
-  // --- Create Flow Modal ---
-  document.getElementById('open-create-flow-modal')?.addEventListener('click', () => {
-    document.getElementById('modal-create-flow')?.classList.add('open');
-  });
-
-  document.getElementById('create-flow-form')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const title = document.getElementById('new-flow-title').value.trim();
-    const description = document.getElementById('new-flow-description').value.trim();
-    if (!title || !description) return;
-
-    document.getElementById('flows-grid')?.insertAdjacentHTML('beforeend', `
-      <div style="border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; background: white;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">${title}</span><span class="status-badge active">Draft</span></div>
-        <p style="font-size: 0.85rem; color: #4B5563; margin-bottom: 0.75rem;">${description}</p>
-        <div style="font-size: 0.75rem; color: #6B7280;">Submissions: 0 • Completion Rate: --</div>
-      </div>
-    `);
-
-    e.target.reset();
-    document.getElementById('modal-create-flow')?.classList.remove('open');
-    showToast('Flow created');
   });
 
   // --- Wallet ---

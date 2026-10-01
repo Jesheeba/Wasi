@@ -552,18 +552,43 @@
 
         <!-- 4. TEMPLATE VIEW -->
         <div id="view-template" class="view-container" style="padding: 1.5rem;">
-          <div class="page-title-bar">
+          <div class="page-title-bar templates-page-header">
             <div>
-              <h1 class="page-title">WhatsApp Templates</h1>
+              <h1 class="page-title">Templates</h1>
               <p class="page-subtitle">Your Meta WhatsApp message templates and their approval status</p>
             </div>
-            <div style="display: flex; gap: 10px;">
-              <button class="btn-secondary" style="width: auto; padding: 0 18px;" id="sync-templates-btn"><i data-lucide="refresh-cw"></i> Sync from Meta</button>
-              <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-template-modal"><i data-lucide="plus"></i> Create Template</button>
+            <div class="page-actions">
+              <button type="button" class="btn-secondary btn-auto" id="sync-templates-btn"><i data-lucide="refresh-cw"></i> Sync from Meta</button>
+              <button type="button" class="btn-primary btn-auto" id="open-create-template-modal"><i data-lucide="plus"></i> Create Template</button>
             </div>
           </div>
-          <div class="table-card" style="padding: 1.5rem;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="templates-grid"></div>
+          <div class="table-card">
+            <div class="table-toolbar templates-toolbar">
+              <div class="search-box grow">
+                <i data-lucide="search" style="width: 16px; color: var(--text-muted);"></i>
+                <input type="text" id="template-search" placeholder="Search templates" aria-label="Search templates" />
+              </div>
+              <select class="form-input templates-filter" id="template-status-filter" aria-label="Filter by status">
+                <option value="">All statuses</option>
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+                <option value="paused">Paused</option>
+                <option value="disabled">Disabled</option>
+                <option value="in_appeal">In appeal</option>
+              </select>
+              <select class="form-input templates-filter" id="template-category-filter" aria-label="Filter by category">
+                <option value="">All categories</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Utility">Utility</option>
+                <option value="Authentication">Authentication</option>
+              </select>
+            </div>
+            <div class="templates-grid" id="templates-grid" aria-live="polite">
+              <div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:55%;"></span><span class="skeleton" style="height:12px;width:90%;"></span><span class="skeleton" style="height:12px;width:70%;"></span></div>
+              <div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:45%;"></span><span class="skeleton" style="height:12px;width:85%;"></span><span class="skeleton" style="height:12px;width:60%;"></span></div>
+              <div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:60%;"></span><span class="skeleton" style="height:12px;width:80%;"></span><span class="skeleton" style="height:12px;width:50%;"></span></div>
+            </div>
           </div>
         </div>
 
@@ -581,35 +606,37 @@
                category only, skips the review wait entirely). Never merged into
                one filterable list — conflating them would mislead a client about
                which templates still need to wait for approval. -->
-          <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-            <button type="button" class="btn-primary library-source-tab active" data-library-source="wasi" style="width:auto; padding:0 16px;">Wasi Curated</button>
-            <button type="button" class="btn-secondary library-source-tab" data-library-source="meta" style="width:auto; padding:0 16px;">Meta Official (Utility)</button>
+          <div class="tabs library-tabs" role="tablist" aria-label="Template library source">
+            <button type="button" class="tab library-source-tab active" role="tab" id="library-tab-wasi" aria-selected="true" aria-controls="library-source-wasi" data-library-source="wasi">Wasi Curated</button>
+            <button type="button" class="tab library-source-tab" role="tab" id="library-tab-meta" aria-selected="false" aria-controls="library-source-meta" data-library-source="meta" tabindex="-1">Meta Official (Utility)</button>
           </div>
 
-          <div id="library-source-wasi">
-            <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
-              <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
-                <select id="library-filter-category" class="form-input" style="width: auto; min-width: 160px;">
+          <div id="library-source-wasi" role="tabpanel" aria-labelledby="library-tab-wasi">
+            <div class="table-card library-filters">
+              <div class="table-toolbar">
+                <select id="library-filter-category" class="form-input templates-filter" aria-label="Filter by category">
                   <option value="">All Categories</option>
                   <option value="Marketing">Marketing</option>
                   <option value="Utility">Utility</option>
                   <option value="Authentication">Authentication</option>
                 </select>
-                <select id="library-filter-use-case" class="form-input" style="width: auto; min-width: 160px;">
+                <select id="library-filter-use-case" class="form-input templates-filter" aria-label="Filter by use case">
                   <option value="">All Use Cases</option>
                 </select>
               </div>
             </div>
             <div class="library-layout">
-              <div class="table-card" style="padding: 1.5rem;">
+              <div class="table-card library-list-card">
                 <!-- Grouped into one section per industry (not a filter — every
                      industry's templates are always visible, sectioned with its
                      own heading), same layout for every industry. Category/use-
                      case dropdowns above still narrow within/across sections. -->
-                <div id="library-grid"></div>
+                <div id="library-grid">
+                  <div class="templates-grid"><div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:55%;"></span><span class="skeleton" style="height:12px;width:90%;"></span></div><div class="template-card template-skeleton"><span class="skeleton" style="height:16px;width:45%;"></span><span class="skeleton" style="height:12px;width:85%;"></span></div></div>
+                </div>
               </div>
-              <div class="table-card library-preview-card" style="padding: 1.5rem;" id="library-preview-panel">
-                <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
+              <div class="table-card library-preview-card" id="library-preview-panel">
+                <p class="library-preview-empty">Select a template on the left to preview it here.</p>
               </div>
             </div>
           </div>
@@ -619,21 +646,24 @@
                with no {{n}} variables (Phase 0 decision: the API returns
                positional {{1}}/{{2}} params, incompatible with this app's
                named-parameters-only template pipeline) — see CLAUDE.md Known Gaps. -->
-          <div id="library-source-meta" style="display:none;">
-            <div class="table-card" style="padding: 1.5rem; margin-bottom: 1rem;">
-              <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
-                <select id="meta-library-filter-usecase" class="form-input" style="width: auto; min-width: 180px;">
+          <div id="library-source-meta" role="tabpanel" aria-labelledby="library-tab-meta" style="display:none;">
+            <div class="table-card library-filters">
+              <div class="table-toolbar">
+                <div class="search-box grow">
+                  <i data-lucide="search" style="width: 16px; color: var(--text-muted);"></i>
+                  <input type="text" id="meta-library-search" placeholder="Search by name…" aria-label="Search Meta library by name">
+                </div>
+                <select id="meta-library-filter-usecase" class="form-input templates-filter" aria-label="Filter by use case">
                   <option value="">All Use Cases</option>
                 </select>
-                <input type="text" id="meta-library-search" class="form-input" style="width: auto; min-width: 200px;" placeholder="Search by name…">
               </div>
             </div>
             <div class="library-layout">
-              <div class="table-card" style="padding: 1.5rem;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;" id="meta-library-grid"></div>
+              <div class="table-card library-list-card">
+                <div class="templates-grid" id="meta-library-grid"></div>
               </div>
-              <div class="table-card library-preview-card" style="padding: 1.5rem;" id="meta-library-preview-panel">
-                <p style="color: var(--text-muted); font-size: 0.85rem;">Select a template on the left to preview it here.</p>
+              <div class="table-card library-preview-card" id="meta-library-preview-panel">
+                <p class="library-preview-empty">Select a template on the left to preview it here.</p>
               </div>
             </div>
           </div>
@@ -641,26 +671,40 @@
 
         <!-- 5. AUTOMATION VIEW -->
         <div id="view-automation" class="view-container" style="padding: 1.5rem;">
-          <div class="page-title-bar">
+          <div class="page-title-bar automation-page-header">
             <div>
-              <h1 class="page-title">Automation & Workflows</h1>
-              <p class="page-subtitle">Configure bot flow rules, keyword triggers, and auto-responders</p>
+              <h1 class="page-title">Automation</h1>
+              <p class="page-subtitle">Build powerful automations with keyword rules and multi-step flows</p>
             </div>
-            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-rule-modal"><i data-lucide="plus"></i> Create Rule</button>
-          </div>
-          <div class="table-card" style="padding: 1.5rem;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;" id="automation-rules-grid"></div>
+            <div class="page-actions">
+              <button type="button" class="btn-primary btn-auto" id="open-create-rule-modal"><i data-lucide="plus"></i> New Rule</button>
+              <button type="button" class="btn-primary btn-auto" id="open-create-bot-flow-btn" hidden><i data-lucide="plus"></i> New Flow</button>
+            </div>
           </div>
 
-          <div class="page-title-bar" style="margin-top: 2rem;">
-            <div>
-              <h2 class="page-title" style="font-size: 1.15rem;">Flows</h2>
-              <p class="page-subtitle">Multi-step flows with branching, buttons, delays, and actions — a rule can start one instead of sending a single reply</p>
-            </div>
-            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-bot-flow-btn"><i data-lucide="plus"></i> Create Flow</button>
+          <div class="tabs automation-tabs" role="tablist" aria-label="Automation">
+            <button type="button" class="tab automation-tab active" role="tab" id="automation-tab-rules" aria-selected="true" aria-controls="automation-panel-rules" data-automation-tab="rules">Rules</button>
+            <button type="button" class="tab automation-tab" role="tab" id="automation-tab-flows" aria-selected="false" aria-controls="automation-panel-flows" data-automation-tab="flows" tabindex="-1">Flows</button>
           </div>
-          <div class="table-card" style="padding: 1.5rem;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="bot-flows-grid"></div>
+
+          <div class="table-card" id="automation-panel-rules" role="tabpanel" aria-labelledby="automation-tab-rules">
+            <p class="automation-panel-intro">A rule watches incoming messages for a trigger and either sends a single reply or starts a flow.</p>
+            <table class="data-table stack-mobile automation-table">
+              <thead>
+                <tr><th>Rule</th><th>Trigger</th><th>Responds with</th><th>Status</th><th>Created</th></tr>
+              </thead>
+              <tbody id="automation-rules-grid"></tbody>
+            </table>
+          </div>
+
+          <div class="table-card" id="automation-panel-flows" role="tabpanel" aria-labelledby="automation-tab-flows" hidden>
+            <p class="automation-panel-intro">Multi-step flows with branching, buttons, delays, and actions — a rule can start one instead of sending a single reply.</p>
+            <table class="data-table stack-mobile automation-table">
+              <thead>
+                <tr><th>Flow</th><th>Trigger</th><th>Status</th><th>Updated</th><th class="automation-col-actions"><span class="sr-only">Actions</span></th></tr>
+              </thead>
+              <tbody id="bot-flows-grid"></tbody>
+            </table>
           </div>
         </div>
 
@@ -2178,29 +2222,6 @@
     </div>
   </div>
 
-  <div id="modal-create-flow" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 class="modal-title">Create Flow</h3>
-        <button class="close-modal-btn" data-close-modal="modal-create-flow"><i data-lucide="x"></i></button>
-      </div>
-      <form id="create-flow-form">
-        <div class="form-group">
-          <label class="form-label">Flow Title</label>
-          <input type="text" id="new-flow-title" class="form-input" placeholder="e.g. Feedback Survey" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea id="new-flow-description" class="form-input" style="height: 70px; padding: 10px;" required></textarea>
-        </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
-          <button type="button" class="btn-secondary" data-close-modal="modal-create-flow">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Publish Flow</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <div id="modal-recharge-wallet" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
@@ -2263,7 +2284,7 @@
        is deliberate, not decorative — this codebase already has an
        unrelated pre-existing "WhatsApp Flows" feature (Meta's native-form
        product, view-whatsapp-flows below) using the plain "flow"/"flows"
-       id vocabulary (modal-create-flow, create-flow-form, flows-grid).
+       id vocabulary (flows-grid).
        These are a different concept (the automation engine's multi-step
        bot flows, server/src/services/flowEngine.js) and must not collide
        with it. -->
@@ -2287,30 +2308,38 @@
   </div>
 
   <!-- ===================== BOT FLOW EDITOR MODAL ===================== -->
-  <div id="modal-bot-flow-editor" class="modal-overlay">
-    <div class="modal-box modal-box-wide">
-      <div class="modal-header">
-        <h3 class="modal-title" id="bot-flow-editor-title">Edit Flow</h3>
-        <button class="close-modal-btn" data-close-modal="modal-bot-flow-editor"><i data-lucide="x"></i></button>
-      </div>
-      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap;">
-        <span id="bot-flow-editor-status-badge" class="status-badge"></span>
-        <button type="button" class="btn-secondary" id="bot-flow-editor-toggle-status-btn" style="width: auto; padding: 0 14px; font-size: 0.8rem;"></button>
-        <span style="font-size: 0.8rem; color: var(--text-muted);" id="bot-flow-editor-entry-label"></span>
-        <button type="button" class="btn-secondary" id="bot-flow-editor-delete-btn" title="Delete this flow" style="width: auto; padding: 0 14px; font-size: 0.8rem; color: #DC2626; display: inline-flex; align-items: center; gap: 4px; margin-left: auto;"><i data-lucide="trash-2" style="width: 14px;"></i> Delete Flow</button>
-        <span style="display: flex; border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden;">
-          <button type="button" class="flow-view-btn" data-flow-view="list" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer;">List</button>
-          <button type="button" class="flow-view-btn" data-flow-view="canvas" style="border: none; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; border-left: 1px solid var(--border-light);">Visual Editor</button>
-        </span>
-      </div>
-      <div id="bot-flow-editor-issues-banner"></div>
-      <div id="bot-flow-editor-nodes"></div>
-      <div id="bot-flow-editor-canvas-wrap" style="display: none;">
-        <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem;">Drag nodes, draw connections between them, and edit fields directly on the canvas — changes here save immediately and appear in the List view too.</div>
-        <iframe id="bot-flow-editor-iframe" title="Visual flow editor" style="width: 100%; border: 1px solid var(--border-light); border-radius: 10px; background: #FBFAF7;"></iframe>
-      </div>
-      <div style="margin-top: 1rem;">
-        <button type="button" class="btn-secondary" id="bot-flow-editor-add-node-btn" style="width: auto; padding: 0 16px;"><i data-lucide="plus"></i> Add Node</button>
+  <!-- Full-viewport layer (not a cramped modal): top bar with flow name, status,
+       Activate/Archive, Delete and close; List / Visual Editor tabs; the body fills
+       the rest of the screen. Every id below is wired in app.js (openFlowEditor,
+       renderFlowEditor, applyFlowView, loadFlowIframe). -->
+  <div id="modal-bot-flow-editor" class="modal-overlay flow-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="bot-flow-editor-title">
+    <div class="modal-box flow-editor-shell">
+      <header class="flow-editor-topbar">
+        <button type="button" class="close-modal-btn flow-editor-close" data-close-modal="modal-bot-flow-editor" aria-label="Close flow editor"><i data-lucide="arrow-left"></i></button>
+        <div class="flow-editor-heading">
+          <h3 class="flow-editor-title" id="bot-flow-editor-title">Edit Flow</h3>
+          <span id="bot-flow-editor-status-badge" class="badge badge-neutral"></span>
+        </div>
+        <div class="tabs flow-editor-tabs" role="tablist" aria-label="Editor view">
+          <button type="button" class="tab flow-view-btn" role="tab" aria-selected="true" data-flow-view="list">List</button>
+          <button type="button" class="tab flow-view-btn" role="tab" aria-selected="false" data-flow-view="canvas">Visual Editor</button>
+        </div>
+        <div class="flow-editor-actions">
+          <button type="button" class="btn-secondary btn-sm btn-auto" id="bot-flow-editor-toggle-status-btn"></button>
+          <button type="button" class="btn-ghost btn-sm flow-editor-delete" id="bot-flow-editor-delete-btn" title="Delete this flow" aria-label="Delete flow"><i data-lucide="trash-2" class="icon-14"></i><span class="flow-editor-delete-label"> Delete Flow</span></button>
+        </div>
+      </header>
+      <div class="flow-editor-subbar"><span id="bot-flow-editor-entry-label"></span></div>
+      <div class="flow-editor-body">
+        <div id="bot-flow-editor-issues-banner"></div>
+        <div id="bot-flow-editor-nodes"></div>
+        <div id="bot-flow-editor-canvas-wrap" style="display: none;">
+          <p class="flow-editor-hint">Drag nodes, draw connections between them, and edit fields directly on the canvas — changes here save immediately and appear in the List view too.</p>
+          <iframe id="bot-flow-editor-iframe" title="Visual flow editor"></iframe>
+        </div>
+        <div class="flow-editor-footer">
+          <button type="button" class="btn-secondary btn-auto" id="bot-flow-editor-add-node-btn"><i data-lucide="plus"></i> Add Node</button>
+        </div>
       </div>
     </div>
   </div>
