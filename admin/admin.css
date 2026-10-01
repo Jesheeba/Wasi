@@ -1,4 +1,10 @@
-/* Wasi Admin Panel — styles layered on top of ../index.css design tokens */
+/* Wasi Admin Panel — layered on top of ../index.css and /design-system.css
+   (loaded AFTER this file, so design-system tokens/components win ties).
+
+   Admin-only pieces live here: the grouped sidebar profile, KPI tiles, the
+   scrollable sticky-header table wrapper, client-detail tabs/cards, the
+   secrets (copy-once) panel, and the API Guide. Status colours come from the
+   shared .badge-* / .alert-* components — no inline hex colours. */
 
 body {
   overflow: auto;
@@ -10,25 +16,32 @@ body {
   height: 100vh;
 }
 
+/* Dynamic viewport unit so mobile browser toolbars never clip the shell. */
+@supports (height: 100dvh) {
+  body { min-height: 100dvh; }
+  #app-shell { height: 100dvh; }
+  @media (max-width: 900px) {
+    .sidebar { height: 100dvh; }
+  }
+}
+
 .content-area {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem 2rem 3rem;
 }
+.content-area:focus { outline: none; }
 
 .admin-view {
   display: none;
+  max-width: 1400px;
+  margin: 0 auto;
 }
+.admin-view.active { display: block; }
 
-.admin-view.active {
-  display: block;
-}
-
-.page-title-inline {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--color-heading);
-}
+/* ----------------------------------------------------------- login */
+.login-heading { font-size: 1.75rem; font-weight: 700; color: var(--color-heading); }
+.login-blurb { color: var(--text-muted); font-size: 0.95rem; }
 
 .admin-logo-mark {
   width: 64px;
@@ -40,192 +53,225 @@ body {
   align-items: center;
   justify-content: center;
 }
+.admin-logo-mark svg { width: 32px; height: 32px; }
 
-.admin-logo-mark svg {
-  width: 32px;
-  height: 32px;
-}
+/* --------------------------------------------------------- sidebar */
+.sidebar-logo-icon { color: #4AC959; }
+.sidebar-logo-text { color: #fff; font-weight: 700; font-size: 1.05rem; }
 
-/* Inline error / alert banners */
-.inline-error {
-  background: #FEF2F2;
-  border: 1px solid #FCA5A5;
-  color: #B91C1C;
-  font-size: 0.85rem;
-  padding: 10px 14px;
-  border-radius: 10px;
-  margin-bottom: 1rem;
+.sidebar-profile {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 8px 14px 10px;
+  min-width: 0;
 }
+.sidebar-avatar { width: 30px; height: 30px; font-size: 0.8rem; background: #4AC959; color: #0E2916; flex-shrink: 0; }
+.sidebar-profile-text { min-width: 0; }
+.sidebar-profile-name { color: #fff; font-weight: 600; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-profile-role { color: rgba(255, 255, 255, 0.55); font-size: 0.72rem; text-transform: capitalize; }
 
-.inline-warning {
-  background: #FFFBEB;
-  border: 1px solid #FCD34D;
-  color: #92400E;
-  font-size: 0.85rem;
-  padding: 10px 14px;
-  border-radius: 10px;
-  margin-bottom: 1rem;
-}
-
+/* ------------------------------------------------- alerts / banners
+   Legacy class names kept (dozens of JS call sites), restyled onto the
+   shared semantic tokens. */
+.inline-error,
+.inline-warning,
 .inline-success {
-  background: #ECFDF5;
-  border: 1px solid #6EE7B7;
-  color: #047857;
-  font-size: 0.85rem;
+  font-size: var(--fs-body);
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
+  border: 1px solid;
   margin-bottom: 1rem;
+  line-height: 1.5;
+}
+.inline-error { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); display: flex; align-items: center; gap: 8px; }
+.inline-warning { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning); }
+.inline-success { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.alert { margin-bottom: 1rem; }
+.alert-spaced { margin: 0.5rem 0 0.75rem; }
+.alert strong { font-weight: 600; }
+.alert-body { min-width: 0; }
+.tech-detail { display: block; margin-top: 4px; font-size: var(--fs-caption); opacity: 0.85; font-family: var(--font-mono); word-break: break-word; }
+.muted-text { color: var(--text-muted); font-size: var(--fs-body); }
+
+.test-alert-result {
+  margin-bottom: 1rem;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-body);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  white-space: pre-line;
 }
 
-.empty-state {
-  padding: 2.5rem 1rem;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.9rem;
+/* -------------------------------------------------------- KPI tiles
+   ONE tile component for the dashboard, billing and payment-reminder rows. */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
 }
+.kpi-grid-compact { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 
-/* Status badge color variants (extends .status-badge from index.css) */
-.status-badge.status-active { background: #DCFCE7; color: #15803D; }
-.status-badge.status-pending_setup,
-.status-badge.status-payment_confirmed,
-.status-badge.status-connecting,
-.status-badge.status-pending { background: #FEF3C7; color: #B45309; }
-.status-badge.status-suspended,
-.status-badge.status-failed,
-.status-badge.status-revoked,
-.status-badge.status-rejected { background: #FEE2E2; color: #B91C1C; }
-.status-badge.status-connected,
-.status-badge.status-approved,
-.status-badge.status-resolved { background: #DCFCE7; color: #15803D; }
-.status-badge.status-unknown { background: #F1F5F9; color: #475569; }
-.status-badge.status-open { background: #FEF3C7; color: #B45309; }
-.status-badge.status-in_progress { background: #DBEAFE; color: #1D4ED8; }
-.status-badge.status-closed { background: #F1F5F9; color: #475569; }
+.kpi-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  min-width: 0;
+}
+.kpi-value { font-size: 1.625rem; font-weight: 600; color: var(--text); line-height: 1.2; }
+.kpi-label { font-size: var(--fs-label); color: var(--text-muted); }
+.kpi-icon {
+  position: absolute; top: var(--sp-3); right: var(--sp-3);
+  width: 32px; height: 32px; border-radius: var(--r-md);
+  background: var(--brand-soft); color: var(--success);
+  display: flex; align-items: center; justify-content: center;
+}
+.kpi-icon svg { width: 16px; height: 16px; }
+.kpi-tile.tone-warning .kpi-icon { background: var(--warning-bg); color: var(--warning); }
+.kpi-tile.tone-danger .kpi-icon { background: var(--danger-bg); color: var(--danger); }
+.kpi-tile.tone-danger .kpi-value { color: var(--danger); }
+.kpi-tile.clickable { cursor: pointer; transition: border-color 0.12s ease, box-shadow 0.12s ease; }
+.kpi-tile.clickable:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(20, 53, 24, 0.07); }
 
-.stuck-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: #FEE2E2;
-  color: #B91C1C;
+/* ------------------------------------------------------ card chrome */
+.card-head { padding: var(--sp-4) var(--sp-4) var(--sp-3); border-bottom: 1px solid var(--border); }
+.card-head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap; }
+.card-title { font-size: var(--fs-card); font-weight: 600; color: var(--text); }
+.card-sub { margin-top: 2px; font-size: var(--fs-label); color: var(--text-muted); max-width: 70ch; }
+.card-body { padding: var(--sp-4); }
+.section-gap { margin-top: var(--sp-5); }
+.section-gap-bottom { margin-bottom: var(--sp-5); }
+.nowrap { white-space: nowrap; }
+
+.breadcrumb-row { margin-bottom: var(--sp-3); }
+.toolbar-note { font-size: var(--fs-label); color: var(--text-muted); }
+.toolbar-count { font-size: var(--fs-label); color: var(--text-muted); white-space: nowrap; }
+.tab-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.search-box .search-icon { color: var(--text-muted); }
+
+.tabs { margin-bottom: var(--sp-4); }
+.tab:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--r-sm); }
+
+/* ---------------------------------------------------------- tables
+   .table-scroll is the scroll container (so the sticky header works and a
+   long table never grows the page without bound). */
+.table-scroll {
+  overflow: auto;
+  max-height: clamp(320px, calc(100vh - 260px), 760px);
+}
+@supports (height: 100dvh) {
+  .table-scroll { max-height: clamp(320px, calc(100dvh - 260px), 760px); }
+}
+.table-scroll .data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--border);
   white-space: nowrap;
 }
+.data-table tbody tr.clickable-row { cursor: pointer; transition: background 0.12s ease; }
+.data-table tbody tr.clickable-row:hover td { background: var(--brand-soft); }
+.data-table tbody tr[tabindex]:focus-visible td { background: var(--brand-soft); }
+.cell-wrap { max-width: 320px; white-space: normal; }
+.cell-clamp {
+  max-width: 280px; min-width: 160px; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.cell-mono { font-family: var(--font-mono); font-size: var(--fs-caption); }
+.cell-break { word-break: break-all; }
+.cell-secondary { color: var(--text-muted); font-size: var(--fs-caption); }
+.table-state td { padding: 0; border-bottom: none; }
+.table-state:hover td { background: transparent !important; }
 
-/* Table row hover + clickable rows */
-.data-table tbody tr.clickable-row {
-  cursor: pointer;
-  transition: background 0.12s ease;
+@media (max-width: 640px) {
+  .table-scroll { max-height: none; overflow: visible; }
+  .data-table.stack-mobile tr.table-state { border: none; margin: 0; padding: 0; }
+  .data-table.stack-mobile td.state-cell { display: block; text-align: center; padding: 0; }
+  .data-table.stack-mobile td.state-cell::before { content: none; }
+  .data-table.stack-mobile td.cell-wrap { max-width: none; display: flex; }
+  .cell-clamp { max-width: none; min-width: 0; text-align: right; }
+  .data-table.stack-mobile td:empty { display: none; }
 }
 
-.data-table tbody tr.clickable-row:hover {
-  background: var(--color-primary-50);
-}
+/* ------------------------------------------------- loading skeletons */
+.skeleton-block { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 var(--sp-5); }
+.skel-line { height: 16px; width: 60%; }
+.skel-title { height: 28px; width: 35%; }
+.skel-chart { height: 180px; width: 100%; }
+.skel-row td { padding: 14px 16px; }
 
-.table-empty-row td {
-  text-align: center;
-  color: var(--text-muted);
-  padding: 2rem;
-}
+/* ------------------------------------------------- dashboard bars */
+.status-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.status-bar-label { width: 170px; font-size: var(--fs-label); color: var(--text); flex-shrink: 0; }
+.status-bar-track { flex: 1; height: 10px; background: var(--neutral-bg); border-radius: 999px; overflow: hidden; }
+.status-bar-fill { height: 100%; background: var(--brand); border-radius: 999px; }
+.status-bar-count { width: 40px; text-align: right; font-size: var(--fs-label); font-weight: 600; color: var(--text); }
 
-/* Clients-by-status simple bar list on dashboard */
-.status-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
+.chart-box { position: relative; height: 220px; }
+.detail-card-aside { font-weight: 400; color: var(--text-muted); font-size: var(--fs-label); }
 
-.status-bar-label {
-  width: 160px;
-  font-size: 0.825rem;
-  color: var(--text-main);
-  flex-shrink: 0;
-}
-
-.status-bar-track {
-  flex: 1;
-  height: 10px;
-  background: #F1F5F9;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.status-bar-fill {
-  height: 100%;
-  background: var(--color-primary);
-  border-radius: 999px;
-}
-
-.status-bar-count {
-  width: 40px;
-  text-align: right;
-  font-size: 0.825rem;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-/* Client detail layout */
+/* ------------------------------------------------------ detail grid */
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
 }
-
+.detail-grid-single { grid-template-columns: 1fr; }
 .detail-card {
   background: var(--bg-card);
-  border-radius: 16px;
-  border: 1px solid var(--border-light);
-  box-shadow: var(--shadow-sm);
-  padding: 1.25rem 1.5rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  padding: var(--sp-4) var(--sp-5);
+  min-width: 0;
 }
-
+.detail-card-accent { border-color: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
 .detail-card-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--color-heading);
-  margin-bottom: 1rem;
+  font-size: var(--fs-card);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--sp-3);
   display: flex;
   align-items: center;
   gap: 8px;
   justify-content: space-between;
 }
+.detail-card p { font-size: var(--fs-body); line-height: 1.6; color: var(--text); margin-bottom: 0.6rem; }
+.detail-card p:last-child { margin-bottom: 0; }
+.detail-card p.p-spaced { margin-top: 0.75rem; }
+.guide-list { margin: 0; padding-left: 1.1rem; line-height: 1.7; font-size: var(--fs-body); }
+.detail-card-full { grid-column: 1 / -1; }
+.detail-card-danger { border-color: var(--danger-border); }
+.detail-card-danger .detail-card-title { color: var(--danger); }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #F1F5F9;
-  font-size: 0.85rem;
+  border-bottom: 1px solid var(--neutral-bg);
+  font-size: var(--fs-body);
   gap: 1rem;
 }
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-row-label {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.detail-row-value {
-  color: var(--text-main);
-  font-weight: 500;
-  text-align: right;
-  word-break: break-word;
-}
-
-.detail-card-full {
-  grid-column: 1 / -1;
-}
+.detail-row:last-child { border-bottom: none; }
+.detail-row-label { color: var(--text-muted); flex-shrink: 0; }
+.detail-row-value { color: var(--text); font-weight: 500; text-align: right; word-break: break-word; min-width: 0; }
+.detail-row-inline { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; }
+.detail-sub { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+.detail-sub-title { font-weight: 600; font-size: var(--fs-label); margin-bottom: 0.35rem; }
+.detail-sub-note { font-size: var(--fs-caption); color: var(--text-muted); margin: 0.2rem 0 0.5rem; line-height: 1.5; }
+.btn-block-center { width: 100%; justify-content: center; margin-top: 0.6rem; }
+.copy-btn-mini { padding: 2px 8px; flex-shrink: 0; }
 
 .status-editor-row {
   display: flex;
@@ -233,540 +279,188 @@ body {
   align-items: center;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid var(--border);
 }
+.status-editor-row select { flex: 1; height: 38px; border-radius: var(--r-md); border: 1px solid var(--border); padding: 0 10px; font-size: var(--fs-body); background: #fff; }
 
-.status-editor-row select {
-  flex: 1;
-  height: 38px;
-  border-radius: 8px;
-  border: 1px solid var(--border-tertiary);
-  padding: 0 10px;
-  font-size: 0.85rem;
-  background: white;
-}
+/* Client detail header + facts strip */
+.client-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.client-header .page-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.client-header-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 
-.template-mini-card {
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.6rem;
-}
+.template-mini-card { border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.75rem 1rem; margin-bottom: 0.6rem; }
+.template-mini-card:last-child { margin-bottom: 0; }
+.template-mini-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; }
+.template-mini-name { font-weight: 600; font-size: var(--fs-body); color: var(--text); word-break: break-word; }
+.template-mini-category { font-size: var(--fs-caption); color: var(--text-muted); }
+.template-mini-body { font-size: var(--fs-label); color: var(--text-muted); line-height: 1.45; white-space: pre-wrap; }
 
-.template-mini-card:last-child {
-  margin-bottom: 0;
-}
+.audit-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--neutral-bg); font-size: var(--fs-label); }
+.audit-item:last-child { border-bottom: none; }
+.audit-actor-icon { width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--success); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.audit-item-body { flex: 1; min-width: 0; }
+.audit-item-action { font-weight: 600; color: var(--text); }
+.audit-item-target { color: var(--text-muted); word-break: break-word; }
+.audit-item-time { color: var(--text-faint); font-size: var(--fs-caption); margin-top: 2px; }
 
-.template-mini-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
+.field-hint { font-size: var(--fs-caption); color: var(--text-muted); margin-top: 6px; }
 
-.template-mini-name {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--text-main);
-}
+/* Danger zone */
+.danger-zone { border: 1px solid var(--danger-border); border-radius: var(--r-lg); padding: var(--sp-4) var(--sp-5); background: var(--danger-bg); }
+.danger-zone-title { font-weight: 600; color: var(--danger); font-size: var(--fs-card); margin-bottom: 4px; }
+.danger-zone p { font-size: var(--fs-body); color: var(--text); margin-bottom: var(--sp-3); line-height: 1.5; }
 
-.template-mini-category {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
+/* Copy-once secrets panel (create client / new API key) */
+.secret-list { display: flex; flex-direction: column; gap: 8px; margin: 0.75rem 0; }
+.secret-row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; }
+.secret-row-label { font-size: var(--fs-caption); color: var(--text-muted); width: 92px; flex-shrink: 0; }
+.secret-row-value { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--fs-label); word-break: break-all; user-select: all; }
+.ack-row { display: flex; align-items: center; gap: 8px; font-size: var(--fs-body); margin: 0.75rem 0; font-weight: 500; }
+.ack-row.attention { color: var(--danger); }
+.ack-row input { width: 18px; height: 18px; accent-color: var(--brand); }
+.next-steps { margin: 1rem 0; padding: 0.75rem; background: var(--bg-subtle); border-radius: var(--r-md); font-size: var(--fs-body); line-height: 1.6; }
+.next-steps ol { margin: 0.4rem 0 0 1.1rem; padding: 0; }
 
-.template-mini-body {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
+/* Payment reminders schedule */
+.schedule-form { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--sp-3); }
+.schedule-form .form-group { margin-bottom: 0; }
+.schedule-form select { width: 120px; }
+.schedule-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--border); font-size: var(--fs-body); }
+.schedule-row .schedule-when { min-width: 220px; }
+.schedule-row .schedule-last { flex: 1; font-size: var(--fs-label); color: var(--text-muted); }
+.recipient-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 12px; margin: 0.6rem 0 0; font-size: var(--fs-label); list-style: none; }
+.recipient-list li { padding: 3px 0; border-bottom: 1px solid var(--neutral-bg); display: flex; justify-content: space-between; gap: 8px; }
+.recipient-list li:last-child { border-bottom: none; }
 
-.audit-item {
-  display: flex;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #F1F5F9;
-  font-size: 0.825rem;
-}
+/* Template review modal */
+.template-preview { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); white-space: pre-wrap; word-break: break-word; font-size: var(--fs-body); line-height: 1.55; max-height: 280px; overflow-y: auto; margin: 0.6rem 0; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.meta-grid dt { font-size: var(--fs-caption); color: var(--text-muted); }
+.meta-grid dd { font-size: var(--fs-body); font-weight: 500; word-break: break-word; }
 
-.audit-item:last-child {
-  border-bottom: none;
-}
+/* Confirm dialog */
+.confirm-box { max-width: 520px; }
+.confirm-body { font-size: var(--fs-body); color: var(--text); line-height: 1.55; margin-bottom: 1.25rem; }
+.confirm-body p { margin-bottom: 0.6rem; }
+.confirm-box .alert { margin: 0 0 1rem; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.confirm-warning { color: var(--danger); font-weight: 600; }
 
-.audit-actor-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--color-primary-50);
-  color: var(--color-primary-700);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
+.spin { animation: admin-spin 1s linear infinite; }
+@keyframes admin-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-.audit-item-body {
-  flex: 1;
-  min-width: 0;
-}
+/* ---------------------------------------------- shared form helpers */
+.page-title-actions { display: flex; gap: 8px; }
+.page-title-auto { width: auto; }
+.page-actions select.form-input { height: 38px; }
+.table-toolbar select.form-input { height: 38px; width: auto; }
+.table-toolbar .search-box { width: auto; }
+.password-generate-row { display: flex; gap: 8px; }
+.search-box-wide { min-width: 260px; }
 
-.audit-item-action {
-  font-weight: 600;
-  color: var(--text-main);
-}
+.form-section-title { font-weight: 600; font-size: var(--fs-label); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 0.6rem; }
+.form-section-details { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+.form-section-details summary { cursor: pointer; font-weight: 600; font-size: var(--fs-body); list-style: none; display: flex; align-items: center; gap: 0.4rem; color: var(--text); }
+.form-section-details summary::-webkit-details-marker { display: none; }
+.form-section-details summary::before { content: '▸'; font-size: 0.7rem; color: var(--text-muted); display: inline-block; transition: transform 0.15s ease; }
+.form-section-details[open] summary::before { transform: rotate(90deg); }
+.form-section-details .form-group:first-of-type { margin-top: 0.75rem; }
 
-.audit-item-target {
-  color: var(--text-muted);
-  word-break: break-word;
-}
+/* ---------------------------------------------------------- API Guide */
+.api-guide-code { background: #0F172A; color: #E2E8F0; border-radius: var(--r-md); padding: 0.85rem 1rem; font-size: var(--fs-label); line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0.5rem 0; }
+.api-guide-inline-link { color: var(--success); font-weight: 600; text-decoration: none; }
+.api-guide-inline-link:hover { text-decoration: underline; }
+.code-block-wrapper { position: relative; }
+.code-block-wrapper .copy-btn { position: absolute; top: 8px; right: 8px; }
 
-.audit-item-time {
-  color: #9CA3AF;
-  font-size: 0.75rem;
-  margin-top: 2px;
-}
+/* ----------------------------------------------- row actions popover */
+.row-actions-menu { position: relative; display: inline-block; }
+.row-actions-trigger { background: transparent; border: 1px solid var(--border); border-radius: var(--r-sm); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); }
+.row-actions-trigger:hover, .row-actions-trigger[aria-expanded="true"] { background: var(--neutral-bg); border-color: var(--border-strong); color: var(--text); }
+.row-actions-popover { position: absolute; right: 0; top: calc(100% + 4px); min-width: 170px; background: #fff; border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-overlay); padding: 4px; z-index: var(--z-popover); display: none; }
+.row-actions-popover.open { display: block; }
+.row-actions-popover button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px; font-size: var(--fs-label); border-radius: var(--r-sm); cursor: pointer; color: var(--text); font-family: inherit; }
+.row-actions-popover button:hover, .row-actions-popover button:focus-visible { background: var(--neutral-bg); outline: none; }
+.row-actions-popover button.danger { color: var(--danger); }
+.row-actions-popover button.danger:hover, .row-actions-popover button.danger:focus-visible { background: var(--danger-bg); }
+.row-actions-inline { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
-.btn-danger {
-  background: #FFFFFF;
-  border: 1px solid #FCA5A5;
-  color: #DC2626;
-}
+/* ------------------------------------------- Service / Payment toggles */
+.wasi-toggle { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.wasi-toggle input { appearance: none; -webkit-appearance: none; width: 38px; height: 22px; border-radius: 999px; background: var(--border-strong); position: relative; cursor: pointer; outline: none; transition: background 0.15s ease; flex-shrink: 0; }
+.wasi-toggle input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s ease; }
+.wasi-toggle input:checked { background: var(--brand); }
+.wasi-toggle input:checked::before { transform: translateX(16px); }
+.wasi-toggle input:focus-visible { box-shadow: var(--focus-ring); }
+.wasi-toggle input:disabled { opacity: 0.5; cursor: not-allowed; }
+.wasi-toggle-label { font-size: var(--fs-body); font-weight: 600; }
+.wasi-toggle.wasi-toggle-danger input:checked { background: var(--danger-solid); }
 
-.btn-danger:hover {
-  background: #FEF2F2;
-  border-color: #DC2626;
-}
+.hub-event-label { display: flex; align-items: center; gap: 0.4rem; font-size: var(--fs-label); }
+.hub-event-label span { font-family: var(--font-mono); }
+.hub-event-list { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0 0.6rem; }
 
-.btn-sm {
-  height: 32px;
-  padding: 0 12px;
-  font-size: 0.8rem;
-}
-
-.field-hint {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 6px;
-}
-
-/* Toast variants */
-.toast.toast-error { background: #B91C1C; }
-.toast.toast-success { background: #15803D; }
-
-/* Loading spinner (simple) */
-.spin {
-  animation: admin-spin 1s linear infinite;
-}
-
-@keyframes admin-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* ===================== Responsive (mobile audit) ===================== */
-
-/* .page-title-bar (index.css) is a plain flex row — title on the left,
-   one or more action controls on the right — with no wrap. Every one of
-   the 16 admin views uses this shape; the "Issue Missing Keys (All
-   Clients)" + "New Key" pair on API Keys was the confirmed overflow case,
-   but the fix below applies to all of them consistently.
-   .page-title-actions groups a header's multiple action controls (used by
-   Volume, Templates Review, Tickets, API Keys) so they wrap/stack as one
-   unit. .page-title-auto marks an action button or <select class="form-input">
-   that needs an explicit auto width on desktop — overriding .btn-primary's
-   100% default, or a select's natural stretch — while remaining free to go
-   full-width under the mobile override below. */
-.page-title-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.page-title-auto {
-  width: auto;
-}
-
-/* Create Client modal: the Password field's input + "Generate" button is
-   the one side-by-side row among the 4 modals' fields that doesn't already
-   stack via .form-group's column behavior. */
-.password-generate-row {
-  display: flex;
-  gap: 8px;
-}
-
-/* Audit Log's client-id filter box was an inline style="width:340px" in
-   admin/index.html, which can exceed the available content width below
-   640px. Moved into a class here so the mobile override can win over it. */
-.search-box-wide {
-  width: 340px;
-}
-
-/* API Guide's two code-block copy buttons (Connect via MCP / Claude Code
-   prompt) were previously position:absolute via an INLINE style in
-   admin/index.html — an inline style always beats a class selector
-   regardless of media query, which silently made the mobile override
-   below a no-op. Moved here, same fix shape as .search-box-wide above, so
-   the mobile override can actually win via source order. */
-.code-block-wrapper .copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+/* ======================================================= Responsive */
+@media (max-width: 900px) {
+  .content-area { padding: 1rem 1rem 2.5rem; }
+  /* The fixed hamburger toggle (index.css) reserves the top-left corner. */
+  .admin-view > .page-header,
+  .admin-view > .breadcrumb-row { padding-left: 56px; min-height: 44px; }
+  .admin-view > .breadcrumb-row { display: flex; align-items: center; margin-bottom: 0.5rem; }
 }
 
 @media (max-width: 640px) {
-  /* --- 1. Page title bars: wrap instead of overflowing/crushing --- */
-  .page-title-bar {
-    flex-wrap: wrap;
-    row-gap: 0.75rem;
-  }
+  .page-header .page-actions { width: 100%; }
+  .page-header .page-actions > * { flex: 1 1 auto; justify-content: center; }
+  .page-title-auto { width: 100%; }
+  .page-title-actions { flex-direction: column; align-items: stretch; }
+  .table-toolbar > * { flex: 1 1 100%; }
+  .table-toolbar .toolbar-count { flex: 0 0 auto; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .password-generate-row { flex-direction: column; align-items: stretch; }
+  .status-bar-row { flex-wrap: wrap; }
+  .status-bar-label { width: 100%; }
+  .status-editor-row { flex-direction: column; align-items: stretch; }
+  .detail-row { flex-wrap: wrap; }
+  .search-box-wide { min-width: 0; }
+  .search-box { width: 100%; min-height: 44px; }
+  .secret-row { flex-wrap: wrap; }
+  .secret-row-label { width: 100%; }
+  .code-block-wrapper { display: flex; flex-direction: column; }
+  .code-block-wrapper .copy-btn { position: static; align-self: flex-end; order: -1; margin-bottom: 8px; }
+  .table-header-tools { flex-wrap: wrap; }
 
-  .page-title-bar > *:last-child {
-    width: 100%;
-  }
-
-  .page-title-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .page-title-actions > * {
-    width: 100%;
-  }
-
-  .page-title-auto {
-    width: 100%;
-  }
-
-  /* --- 2. Client Detail / Settings: .detail-grid forces a single column
-     below the 320px auto-fit minimum's breakpoint (admin-only markup,
-     safe to override here). --- */
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  /* --- 3. Create Client modal's Password/Generate row stacks. --- */
-  .password-generate-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  /* Dashboard's Clients-by-status bars: the label has a fixed 160px width
-     (see rule outside this media block) which squeezes .status-bar-track
-     to a sliver at narrow widths. Wrap so the label takes its own line,
-     leaving the track+count a full line to themselves. */
-  .status-bar-row {
-    flex-wrap: wrap;
-  }
-
-  .status-bar-label {
-    width: 100%;
-  }
-
-  /* Client Detail: status <select> + Save button row stacks, same pattern
-     as .password-generate-row above. */
-  .status-editor-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  /* Client Detail: the webhook-secret row (masked secret + copy/regenerate
-     icon buttons) is a plain .detail-row but too cramped to stay inline at
-     mobile widths. Scoped to .detail-row-secret specifically so the many
-     other simple label/value .detail-row instances elsewhere are untouched. */
-  .detail-row-secret {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.4rem;
-  }
-
-  .detail-row-secret .detail-row-value {
-    justify-content: flex-start;
-    text-align: left;
-  }
-
-  /* API Guide: copy button overlaid on top of a code block covers the
-     first line(s) of wrapped code at mobile widths. Move it above the
-     code block instead. Scoped to .code-block-wrapper .copy-btn (not bare
-     .copy-btn, which is also used elsewhere e.g. the Client ID copy
-     button on Client Detail). */
-  .code-block-wrapper {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .code-block-wrapper .copy-btn {
-    position: static;
-    align-self: flex-end;
-    order: -1;
-    margin-bottom: 8px;
-  }
-
-  /* --- 5. Fixed-width inline styles found in the audit (Audit Log filter,
-     plus the generic search-box used on Clients/Audit Log). --- */
-  .search-box-wide {
-    width: 100%;
-  }
-
-  .search-box {
-    width: 100%;
-    min-height: 44px;
-  }
-
-  .table-header-tools {
-    flex-wrap: wrap;
-  }
-
-  /* --- 6. Touch targets: bump every interactive control to >=44px.
-     min-height (rather than height) is used deliberately so it combines
-     with each control's existing height/padding declaration instead of
-     needing to out-specificity it — the used height becomes
-     max(existing height, 44px) regardless of cascade order. --- */
-  .btn-primary,
-  .btn-secondary,
-  .btn-sm,
-  .form-input {
-    min-height: 44px;
-  }
-
-  .nav-item {
-    min-height: 44px;
-  }
-
-  .close-modal-btn,
-  .password-toggle-btn {
-    padding: 10px;
-  }
-
-  .status-editor-row select {
-    height: 44px;
-  }
-
-  .hub-event-label {
-    min-height: 44px;
-    padding: 6px 0;
-  }
+  /* >=44px touch targets (min-height combines with each control's own). */
+  .btn-primary, .btn-secondary, .btn-sm, .btn-danger, .btn-ghost, .form-input { min-height: 44px; }
+  .nav-item { min-height: 44px; }
+  .tab { min-height: 44px; }
+  .close-modal-btn, .password-toggle-btn { padding: 10px; }
+  .status-editor-row select { height: 44px; }
+  .hub-event-label { min-height: 44px; padding: 6px 0; }
+  .row-actions-trigger { width: 44px; height: 44px; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* Per-row contextual action menu (kebab button + popover) — used by the API
-   Keys table so Revoke/Delete don't compete visually with primary actions.
-   Generic enough to reuse for any other table that grows more than one
-   per-row action later. */
-.row-actions-menu {
-  position: relative;
-  display: inline-block;
-}
+/* Author `display` on .pagination / .alert would otherwise beat the UA
+   [hidden] rule — make hidden always win. */
+[hidden] { display: none !important; }
 
-.row-actions-trigger {
-  background: transparent;
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--text-muted);
-}
+.tab-flag { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); font-size: 0.65rem; font-weight: 700; vertical-align: middle; }
 
-.row-actions-trigger:hover,
-.row-actions-trigger[aria-expanded="true"] {
-  background: #F3F4F6;
-  border-color: #D1D5DB;
-  color: #111827;
-}
+/* Compact the grouped sidebar so all 13 items + labels fit a 900px-tall
+   viewport without the nav needing to scroll. */
+.sidebar-nav { gap: 2px; }
+.sidebar-nav .nav-item { padding: 7px 14px; }
+.sidebar-nav .nav-group-label { padding-top: 12px; padding-bottom: 2px; }
+.sidebar-nav .nav-group-label:first-child { padding-top: 4px; }
+.detail-card-aside a { color: var(--success); font-weight: 600; text-decoration: none; }
+.detail-card-aside a:hover { text-decoration: underline; }
 
-.row-actions-popover {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  min-width: 170px;
-  background: #FFFFFF;
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  box-shadow: var(--shadow-card);
-  padding: 4px;
-  z-index: 30;
-  display: none;
-}
+.page-header .page-header-text { flex: 1 1 280px; }
+a.btn-secondary, a.btn-primary, a.btn-ghost { text-decoration: none; }
 
-.row-actions-popover.open {
-  display: block;
-}
-
-.row-actions-popover button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 8px 10px;
-  font-size: 0.82rem;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #111827;
-}
-
-.row-actions-popover button:hover {
-  background: #F3F4F6;
-}
-
-.row-actions-popover button.danger {
-  color: #DC2626;
-}
-
-.row-actions-popover button.danger:hover {
-  background: #FEF2F2;
-}
-
-/* Dashboard KPI cards that navigate somewhere — matches the visual language
-   already used for .clickable-row (table rows). Cards with no destination
-   omit this class entirely and stay static. */
-.stat-card.clickable {
-  cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
-}
-
-.stat-card.clickable:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  border-color: var(--color-primary-200);
-}
-
-.stat-card.clickable:active {
-  transform: translateY(0);
-  box-shadow: var(--shadow-sm);
-}
-
-.stat-card.clickable:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Progressive-disclosure sections in the Create Client modal — a small
-   heading for the always-visible first section, collapsible <details> for
-   everything after it so the required 3 fields stay the whole story until
-   an admin chooses to add more. */
-.form-section-title {
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin: 0 0 0.6rem;
-}
-
-.form-section-details {
-  margin-top: 1rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border-light);
-}
-
-.form-section-details summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--text-main);
-}
-
-.form-section-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.form-section-details summary::before {
-  content: '▸';
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  display: inline-block;
-  transition: transform 0.15s ease;
-}
-
-.form-section-details[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.form-section-details .form-group:first-of-type {
-  margin-top: 0.75rem;
-}
-
-/* API Guide view */
-.api-guide-code {
-  background: #0F172A;
-  color: #E2E8F0;
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
-  font-size: 0.78rem;
-  line-height: 1.6;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0.5rem 0;
-}
-
-.api-guide-inline-link {
-  color: var(--color-primary-700);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.api-guide-inline-link:hover {
-  text-decoration: underline;
-}
-
-/* Service/Payment toggle switches — Client Detail's Service & Billing card
-   (payment reminder / auto-suspend feature). A plain checkbox styled as a
-   pill, not a new dependency — real switch semantics (role, keyboard focus)
-   come from the underlying <input type="checkbox"> for free. */
-.wasi-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-.wasi-toggle input {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 38px;
-  height: 22px;
-  border-radius: 999px;
-  background: #E2E8F0;
-  position: relative;
-  cursor: pointer;
-  outline: none;
-  transition: background 0.15s ease;
-  flex-shrink: 0;
-}
-.wasi-toggle input::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease;
-}
-.wasi-toggle input:checked {
-  background: var(--color-primary, #4AC959);
-}
-.wasi-toggle input:checked::before {
-  transform: translateX(16px);
-}
-.wasi-toggle input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.wasi-toggle-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.wasi-toggle.wasi-toggle-danger input:checked {
-  background: #DC2626;
-}
+/* The client-facing sendability banner (index.css) rendered inline inside a card. */
+.sendability-inline { border-radius: var(--r-md); margin-bottom: 0.6rem; padding: 0.55rem 0.85rem; }
+.sendability-inline .sendability-banner-action { white-space: normal; margin-left: 0; flex-basis: 100%; }
+@media (min-width: 641px) { .row-actions-inline { flex-wrap: nowrap; } }
+.detail-grid-single .detail-card-title { justify-content: flex-start; flex-wrap: wrap; }
