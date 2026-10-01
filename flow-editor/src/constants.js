@@ -22,14 +22,14 @@ export const FLOW_EDGE_TYPE_LABELS = {
   timeout: 'Timeout',
 };
 
-// Same palette as the read-only canvas's flow-edge-<condition_type> CSS
-// classes (index.css) — kept visually identical across both editors.
+// Edge colours per condition type: distinguishable, harmonised with the WASI
+// palette (green / blue / amber / red / grey, matching design-system.css).
 export const CONDITION_COLORS = {
-  button_id: '#1e6e5a',
-  keyword: '#2e5f8a',
-  default: '#9a6a1f',
-  timeout: '#a4402f',
-  always: '#8a8578',
+  button_id: '#2E9E3B',
+  keyword: '#1D4ED8',
+  default: '#B45309',
+  timeout: '#B91C1C',
+  always: '#6B7280',
 };
 
 export const NODE_TYPE_LABELS = {

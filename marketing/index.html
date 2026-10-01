@@ -3,95 +3,131 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Wasi CRM — WhatsApp CRM & Automation for Growing Businesses</title>
+  <title>Wasi — WhatsApp CRM & Automation for Growing Businesses</title>
   <meta name="description" content="Connect your WhatsApp Business number in minutes and run chat, contacts, campaigns and automation from one CRM. Self-serve setup, no BSP paperwork." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="/breakpoints.css" />
   <link rel="stylesheet" href="/marketing/marketing.css" />
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/design-system.css" />
+  <script src="https://unpkg.com/lucide@1.49.0/dist/umd/lucide.min.js" defer></script>
 </head>
 <body>
 
   <!-- ================= STICKY NAV ================= -->
   <header class="site-nav">
     <div class="container">
-      <a href="/marketing/index.html" class="nav-logo">
-        <svg width="112" height="34" viewBox="0 0 130 40" fill="none">
-          <rect width="130" height="40" rx="8" fill="#43B751" fill-opacity="0.15"/>
-          <text x="22" y="27" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#304742">wasi</text>
-          <circle cx="98" cy="18" r="4" fill="#4AC959"/>
-        </svg>
+      <a href="/marketing/index.html" class="nav-logo" aria-label="Wasi home">
+        <svg viewBox="0 0 40 28" fill="none" aria-hidden="true"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#2E9E3B"/></svg>
+        <span>Wasi</span>
       </a>
-      <nav class="nav-links" id="nav-links">
+      <nav class="nav-links" id="nav-links" aria-label="Primary">
         <a href="#features">Features</a>
         <a href="#how-it-works">How it works</a>
         <a href="#pricing">Pricing</a>
         <a href="#explainer">WhatsApp API</a>
         <a href="#faq">FAQ</a>
+        <a href="/" class="nav-login-mobile">Log in</a>
       </nav>
       <div class="nav-actions">
-        <a href="/marketing/signup.html" class="btn btn-secondary">Log in</a>
+        <a href="/" class="btn btn-secondary">Log in</a>
         <a href="/marketing/signup.html" class="btn btn-primary">Start Free Trial</a>
       </div>
-      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu"><span></span></button>
+      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="nav-links"><span></span></button>
     </div>
   </header>
 
   <!-- ================= HERO ================= -->
   <section class="hero">
+    <span class="leaf leaf-1" aria-hidden="true"></span>
+    <span class="leaf leaf-2" aria-hidden="true"></span>
     <div class="container">
       <div class="hero-copy">
-        <span class="eyebrow">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-          Automated WhatsApp onboarding — no manual setup
-        </span>
-        <h1>Run your whole business on <span>WhatsApp</span>, from one CRM.</h1>
-        <p class="lede">Wasi CRM connects to Meta's WhatsApp Cloud API in a self-serve, guided flow — chat inbox, contacts, campaigns, automation and templates, live the same day you sign up.</p>
+        <p class="hero-kicker">Conversations. Campaigns. Growth.</p>
+        <h1>Turn conversations into <span class="accent">customers.</span></h1>
+        <p class="lede">A modern WhatsApp business platform to manage chats, contacts, campaigns and automations — all in one place, on Meta's official Cloud API.</p>
         <div class="hero-cta-row">
-          <a href="/marketing/signup.html" class="btn btn-primary btn-lg">
-            Start Free Trial
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </a>
+          <a href="/marketing/signup.html" class="btn btn-primary btn-lg">Start Free Trial</a>
           <a href="#how-it-works" class="btn btn-secondary btn-lg">See how it works</a>
         </div>
-        <div class="hero-meta">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-          No credit card to start &nbsp;·&nbsp; Cancel anytime &nbsp;·&nbsp; Official Meta Cloud API
+        <p class="hero-meta">No credit card to start &nbsp;·&nbsp; Self-serve setup &nbsp;·&nbsp; Official Meta Cloud API</p>
+
+        <div class="benefit-list">
+          <div class="benefit">
+            <div class="icon-tile"><i data-lucide="message-square"></i></div>
+            <div><h3>Unified inbox</h3><p>Respond faster with a clean, focused chat experience.</p></div>
+          </div>
+          <div class="benefit">
+            <div class="icon-tile"><i data-lucide="users"></i></div>
+            <div><h3>Grow your audience</h3><p>Manage contacts, tags and consent with ease.</p></div>
+          </div>
+          <div class="benefit">
+            <div class="icon-tile"><i data-lucide="send"></i></div>
+            <div><h3>Run campaigns</h3><p>Create, schedule and track campaigns that convert.</p></div>
+          </div>
+          <div class="benefit">
+            <div class="icon-tile"><i data-lucide="workflow"></i></div>
+            <div><h3>Automate with flows</h3><p>Set up powerful automations without code.</p></div>
+          </div>
         </div>
       </div>
 
       <div class="hero-visual">
-        <div class="mock-chat-window">
-          <div class="mock-chat-header">
-            <span class="dot"></span>
-            <div style="font-size:0.82rem;font-weight:600;">Priya Sharma — +91 98765 43210</div>
+        <div class="app-mock" role="img" aria-label="Illustration of the Wasi inbox: navigation sidebar, a conversation list and an open chat thread.">
+          <div class="mock-side">
+            <div class="mock-brand">
+              <svg viewBox="0 0 40 28" fill="none"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#86DB90"/></svg>
+              Wasi
+            </div>
+            <div class="mock-nav active"><i data-lucide="message-square"></i>Chat</div>
+            <div class="mock-nav"><i data-lucide="users"></i>Contacts</div>
+            <div class="mock-nav"><i data-lucide="send"></i>Campaigns</div>
+            <div class="mock-nav"><i data-lucide="layout-template"></i>Templates</div>
+            <div class="mock-nav"><i data-lucide="workflow"></i>Automation</div>
+            <div class="mock-nav"><i data-lucide="bar-chart-3"></i>Analytics</div>
           </div>
-          <div class="mock-chat-body">
-            <div class="bubble in">Hi, do you have this in size M?</div>
-            <div class="bubble auto">🤖 Auto-reply: Thanks for reaching out! Checking stock now…</div>
-            <div class="bubble out">Yes, size M is available. Want me to hold one for you?</div>
-            <div class="bubble in">Yes please!</div>
+          <div class="mock-list">
+            <div class="mock-list-head">Conversations</div>
+            <div class="mock-chip-row"><span class="mock-chip on">All</span><span class="mock-chip">Unread</span><span class="mock-chip">Mine</span></div>
+            <div class="mock-convo active"><span class="mock-avatar">RM</span><div><b>Rohan M.</b><small>Can you share the pricing?</small></div></div>
+            <div class="mock-convo"><span class="mock-avatar">SI</span><div><b>Sneha I.</b><small>Thanks! That looks great.</small></div></div>
+            <div class="mock-convo"><span class="mock-avatar">AS</span><div><b>Aarav S.</b><small>Can we schedule a demo?</small></div></div>
+            <div class="mock-convo"><span class="mock-avatar">NK</span><div><b>Neha K.</b><small>Welcome! Let me know if you…</small></div></div>
+          </div>
+          <div class="mock-chat">
+            <div class="mock-chat-head"><span class="mock-avatar">RM</span><div>Rohan M.<small>WhatsApp</small></div></div>
+            <div class="mock-thread">
+              <div class="bubble in">Hi! I want to know more about your WhatsApp platform.</div>
+              <div class="bubble auto">Auto-reply: Thanks for reaching out — a teammate will be right with you.</div>
+              <div class="bubble out">Hi Rohan! Wasi helps you manage conversations, run campaigns and automate your business on WhatsApp.</div>
+              <div class="bubble in">That sounds great. Can you share the pricing plans?</div>
+            </div>
+            <div class="mock-compose"><div class="mock-input">Type a message…</div><div class="mock-send"><i data-lucide="send"></i></div></div>
           </div>
         </div>
-        <div class="mock-stat-row">
-          <div class="mock-stat"><div class="num">1,204</div><div class="lbl">Conversations this month</div></div>
-          <div class="mock-stat"><div class="num">98.2%</div><div class="lbl">Delivery rate</div></div>
-          <div class="mock-stat"><div class="num">3m 40s</div><div class="lbl">Avg. first response</div></div>
-        </div>
+        <p class="mock-caption">Illustrative preview of the Wasi inbox — sample conversation, not real customer data.</p>
       </div>
     </div>
   </section>
 
-  <!-- ================= PROOF STRIP ================= -->
-  <div class="proof-strip">
-    <div class="container">
-      <div class="proof-label">Built on the official Meta WhatsApp Cloud API</div>
-      <div class="proof-metrics">
-        <div class="proof-metric"><div class="num">2 min</div><div class="lbl">Avg. WhatsApp connect time</div></div>
-        <div class="proof-metric"><div class="num">3</div><div class="lbl">Simple, transparent plans</div></div>
-        <div class="proof-metric"><div class="num">100%</div><div class="lbl">Self-serve, no sales call</div></div>
+  <!-- ================= CREDIBILITY (no numbers claimed) ================= -->
+  <section class="credibility section-white">
+    <div class="container credibility-grid">
+      <div class="credibility-item">
+        <div class="icon-tile"><i data-lucide="layers"></i></div>
+        <div><h3>The official Meta Cloud API</h3><p>Not the single-device Business App — the platform serious WhatsApp tooling runs on.</p></div>
+      </div>
+      <div class="credibility-item">
+        <div class="icon-tile"><i data-lucide="zap"></i></div>
+        <div><h3>Self-serve setup</h3><p>Connect your own number in minutes through Meta's signup flow — no agency in the middle.</p></div>
+      </div>
+      <div class="credibility-item">
+        <div class="icon-tile"><i data-lucide="shield-check"></i></div>
+        <div><h3>Your data, your account</h3><p>Contacts and conversations are scoped to your business alone. Export or close anytime.</p></div>
       </div>
     </div>
-  </div>
+  </section>
 
   <!-- ================= FEATURE GRID ================= -->
   <section id="features">
@@ -103,46 +139,46 @@
       </div>
       <div class="feature-grid">
         <div class="feature-card">
-          <div class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="icon-tile"><i data-lucide="message-square"></i></div>
           <h3>Shared chat inbox</h3>
           <p>One inbox for every agent, with tags, contact details and quick replies — never lose track of a conversation.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-          <h3>Contacts & CRM</h3>
-          <p>Searchable contact database with tags, custom attributes and status — the single source of truth for every customer.</p>
+          <div class="icon-tile"><i data-lucide="users"></i></div>
+          <h3>Contacts &amp; CRM</h3>
+          <p>Searchable contact database with tags, custom attributes and consent status — the single source of truth for every customer.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></div>
+          <div class="icon-tile"><i data-lucide="send"></i></div>
           <h3>Broadcast campaigns</h3>
-          <p>Send templated broadcasts to segmented, tagged audiences and track delivered/read rates in real time.</p>
+          <p>Send templated broadcasts to segmented, tagged audiences and track delivered and read rates.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></div>
-          <h3>Keyword automation</h3>
-          <p>Trigger-based automation rules reply instantly to common questions and route conversations to the right agent.</p>
+          <div class="icon-tile"><i data-lucide="workflow"></i></div>
+          <h3>Automation flows</h3>
+          <p>Keyword rules and branching flows reply instantly to common questions and route conversations to the right agent.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+          <div class="icon-tile"><i data-lucide="layout-template"></i></div>
           <h3>Message templates</h3>
           <p>Build, submit and manage Meta-approved templates with variable placeholders, right from the dashboard.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg></div>
-          <h3>Analytics & reporting</h3>
-          <p>Campaign performance, tag breakdowns, flow completion and agent stats in one live dashboard.</p>
+          <div class="icon-tile"><i data-lucide="bar-chart-3"></i></div>
+          <h3>Analytics &amp; reporting</h3>
+          <p>Campaign performance, tag breakdowns and flow completion in one dashboard.</p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ================= HOW IT WORKS ================= -->
-  <section id="how-it-works" style="background:#fff;border-top:1px solid var(--border-light);border-bottom:1px solid var(--border-light);">
+  <section id="how-it-works" class="section-white">
     <div class="container">
       <div class="section-head">
         <span class="eyebrow">The automated onboarding difference</span>
         <h2>Go live in minutes, not weeks</h2>
-        <p>Traditional WhatsApp Business Solution Providers make you email documents back and forth for setup. Wasi automates the entire connection through Meta's official Embedded Signup flow.</p>
+        <p>Traditional WhatsApp Business Solution Providers make you email documents back and forth. Wasi automates the connection through Meta's official Embedded Signup flow.</p>
       </div>
       <div class="steps-grid">
         <div class="step-card">
@@ -158,7 +194,7 @@
         <div class="step-card highlight">
           <div class="step-num">3</div>
           <h3>Connect WhatsApp in ~2 minutes</h3>
-          <p>Meta's Embedded Signup pops up right inside Wasi — log into your Facebook Business Manager, pick or create a WABA, and we auto-configure webhooks, phone number registration and default templates. No manual BSP paperwork.</p>
+          <p>Meta's Embedded Signup opens right inside Wasi — pick or create a WABA and we configure webhooks, number registration and defaults. No BSP paperwork.</p>
         </div>
         <div class="step-card">
           <div class="step-num">4</div>
@@ -169,89 +205,52 @@
     </div>
   </section>
 
-  <!-- ================= PRICING ================= -->
-  <section id="pricing">
+  <!-- ================= SWITCHING PROVIDERS (ported from landing.html) ================= -->
+  <section id="switching">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow">Already on WhatsApp somewhere else?</span>
+        <h2>Switching providers doesn't mean losing your number</h2>
+        <p>If your number is already active with another provider, we move it to Wasi and handle the release with them — so your chat history, contacts and templates carry over cleanly.</p>
+      </div>
+      <div class="steps-grid steps-grid--3col">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <h3>Tell us who you're with</h3>
+          <p>We confirm what needs to be released on their side before anything moves.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <h3>We handle the release</h3>
+          <p>The coordination with your current provider is on us, not you.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <h3>Your number reconnects on Wasi</h3>
+          <p>Same number, same customers — now running on the Cloud API through Wasi.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PRICING (rendered by plans.js — single source) ================= -->
+  <section id="pricing" class="section-white">
     <div class="container">
       <div class="section-head">
         <span class="eyebrow">Simple, transparent pricing</span>
         <h2>Plans that grow with your conversation volume</h2>
         <p>All prices in INR per month. WhatsApp conversation charges from Meta are billed separately and pass through at cost.</p>
       </div>
-
-      <div class="pricing-grid">
-        <div class="price-card">
-          <h3>Starter</h3>
-          <div class="price-target">Solo &amp; small business</div>
-          <div class="price-amount"><span class="amt">₹999</span><span class="per">/ month</span></div>
-          <div class="price-note">1 WABA number · 500 conversations/mo</div>
-          <ul class="price-features">
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>1 WhatsApp number</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>500 conversations / month</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Shared chat inbox</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Contacts &amp; CRM</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Basic keyword automation</li>
-          </ul>
-          <a href="/marketing/signup.html?plan=Starter" class="btn btn-secondary btn-block">Start Free Trial</a>
-        </div>
-
-        <div class="price-card featured">
-          <span class="price-badge">Most popular</span>
-          <h3>Growth</h3>
-          <div class="price-target">Growing SMB</div>
-          <div class="price-amount"><span class="amt">₹2,999</span><span class="per">/ month</span></div>
-          <div class="price-note">1 WABA number · 3,000 conversations/mo</div>
-          <ul class="price-features">
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Everything in Starter</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>3,000 conversations / month</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Broadcast campaigns</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Message templates &amp; tags</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Analytics dashboard</li>
-          </ul>
-          <a href="/marketing/signup.html?plan=Growth" class="btn btn-primary btn-block">Start Free Trial</a>
-        </div>
-
-        <div class="price-card">
-          <h3>Scale</h3>
-          <div class="price-target">Agencies &amp; larger teams</div>
-          <div class="price-amount"><span class="amt">₹7,999</span><span class="per">/ month</span></div>
-          <div class="price-note">Multiple numbers · unlimited conversations*</div>
-          <ul class="price-features">
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Everything in Growth</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Multiple WABA numbers</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Unlimited conversations*</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Team seats &amp; roles</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>API access &amp; priority support</li>
-          </ul>
-          <a href="/marketing/signup.html?plan=Scale" class="btn btn-secondary btn-block">Start Free Trial</a>
-        </div>
-      </div>
-      <p style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-top:16px;">*Meta's per-conversation pricing passes through at cost and is billed separately from your Wasi subscription.</p>
-
+      <div class="pricing-grid" id="pricing-grid"></div>
+      <p class="fine-print">*Meta's per-conversation pricing passes through at cost and is billed separately from your Wasi subscription.</p>
       <div class="compare-table-wrap">
-        <table class="compare-table">
-          <thead>
-            <tr><th>Feature</th><th>Starter</th><th>Growth</th><th>Scale</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>WhatsApp numbers</td><td>1</td><td>1</td><td>Multiple</td></tr>
-            <tr><td>Conversations / month</td><td>500</td><td>3,000</td><td>Unlimited*</td></tr>
-            <tr><td>Chat inbox</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Contacts &amp; CRM</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Basic automation</td><td>✓</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Broadcast campaigns</td><td>—</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Templates &amp; tags</td><td>—</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Analytics dashboard</td><td>—</td><td>✓</td><td>✓</td></tr>
-            <tr><td>Team seats</td><td>—</td><td>—</td><td>✓</td></tr>
-            <tr><td>API access</td><td>—</td><td>—</td><td>✓</td></tr>
-            <tr><td>Priority support</td><td>—</td><td>—</td><td>✓</td></tr>
-          </tbody>
-        </table>
+        <table class="compare-table" id="compare-table"></table>
       </div>
     </div>
   </section>
 
   <!-- ================= API EXPLAINER ================= -->
-  <section id="explainer" style="background:#fff;border-top:1px solid var(--border-light);border-bottom:1px solid var(--border-light);">
+  <section id="explainer">
     <div class="container">
       <div class="section-head">
         <span class="eyebrow">Know what you're signing up for</span>
@@ -286,7 +285,7 @@
   </section>
 
   <!-- ================= FAQ ================= -->
-  <section id="faq">
+  <section id="faq" class="section-white">
     <div class="container">
       <div class="section-head">
         <span class="eyebrow">Questions</span>
@@ -294,23 +293,23 @@
       </div>
       <div class="faq-list">
         <details class="faq-item">
-          <summary>What do I need to connect WhatsApp?<span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></summary>
+          <summary>What do I need to connect WhatsApp?<span class="chev"><i data-lucide="chevron-down"></i></span></summary>
           <p>A Facebook Business Manager account and a phone number that isn't already active on the regular WhatsApp Business App. During setup, Meta may ask you to verify your business (name, address, website) before your account can send templated messages at scale — this is Meta's requirement, not ours, and typically takes anywhere from a few minutes to a couple of days.</p>
         </details>
         <details class="faq-item">
-          <summary>Who pays for the WhatsApp messages themselves?<span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></summary>
+          <summary>Who pays for the WhatsApp messages themselves?<span class="chev"><i data-lucide="chevron-down"></i></span></summary>
           <p>Meta charges per-conversation fees directly, separate from your Wasi subscription. Your Wasi plan pays for the CRM software (inbox, automation, campaigns, analytics); Meta's conversation pricing passes through at cost based on your usage.</p>
         </details>
         <details class="faq-item">
-          <summary>Who owns my contacts and conversation data?<span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></summary>
+          <summary>Who owns my contacts and conversation data?<span class="chev"><i data-lucide="chevron-down"></i></span></summary>
           <p>You do. Your contacts, chat history and templates belong to your business and are scoped to your account only. You can export your data or close your account at any time.</p>
         </details>
         <details class="faq-item">
-          <summary>How is this different from a manual BSP setup?<span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></summary>
+          <summary>How is this different from a manual BSP setup?<span class="chev"><i data-lucide="chevron-down"></i></span></summary>
           <p>Traditional WhatsApp Business Solution Providers often require you to email business documents and wait days for a human to configure your number. Wasi uses Meta's official Embedded Signup flow to do that configuration automatically the moment you connect — no back-and-forth required.</p>
         </details>
         <details class="faq-item">
-          <summary>Can I change plans later?<span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></summary>
+          <summary>Can I change plans later?<span class="chev"><i data-lucide="chevron-down"></i></span></summary>
           <p>Yes. You can upgrade or downgrade your plan at any time from account settings; changes apply from your next billing cycle.</p>
         </details>
       </div>
@@ -319,11 +318,13 @@
 
   <!-- ================= FINAL CTA ================= -->
   <section class="section-tight">
-    <div class="cta-band">
-      <h2>Ready to move your customer conversations onto WhatsApp?</h2>
-      <p>Set up your account and connect WhatsApp in the same sitting — no sales call required.</p>
-      <div class="hero-cta-row">
-        <a href="/marketing/signup.html" class="btn btn-primary btn-lg">Start Free Trial</a>
+    <div class="container">
+      <div class="cta-band">
+        <h2>Ready to move your customer conversations onto WhatsApp?</h2>
+        <p>Set up your account and connect WhatsApp in the same sitting — no sales call required.</p>
+        <div class="hero-cta-row">
+          <a href="/marketing/signup.html" class="btn btn-primary btn-lg">Get started</a>
+        </div>
       </div>
     </div>
   </section>
@@ -333,11 +334,10 @@
     <div class="container">
       <div class="footer-grid">
         <div class="footer-col footer-brand">
-          <svg width="100" height="30" viewBox="0 0 130 40" fill="none">
-            <rect width="130" height="40" rx="8" fill="#4AC959" fill-opacity="0.2"/>
-            <text x="22" y="27" font-family="'Poppins', sans-serif" font-weight="700" font-size="22" fill="#ffffff">wasi</text>
-            <circle cx="98" cy="18" r="4" fill="#4AC959"/>
-          </svg>
+          <a href="/marketing/index.html" class="nav-logo" aria-label="Wasi home">
+            <svg viewBox="0 0 40 28" fill="none" aria-hidden="true"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#86DB90"/></svg>
+            <span>Wasi</span>
+          </a>
           <p>WhatsApp CRM and automation for businesses that talk to customers on WhatsApp.</p>
         </div>
         <div class="footer-col">
@@ -354,7 +354,7 @@
           <ul>
             <li><a href="#faq">FAQ</a></li>
             <li><a href="mailto:support@sirahdigital.in">Contact support</a></li>
-            <li><a href="#" id="status-link">Status page</a></li>
+            <li><a href="/">Log in</a></li>
           </ul>
         </div>
         <div class="footer-col">
@@ -366,12 +366,13 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <span>© 2026 Wasi CRM. All rights reserved.</span>
+        <span>© 2026 Wasi. All rights reserved.</span>
         <span>Built on the official Meta WhatsApp Cloud API.</span>
       </div>
     </div>
   </footer>
 
+  <script src="/marketing/plans.js"></script>
   <script src="/marketing/marketing.js"></script>
 </body>
 </html>

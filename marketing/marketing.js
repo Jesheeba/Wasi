@@ -1,28 +1,24 @@
-// Wasi CRM marketing site — small progressive-enhancement behaviors.
+// Wasi marketing site — small progressive-enhancement behaviors.
 // No framework, no build step: plain DOM APIs only, matching the rest of this repo.
 
 document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) lucide.createIcons();
 
-  // Mobile nav toggle: reveal the nav links as a dropdown under the bar.
+  // Pricing cards + comparison table come from plans.js (single source).
+  if (window.WasiPlans) {
+    WasiPlans.renderPricing(document.getElementById('pricing-grid'), document.getElementById('compare-table'));
+  }
+
+  // Mobile nav: a class toggle (styling lives in marketing.css), no inline styles.
+  const nav = document.querySelector('.site-nav');
   const toggle = document.getElementById('nav-toggle');
-  const links = document.getElementById('nav-links');
-  if (toggle && links) {
-    toggle.addEventListener('click', () => {
-      const isOpen = links.style.display === 'flex';
-      links.style.display = isOpen ? 'none' : 'flex';
-      if (!isOpen) {
-        links.style.position = 'absolute';
-        links.style.top = 'var(--header-height)';
-        links.style.left = '0';
-        links.style.right = '0';
-        links.style.background = '#fff';
-        links.style.flexDirection = 'column';
-        links.style.padding = '16px 24px';
-        links.style.borderBottom = '1px solid var(--border-light)';
-        links.style.gap = '16px';
-      }
-    });
+  if (nav && toggle) {
+    const setOpen = (open) => {
+      nav.classList.toggle('nav-open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    };
+    toggle.addEventListener('click', () => setOpen(!nav.classList.contains('nav-open')));
+    nav.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
   }
 
   // Only one FAQ item open at a time, for a tidier accordion feel.

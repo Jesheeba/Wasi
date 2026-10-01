@@ -9,7 +9,7 @@ import { CONDITION_COLORS, FLOW_EDGE_TYPE_LABELS } from './constants.js';
 // be functional) — click-to-select is simpler and just as real.
 export default function ConditionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected, markerEnd }) {
   const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const color = CONDITION_COLORS[data?.conditionType] || '#8a8578';
+  const color = CONDITION_COLORS[data?.conditionType] || '#6B7280';
   const dashed = data?.conditionType === 'timeout';
 
   return (
