@@ -30,11 +30,28 @@ before(async () => {
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = 'http://localhost:4000';
 
-  await fetch(`${baseUrl}/api/auth/register`, {
+  const registered = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ businessName: `${SUITE_PREFIX}client`, email: EMAIL, password: PASSWORD }),
+  }).then((r) => r.json());
+
+  // UI redesign Stage 6: New Campaign is a 5-step wizard that only offers an
+  // APPROVED template, and Launch only exists on the last step — so reaching
+  // it needs a real approved template (stubbed Meta, then approved directly).
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (!String(url).includes('graph.facebook.com')) return realFetch(url, opts);
+    return { ok: true, status: 200, json: async () => ({ id: `${SUITE_PREFIX}meta_tpl`, status: 'APPROVED', category: 'UTILITY' }) };
+  };
+  const tplRes = await fetch(`${baseUrl}/api/templates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${registered.token}` },
+    body: JSON.stringify({ name: `${SUITE_PREFIX}tpl`, category: 'Utility', body: 'A modal scroll test message with no variables.' }),
   });
+  global.fetch = realFetch;
+  assert.equal(tplRes.status, 201);
+  await pool.query("update message_templates set status = 'approved' where client_id = $1", [registered.client.id]);
 
   browser = await chromium.launch();
 });
@@ -69,6 +86,12 @@ async function openNewCampaignModal(viewport) {
   await page.click('#open-create-broadcast-modal');
   await page.waitForSelector('#modal-create-campaign.open', { timeout: 5000 });
   await page.waitForTimeout(300);
+  // Walk to the final (Review & Launch) step — the only step with Launch.
+  await page.fill('#new-campaign-name', `${SUITE_PREFIX}Campaign`);
+  for (let step = 1; step < 5; step++) {
+    await page.click('#campaign-wizard-next');
+    await page.waitForTimeout(150);
+  }
   return page;
 }
 
@@ -79,14 +102,12 @@ test('1366x768: .modal-box scrolls internally, and Launch Campaign (below Smart 
   const overflowY = await modalBox.evaluate((el) => getComputedStyle(el).overflowY);
   assert.equal(overflowY, 'auto', '.modal-box must have overflow-y:auto at 1366x768, not just below 640px');
 
-  const { scrollHeight, clientHeight } = await modalBox.evaluate((el) => ({
-    scrollHeight: el.scrollHeight,
-    clientHeight: el.clientHeight,
-  }));
-  assert.ok(
-    scrollHeight > clientHeight,
-    `New Campaign's real content must overflow .modal-box's capped height at 1366x768 (scrollHeight ${scrollHeight} vs clientHeight ${clientHeight}) — otherwise this test isn't exercising the scroll mechanism at all`
-  );
+  // The wizard shows one step at a time, so the review step may or may not
+  // overflow at 768px tall — what must hold is that the box is capped to the
+  // viewport (so overflow WOULD scroll). The forced-overflow case is the
+  // 1366x480 test below.
+  const boxHeight = await modalBox.evaluate((el) => el.getBoundingClientRect().height);
+  assert.ok(boxHeight <= 768 * 0.88 + 1, `.modal-box must be capped to ~88vh (height ${boxHeight})`);
 
   const launchBtn = page.locator('#modal-create-campaign button[type="submit"]');
   await launchBtn.scrollIntoViewIfNeeded();
@@ -97,6 +118,18 @@ test('1366x768: .modal-box scrolls internally, and Launch Campaign (below Smart 
     `Launch Campaign must be scrolled into the actual visible viewport at 1366x768, not just scrollable-to in theory (box.y=${box.y}, height=${box.height})`
   );
 
+  await page.close();
+});
+
+test('1366x480 short viewport: the wizard step really overflows .modal-box, scrolls internally, and Launch is still reachable', async () => {
+  const page = await openNewCampaignModal({ width: 1366, height: 480 });
+  const modalBox = page.locator('#modal-create-campaign .modal-box');
+  const { scrollHeight, clientHeight } = await modalBox.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+  assert.ok(scrollHeight > clientHeight, `review step must overflow at 480px tall (scrollHeight ${scrollHeight} vs clientHeight ${clientHeight})`);
+  const launchBtn = page.locator('#modal-create-campaign button[type="submit"]');
+  await launchBtn.scrollIntoViewIfNeeded();
+  const box = await launchBtn.boundingBox();
+  assert.ok(box && box.y >= 0 && box.y + box.height <= 480, `Launch must be reachable by scrolling (box.y=${box && box.y})`);
   await page.close();
 });
 

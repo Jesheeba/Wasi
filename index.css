@@ -2610,3 +2610,137 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 @media (prefers-reduced-motion: reduce) {
   .contact-drawer-overlay .modal-box.contact-drawer { transition: none; }
 }
+
+/* ===================================================================
+   Campaigns view + New Campaign wizard — UI redesign Stage 6
+   List/summary/toolbar/table mirror the Contacts view's patterns; the
+   wizard is hide/show panels inside the existing #create-campaign-form.
+   =================================================================== */
+.campaigns-page-header { gap: var(--sp-4); flex-wrap: wrap; flex-shrink: 0; }
+.campaigns-page-header > div:first-child { min-width: 0; }
+
+.campaign-summary {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.campaign-tile {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+}
+.campaign-tile-value { font-size: 1.75rem; font-weight: 600; line-height: 1.2; color: var(--text); font-variant-numeric: tabular-nums; }
+.campaign-tile-label { font-size: var(--fs-label); color: var(--text-muted); margin-top: 2px; }
+.campaign-tile.tile-success .campaign-tile-value { color: var(--success); }
+.campaign-tile.tile-info .campaign-tile-value { color: var(--info); }
+.campaign-tile.tile-warning .campaign-tile-value { color: var(--warning); }
+
+.campaigns-toolbar .search-box { width: auto; min-width: 0; flex: 1 1 260px; }
+.campaigns-filter { width: auto; min-width: 150px; height: 38px; flex: 0 0 auto; padding-right: 28px; }
+.campaigns-table td, .campaigns-table th { vertical-align: middle; }
+.campaigns-title-td { max-width: 260px; }
+.campaigns-title { display: block; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaigns-template { display: block; font-size: var(--fs-caption); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaigns-template:empty { display: none; }
+.campaigns-count { color: var(--text-muted); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+.campaigns-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.campaigns-skipped { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.campaigns-col-actions { width: 150px; text-align: right; }
+.campaigns-actions { display: inline-flex; gap: var(--sp-2); justify-content: flex-end; }
+.campaigns-state-row td { padding: 0; }
+.campaigns-state-row:hover td { background: transparent !important; }
+.campaigns-skeleton-row td { padding: var(--sp-4); }
+.campaigns-table td[data-label="Date"] { white-space: nowrap; }
+
+@media (min-width: 641px) and (max-width: 1100px) {
+  .campaigns-table th:nth-child(8), .campaigns-table td:nth-child(8) { display: none; }
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  .campaigns-table th:nth-child(6), .campaigns-table td:nth-child(6) { display: none; }
+  .campaigns-table th, .campaigns-table td { padding-left: 10px; padding-right: 10px; }
+  .campaigns-col-actions { width: auto; }
+}
+@media (max-width: 900px) {
+  .campaign-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .campaigns-filter { flex: 1 1 100%; min-width: 0; }
+  .campaigns-page-header .btn-primary { flex: 1 1 100%; justify-content: center; }
+  .campaigns-title-td { max-width: none; }
+  .data-table.stack-mobile.campaigns-table td.campaigns-title-td { flex-direction: column; align-items: flex-start; text-align: left; }
+  .campaigns-table td.campaigns-title-td::before { display: none; }
+  .campaigns-table td[data-label=""]::before { display: none; }
+  .data-table.stack-mobile.campaigns-table td.campaigns-col-actions { justify-content: flex-end; width: 100%; }
+  .campaigns-state-row, .campaigns-skeleton-row { border: none !important; margin: 0 !important; padding: 0 !important; }
+  .campaigns-table .campaigns-state-row td, .campaigns-table .campaigns-skeleton-row td { display: block; text-align: center; }
+}
+
+/* ---- Wizard ---- */
+.campaign-wizard [hidden] { display: none !important; }
+.wizard-stepper {
+  list-style: none; display: flex; align-items: center; gap: var(--sp-1);
+  margin: 0 0 var(--sp-5); padding: 0;
+}
+.wizard-step-indicator {
+  display: flex; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0;
+  font-size: var(--fs-caption); color: var(--text-muted);
+}
+.wizard-step-indicator:last-child { flex: 0 0 auto; }
+.wizard-step-indicator:not(:last-child)::after {
+  content: ''; flex: 1 1 8px; height: 2px; background: var(--border); border-radius: 2px; min-width: 8px;
+}
+.wizard-step-indicator.done:not(:last-child)::after { background: var(--brand); }
+.wizard-step-num {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--neutral-bg); color: var(--text-muted); font-weight: 600; font-size: var(--fs-caption);
+  border: 1px solid var(--border);
+}
+.wizard-step-indicator.active .wizard-step-num { background: var(--brand); border-color: var(--brand); color: #fff; }
+.wizard-step-indicator.active { color: var(--text); font-weight: 600; }
+.wizard-step-indicator.done .wizard-step-num { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-dark); }
+.wizard-step-label { white-space: nowrap; }
+@media (max-width: 640px) {
+  .wizard-step-indicator:not(.active) .wizard-step-label { display: none; }
+  .wizard-step-indicator.active { flex: 0 0 auto; }
+  .wizard-step-indicator.active:not(:last-child) { flex: 1 1 auto; }
+}
+.wizard-panel-title { font-size: var(--fs-card); font-weight: 600; color: var(--text); margin: 0 0 var(--sp-4); }
+.wizard-footer {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  position: sticky; bottom: -1.5rem; z-index: 2;
+  margin: var(--sp-5) -1.5rem -1.5rem; padding: var(--sp-3) 1.5rem;
+  background: var(--bg-card); border-top: 1px solid var(--border);
+}
+.wizard-footer .grow-spacer { flex: 1; }
+
+.campaign-tier-status { margin-bottom: var(--sp-2); }
+.campaign-tier-status:empty { display: none; }
+.campaign-audience-modes { display: flex; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-2); font-size: var(--fs-body); }
+.campaign-radio { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.campaign-import-row { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
+.campaign-import-row .form-input { flex: 1 1 140px; min-width: 0; }
+.campaign-gap-bottom { margin-bottom: var(--sp-2); }
+.campaign-gap-bottom-sm { margin-bottom: var(--sp-1); }
+.campaign-gap-top { margin-top: var(--sp-2); }
+.campaign-gap-top-sm { margin-top: var(--sp-1); }
+.campaign-media-row { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); flex-wrap: wrap; }
+.campaign-segment-builder { margin-top: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-subtle); }
+
+.campaign-template-preview {
+  background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+}
+.campaign-template-preview-meta { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.campaign-template-preview-body { white-space: pre-wrap; font-size: var(--fs-body); color: var(--text); word-break: break-word; }
+
+.campaign-review { margin: 0 0 var(--sp-4); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.campaign-review-row { display: grid; grid-template-columns: 130px 1fr; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); font-size: var(--fs-body); }
+.campaign-review-row:last-child { border-bottom: none; }
+.campaign-review-row dt { color: var(--text-muted); margin: 0; }
+.campaign-review-row dd { margin: 0; color: var(--text); font-weight: 500; min-width: 0; word-break: break-word; }
+.campaign-review-warnings { display: flex; flex-direction: column; gap: var(--sp-2); }
+.campaign-review-warnings:empty { display: none; }
+@media (max-width: 640px) {
+  .campaign-review-row { grid-template-columns: 1fr; gap: 2px; }
+  .campaign-summary { gap: var(--sp-2); }
+  .campaign-tile { padding: var(--sp-3) var(--sp-4); }
+}

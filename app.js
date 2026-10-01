@@ -261,6 +261,13 @@ document.addEventListener('DOMContentLoaded', () => {
       delivered: String(b.delivered_count),
       readRate: `${Number(b.read_rate).toFixed(1)}%`,
       date: (b.scheduled_date || b.created_at || '').toString().slice(0, 10),
+      // Stage 6 — extra fields the list endpoint already returns, surfaced for
+      // the redesigned table (no new request). delivered_count is the SENT
+      // count (see broadcastsRepo.list), delivered_rate is delivered/sent.
+      templateName: b.template_name || '',
+      recipientCount: b.recipient_count || 0,
+      deliveredRate: `${Number(b.delivered_rate || 0).toFixed(1)}%`,
+      audience: b.contact_list_id ? 'Contact list' : b.segment_id ? 'Segment' : (state.tagsById[b.tag_id]?.name || 'Everyone'),
       skippedConsent: b.skipped_consent_count || 0,
       // item 12 follow-up — kept separate from skippedConsent above: the
       // two are different reasons a recipient never got sent to, and
@@ -860,7 +867,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
-    if (targetView === 'campaigns') renderBroadcasts();
+    if (targetView === 'campaigns') {
+      renderBroadcasts();
+      // Same staleness fix as contacts above: refetch on every view open so
+      // sends/recipient counts that moved since login show up.
+      refreshBroadcasts().then(() => {
+        campaignsView.loadState = 'ready';
+        if (state.currentView === 'campaigns') renderBroadcasts();
+      }).catch(() => {
+        if (!state.broadcasts.length && state.currentView === 'campaigns') {
+          campaignsView.loadState = 'error';
+          renderBroadcasts();
+        }
+      });
+    }
     if (targetView === 'automation') { renderAutomation(); renderFlowsList(); }
     if (targetView === 'template') {
       // Same staleness fix — a template synced after login (e.g. right
@@ -2860,12 +2880,95 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Broadcasts Table ---
+  // UI redesign Stage 6 — summary tiles, search/status filter and pagination
+  // are all client-side over the already-loaded state.broadcasts (no API
+  // change). Row markup keeps .broadcast-pause-btn/.broadcast-resume-btn/
+  // .broadcast-view-btn and #broadcasts-table-body exactly as before.
+  const CAMPAIGNS_PAGE_SIZE = 20;
+  const campaignsView = { q: '', status: '', page: 1, loadState: 'ready' };
+  const CAMPAIGN_STATUS_BADGE = {
+    Completed: 'badge-success', Sending: 'badge-info', Paused: 'badge-warning',
+    Scheduled: 'badge-neutral',
+  };
+
+  function updateCampaignSummary() {
+    const list = state.broadcasts;
+    const count = (s) => list.filter((b) => b.status === s).length;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+    const show = campaignsView.loadState === 'loading' ? '–' : null;
+    set('campaign-stat-total', show ?? list.length);
+    set('campaign-stat-completed', show ?? count('Completed'));
+    set('campaign-stat-sending', show ?? count('Sending'));
+    set('campaign-stat-paused', show ?? (count('Paused') + count('Scheduled')));
+  }
+
+  function campaignsStateRow(innerHtml) {
+    return `<tr class="campaigns-state-row"><td colspan="9">${innerHtml}</td></tr>`;
+  }
+
+  function getFilteredCampaigns() {
+    const q = campaignsView.q.trim().toLowerCase();
+    return state.broadcasts.filter((b) => {
+      if (campaignsView.status && b.status !== campaignsView.status) return false;
+      if (q && !String(b.title || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }
+
   function renderBroadcasts() {
     const broadcastsTableBody = document.getElementById('broadcasts-table-body');
     if (!broadcastsTableBody) return;
+    const pager = document.getElementById('campaigns-pagination');
+    updateCampaignSummary();
 
-    broadcastsTableBody.innerHTML = '';
-    state.broadcasts.forEach(b => {
+    if (campaignsView.loadState === 'loading') {
+      if (pager) pager.hidden = true;
+      broadcastsTableBody.innerHTML = [60, 45, 55, 40].map((w) =>
+        `<tr class="campaigns-skeleton-row"><td colspan="9"><span class="skeleton" style="height:16px;width:${w}%;"></span></td></tr>`).join('');
+      return;
+    }
+    if (campaignsView.loadState === 'error') {
+      if (pager) pager.hidden = true;
+      broadcastsTableBody.innerHTML = campaignsStateRow(`
+        <div class="error-state">
+          <div>Couldn't load your campaigns.</div>
+          <button type="button" class="btn-secondary" id="campaigns-retry-btn">Try again</button>
+        </div>`);
+      return;
+    }
+    if (!state.broadcasts.length) {
+      if (pager) pager.hidden = true;
+      broadcastsTableBody.innerHTML = campaignsStateRow(`
+        <div class="empty-state">
+          <i data-lucide="send" class="empty-icon"></i>
+          <div class="empty-title">No campaigns yet</div>
+          <div>Send a WhatsApp template to a tag, contact list or segment in a few guided steps.</div>
+          <button type="button" class="btn-primary btn-auto" id="campaigns-empty-create">Create your first campaign</button>
+        </div>`);
+      refreshIcons();
+      return;
+    }
+    const filtered = getFilteredCampaigns();
+    if (!filtered.length) {
+      if (pager) pager.hidden = true;
+      broadcastsTableBody.innerHTML = campaignsStateRow(`
+        <div class="empty-state">
+          <i data-lucide="search-x" class="empty-icon"></i>
+          <div class="empty-title">No campaigns match</div>
+          <div>Try a different search or clear the filter.</div>
+          <button type="button" class="btn-secondary" id="campaigns-clear-filters">Clear filters</button>
+        </div>`);
+      refreshIcons();
+      return;
+    }
+
+    const pages = Math.max(1, Math.ceil(filtered.length / CAMPAIGNS_PAGE_SIZE));
+    if (campaignsView.page > pages) campaignsView.page = pages;
+    if (campaignsView.page < 1) campaignsView.page = 1;
+    const start = (campaignsView.page - 1) * CAMPAIGNS_PAGE_SIZE;
+    const pageItems = filtered.slice(start, start + CAMPAIGNS_PAGE_SIZE);
+
+    broadcastsTableBody.innerHTML = pageItems.map(b => {
       // Real bug, fixed: this used to show ONE combined "N skipped" badge,
       // unconditionally labeled "not opted in for marketing" — wrong, not
       // just vague, whenever any of the N were actually item 12's Smart
@@ -2874,44 +2977,82 @@ document.addEventListener('DOMContentLoaded', () => {
       // with an accurate reason.
       const badges = [];
       if (b.skippedConsent > 0) {
-        badges.push(`<span class="status-badge" style="background: #FEF3C7; color: #B45309;" title="Contacts not opted in for marketing — skipped, not sent">${b.skippedConsent} skipped (consent)</span>`);
+        badges.push(`<span class="badge badge-warning" title="Contacts not opted in for marketing — skipped, not sent">${esc(b.skippedConsent)} consent</span>`);
       }
       if (b.skippedSmartSending > 0) {
-        badges.push(`<span class="status-badge" style="background: #E0E7FF; color: #4338CA;" title="Contacts already messaged by another campaign within this broadcast's Smart Sending window — skipped, not sent">${b.skippedSmartSending} skipped (smart sending)</span>`);
+        badges.push(`<span class="badge badge-info" title="Contacts already messaged by another campaign within this broadcast's Smart Sending window — skipped, not sent">${esc(b.skippedSmartSending)} smart sending</span>`);
       }
-      const skippedCell = badges.length ? badges.join(' ') : '—';
+      const skippedCell = badges.length ? `<span class="campaigns-skipped">${badges.join('')}</span>` : '<span class="contacts-muted">—</span>';
       // PLAN.md item 11 — pause/resume only makes sense for a broadcast
       // actively Sending or already Paused; any other status (Completed,
       // Scheduled) gets no button here rather than a disabled one, since
       // routes/broadcasts.js's own 400 message already explains why for
       // anyone who reaches this via the API directly.
       const actionBtn = b.status === 'Sending'
-        ? `<button type="button" class="btn-secondary broadcast-pause-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">Pause</button>`
+        ? `<button type="button" class="btn-secondary btn-sm broadcast-pause-btn" data-broadcast-id="${esc(b.id)}" aria-label="Pause ${esc(b.title)}">Pause</button>`
         : b.status === 'Paused'
-          ? `<button type="button" class="btn-secondary broadcast-resume-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">Resume</button>`
+          ? `<button type="button" class="btn-secondary btn-sm broadcast-resume-btn" data-broadcast-id="${esc(b.id)}" aria-label="Resume ${esc(b.title)}">Resume</button>`
           : '';
       // PLAN.md item 28 — the per-recipient detail view. Available for
       // every status (unlike pause/resume, which only make sense mid-send)
       // since a Completed/Scheduled campaign's recipient list is just as
       // real and worth drilling into.
-      const viewBtn = `<button type="button" class="btn-secondary broadcast-view-btn" data-broadcast-id="${b.id}" style="width:auto; padding:0 10px; font-size:0.75rem;">View</button>`;
-      const tr = `
+      const viewBtn = `<button type="button" class="btn-ghost btn-sm broadcast-view-btn" data-broadcast-id="${esc(b.id)}" aria-label="View ${esc(b.title)} details">View</button>`;
+      const badgeCls = CAMPAIGN_STATUS_BADGE[b.status] || 'badge-neutral';
+      return `
         <tr>
-          <td style="font-weight: 600;">${b.title}</td>
-          <td><span class="tag-badge">${b.tag}</span></td>
-          <td><span class="status-badge active">${b.status}</span></td>
-          <td>${b.delivered}</td>
-          <td>${b.readRate}</td>
-          <td>${skippedCell}</td>
-          <td>${b.date}</td>
-          <td style="display:flex; gap:6px;">${viewBtn}${actionBtn}</td>
+          <td data-label="Campaign" class="campaigns-title-td"><span class="campaigns-title">${esc(b.title)}</span><span class="campaigns-template">${esc(b.templateName || '')}</span></td>
+          <td data-label="Status"><span class="badge status-badge ${badgeCls}">${esc(b.status)}</span></td>
+          <td data-label="Audience"><span class="tag-badge">${esc(b.audience)}</span> <span class="campaigns-count">${esc(Number(b.recipientCount).toLocaleString())}</span></td>
+          <td data-label="Sent" class="campaigns-num">${esc(Number(b.delivered).toLocaleString())}</td>
+          <td data-label="Delivered" class="campaigns-num">${esc(b.deliveredRate)}</td>
+          <td data-label="Read rate" class="campaigns-num">${esc(b.readRate)}</td>
+          <td data-label="Skipped">${skippedCell}</td>
+          <td data-label="Date" class="contacts-muted">${esc(b.date)}</td>
+          <td data-label="" class="campaigns-col-actions"><span class="campaigns-actions">${viewBtn}${actionBtn}</span></td>
         </tr>
       `;
-      broadcastsTableBody.innerHTML += tr;
-    });
+    }).join('');
+
+    if (pager) {
+      pager.hidden = pages <= 1;
+      const info = document.getElementById('campaigns-page-info');
+      if (info) info.textContent = `Showing ${start + 1}–${start + pageItems.length} of ${filtered.length}`;
+      const prev = document.getElementById('campaigns-prev-page');
+      const next = document.getElementById('campaigns-next-page');
+      if (prev) prev.disabled = campaignsView.page <= 1;
+      if (next) next.disabled = campaignsView.page >= pages;
+    }
   }
 
+  async function reloadCampaignsWithState() {
+    campaignsView.loadState = 'loading';
+    renderBroadcasts();
+    try {
+      await refreshBroadcasts();
+      campaignsView.loadState = 'ready';
+    } catch (err) {
+      campaignsView.loadState = 'error';
+    }
+    renderBroadcasts();
+  }
+
+  function applyCampaignsFilterChange() { campaignsView.page = 1; renderBroadcasts(); }
+  document.getElementById('campaign-search')?.addEventListener('input', (e) => { campaignsView.q = e.target.value; applyCampaignsFilterChange(); });
+  document.getElementById('campaign-status-filter')?.addEventListener('change', (e) => { campaignsView.status = e.target.value; applyCampaignsFilterChange(); });
+  document.getElementById('campaigns-prev-page')?.addEventListener('click', () => { campaignsView.page -= 1; renderBroadcasts(); });
+  document.getElementById('campaigns-next-page')?.addEventListener('click', () => { campaignsView.page += 1; renderBroadcasts(); });
+
   document.getElementById('broadcasts-table-body')?.addEventListener('click', async (e) => {
+    if (e.target.closest('#campaigns-retry-btn')) { reloadCampaignsWithState(); return; }
+    if (e.target.closest('#campaigns-empty-create')) { document.getElementById('open-create-broadcast-modal')?.click(); return; }
+    if (e.target.closest('#campaigns-clear-filters')) {
+      campaignsView.q = ''; campaignsView.status = '';
+      const s = document.getElementById('campaign-search'); if (s) s.value = '';
+      const f = document.getElementById('campaign-status-filter'); if (f) f.value = '';
+      applyCampaignsFilterChange();
+      return;
+    }
     const pauseBtn = e.target.closest('.broadcast-pause-btn');
     const resumeBtn = e.target.closest('.broadcast-resume-btn');
     const viewBtn = e.target.closest('.broadcast-view-btn');
@@ -2940,13 +3081,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const BROADCAST_STATUS_LABELS = {
     pending: 'Pending', sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed', skipped: 'Skipped',
   };
-  const BROADCAST_STATUS_COLORS = {
-    pending: { bg: '#F3F4F6', fg: '#4B5563' },
-    sent: { bg: '#E0E7FF', fg: '#4338CA' },
-    delivered: { bg: '#DBEAFE', fg: '#1D4ED8' },
-    read: { bg: '#D1FAE5', fg: '#047857' },
-    failed: { bg: '#FEE2E2', fg: '#B91C1C' },
-    skipped: { bg: '#FEF3C7', fg: '#B45309' },
+  const BROADCAST_STATUS_BADGES = {
+    pending: 'badge-neutral', sent: 'badge-info', delivered: 'badge-info',
+    read: 'badge-success', failed: 'badge-danger', skipped: 'badge-warning',
   };
 
   let broadcastDetailState = null; // { id, meta, recipients } — set on open, cleared on close.
@@ -2987,8 +3124,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     document.getElementById('broadcast-detail-meta').innerHTML = metaItems.map((item) => `
       <div class="broadcast-meta-item">
-        <div class="broadcast-meta-label">${item.label}</div>
-        <div class="broadcast-meta-value" title="${item.value}">${item.value}</div>
+        <div class="broadcast-meta-label">${esc(item.label)}</div>
+        <div class="broadcast-meta-value" title="${esc(item.value)}">${esc(item.value)}</div>
       </div>
     `).join('');
 
@@ -3009,10 +3146,10 @@ document.addEventListener('DOMContentLoaded', () => {
       buckets.unshift({ key: 'pending', label: 'Pending', count: meta.pending_count });
     }
     document.getElementById('broadcast-detail-strip').innerHTML = buckets.map((b) => {
-      const title = b.note ? ` title="${b.note.replace(/"/g, '&quot;')}"` : '';
+      const title = b.note ? ` title="${esc(b.note)}"` : '';
       return `
         <div class="broadcast-stat-block"${title}>
-          <div class="broadcast-stat-label">${b.label}</div>
+          <div class="broadcast-stat-label">${esc(b.label)}</div>
           <div class="broadcast-stat-value">${pct(b.count)}</div>
           <div class="broadcast-stat-count">${b.count.toLocaleString()}</div>
         </div>
@@ -3044,17 +3181,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (card) card.style.display = '';
     emptyEl.style.display = 'none';
     tbody.innerHTML = rows.map((r) => {
-      const color = BROADCAST_STATUS_COLORS[r.status] || BROADCAST_STATUS_COLORS.pending;
+      const badgeCls = BROADCAST_STATUS_BADGES[r.status] || 'badge-neutral';
       const label = BROADCAST_STATUS_LABELS[r.status] || r.status;
       const when = r.at ? new Date(r.at).toLocaleString() : '—';
-      const reason = r.reason ? `<span title="${r.reason.replace(/"/g, '&quot;')}">${r.reason}</span>` : '—';
+      const reason = r.reason ? `<span title="${esc(r.reason)}">${esc(r.reason)}</span>` : '—';
       return `
         <tr>
-          <td>${r.name || '—'}</td>
-          <td>${r.phone || '—'}</td>
-          <td><span class="status-badge" style="background:${color.bg}; color:${color.fg};">${label}</span></td>
-          <td>${when}</td>
-          <td class="broadcast-recipient-reason">${reason}</td>
+          <td data-label="Name">${esc(r.name || '—')}</td>
+          <td data-label="Phone">${esc(r.phone || '—')}</td>
+          <td data-label="Status"><span class="badge ${badgeCls}">${esc(label)}</span></td>
+          <td data-label="When">${esc(when)}</td>
+          <td data-label="Reason" class="broadcast-recipient-reason">${reason}</td>
         </tr>
       `;
     }).join('');
@@ -4433,8 +4570,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('campaign-tier-status');
     if (!el) return;
     el.textContent = '';
+    campaignTierStatus = null;
     try {
       const status = await authFetch('/api/broadcasts/tier-status');
+      campaignTierStatus = status;
       if (!status.tier) {
         el.textContent = 'Messaging tier not checked yet — ask an admin to refresh it before a large campaign.';
         return;
@@ -4451,7 +4590,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('open-create-broadcast-modal')?.addEventListener('click', async () => {
     populateTagSelect(document.getElementById('new-campaign-tag'));
-    populateTemplateSelect(document.getElementById('new-campaign-template'));
+    populateCampaignTemplateSelect();
+    setCampaignStep(1);
     newCampaignHeaderMediaAssetId = null;
     document.getElementById('new-campaign-media-file').value = '';
     document.getElementById('new-campaign-media-status').textContent = '';
@@ -4707,6 +4847,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-campaign-media-status').textContent = '';
     await updateNewCampaignMediaField();
     renderNewCampaignParamMappings();
+    updateCampaignTemplatePreview();
+    updateCampaignContentStep();
   });
 
   // Picking an existing asset instead of uploading a new one — either the
@@ -4763,8 +4905,198 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- New Campaign wizard (UI redesign Stage 6) ---
+  // The five steps are plain hide/show panels inside the one existing form,
+  // so every input keeps its original id and value across steps. "Next" only
+  // validates the current step; the submit handler below still runs ALL of
+  // its original validation, so nothing here can weaken Launch.
+  const CAMPAIGN_STEP_COUNT = 5;
+  let campaignWizardStep = 1;
+  let campaignTierStatus = null; // last /api/broadcasts/tier-status response, for the review step
+
+  function approvedCampaignTemplates() {
+    return (state.templates || []).filter((t) => t.status === 'approved');
+  }
+
+  // Only approved templates are offered — a campaign can only send an
+  // approved template, so a pending/rejected one is never a valid pick.
+  // When there is none, the blocker is shown up front (step 2) instead of the
+  // user discovering it at Launch.
+  function populateCampaignTemplateSelect() {
+    const select = document.getElementById('new-campaign-template');
+    if (!select) return;
+    const approved = approvedCampaignTemplates();
+    select.innerHTML = approved.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('');
+    const blocker = document.getElementById('campaign-template-blocker');
+    const group = document.getElementById('campaign-template-group');
+    const none = approved.length === 0;
+    if (blocker) blocker.hidden = !none;
+    if (group) group.hidden = none;
+    if (none) {
+      const total = (state.templates || []).length;
+      const detail = document.getElementById('campaign-template-blocker-detail');
+      if (detail) {
+        detail.textContent = total > 0
+          ? ` You have ${total} template${total === 1 ? '' : 's'}, but none are approved yet. Wait for Meta's review or submit a new one — campaigns can only send an approved WhatsApp template.`
+          : ' You have not created a template yet. Campaigns can only send an approved WhatsApp template.';
+      }
+    }
+    updateCampaignTemplatePreview();
+  }
+
+  function updateCampaignTemplatePreview() {
+    const el = document.getElementById('campaign-template-preview');
+    if (!el) return;
+    const name = document.getElementById('new-campaign-template')?.value;
+    const t = (state.templates || []).find((x) => x.name === name);
+    if (!t) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="campaign-template-preview-meta"><span class="badge badge-neutral">${esc(t.category || 'Template')}</span><span class="badge badge-neutral">${esc(t.language || '')}</span></div>
+      <div class="campaign-template-preview-body">${esc(t.body || '')}</div>`;
+  }
+
+  function updateCampaignContentStep() {
+    const mediaVisible = document.getElementById('new-campaign-media')?.style.display !== 'none';
+    const hasParams = !!document.querySelector('#new-campaign-param-mappings .param-map-row');
+    const empty = document.getElementById('campaign-content-empty');
+    if (empty) empty.hidden = mediaVisible || hasParams;
+  }
+
+  function campaignAudienceMode() {
+    if (document.getElementById('campaign-audience-mode-list')?.checked) return 'list';
+    if (document.getElementById('campaign-audience-mode-segment')?.checked) return 'segment';
+    return 'tag';
+  }
+
+  function selectedOptionText(id) {
+    const sel = document.getElementById(id);
+    return sel && sel.selectedIndex >= 0 ? (sel.options[sel.selectedIndex]?.textContent || '').trim() : '';
+  }
+
+  // Returns the first problem with step n, or null. Messages reuse the
+  // submit handler's own wording where the same check exists there.
+  function campaignStepProblem(n) {
+    if (n === 1) {
+      if (!document.getElementById('new-campaign-name').value.trim()) return { msg: 'Enter a campaign name.', focus: 'new-campaign-name' };
+      const mode = campaignAudienceMode();
+      if (mode === 'list' && !document.getElementById('new-campaign-contact-list').value) return { msg: 'Select a contact list, or import one, before continuing.', focus: 'new-campaign-contact-list' };
+      if (mode === 'segment' && !document.getElementById('new-campaign-segment').value) return { msg: 'Select a segment, or build and save one, before continuing.', focus: 'new-campaign-segment' };
+    }
+    if (n === 2) {
+      if (!document.getElementById('new-campaign-template').value) {
+        return { msg: 'Campaigns send via an approved template — you have none yet. Use "Go to Templates" to create one.', focus: 'campaign-go-templates-btn' };
+      }
+    }
+    return null;
+  }
+
+  function setCampaignStep(n) {
+    campaignWizardStep = Math.min(CAMPAIGN_STEP_COUNT, Math.max(1, n));
+    document.querySelectorAll('#create-campaign-form .wizard-panel').forEach((p) => {
+      p.hidden = Number(p.dataset.step) !== campaignWizardStep;
+    });
+    document.querySelectorAll('#campaign-wizard-stepper .wizard-step-indicator').forEach((li) => {
+      const s = Number(li.dataset.step);
+      li.classList.toggle('active', s === campaignWizardStep);
+      li.classList.toggle('done', s < campaignWizardStep);
+      if (s === campaignWizardStep) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+    const last = campaignWizardStep === CAMPAIGN_STEP_COUNT;
+    document.getElementById('campaign-wizard-back').hidden = campaignWizardStep === 1;
+    document.getElementById('campaign-wizard-next').hidden = last;
+    document.getElementById('campaign-launch-btn').hidden = !last;
+    if (campaignWizardStep === 3) updateCampaignContentStep();
+    if (last) renderCampaignReview();
+    refreshIcons();
+    const box = document.querySelector('#modal-create-campaign .modal-box');
+    if (box) box.scrollTop = 0;
+  }
+
+  function campaignParamSummary() {
+    const rows = [];
+    document.querySelectorAll('#new-campaign-param-mappings .param-map-row').forEach((row) => {
+      const src = row.querySelector('.param-map-source');
+      const label = src.options[src.selectedIndex]?.textContent || '';
+      const val = src.value === 'static' ? `Static: "${row.querySelector('.param-map-static-value').value.trim()}"` : label;
+      rows.push(`{{${row.dataset.param}}} → ${val}`);
+    });
+    return rows;
+  }
+
+  function renderCampaignReview() {
+    const dl = document.getElementById('campaign-review');
+    const warn = document.getElementById('campaign-review-warnings');
+    if (!dl || !warn) return;
+    const mode = campaignAudienceMode();
+    let audience = '';
+    let listCount = null;
+    if (mode === 'list') {
+      const list = campaignContactLists.find((l) => l.id === document.getElementById('new-campaign-contact-list').value);
+      audience = list ? `Contact list: ${list.name} (${Number(list.member_count).toLocaleString()} contacts)` : 'Contact list';
+      if (list) listCount = Number(list.member_count);
+    } else if (mode === 'segment') {
+      audience = `Segment: ${selectedOptionText('new-campaign-segment') || '—'}`;
+    } else {
+      audience = `Tag: ${selectedOptionText('new-campaign-tag') || 'Everyone (all contacts)'}`;
+    }
+    const templateName = document.getElementById('new-campaign-template').value;
+    const template = (state.templates || []).find((t) => t.name === templateName);
+    const mediaOn = document.getElementById('new-campaign-media')?.style.display !== 'none';
+    const mediaSel = document.getElementById('new-campaign-media-asset');
+    const header = !mediaOn ? null : (mediaSel && mediaSel.value ? selectedOptionText('new-campaign-media-asset') : "Template's default file");
+    const params = campaignParamSummary();
+    const pace = document.getElementById('new-campaign-pace').value;
+    const smart = document.getElementById('new-campaign-smart-sending').value;
+    const items = [
+      ['Campaign', document.getElementById('new-campaign-name').value.trim()],
+      ['Audience', audience],
+      ['Template', `${templateName}${template?.category ? ` (${template.category})` : ''}`],
+    ];
+    if (header) items.push(['Header file', header]);
+    if (params.length) items.push(['Variables', params]);
+    items.push(['Sending pace', selectedOptionText('new-campaign-pace') || 'Normal']);
+    items.push(['Smart Sending', smart ? selectedOptionText('new-campaign-smart-sending') : 'Off']);
+    items.push(['Starts', 'Immediately after launch']);
+    dl.innerHTML = items.map(([k, v]) => `
+      <div class="campaign-review-row"><dt>${esc(k)}</dt><dd>${Array.isArray(v) ? v.map((x) => `<div>${esc(x)}</div>`).join('') : esc(v)}</dd></div>`).join('');
+
+    const alerts = [];
+    const tierText = (document.getElementById('campaign-tier-status')?.textContent || '').trim();
+    if (tierText) alerts.push({ cls: 'alert-info', icon: 'gauge', text: tierText });
+    if (listCount !== null && campaignTierStatus && campaignTierStatus.remaining !== null && campaignTierStatus.remaining !== undefined && listCount > campaignTierStatus.remaining) {
+      alerts.push({ cls: 'alert-warning', icon: 'alert-triangle', text: `This list has ${listCount.toLocaleString()} contacts but roughly ${Number(campaignTierStatus.remaining).toLocaleString()} conversations remain in your daily messaging tier — some sends could be rejected by WhatsApp. (Estimate, not a live Meta count.)` });
+    }
+    if (template && template.category === 'Marketing') {
+      alerts.push({ cls: 'alert-info', icon: 'shield-check', text: 'This is a Marketing template: only contacts who have opted in to marketing messages will receive it. Anyone else is skipped, not sent — you will see a warning after launch if most of the audience is not opted in.' });
+    }
+    warn.innerHTML = alerts.map((a) => `<div class="alert ${a.cls}"><i data-lucide="${a.icon}" class="icon-16"></i><div>${esc(a.text)}</div></div>`).join('');
+    refreshIcons();
+  }
+
+  function campaignWizardNext() {
+    const problem = campaignStepProblem(campaignWizardStep);
+    if (problem) {
+      showToast(problem.msg, 'error');
+      document.getElementById(problem.focus)?.focus?.();
+      return;
+    }
+    // Step 3 reuses the submit handler's own mapping validation (toasts why).
+    if (campaignWizardStep === 3 && collectNewCampaignParamMappings() === null) return;
+    setCampaignStep(campaignWizardStep + 1);
+  }
+
+  document.getElementById('campaign-wizard-next')?.addEventListener('click', campaignWizardNext);
+  document.getElementById('campaign-wizard-back')?.addEventListener('click', () => setCampaignStep(campaignWizardStep - 1));
+  document.getElementById('campaign-go-templates-btn')?.addEventListener('click', () => {
+    document.getElementById('modal-create-campaign')?.classList.remove('open');
+    switchView('template');
+  });
+
   document.getElementById('create-campaign-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    // Enter inside a field on steps 1-4 means "continue", never "launch".
+    if (campaignWizardStep < CAMPAIGN_STEP_COUNT) { campaignWizardNext(); return; }
     const title = document.getElementById('new-campaign-name').value.trim();
     const isListMode = document.getElementById('campaign-audience-mode-list').checked;
     const isSegmentMode = document.getElementById('campaign-audience-mode-segment').checked;

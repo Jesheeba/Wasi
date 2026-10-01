@@ -57,6 +57,9 @@ before(async () => {
   });
   assert.equal(templateRes.status, 201, JSON.stringify(await templateRes.clone().json()));
   global.fetch = realFetch;
+  // The redesigned New Campaign wizard (UI redesign Stage 6) only offers
+  // APPROVED templates, so approve the fixture template directly.
+  await pool.query("update message_templates set status = 'approved' where client_id = $1 and name = $2", [testClientId, `${SUITE_PREFIX}tpl`]);
 
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -99,6 +102,12 @@ test('1. picking a Smart Sending option and launching persists smart_sending_hou
   });
   await page.waitForTimeout(300);
 
+  // Walk the 5-step wizard (Audience > Template > Content > Schedule > Review);
+  // Launch only appears on the last step.
+  for (let step = 1; step < 5; step++) {
+    await page.click('#campaign-wizard-next');
+    await page.waitForTimeout(150);
+  }
   await page.click('#create-campaign-form button[type="submit"]');
   await page.waitForTimeout(800);
 
