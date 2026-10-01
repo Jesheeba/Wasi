@@ -13,6 +13,10 @@ const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRe
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
+const paymentNotificationsRepo = require('../repositories/paymentNotificationsRepo');
+const paymentNotificationService = require('../services/paymentNotificationService');
+const clientNotifier = require('../services/clientNotifier');
+const paymentReminderSchedulesRepo = require('../repositories/paymentReminderSchedulesRepo');
 const alertNotifier = require('../services/alertNotifier');
 const { getAlertingConfigStatus } = require('../utils/alertingConfig');
 const messagingTierRefreshRunner = require('../services/messagingTierRefreshRunner');
@@ -583,6 +587,81 @@ router.get('/health', asyncHandler(async (req, res) => {
     order by c.name asc
   `);
   res.json(rows);
+}));
+
+// --- Payment reminder audit ---
+router.get('/payment-notifications', asyncHandler(async (req, res) => {
+  const { status, kind, clientId, limit } = req.query;
+  const [rows, summary] = await Promise.all([
+    paymentNotificationsRepo.list({ status, kind, clientId, limit }),
+    paymentNotificationsRepo.summary(),
+  ]);
+  let senderConfigured = true;
+  try { await clientNotifier.resolveSenderWaba(); } catch (_) { senderConfigured = false; }
+  res.json({ rows, summary, senderConfigured });
+}));
+
+// Monthly schedules: "day N at hour H (India time), every month".
+const scheduleCreateSchema = z.object({
+  day_of_month: z.number().int().min(1).max(31),
+  send_hour: z.number().int().min(0).max(23).default(10),
+});
+
+router.get('/payment-notifications/schedules', asyncHandler(async (req, res) => {
+  res.json(await paymentReminderSchedulesRepo.list());
+}));
+
+router.post('/payment-notifications/schedules', asyncHandler(async (req, res) => {
+  const body = scheduleCreateSchema.parse(req.body);
+  const schedule = await paymentReminderSchedulesRepo.create({ ...body, created_by: req.adminId });
+  await auditLogRepo.record({
+    actor_type: 'admin', actor_id: req.adminId, action: 'payment_reminder_schedule_created',
+    target: `day ${body.day_of_month} @ ${body.send_hour}:00 IST`,
+  });
+  res.status(201).json(schedule);
+}));
+
+router.patch('/payment-notifications/schedules/:id', asyncHandler(async (req, res) => {
+  const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+  const schedule = await paymentReminderSchedulesRepo.setEnabled(req.params.id, enabled);
+  if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
+  await auditLogRepo.record({
+    actor_type: 'admin', actor_id: req.adminId, action: enabled ? 'payment_reminder_schedule_enabled' : 'payment_reminder_schedule_disabled',
+    target: `day ${schedule.day_of_month} @ ${schedule.send_hour}:00 IST`,
+  });
+  res.json(schedule);
+}));
+
+router.delete('/payment-notifications/schedules/:id', asyncHandler(async (req, res) => {
+  const ok = await paymentReminderSchedulesRepo.remove(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Schedule not found' });
+  await auditLogRepo.record({
+    actor_type: 'admin', actor_id: req.adminId, action: 'payment_reminder_schedule_deleted', target: req.params.id,
+  });
+  res.status(204).end();
+}));
+
+// Sends the payment reminder to every client currently status='active'.
+// Outward-facing, so the UI gates it behind an explicit confirm and this
+// route refuses without { confirm: true }. Sequential, with a per-client
+// failure boundary; every attempt (including a failed one) is logged.
+router.post('/payment-notifications/send-reminders', asyncHandler(async (req, res) => {
+  if (req.body?.confirm !== true) return res.status(400).json({ error: 'Send requires { "confirm": true }.' });
+  const clients = await clientsRepo.listActive(pool);
+  let sent = 0;
+  let failed = 0;
+  for (const client of clients) {
+    const result = await paymentNotificationService.sendAndLog(client, {
+      kind: 'payment_reminder', trigger: 'manual_bulk', name: 'wasi_payment_reminder',
+      bodyParams: { client_name: client.name }, triggeredBy: req.adminId,
+    });
+    if (result.ok) sent += 1; else failed += 1;
+  }
+  await auditLogRepo.record({
+    actor_type: 'admin', actor_id: req.adminId, action: 'payment_reminders_bulk_sent',
+    target: `${clients.length} active clients: ${sent} sent, ${failed} failed`,
+  });
+  res.json({ total: clients.length, sent, failed });
 }));
 
 // Backs the Health Monitor's "Alerts are not configured" banner —

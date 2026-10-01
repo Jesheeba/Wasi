@@ -76,6 +76,7 @@
         <a class="nav-item" data-view="health-monitor"><i data-lucide="heart-pulse"></i><span class="nav-text">Health Monitor</span></a>
         <a class="nav-item" data-view="volume"><i data-lucide="bar-chart-3"></i><span class="nav-text">Usage &amp; Volume</span></a>
         <a class="nav-item" data-view="failures"><i data-lucide="alert-octagon"></i><span class="nav-text">Failures</span></a>
+        <a class="nav-item" data-view="payment-reminders"><i data-lucide="bell-ring"></i><span class="nav-text">Payment Reminders</span></a>
         <a class="nav-item" data-view="billing"><i data-lucide="credit-card"></i><span class="nav-text">Billing</span></a>
         <a class="nav-item" data-view="templates-review"><i data-lucide="file-check"></i><span class="nav-text">Templates Review</span></a>
         <a class="nav-item" data-view="api-keys"><i data-lucide="key"></i><span class="nav-text">API Keys</span></a>
@@ -789,6 +790,72 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
                   </tr>
                 </thead>
                 <tbody id="team-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- Payment Reminders (audit) ---------- -->
+        <section id="view-payment-reminders" class="admin-view">
+          <div class="page-title-bar">
+            <div>
+              <div class="page-title">Payment Reminders</div>
+              <div class="page-subtitle">Every billing message Wasi sent to a client — who got it, and whether it was delivered or read. Refreshes automatically.</div>
+            </div>
+            <button class="btn-secondary" id="pr-export-btn"><i data-lucide="download" style="width:14px;"></i> Export CSV</button>
+            <button class="btn-secondary" id="pr-refresh-btn"><i data-lucide="rotate-cw" style="width:14px;"></i> Refresh</button>
+            <button class="btn-primary" id="pr-send-all-btn"><i data-lucide="send" style="width:14px;"></i> Send reminder to all active clients</button>
+          </div>
+          <div id="pr-sender-banner" class="inline-error" style="display:none; margin-bottom:1rem;"></div>
+          <div id="pr-error" class="inline-error" style="display:none;"></div>
+          <div class="table-card" style="padding:14px 16px; margin-bottom:1rem;">
+            <div style="font-weight:600; margin-bottom:4px;">Monthly schedule</div>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">Pick a date: on that day of every month (India time) the reminder is sent to all active clients. A date past the month's end (e.g. 31) runs on the last day.</div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+              <label style="font-size:0.85rem;">Day of month
+                <select id="pr-sched-day" class="form-input" style="width:90px;"></select>
+              </label>
+              <label style="font-size:0.85rem;">Time (IST)
+                <select id="pr-sched-hour" class="form-input" style="width:110px;"></select>
+              </label>
+              <button class="btn-primary" id="pr-sched-add-btn" style="align-self:flex-end;">Add schedule</button>
+            </div>
+            <div id="pr-sched-list"></div>
+          </div>
+          <div id="pr-summary" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:1rem;"></div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:1rem;">
+            <select id="pr-filter-status" class="form-input" style="max-width:180px;">
+              <option value="">All statuses</option>
+              <option value="sent">Sent (not yet delivered)</option>
+              <option value="delivered">Delivered (not read)</option>
+              <option value="read">Read</option>
+              <option value="failed">Failed</option>
+            </select>
+            <select id="pr-filter-kind" class="form-input" style="max-width:200px;">
+              <option value="">All message types</option>
+              <option value="payment_reminder">Payment reminder</option>
+              <option value="suspension_warning">Suspension warning</option>
+              <option value="service_suspended">Service suspended</option>
+            </select>
+            <input id="pr-filter-search" class="form-input" placeholder="Search client or phone" style="max-width:240px;">
+          </div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Phone</th>
+                    <th>Message</th>
+                    <th>Trigger</th>
+                    <th>Status</th>
+                    <th>Sent</th>
+                    <th>Delivered</th>
+                    <th>Read</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody id="pr-table-body"></tbody>
               </table>
             </div>
           </div>

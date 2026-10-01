@@ -273,6 +273,7 @@ const VIEW_TITLES = {
   volume: 'Usage & Volume',
   failures: 'Failures',
   billing: 'Billing',
+  'payment-reminders': 'Payment Reminders',
   'templates-review': 'Templates Review',
   'api-keys': 'API Keys',
   tickets: 'Support / Tickets',
@@ -318,7 +319,11 @@ function switchView(viewName) {
     if (location.hash !== hash) history.pushState({ view: viewName }, '', hash);
   }
 
+  // The payment-reminder audit page polls while open; stop when leaving it.
+  if (viewName !== 'payment-reminders') stopPaymentRemindersPolling();
+
   if (viewName === 'dashboard') loadDashboard();
+  else if (viewName === 'payment-reminders') { loadPaymentReminders(); startPaymentRemindersPolling(); }
   else if (viewName === 'statistics') loadStatistics();
   else if (viewName === 'clients') loadClients();
   else if (viewName === 'onboarding') loadOnboarding();
@@ -1697,6 +1702,211 @@ function renderPlatformOverview(rows) {
 }
 
 /* ---------------------------------------------------------------
+   Payment Reminders (audit of every billing message sent to a client)
+   --------------------------------------------------------------- */
+const PR_KIND_LABELS = {
+  payment_reminder: 'Payment reminder',
+  suspension_warning: 'Suspension warning',
+  service_suspended: 'Service suspended',
+};
+const PR_TRIGGER_LABELS = { scheduled: 'Monthly schedule', nonpayment_timeline: 'Nonpayment timeline', manual_bulk: 'Sent by admin', admin_schedule: 'Admin schedule' };
+const PR_STATUS_STYLE = {
+  sent: 'background:#E0F2FE;color:#0369A1;',
+  delivered: 'background:#FEF3C7;color:#B45309;',
+  read: 'background:#DCFCE7;color:#15803D;',
+  failed: 'background:#FEE2E2;color:#B91C1C;',
+};
+const PR_STATUS_LABEL = { sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed' };
+
+let paymentRemindersData = { rows: [], summary: null, senderConfigured: true };
+let paymentRemindersTimer = null;
+
+function startPaymentRemindersPolling() {
+  stopPaymentRemindersPolling();
+  paymentRemindersTimer = setInterval(() => loadPaymentReminders({ quiet: true }), 15000);
+}
+function stopPaymentRemindersPolling() {
+  if (paymentRemindersTimer) clearInterval(paymentRemindersTimer);
+  paymentRemindersTimer = null;
+}
+
+async function loadPaymentReminders({ quiet = false } = {}) {
+  const tbody = document.getElementById('pr-table-body');
+  if (!quiet) {
+    setInlineError('pr-error', null);
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="9">Loading…</td></tr>';
+  }
+  if (!quiet) loadPaymentSchedules();
+  try {
+    const status = document.getElementById('pr-filter-status').value;
+    const kind = document.getElementById('pr-filter-kind').value;
+    const qs = new URLSearchParams();
+    if (status) qs.set('status', status);
+    if (kind) qs.set('kind', kind);
+    paymentRemindersData = await apiFetch(`/api/admin/payment-notifications?${qs}`);
+    renderPaymentReminders();
+  } catch (err) {
+    if (err.status === 401) return;
+    if (!quiet) {
+      tbody.innerHTML = '';
+      setInlineError('pr-error', err.message);
+    }
+  }
+}
+
+function ordinal(n) {
+  const v = n % 100;
+  return n + (['th', 'st', 'nd', 'rd'][(v - 20) % 10] || ['th', 'st', 'nd', 'rd'][v] || 'th');
+}
+
+function populateScheduleSelects() {
+  const day = document.getElementById('pr-sched-day');
+  if (day.options.length) return;
+  for (let d = 1; d <= 31; d++) day.add(new Option(ordinal(d), d));
+  const hour = document.getElementById('pr-sched-hour');
+  for (let h = 0; h < 24; h++) {
+    const label = `${((h + 11) % 12) + 1}:00 ${h < 12 ? 'AM' : 'PM'}`;
+    hour.add(new Option(label, h));
+  }
+  hour.value = '10';
+}
+
+async function loadPaymentSchedules() {
+  populateScheduleSelects();
+  const box = document.getElementById('pr-sched-list');
+  try {
+    const schedules = await apiFetch('/api/admin/payment-notifications/schedules');
+    if (!schedules.length) {
+      box.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted);">No schedules yet.</div>';
+      return;
+    }
+    box.innerHTML = schedules.map((sc) => `
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:8px 0; border-top:1px solid #E2E8F0;">
+        <div style="min-width:220px;"><strong>${ordinal(sc.day_of_month)} of every month</strong> at ${((sc.send_hour + 11) % 12) + 1}:00 ${sc.send_hour < 12 ? 'AM' : 'PM'} IST</div>
+        <div style="flex:1; font-size:0.8rem; color:var(--text-muted);">${sc.last_run_on ? `Last run ${escapeHtml(String(sc.last_run_on).slice(0, 10))} � ${escapeHtml(sc.last_run_summary || '')}` : 'Has not run yet'}</div>
+        <label style="font-size:0.85rem;"><input type="checkbox" data-sched-toggle="${escapeHtml(sc.id)}" ${sc.enabled ? 'checked' : ''}> Enabled</label>
+        <button class="btn-secondary" data-sched-delete="${escapeHtml(sc.id)}">Delete</button>
+      </div>`).join('');
+    box.querySelectorAll('[data-sched-toggle]').forEach((el) => el.addEventListener('change', async () => {
+      try {
+        await apiFetch(`/api/admin/payment-notifications/schedules/${el.getAttribute('data-sched-toggle')}`, { method: 'PATCH', body: JSON.stringify({ enabled: el.checked }) });
+      } catch (err) { showToast(err.message, 'error'); loadPaymentSchedules(); }
+    }));
+    box.querySelectorAll('[data-sched-delete]').forEach((el) => el.addEventListener('click', () => {
+      showConfirm({
+        title: 'Delete this schedule?', body: 'It will stop sending. Past messages stay in the log below.', confirmLabel: 'Delete',
+        onConfirm: async () => {
+          await apiFetch(`/api/admin/payment-notifications/schedules/${el.getAttribute('data-sched-delete')}`, { method: 'DELETE' });
+          loadPaymentSchedules();
+        },
+      });
+    }));
+  } catch (err) {
+    if (err.status !== 401) box.innerHTML = `<div class="inline-error">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function addPaymentSchedule() {
+  const day = Number(document.getElementById('pr-sched-day').value);
+  const hour = Number(document.getElementById('pr-sched-hour').value);
+  try {
+    await apiFetch('/api/admin/payment-notifications/schedules', { method: 'POST', body: JSON.stringify({ day_of_month: day, send_hour: hour }) });
+    showToast('Schedule added.', 'success');
+    loadPaymentSchedules();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function paymentRemindersVisibleRows() {
+  const q = document.getElementById('pr-filter-search').value.trim().toLowerCase();
+  if (!q) return paymentRemindersData.rows;
+  return paymentRemindersData.rows.filter((r) =>
+    (r.client_name || '').toLowerCase().includes(q) || (r.recipient_phone || '').toLowerCase().includes(q));
+}
+
+function renderPaymentReminders() {
+  const { summary, senderConfigured } = paymentRemindersData;
+  const banner = document.getElementById('pr-sender-banner');
+  if (!senderConfigured) {
+    banner.style.display = '';
+    banner.textContent = 'PAYMENT_REMINDER_WABA_ID is not set on the server, so no payment message can actually be sent yet — any send attempt is logged below as Failed. The three wasi_* templates must also be approved on Meta.';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  if (summary) {
+    const delivered = summary.delivered_only + summary.read;
+    const tiles = [
+      ['Total sent', summary.total],
+      ['Delivered', delivered],
+      ['Read', summary.read],
+      ['Not yet delivered', summary.sent_only],
+      ['Failed', summary.failed],
+      ['Clients reminded', summary.clients_reminded],
+    ];
+    document.getElementById('pr-summary').innerHTML = tiles.map(([label, n]) => `
+      <div class="table-card" style="padding:12px 14px;">
+        <div style="font-size:0.75rem; color:var(--text-muted);">${label}</div>
+        <div style="font-size:1.4rem; font-weight:700;">${n}</div>
+      </div>`).join('');
+  }
+
+  const rows = paymentRemindersVisibleRows();
+  const tbody = document.getElementById('pr-table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="9">No payment messages recorded yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml(r.client_name)}</td>
+      <td>${escapeHtml(r.recipient_phone || '—')}</td>
+      <td>${escapeHtml(PR_KIND_LABELS[r.kind] || r.kind)}</td>
+      <td>${escapeHtml(PR_TRIGGER_LABELS[r.trigger] || r.trigger)}</td>
+      <td><span class="status-badge" style="${PR_STATUS_STYLE[r.status] || ''}">${escapeHtml(PR_STATUS_LABEL[r.status] || r.status)}</span></td>
+      <td>${formatDateTime(r.sent_at || r.created_at)}</td>
+      <td>${formatDateTime(r.delivered_at)}</td>
+      <td>${formatDateTime(r.read_at)}</td>
+      <td style="max-width:260px; white-space:normal;">${escapeHtml(r.error_message || '')}</td>
+    </tr>`).join('');
+}
+
+function exportPaymentRemindersCsv() {
+  const rows = paymentRemindersVisibleRows();
+  const header = ['Client', 'Phone', 'Message', 'Trigger', 'Status', 'Sent', 'Delivered', 'Read', 'Failed', 'Error'];
+  const cell = (v) => {
+    let s = v == null ? '' : String(v);
+    if (/^[=+\-@]/.test(s)) s = `'${s}`; // neutralize spreadsheet formula injection
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  const lines = [header.map(cell).join(',')].concat(rows.map((r) => [
+    r.client_name, r.recipient_phone, PR_KIND_LABELS[r.kind] || r.kind, PR_TRIGGER_LABELS[r.trigger] || r.trigger,
+    r.status, r.sent_at, r.delivered_at, r.read_at, r.failed_at, r.error_message,
+  ].map(cell).join(',')));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `payment-reminders-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function confirmSendRemindersToAllActive() {
+  showConfirm({
+    title: 'Send payment reminder to all active clients?',
+    body: 'This sends the <strong>wasi_payment_reminder</strong> WhatsApp message to every client whose status is <strong>active</strong>, right now. Every attempt, delivery and read receipt is recorded on this page.',
+    confirmLabel: 'Send to all active',
+    danger: false,
+    onConfirm: async () => {
+      const r = await apiFetch('/api/admin/payment-notifications/send-reminders', {
+        method: 'POST', body: JSON.stringify({ confirm: true }),
+      });
+      showToast(`Reminders: ${r.sent} sent, ${r.failed} failed (of ${r.total} active clients).`, r.failed ? 'error' : 'success');
+      loadPaymentReminders();
+    },
+  });
+}
+
+/* ---------------------------------------------------------------
    Health Monitor
    --------------------------------------------------------------- */
 async function loadHealthMonitor() {
@@ -2628,6 +2838,13 @@ function initEventListeners() {
   document.getElementById('refresh-wabas-btn').addEventListener('click', loadWabas);
   document.getElementById('refresh-platform-overview-btn').addEventListener('click', loadPlatformOverview);
   document.getElementById('refresh-health-monitor-btn').addEventListener('click', loadHealthMonitor);
+  document.getElementById('pr-refresh-btn').addEventListener('click', () => loadPaymentReminders());
+  document.getElementById('pr-export-btn').addEventListener('click', exportPaymentRemindersCsv);
+  document.getElementById('pr-sched-add-btn').addEventListener('click', addPaymentSchedule);
+  document.getElementById('pr-send-all-btn').addEventListener('click', confirmSendRemindersToAllActive);
+  document.getElementById('pr-filter-status').addEventListener('change', () => loadPaymentReminders());
+  document.getElementById('pr-filter-kind').addEventListener('change', () => loadPaymentReminders());
+  document.getElementById('pr-filter-search').addEventListener('input', renderPaymentReminders);
   document.getElementById('send-test-alert-btn').addEventListener('click', sendTestAlert);
   document.getElementById('refresh-volume-btn').addEventListener('click', loadVolume);
   document.getElementById('volume-days-filter').addEventListener('change', loadVolume);

@@ -5,6 +5,7 @@ const auditLogRepo = require('../repositories/auditLogRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
+const paymentNotificationsRepo = require('../repositories/paymentNotificationsRepo');
 const consentRepo = require('../repositories/consentRepo');
 const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
@@ -389,6 +390,13 @@ async function handleStatuses(waba, value) {
   for (const status of value.statuses || []) {
     const error = status.errors?.[0];
     await chatsRepo.updateStatusByMetaId(pool, waba.client_id, status.id, status.status, error?.title || null, error?.code || null);
+    // Wasi's own billing messages (payment_notifications) — a no-op for any
+    // message id that isn't one of ours. Never allowed to break the handler.
+    try {
+      await paymentNotificationsRepo.updateStatusByMetaId(status.id, status.status, error?.title || null);
+    } catch (err) {
+      console.error('metaWebhook: payment_notifications status update failed:', err.message);
+    }
 
     // Meta redelivers on anything short of a fast 2xx — without this guard a
     // redelivered status produces a second identical forward to the CRM.
