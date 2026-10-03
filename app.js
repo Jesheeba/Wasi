@@ -237,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
       name: c.name,
       phone: c.phone,
       tag: state.tagsById[c.tag_id]?.name || '—',
+      tagId: c.tag_id || null,
       // Raw ISO, not pre-formatted — chatListTimeLabel derives the
       // WhatsApp-style label (time-only for today, else a date) at render
       // time, so "Today" stays correct across midnight without a re-adapt.
@@ -1316,10 +1317,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasTag = chat.tag && chat.tag !== '—';
     headerTag.style.display = hasTag ? '' : 'none';
     headerTag.innerText = hasTag ? chat.tag : '';
+    document.getElementById('drawer-contact-tags').style.display = '';
     document.getElementById('drawer-contact-tags').innerHTML = hasTag
       ? `<span class="tag-badge">${escapeHtml(chat.tag)}</span>`
       : '<span class="contact-drawer-muted">No tag assigned</span>';
 
+    // The primary badge above and the multi-tag chips below read two different
+    // tables (contacts.tag_id vs contact_tags), and migration 061 copied every
+    // primary tag into contact_tags — so the same tag would show twice. The
+    // 'contact-tags-rendered' listener (below renderContactTagsInto) hides the
+    // primary badge whenever that tag is already a chip.
     renderContactAttributesInto(document.getElementById('drawer-contact-attributes'), chat.contactId, () => state.activeChatId !== chat.id);
     renderContactTagsInto(document.getElementById('drawer-contact-tags-wrapper'), chat.contactId, () => state.activeChatId !== chat.id);
 
@@ -1654,10 +1661,25 @@ document.addEventListener('DOMContentLoaded', () => {
       </span>
     `).join('');
 
+    // Lets a surface that also shows the single primary tag (the Chat drawer)
+    // drop its own badge when the same tag is already one of these chips.
+    wrapper.dispatchEvent(new CustomEvent('contact-tags-rendered', { detail: { tags } }));
+
     const attachedIds = new Set(tags.map(t => t.id));
     const available = Object.values(state.tagsById).filter(t => !attachedIds.has(t.id));
     select.innerHTML = '<option value="">+ Add tag…</option>' + available.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
   }
+
+  // Chat drawer only: hide the primary-tag badge (or the "No tag assigned"
+  // placeholder) when the chips below already cover it — see the note in the
+  // chat-open render path. Display-only; neither table is touched.
+  document.getElementById('drawer-contact-tags-wrapper')?.addEventListener('contact-tags-rendered', (e) => {
+    const chat = (state.chats || []).find(c => c.id === state.activeChatId);
+    const primary = document.getElementById('drawer-contact-tags');
+    if (!chat || !primary) return;
+    const chipIds = new Set(e.detail.tags.map(t => t.id));
+    primary.style.display = (chat.tagId ? chipIds.has(chat.tagId) : chipIds.size > 0) ? 'none' : '';
+  });
 
   // Two delegated listeners (remove-chip click, add-tag select change),
   // each shared across every .contact-tags-wrapper — re-renders by finding
