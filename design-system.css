@@ -326,8 +326,17 @@ textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .page-title-bar > :first-child { margin-left: 56px; min-height: 44px; }
 }
 
+/* Page-header actions stay compact on phones: content width, 40px tall,
+   side by side and wrapping only when they must, instead of stretching to
+   full-width 44px bars that dominate the screen. */
 @media (max-width: 640px) {
-  .page-title-bar > button, .page-title-bar > .btn-primary { width: 100%; justify-content: center; }
+  .view-container .page-title-bar .btn-primary,
+  .view-container .page-title-bar .btn-secondary {
+    width: auto; flex: 0 0 auto; min-height: 40px; height: 40px; padding: 0 16px; font-size: 0.875rem;
+  }
+  .view-container .page-title-bar .contacts-actions,
+  .view-container .page-title-bar .page-actions { width: 100%; margin-left: 0; gap: var(--sp-2); }
+  .view-container .page-title-bar .contacts-actions .btn-primary { order: -1; }
 }
 
 /* ------------------------------------------------------ touch targets */
@@ -338,9 +347,4 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand-dark); }
 .icon-14 { width: 14px; height: 14px; flex-shrink: 0; }
 .icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
 
-/* Content-width page action on desktop; stretches full-width on mobile like
-   every other page action. */
 .page-title-bar > .btn-compact { width: auto; padding-left: 18px; padding-right: 18px; }
-@media (max-width: 640px) {
-  .page-title-bar > .btn-compact { width: 100%; }
-}
