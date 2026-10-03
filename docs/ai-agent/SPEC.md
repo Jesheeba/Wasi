@@ -967,39 +967,54 @@ ones, answer customers **from the WhatsApp Business app on their own phone**, ne
 opening Wasi. For those clients the only signal that a human is talking is the
 `smb_message_echoes` webhook, ingested by `handleMessageEchoes` / `chatsRepo.insertEcho`.
 
-That signal is not yet reliable:
+That signal is not arriving today. **Confirmed 2026-10-03, not assumed:**
 
-- Echo ingestion is described in the code as Phase 1 and, per migration
-  `080_messages_source.js`, only applies "from the moment smb_message_echoes is actually
-  turned on in the App Dashboard", which had not happened when it was written. **VERIFY**
-  whether it is subscribed in production today.
-- The handler is still being changed. `routes/metaWebhook.js` carries uncommitted edits
-  that read the echo array from `message_echoes`, `smb_message_echoes` or `messages`, and
-  the recipient from `to` or `recipient_id`, i.e. the real payload shape is not
-  confirmed.
-- If echoes never arrive, or arrive in a shape the handler drops, `last_agent_reply_at`
-  never moves for those clients. **The owner replying from their own phone will not
-  silence the agent.** The agent answers on top of the owner, in front of their customer:
-  exactly the failure that section 4.2 calls unrecoverable.
+- The app is not subscribed to the echo field. Meta's live webhook subscription for the
+  app (a read-only `GET /<app-id>/subscriptions`) lists `messages`, `account_update`,
+  `message_template_status_update`, `phone_number_name_update`,
+  `message_template_quality_update` and `phone_number_quality_update`. It does **not**
+  list `smb_message_echoes`, `history` or `smb_app_state_sync`. Meta's Coexistence docs
+  say all three are subscribed in App Dashboard > WhatsApp > Configuration. Meta only sends
+  a field the app is subscribed to, so no echo has ever been sent to this server. Migration
+  `080_messages_source.js` says as much: it only applies "from the moment
+  smb_message_echoes is actually turned on in the App Dashboard", which has not happened.
+- It is not a handler bug. The committed handler reads `message_echoes` with `from`/`to`,
+  which is the shape Meta documents, and it was never reached: `audit_log` holds one row per
+  delivered webhook field (retained since 2026-08-11) and has zero for any echo field,
+  against 15,126 for `messages`. No message has ever had `source = 'whatsapp_app'`. The
+  uncommitted edits to `routes/metaWebhook.js` do not address this (decision 13).
+- Consequence: `last_agent_reply_at` never moves for a reply sent from the owner's own
+  phone. **The owner replying from their own phone will not silence the agent.** The agent
+  answers on top of the owner, in front of their customer: exactly the failure that
+  section 4.2 calls unrecoverable.
 
 Mitigations, in order:
 
-1. **Scheduled on/off hours are Phase 1, not Phase 2.** The agent defaults to
-   `schedule_mode = 'outside_hours'`: it runs only when the client's team is not working
-   (`ai_agents.staff_hours`, evaluated in the client's `timezone`,
-   default Asia/Kolkata). Most clients want the agent covering 11pm, not competing with
-   their staff at 11am, and outside staff hours the echo hole matters far less. Gate 1
-   enforces it and logs `outside_schedule`. `'always'` is allowed but must be an explicit,
-   confirmed choice, and should be refused for a client whose WABA is not receiving echoes
-   (see 3).
+1. **For a Coexistence client, `schedule_mode = 'outside_hours'` is MANDATORY. It is not
+   a default.** Gate 4 cannot detect a business owner replying from their own phone, so for
+   these clients it is not a safeguard at all, and the schedule is the only protection.
+   The agent runs only when the client's team is not working (`ai_agents.staff_hours`,
+   evaluated in the client's `timezone`, default Asia/Kolkata). Gate 1 enforces it and
+   logs `outside_schedule`. **Refuse `'always'` server-side, not just in the UI,** for any
+   WABA where `wabas.registration_is_on_biz_app` is true, and treat null (unknown) as
+   Coexistence. The restriction lifts per WABA only once an echo with
+   `source = 'whatsapp_app'` has actually been recorded for that WABA after the field is
+   subscribed (see 4). Be honest in the product about what this buys: outside staff hours an
+   owner can still reply from their phone and the agent will talk over them. It narrows the
+   exposure; it does not close it. `'always'` remains available for a non-Coexistence
+   client, as an explicit, confirmed choice.
 2. Treat any inbound echo as the strongest human signal: it sets `last_agent_reply_at` and
    is also a reason to set `ai_cooldown_until` for the same window.
 3. Make the gap visible. Record per client whether an echo has ever been received. The
    Settings screen should say "Replies you send from your own phone are not visible to the
    assistant" when none has.
-4. Do not enable `'always'` for a Coexistence client until echo ingestion has been
-   confirmed against a real live payload (the same discipline CLAUDE.md applies to every
-   unconfirmed Meta payload shape).
+4. Do not enable `'always'` for a Coexistence client until (a) `smb_message_echoes` is
+   subscribed in the App Dashboard and (b) a real echo has been captured and ingested for
+   that WABA. The payload shape is still unverified against a live capture; Meta's docs
+   show `message_echoes` with `from` and `to`, but the same discipline CLAUDE.md applies to
+   every unconfirmed Meta payload shape applies here. Do not subscribe `history` until a
+   handler for it exists: it is delivered once, within 24 hours of onboarding, and an
+   unhandled delivery is lost for good.
 
 ---
 
@@ -1424,8 +1439,8 @@ Record the answers here as they are made.
 | 10 | Retention period for `ai_replies.customer_text` | Open — 90 days proposed |
 | 11 | Highest migration number across all branches, and ordering against the Instagram branch | **Answered 2026-10-03: 085 on `master`.** `083_clients_last_login_at`, `084_payment_notifications`, `085_payment_reminder_schedules`. `feature/instagram-phase-1` holds `081_instagram_accounts` and `082_instagram_conversations_messages`. **Decision: Instagram lands first.** Its 081/082 are renumbered to the next free numbers, then the AI migrations take whatever follows. No AI numbers are assigned in this document (section 6) |
 | 12 | State of `pgmigrations` on the shared database | **Answered 2026-10-03 (read-only query), and it is a problem.** Applied: ids 72–76 = `079_identity_token_version`, `080_messages_source`, `083_clients_last_login_at`, `084_payment_notifications`, `085_payment_reminder_schedules` (last run 2026-10-01). So **079 and 080 are applied** (an earlier belief that they were unrun was wrong). There is no `081` or `082` row. Consequence: Instagram's unapplied `081`/`082` sit below the applied `085` and `node-pg-migrate`'s order check would refuse them. They **must** be renumbered, not run with `--no-check-order`. **Action:** renumber the Instagram migrations before landing that branch, as part of decision 11 |
-| 13 | Uncommitted `routes/metaWebhook.js` changes (echo array read from `message_echoes`/`smb_message_echoes`/`messages`; recipient from `to`/`recipient_id`) | **Open — blocks agent day 1.** They sit on the agent's path (the same file the flow call and job enqueue live in, and the echo path gate 4 depends on). Land them, with `server/test/coexistenceEchoIngestion.test.js`, before the agent build starts |
-| 14 | Is `smb_message_echoes` subscribed and delivering in production, and is the payload shape confirmed against a live capture? (10.5) | Open — determines whether `schedule_mode = 'always'` may ever be offered to a Coexistence client |
+| 13 | Uncommitted `routes/metaWebhook.js` changes (echo array read from `message_echoes`/`smb_message_echoes`/`messages`; recipient from `to`/`recipient_id`) | **Revised 2026-10-03: do not land as written.** They are not a fix for echo ingestion. The committed handler already reads `message_echoes` with `from`/`to`, which is the shape Meta documents, and it was never reached because the field is not subscribed (decision 14). The `value.messages` fallback is a latent hazard: the first dispatch branch in `router.post('/')` runs `handleInboundMessages` on any change carrying a `messages` array, so an echo in that shape would also be ingested as an inbound message from the business's own number, on top of being ingested as an echo. The new handler test passes (stubs only) but calls `handleMessageEchoes` directly, so it cannot cover dispatch. **Update, same day:** a concurrent session has since added a `field !== 'smb_message_echoes'` guard on that inbound branch plus `server/test/metaWebhookEchoRouting.test.js`, which drives the real router; with it, the two test files pass 13/13 and the hazard is closed. So the diff is safe to land only **together with that guard and router test, never the handler widening alone**. It still fixes nothing about the real failure, so landing it is not progress on decision 14. **Action:** land it as a hardening change, and add structure-only capture of the first live echoes (keys and types, no customer numbers or message text) so the payload shape can be confirmed. Still blocks agent day 1, as part of the echo subscription work |
+| 14 | Is `smb_message_echoes` subscribed and delivering in production, and is the payload shape confirmed against a live capture? (10.5) | **Answered 2026-10-03: NOT subscribed, so no echo has ever been sent to us. Not a handler bug.** Evidence, all read-only: (1) Meta's live webhook subscription for the app (`GET /<app-id>/subscriptions`, app credentials only, callback `https://wasi.sirahagents.com/webhooks/meta`, `active: true`) lists `messages`, `account_update`, `message_template_status_update`, `phone_number_name_update`, `message_template_quality_update`, `phone_number_quality_update`. **`smb_message_echoes`, `history` and `smb_app_state_sync` are absent**; Meta's Coexistence docs say all three are subscribed in App Dashboard > WhatsApp > Configuration, per app. (2) `audit_log` writes one row per delivered webhook field (`metaWebhook.js`, after the handler, whether or not any handler claimed it) and is retained since 2026-08-11: 15,126 `messages`, 128 `account_update`, 78 `message_template_status_update`, and **zero** for any `smb_*` or `history` field. (3) The webhook is healthy, so this is not an outage: `meta_webhook_log` shows roughly 300-700 deliveries a day over the last 14 days and 5 failures in total. (4) Production query: `messages` rows with `source = 'whatsapp_app'` = **0, all time**, across 10 connected WABAs, **7 of which are Coexistence** (`wabas.registration_is_on_biz_app = true`). Last 30 days: 3,895 inbound and 1,082 outbound messages, every one `source = 'api'`. No echo-related `audit_log` rows. `server/test/coexistenceEchoIngestion.test.js` does **not** answer this: it is stubs-only and feeds the handler payloads the author wrote, so it proves the handler tolerates those shapes, not that Meta sends them. The subscription (1) explains zero echoes on its own, and (2) rules out "a payload shape the handler drops": that would still have left an `audit_log` row for the field. (`meta_webhook_log` does not record field names, but `audit_log` does.) Whether owners reply from their phones is not visible to us at all, which is the point. Consequence: gate 4 cannot rely on `last_agent_reply_at` for phone replies, so `schedule_mode = 'outside_hours'` is **mandatory** for Coexistence clients and `'always'` is refused for them (10.5). (5) Checked separately: no contact in production has a phone number equal to any connected WABA's own number, so echoes have not been arriving disguised as ordinary `messages` and ingested as inbound either (the hazard described in decision 13 has never fired). **Not yet closed:** the payload shape is still unverified against a live capture. To close it, subscribe `smb_message_echoes` (a human action in the App Dashboard), send one message from a Coexistence number's own phone, and confirm an `audit_log` row for the field plus a `messages` row with `source = 'whatsapp_app'`. Do **not** subscribe `history` until a handler exists. **Past phone replies are not recoverable by us.** The Cloud API has no endpoint to read message history, and Meta's one-time `history` sync (up to 180 days, deliverable only within 24 hours of onboarding, once) was never subscribed, so that window has closed for all 7 Coexistence clients. Only offboarding and re-onboarding a client (with them accepting the history-sharing prompt) would replay it, and only with a `history` handler built first. Taken from Meta's docs via a summarized fetch: re-read the source before telling a client |
 | 15 | May the agent answer when an active flow recorded `unmatched_input` (no branch recognised the message)? | **Answered for Phase 1: no, stay silent.** Reason: the flow holds state the agent cannot see (the current node, any pending `capture_reply` or button wait, a `delay`), so an answer would give the customer two parallel conversations, the flow's and the agent's, each unaware of the other. Not closed for good: answering the mid-flow question *and* re-prompting the current flow step is a Phase 2 item (section 17) |
 | 16 | Handover wording: time-aware, or one honest static default (section 15)? | Open — time-aware preferred |
 | 17 | Who may grant AI consent (11.2)? | **Answered 2026-10-03: Owner and Admin only.** Not Manager, not Agent. It is a third-party data-processing agreement on the business's behalf, not an operational setting |
@@ -1442,8 +1457,9 @@ two weeks plus the prerequisite days below. Estimates assume one person.
 
 - The Instagram branch is landed, with its migrations renumbered past 085 (decisions 11
   and 12).
-- The uncommitted `routes/metaWebhook.js` echo changes and their test are landed
-  (decision 13).
+- The echo subscription work is done (decisions 13 and 14): `smb_message_echoes` subscribed
+  in the App Dashboard, structure-only capture in place, and one live echo confirmed. The
+  uncommitted `routes/metaWebhook.js` edits are not part of it.
 - The privacy policy workstream is open (see "In parallel" below).
 
 **Day 1 — verification and prerequisites kick-off.** Re-check `pgmigrations` and every
