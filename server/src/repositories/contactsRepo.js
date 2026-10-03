@@ -30,24 +30,52 @@ async function findManyByIds(db, clientId, ids) {
   return rows;
 }
 
+// contacts.tag_id (the primary tag) and contact_tags (the additive multi-tag
+// table) are separate tables, and migration 061 only backfilled the rows that
+// existed at the time. Segment-by-tag targeting (utils/segmentFilter.js) and
+// the analytics tag counts read contact_tags ONLY, so a contact created with a
+// tag but no matching contact_tags row was silently missing from both. Every
+// write that sets tag_id therefore also attaches it to contact_tags, in the
+// same statement (a data-modifying CTE, so both rows land or neither does).
 async function create(db, clientId, { name, phone, tag_id, status }) {
   const { rows } = await db.query(
-    `insert into contacts (client_id, name, phone, tag_id, status)
-     values ($1, $2, $3, $4, coalesce($5, 'Active'))
-     returning *`,
+    `with new_contact as (
+       insert into contacts (client_id, name, phone, tag_id, status)
+       values ($1, $2, $3, $4, coalesce($5, 'Active'))
+       returning *
+     ), attach_tag as (
+       insert into contact_tags (contact_id, tag_id, client_id)
+       select id, tag_id, client_id from new_contact where tag_id is not null
+       on conflict (contact_id, tag_id) do nothing
+     )
+     select * from new_contact`,
     [clientId, name, phone, tag_id || null, status]
   );
   return rows[0];
 }
 
+// Additive only: changing the primary tag attaches the new one to
+// contact_tags but never removes the old chip (that table is additive by
+// design — see contactTagsRepo). Only when `tag_id` is actually being set, so
+// an unrelated edit (a name change) doesn't write to contact_tags at all.
 async function update(db, clientId, id, fields) {
   const columns = Object.keys(fields);
   if (columns.length === 0) return findById(db, clientId, id);
 
   const setClause = columns.map((col, i) => `${col} = $${i + 3}`).join(', ');
   const values = columns.map((col) => fields[col]);
+  const attachesTag = columns.includes('tag_id') && fields.tag_id;
   const { rows } = await db.query(
-    `update contacts set ${setClause} where client_id = $1 and id = $2 returning *`,
+    attachesTag
+      ? `with updated as (
+           update contacts set ${setClause} where client_id = $1 and id = $2 returning *
+         ), attach_tag as (
+           insert into contact_tags (contact_id, tag_id, client_id)
+           select id, tag_id, client_id from updated where tag_id is not null
+           on conflict (contact_id, tag_id) do nothing
+         )
+         select * from updated`
+      : `update contacts set ${setClause} where client_id = $1 and id = $2 returning *`,
     [clientId, id, ...values]
   );
   return rows[0] || null;
