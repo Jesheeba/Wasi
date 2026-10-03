@@ -2211,6 +2211,7 @@ body {
 .queue-tab-btn {
   font: inherit; font-size: 0.75rem; font-weight: 500; padding: 5px 12px; border-radius: var(--r-pill);
   border: 1px solid var(--border); background: #fff; color: var(--neutral); cursor: pointer; white-space: nowrap;
+  min-height: 36px;
 }
 .queue-tab-btn:hover { border-color: var(--border-strong); color: var(--text); }
 .queue-tab-btn.active { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; font-weight: 600; }
@@ -2424,10 +2425,6 @@ body {
 .contacts-skeleton-row td { padding: var(--sp-4); }
 .contacts-row.is-selected td { background: var(--brand-soft); }
 
-@media (max-width: 900px) {
-  /* The header row reserves 56px for the fixed hamburger; the action buttons sit below it and use the full width. */
-  .contacts-actions { margin-left: -56px; width: calc(100% + 56px); }
-}
 @media (max-width: 640px) {
   .data-table.stack-mobile.contacts-table td.contacts-name-td { padding-left: 44px; justify-content: flex-start; min-height: 32px; }
   .contacts-table td.contacts-name-td::before { display: none; }
@@ -2438,6 +2435,7 @@ body {
   .contacts-table .contacts-col-actions[data-label=""] { justify-content: flex-start; }
   .contacts-table td[data-label=""]::before { display: none; }
   .contacts-table td.contacts-col-actions { justify-content: flex-end; }
+  .contacts-table td.contacts-col-actions .btn-ghost { border: 1px solid var(--border); min-height: 36px; padding: 0 16px; background: #fff; }
   .contacts-table .contacts-row { position: relative; }
   .data-table.stack-mobile.contacts-table td.contacts-col-check { position: absolute; top: 4px; left: 4px; right: auto; width: auto; padding: 6px 10px; z-index: 1; background: transparent; }
   .contacts-state-row, .contacts-skeleton-row { border: none !important; margin: 0 !important; padding: 0 !important; }
@@ -2901,6 +2899,8 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
   .sec-nav-group-title { margin-bottom: 0; padding-left: 0; white-space: nowrap; }
   .sec-nav-list { flex-direction: row; padding-bottom: 0; }
   .sec-nav-item { white-space: nowrap; flex-shrink: 0; }
+  /* fade the right edge so a clipped tab reads as scrollable, not cut off */
+  .sec-nav-groups { padding-right: 32px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
   .settings-main-area { padding: 1.25rem 1rem; overflow: visible; }
   .profile-workspace-grid { grid-template-columns: 1fr; }
 }
