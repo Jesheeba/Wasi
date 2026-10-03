@@ -354,10 +354,11 @@ async function handleInboundMessages(waba, value) {
 // Meta is ever called).
 async function handleMessageEchoes(waba, value) {
   const clientId = waba.client_id;
-  for (const echo of value.message_echoes || []) {
-    const phone = echo.to;
+  const echoes = value.message_echoes || value.smb_message_echoes || value.messages || [];
+  for (const echo of echoes) {
+    const phone = echo.to || echo.recipient_id;
     if (!phone) {
-      console.warn('metaWebhook: smb_message_echoes entry with no `to` — cannot resolve a chat, skipping', { wabaId: waba.waba_id, echoId: echo.id });
+      console.warn('metaWebhook: smb_message_echoes entry with no `to`/`recipient_id` — cannot resolve a chat, skipping', { wabaId: waba.waba_id, echoId: echo.id });
       continue;
     }
 
@@ -558,7 +559,20 @@ router.post('/', asyncHandler(async (req, res) => {
         // decides what runs, and a single change can legitimately carry
         // both arrays at once, so these are independent checks, not
         // if/else — process whichever is actually present.
-        if (waba && Array.isArray(value?.messages) && value.messages.length > 0) {
+        //
+        // Never for an echo field: the echo handler below tolerates an echo
+        // whose array sits under `messages` (the payload shape is not
+        // confirmed against a live capture — as of 2026-10-03 production had never
+        // received a smb_message_echoes change, see docs/ai-agent/SPEC.md
+        // decision 14), and without this guard
+        // that same array also satisfied this branch, ingesting the
+        // BUSINESS'S OWN outgoing message as an inbound customer message
+        // (a contact for the business's own number, flow engine and keyword
+        // automation fired on it). Guarded by field name, deliberately and
+        // only that: the shape is not widened or narrowed here.
+        // server/test/metaWebhookEchoRouting.test.js covers it through the
+        // real router.
+        if (waba && field !== 'smb_message_echoes' && Array.isArray(value?.messages) && value.messages.length > 0) {
           await handleInboundMessages(waba, value);
           handled = true;
         }
@@ -578,7 +592,8 @@ router.post('/', asyncHandler(async (req, res) => {
         // Meta payload shape, see handleUnmappedWabaEvent's own history —
         // still surfaces loudly via the "unhandled payload" warning instead
         // of silently vanishing.
-        if (waba && Array.isArray(value?.message_echoes) && value.message_echoes.length > 0) {
+        const echoList = value?.message_echoes || value?.smb_message_echoes || (field === 'smb_message_echoes' ? value?.messages : null);
+        if (waba && Array.isArray(echoList) && echoList.length > 0) {
           await handleMessageEchoes(waba, value);
           handled = true;
         }

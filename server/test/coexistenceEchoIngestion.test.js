@@ -116,6 +116,21 @@ test('handleMessageEchoes: an echo with no `to` is skipped (can\'t resolve a cha
   }
 });
 
+test('handleMessageEchoes: an echo with smb_message_echoes key and recipient_id is properly ingested', async () => {
+  const stub = stubRepos();
+  try {
+    await handleMessageEchoes(WABA, {
+      smb_message_echoes: [{ id: 'wamid.SMB_ECHO', from: '911234500000', recipient_id: '919876500000', timestamp: '1758700400', type: 'text', text: { body: 'Sent via SMB app' } }],
+    });
+    assert.equal(stub.calls.upsertByPhone.length, 1);
+    assert.equal(stub.calls.upsertByPhone[0].phone, '919876500000');
+    assert.equal(stub.calls.insertEcho.length, 1);
+    assert.equal(stub.calls.insertEcho[0].fields.body, 'Sent via SMB app');
+  } finally {
+    stub.restore();
+  }
+});
+
 // --- chatsRepo.insertEcho (the dedicated insert path itself) ---
 
 function fakeDb(queryImpl) {
