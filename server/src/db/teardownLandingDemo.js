@@ -1,7 +1,8 @@
 // Removes everything seedLandingDemo.js created. A single `delete from
 // clients` cascades every child table (subscriptions, tags, contacts ->
 // contact_tags, chats -> messages, broadcasts -> broadcast_recipients,
-// team_members, automation_flows -> flow_nodes/flow_edges) — see migration
+// team_members, automation_flows -> flow_nodes/flow_edges, message_templates,
+// contact_lists -> contact_list_members) — see migration
 // 002/003/007/011/012/013/023/061's onDelete: 'CASCADE' on every one of
 // these FKs back to clients.id.
 //
@@ -19,6 +20,13 @@ const DEMO_CLIENT_EMAIL = 'demo+vetri-academy@wasi.local';
 
 async function teardown() {
   try {
+    // Count rows in the tables that don't come with the client's chat data, so
+    // the log shows exactly what this teardown took with it (all cascade).
+    const { rows: [before] } = await pool.query(
+      `select (select count(*) from message_templates where client_id = $1)::int as templates,
+              (select count(*) from contact_lists where client_id = $1)::int as lists`,
+      [DEMO_CLIENT_ID]
+    );
     const { rowCount } = await pool.query(
       'delete from clients where id = $1 and email = $2',
       [DEMO_CLIENT_ID, DEMO_CLIENT_EMAIL]
@@ -26,7 +34,7 @@ async function teardown() {
     if (rowCount === 0) {
       console.log('Nothing to remove — demo client not found (already torn down, or never seeded).');
     } else {
-      console.log(`Removed demo client ${DEMO_CLIENT_ID} (${DEMO_CLIENT_EMAIL}) and all its rows.`);
+      console.log(`Removed demo client ${DEMO_CLIENT_ID} (${DEMO_CLIENT_EMAIL}) and all its rows (${before.templates} templates, ${before.lists} contact lists).`);
     }
   } finally {
     await pool.end();

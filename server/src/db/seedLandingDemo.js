@@ -6,6 +6,10 @@
 // Yesterday pills both appear, divider lands before the run), and Divya
 // Krishnan's chat (suffix '09') plus 3 other campaign recipients get a real
 // failed outbound message with an error reason (see CAMPAIGN_FAIL_REASON).
+// Also seeds: 6 message_templates (approved/pending/rejected, plain rows — no Meta
+// call, nothing submits or syncs them), one small manual contact list (so the
+// campaign wizard's Review step shows a real audience count), and a recent
+// inbound message on Deepa R.'s chat (so her 24h session window is open).
 // Idempotent: safe to re-run, always wipes and reinserts this ONE client's
 // own rows first, keyed by a fixed id, and never touches any other
 // client's data.
@@ -70,6 +74,9 @@ const DEEPA_BEAT3B = plus(DEEPA_BEAT3, 140); // "Yes please"
 const DEEPA_BEAT4 = plus(DEEPA_BEAT3, 240); // confirmation template
 const DEEPA_BEAT4_READ = plus(DEEPA_BEAT4, 600); // ticks turn blue ~10min later
 const CAMPAIGN_AT = daysAgoAt(4, 11, 0, 0); // "three weeks later" from beat 3/4
+// A fresh inbound reply to the campaign, ~3h before the script runs, so her 24h
+// customer-service window is open (no "session window closed" banner).
+const DEEPA_REPLY_AT = plus(NOW, -3 * 3600);
 
 // Any computed timestamp is clamped to at most 30s before script start —
 // belt-and-suspenders against a fixed early-morning clock time (e.g.
@@ -282,6 +289,27 @@ const FLOW_EDGES = [
   { from: 'ask', to: 'callback', condition_type: 'button_id', condition_value: 'call_me', priority: 1 },
 ];
 
+// --- Templates: plain rows for the Templates view's approval-status badges.
+// crash_course_promo matches the seeded broadcast's template_name.
+// meta_template_id is an obviously-synthetic 'demo-...' string, never a real
+// Meta id; none of these is ever sent, synced, or submitted anywhere.
+const TEMPLATE_SAMPLES = {
+  batch_name: 'Weekend NEET batch', start_date: '6 October', start_time: '9:00am',
+  student_name: 'Deepa', amount: '₹9,000', due_date: '12 October', score: '148/180',
+};
+const TEMPLATES = [
+  { name: 'crash_course_promo', category: 'MARKETING', status: 'approved', body: 'Crash course for the January attempt opens Monday. Existing students get 20% off.' },
+  { name: 'seat_confirmation', category: 'UTILITY', status: 'approved', body: 'Your seat is confirmed. Vetri Academy — {{batch_name}}, starts {{start_date}}, {{start_time}}.' },
+  { name: 'fee_reminder', category: 'UTILITY', status: 'approved', body: 'Hi {{student_name}}, your second instalment of {{amount}} is due on {{due_date}}.' },
+  { name: 'exam_result_ready', category: 'UTILITY', status: 'approved', body: 'Hi {{student_name}}, your mock test result is ready. Your score: {{score}}.' },
+  { name: 'demo_class_invite', category: 'MARKETING', status: 'pending', body: 'Join our free demo class this Saturday at 10am. Reply YES to reserve your slot.' },
+  {
+    name: 'early_bird_offer', category: 'MARKETING', status: 'rejected',
+    body: 'Last chance! Enrol today and save big on every course.',
+    rejection_reason: 'Meta flagged this template as promotional content that is too vague. Add specific details about the offer.',
+  },
+];
+
 async function seed() {
   const client = await pool.connect();
   client.on('error', (err) => console.error('seedLandingDemo: checked-out client error:', err.message));
@@ -304,6 +332,8 @@ async function seed() {
     // contacts -> contact_tags, automation_flows -> flow_nodes/flow_edges).
     await client.query('delete from subscriptions where client_id = $1', [DEMO_CLIENT_ID]);
     await client.query('delete from broadcasts where client_id = $1', [DEMO_CLIENT_ID]);
+    await client.query('delete from contact_lists where client_id = $1', [DEMO_CLIENT_ID]);
+    await client.query('delete from message_templates where client_id = $1', [DEMO_CLIENT_ID]);
     await client.query('delete from chats where client_id = $1', [DEMO_CLIENT_ID]);
     await client.query('delete from contacts where client_id = $1', [DEMO_CLIENT_ID]);
     await client.query('delete from tags where client_id = $1', [DEMO_CLIENT_ID]);
@@ -405,7 +435,7 @@ async function seed() {
     // --- Campaign / broadcast ---------------------------------------------
     const { rows: [broadcast] } = await client.query(
       `insert into broadcasts (client_id, title, tag_id, status, template_name, scheduled_date, created_at)
-       values ($1, 'January Crash Course — Early Bird', $2, 'Completed', 'crash_course_jan_promo', $3, $4) returning id`,
+       values ($1, 'January Crash Course — Early Bird', $2, 'Completed', 'crash_course_promo', $3, $4) returning id`,
       [DEMO_CLIENT_ID, tagId.batch, CAMPAIGN_AT.toISOString().slice(0, 10), daysAgoAt(4, 10, 30, 0)]
     );
 
@@ -454,6 +484,39 @@ async function seed() {
       );
     }
 
+    // --- Deepa's recent inbound reply to the campaign ----------------------
+    await insertMessage(deepaChat.id, {
+      dir: 'in', body: 'Does the 20% discount apply to the weekend batch as well?', sentAt: DEEPA_REPLY_AT,
+    });
+    await client.query(`update chats set last_message_at = $2 where id = $1`, [deepaChat.id, DEEPA_REPLY_AT]);
+
+    // --- Manual contact list (every 'Weekend NEET Batch'-tagged contact) ---
+    const { rows: [list] } = await client.query(
+      `insert into contact_lists (client_id, name, source) values ($1, 'Weekend NEET Batch — Enquiries', 'manual') returning id`,
+      [DEMO_CLIENT_ID]
+    );
+    const listMemberIds = [deepaContact.id, ...FILLER.filter((f) => f.tag === 'batch').map((f) => contactByKey[f.suffix].id)];
+    for (const contactId of listMemberIds) {
+      await client.query(`insert into contact_list_members (contact_list_id, contact_id) values ($1, $2)`, [list.id, contactId]);
+    }
+
+    // --- Templates ----------------------------------------------------------
+    let tplIdx = 0;
+    for (const t of TEMPLATES) {
+      tplIdx += 1;
+      const params = [...t.body.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]);
+      const created = daysAgoAt(20 - tplIdx * 2, 10, 0, 0);
+      await client.query(
+        `insert into message_templates (client_id, name, category, status, body, language, rejection_reason, header_type, body_param_examples, meta_template_id, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, 'en_US', $6, 'NONE', $7, $8, $9, $9)`,
+        [
+          DEMO_CLIENT_ID, t.name, t.category, t.status, t.body, t.rejection_reason || null,
+          params.length ? JSON.stringify(Object.fromEntries(params.map((k) => [k, TEMPLATE_SAMPLES[k]]))) : null,
+          `demo-${t.name}`, created,
+        ]
+      );
+    }
+
     // --- Flow (draft, unattached to any automation_rules trigger — inert) -
     const { rows: [flow] } = await client.query(
       `insert into automation_flows (client_id, name, status) values ($1, 'New Enquiry -> Fee or Callback', 'draft') returning id`,
@@ -478,8 +541,10 @@ async function seed() {
 
     await client.query('COMMIT');
     console.log(`Seed complete for client ${DEMO_CLIENT_ID}`);
-    console.log(`Demo client login: ${DEMO_CLIENT_EMAIL} / ${DEMO_CLIENT_PASSWORD}`);
-    console.log(`${1 + FILLER.length} contacts, 1 campaign (${recipients.length} recipients: 15 read / 15 delivered / 12 sent / 4 failed / 4 pending), 1 draft flow with a 2-way branch.`);
+    // Never echo a password that came from LANDING_DEMO_PASSWORD — only the
+    // committed fallback (already public) is printed.
+    console.log(`Demo client login: ${DEMO_CLIENT_EMAIL} / ${process.env.LANDING_DEMO_PASSWORD ? '(LANDING_DEMO_PASSWORD)' : DEMO_CLIENT_PASSWORD + ' (committed fallback — set LANDING_DEMO_PASSWORD)'}`);
+    console.log(`${1 + FILLER.length} contacts, 1 campaign (${recipients.length} recipients: 15 read / 15 delivered / 12 sent / 4 failed / 4 pending), 1 draft flow with a 2-way branch, ${TEMPLATES.length} templates, 1 contact list (${listMemberIds.length} members).`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
