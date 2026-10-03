@@ -2195,7 +2195,7 @@ body {
 .filter-dropdown-panel { max-height: 320px; overflow-y: auto; z-index: var(--z-popover); }
 
 .chat-search { position: relative; padding: 0 16px 10px; }
-.chat-search-icon { position: absolute; left: 28px; top: 11px; color: var(--text-faint); pointer-events: none; }
+.chat-search-icon { position: absolute; left: 28px; top: 11px; width: 16px; height: 16px; color: var(--text-faint); pointer-events: none; }
 .chat-search-input {
   width: 100%; height: 36px; padding: 0 12px 0 34px; font: inherit; font-size: 0.8125rem;
   border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-subtle); color: var(--text);
@@ -2256,7 +2256,7 @@ body {
 .chat-empty-art { margin-bottom: 1.5rem; }
 .chat-empty-title { font-size: 1.25rem; font-weight: 600; color: var(--text); margin: 0 0 8px; }
 .chat-empty-text { font-size: 0.875rem; color: var(--text-muted); max-width: 440px; line-height: 1.6; margin: 0 0 24px; }
-.chat-empty-cta { height: 40px; }
+.chat-empty-cta { width: auto; height: 36px; padding: 0 16px; font-size: 0.8125rem; }
 
 /* ---- Column 2: conversation ---- */
 .chat-workspace { display: none; flex: 1; min-width: 0; position: relative; overflow: hidden; }
@@ -2907,3 +2907,12 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .analytics-state-cell { text-align: center; }
 .channel-info-left { flex: 1 1 200px; }
 .channel-status-card { flex-wrap: wrap; }
+
+/* Sidebar group labels. Also defined in design-system.css (admin needs it
+   there); repeated here so the client sidebar stays legible on its own if
+   that shared file ever fails to load. */
+.nav-group-label {
+  padding: var(--sp-4) var(--sp-4) var(--sp-1); font-size: 0.6875rem; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45);
+}
+.sidebar.collapsed .nav-group-label { display: none; }

@@ -19,3 +19,61 @@
   --breakpoint-tablet: 900px;
   --breakpoint-mobile: 640px;
 }
+
+/* ---- Shared design tokens (moved here from design-system.css so every surface
+   gets them even if design-system.css fails to load) ---- */
+:root {
+  /* ---- Brand + neutrals (values unchanged from index.css; restated so this
+         file is the single reference) ---- */
+  --brand: #4AC959;
+  --brand-hover: #43B751;
+  --brand-soft: #EDFAEE;
+  --brand-dark: #143518;
+  --bg-app: #F6F9F6;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F9FAFB;
+  --border: #E5E7EB;
+  --border-strong: #D1D5DB;
+  --text: #1F2937;
+  --text-muted: #6B7280;
+  --text-faint: #9CA3AF;
+
+  /* ---- Semantic status (replaces scattered #B91C1C / #92400E hex) ---- */
+  --success: #15803D;  --success-bg: #ECFDF3;  --success-border: #A7E8BE;
+  --warning: #92400E;  --warning-bg: #FFFBEB;  --warning-border: #FCD98A;
+  --danger:  #B91C1C;  --danger-bg:  #FEF2F2;  --danger-border:  #FCA5A5;
+  --danger-solid: #DC2626;
+  --info:    #1D4ED8;  --info-bg:    #EFF6FF;  --info-border:    #BFDBFE;
+  --neutral: #4B5563;  --neutral-bg: #F3F4F6;  --neutral-border: #E5E7EB;
+
+  /* ---- Spacing (4px base) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  /* ---- Radii ---- */
+  --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-pill: 999px;
+
+  /* ---- Type scale ---- */
+  --fs-title: 1.5rem;    /* page title */
+  --fs-section: 1.125rem;
+  --fs-card: 1rem;
+  --fs-body: 0.875rem;
+  --fs-label: 0.8125rem;
+  --fs-caption: 0.75rem;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Elevation ---- */
+  --shadow-card: none;
+  --shadow-overlay: 0 12px 32px rgba(17, 24, 39, 0.14);
+
+  /* ---- z-index scale ---- */
+  --z-sidebar: 20;
+  --z-toggle: 30;
+  --z-popover: 60;
+  --z-modal: 100;
+  --z-toast: 200;
+
+  --focus-ring: 0 0 0 3px rgba(74, 201, 89, 0.35);
+
+  --sidebar-width: 240px;
+}
