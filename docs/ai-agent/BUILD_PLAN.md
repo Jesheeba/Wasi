@@ -17,6 +17,8 @@ This document has two jobs.
 
 **Rule for the whole document:** nothing in Section 5 onwards starts until Section 2 is clear. The reason is in Section 2 itself.
 
+**Standing rule: no figure enters this document without its source named** (a query, a file and line, a commit, a log, or a named person's statement). A figure with no source is recorded as unknown. Three figures this document once carried turned out to be artifacts; the history is in Appendix D.
+
 ---
 
 ## 1. Current state
@@ -36,9 +38,9 @@ This document has two jobs.
 ### 1.2 What does not exist
 
 - **No AI feature code at all.** No migration, no model call, no `ai_jobs` table, no agent configuration, nothing. Phase 0 has not started.
-- **No database backups.** `"backups": []`, `pitr_enabled: false` on the Wasi Supabase project (`exvoupxpocybjcxmkuac`). This is why GV Mart's deleted messages are unrecoverable. *(Re-verified 2026-10-12 via the Supabase Management API, `GET /v1/projects/exvoupxpocybjcxmkuac/database/backups`: `backups: []`, `pitr_enabled: false`, `walg_enabled: true`.)*
+- **No database backups.** `"backups": []`, `pitr_enabled: false` on the Wasi Supabase project (`exvoupxpocybjcxmkuac`). A restorable backup is what would have made the 7 Oct client deletion (2.4) reversible; none exists. *(Re-verified 2026-10-12 via the Supabase Management API, `GET /v1/projects/exvoupxpocybjcxmkuac/database/backups`: `backups: []`, `pitr_enabled: false`, `walg_enabled: true`.)*
 - **No API request log.** When a client asks "did my call reach you?", there is no way to answer.
-- **No send-failure alerting.** GV Mart lost 55 of 66 outbound messages in 48 hours and nobody at Wasi noticed.
+- **No send-failure alerting.** Wasi has no rule that notices a client's sends failing unless someone looks (see 2.3). The earlier "55 of 66 GV Mart sends" example was **not** a Wasi failure rate; see 2.2 and Appendix D.
 - **No multi-number support.** `wabasRepo.findByClientId` returns the newest WABA only.
 
 ### 1.3 The thing that keeps happening
@@ -72,43 +74,50 @@ One run of `debug_token` prints the granted scopes, the token's owning app and t
 
 **Definition of done:** the script's output is pasted into this document as Appendix A, and each of the four clients has a named cause.
 
-### 2.2 GV Mart — 55 of 66 sends failing
+### 2.2 GV Mart sends — closed; not a Wasi failure (corrected 2026-10-12)
 
-**Status:** happening right now.
+**Status:** closed. No action for Wasi.
 
-In the last 48 hours, 55 of GV Mart's 66 outbound messages failed with `session_window_closed`. The cause is behavioural, not technical: they send free text to customers whose 24-hour window has closed, where an approved template is required.
+This item used to read "55 of GV Mart's 66 outbound messages failed with `session_window_closed` in 48 hours". That was **not a Wasi failure rate.** It was GV Mart's own test burst on 8 Oct, sent to two of GV Mart's own test numbers, which GV Mart diagnosed and fixed themselves. **Source:** GV Mart's own account, relayed by the project owner on 2026-10-12. The 66 rows were counted in GV Mart's own Supabase outbox (`fsunrjithwcjtsutsgea`, per the recovery-record note in 2.4), not in Wasi's database, and Wasi's database holds no outbound messages for GV Mart's current client (queried 2026-10-12: `messages` count for client `4b09813e…` is 0).
 
-**What they need:**
-1. Approved utility templates covering their actual customer notifications (order confirmation, dispatch, delivery, payment).
-2. To be told that free text outside the window will never work, and why.
-
-**Blocked by 2.1** if their `#100` turns out to be a template-creation permission problem.
-
-**Definition of done:** GV Mart has at least three approved templates covering their notification cases, and their 48-hour failure rate is under 10%.
+The platform rule itself stands, as a general fact and not as a GV Mart finding: free text outside the 24-hour customer service window is rejected (`session_window_closed`); only an approved template can be sent.
 
 ### 2.3 Send-failure alerting
 
 **Status:** not built. `alertRunner` already exists and is the right place for it.
 
-The only reason 2.2 was found is that someone went looking. Build the alert so the next one finds itself.
+Nothing in Wasi notices a client's sends failing unless someone looks. Build the alert so the next one finds itself.
 
 **Minimum viable rule:** for each client, over a rolling 6-hour window, if `failed_sends / total_sends > 0.3` and `total_sends >= 10`, raise an alert. Separate the alert by failure reason, because `session_window_closed` is a client-behaviour problem and `waba_not_connected` is a Wasi problem, and they need different responses.
 
-**Definition of done:** the rule fires on a synthetic test, and GV Mart's current state would have triggered it.
+**Definition of done:** the rule fires on a synthetic test.
 
-### 2.4 Tell GV Mart their data is gone
+### 2.4 GV Mart's deleted client — what is established (closed 2026-10-12)
 
-**Status:** six days old.
+**Status:** closed. The deletion was intentional, per the project owner (2026-10-12), and the cascade did what it was designed to do. Nothing broke.
 
-1,738 messages were deleted. There is no backup, no PITR, and their own Supabase project holds only 2 inbound rows from 6 October. There is no recovery path except a Supabase support ticket, which is unanswered.
+**The number of deleted messages is UNKNOWN.** The "1,738 messages" this item used to carry was a count of surviving `audit_log` webhook rows for the old WABA, mixing inbound messages and status callbacks. See Appendix D.
 
-This conversation gets harder every day it is delayed. It should happen whether or not the ticket is resolved.
+**What is established, with sources:**
 
-### 2.5 Supabase support ticket
+- **What was deleted:** client `e186eb60-98e5-4642-a9f9-3ca491347792`, via `DELETE /api/clients/:id`, which writes no audit row.
+- **Deletion window: 7 Oct 2026, 07:04:47 to 07:08:31 UTC.**
+  - *Lower bound, 07:04:47.424Z:* `audit_log` `client_password_reset` for that client, so the row still existed.
+  - *Upper bound, 07:08:31.283Z:* `pg_stat_user_tables.last_autovacuum` for `contacts`. An autovacuum triggered by those deletes cannot finish before them.
+  - *Independent corroboration:* the replacement client (`4b09813e…`) was created at 07:09:54.980Z (`clients.created_at`, and the `api_key_created` audit row) with the **same email**; `clients.email` is unique (`clients_email_key`), so the old row was already gone.
+- **Cascade chain** (from `pg_constraint`, all `ON DELETE CASCADE`): `clients` → `messages` (`messages.client_id`); `clients` → `chats` → `messages` (`messages.chat_id`, plus `chat_notes` and `chat_sla_logs`); `clients` → `contacts` → `consent_events`, `contact_attribute_values`, `contact_tags`, `flow_events`; and by `client_id`: `api_keys`, `wabas`, `webhook_deliveries`, `message_templates`, flows/nodes/edges, `tags`, `broadcasts`, `usage_logs`, `subscriptions`, `invoices` and others. `chats.contact_id` is `SET NULL`; `payment_notifications.client_id` is `SET NULL`.
+- **The old WABA had been failing since 5 Oct.** `audit_log` shows `sendability_registration_check_failed` ("Unsupported get request", 47 rows) from 2026-10-05T09:02:39Z through 2026-10-07T07:02:33Z. The last webhook for WABA `109558648723856` was 2026-10-04T17:47:02Z. That WABA id is *inferred* to be e186eb60's (its first webhook, 26 Aug 11:31:22Z, came 2m28s after that client's `whatsapp_connected` at 11:28:54Z); no surviving row states it directly.
+- **Current WABA is a different id** (`1766605231203643`). Whether it is the same phone number is not recorded anywhere that survives.
 
-**Status:** send or chase.
+**Recovery is closed by decision, not by exhaustion.** `pageinspect` on `messages` might have shown surviving dead tuples (last vacuum 3 Oct, so the 7 Oct deletes may still have been on disk). The owner declined (2026-10-12) because the best possible result was message bodies and timestamps with no chat or customer identity: chats were vacuumed 9 Oct 05:37:32Z and contacts 7 Oct 07:08:31Z. That is not a history that could be given back to GV Mart. The dead tuples were therefore never examined.
 
-Autovacuum is still frozen on `messages`, `chats` and `contacts` while waiting for a reply. That freeze cannot stay indefinitely — dead tuples accumulate and query planning degrades. Set a decision date: if there is no useful reply by that date, abandon the recovery, re-enable autovacuum, and close 2.4 honestly.
+**Who issued the delete:** not recorded. The route requires an admin token but there is no session store or login audit. The 07:04:47 reset, the delete, and the 07:09:54 re-creation were all the one shared admin identity within about five minutes, which fits a deliberate recreate. Source IP: pending the nginx log review.
+
+### 2.5 Supabase support ticket — moot; autovacuum restored (2026-10-12)
+
+**Status:** closed. The ticket is moot (nothing broke; see 2.4) and is to be withdrawn by the project owner.
+
+**Autovacuum was re-enabled on `messages`, `chats` and `contacts` on 2026-10-12** by resetting the `autovacuum_enabled` storage parameter (`alter table … reset (autovacuum_enabled)`), restoring the table default. Confirmed live: `pg_class.reloptions` is null on all three. Dead tuples at that moment (`pg_stat_user_tables`): `chats` 628, `contacts` 6, `messages` 1,328. Table sizes with indexes were 952 kB, 808 kB and 4,016 kB, so the vacuum is trivial IO.
 
 ### 2.6 Evokz
 
@@ -242,6 +251,10 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 
 **Do not start this during the AI build.** It touches 30 call sites including every send path, and interleaving it with the AI feature means neither lands. Schedule it after Phase 2.
 
+### 3.8 `DELETE /api/clients/:id` is unaudited, unconfirmed and ungated
+
+**Spec only; nothing built.** Today it writes no audit row, takes no confirmation, ignores `adminRole` (no code anywhere reads it), and cascades a client's entire history in one call. At least three real clients (`a6959183…`, `792a86cf…`, `e186eb60…`) were deleted this way with no record of who did it (source: `audit_log` rows for those ids with no matching delete event; route in `server/src/routes/clients.js`). The fix spec and trade-offs were written up on 2026-10-12 in the session that produced this section; they are to be filed here when approved. Until then: treat every client deletion as irreversible and unattributed.
+
 ---
 
 ## 4. Security and infrastructure
@@ -264,7 +277,7 @@ An unauthenticated `git pull` fails on a private repository. Flipping first brea
 
 ### 4.2 Nightly `pg_dump`
 
-**This is the single highest-value item in this document.** GV Mart lost 1,738 messages because it did not exist.
+**This is the single highest-value item in this document.** It is the only thing that would make a deletion like the 7 Oct one (2.4) reversible, and none exists.
 
 Minimum: nightly `pg_dump` to object storage, 14 days retained, **and a restore tested once into a scratch database.** An untested backup is not a backup.
 
@@ -286,7 +299,7 @@ These were established during the investigation and remain in force for every fu
 - **Never restore over production.** It would undo the password rotation and two days of every client's messages.
 - **Never rewrite git history.**
 - **Never delete the Supabase project `fsunrjithwcjtsutsgea`.** It is GV Mart's live backend, referenced in their `.env`, three GitHub workflows, and shipped Android and iOS app assets.
-- **Do not re-enable autovacuum** on `messages`/`chats`/`contacts` until the recovery attempt is finished or formally abandoned.
+- **Autovacuum on `messages`/`chats`/`contacts` was re-enabled on 2026-10-12** (recovery closed by decision, 2.4). Do not freeze it again without a named recovery plan and an end date.
 - **Never use session-level settings over `DATABASE_URL`.** The pooler leaks them between sessions. Use `begin read only` or `set local`.
 - **Investigations are read-only.** No production writes without explicit approval, named per write.
 
@@ -353,7 +366,7 @@ Claude Haiku 4.5 at $1 / $5 per million tokens (input / output).
 
 Written on every inbound message in `chatsRepo.insertInbound`.
 
-**Why it matters beyond the agent:** you currently cannot determine from the database whether a chat's 24-hour customer service window is open. This is the same gap behind GV Mart losing 55 of 66 sends (Section 2.2). With this column, `session_window_closed` becomes predictable before the send rather than discovered after it.
+**Why it matters beyond the agent:** you currently cannot determine from the database whether a chat's 24-hour customer service window is open. This is the gap behind any `session_window_closed` send failure in general (Section 2.2 states the platform rule). With this column, `session_window_closed` becomes predictable before the send rather than discovered after it.
 
 Backfill from `messages` for existing chats.
 
@@ -455,9 +468,9 @@ Two sub-steps. Do not merge them.
 ## 11. Sequencing
 
 ```
-BLOCKING   2.1 debug_token  ──┬──> 2.2 GV Mart templates ──> 2.3 alerting
+BLOCKING   2.1 debug_token  ──┬──> 2.2 (closed) ──> 2.3 alerting
                               ├──> 2.6 Evokz (+ fix 6.x metaClient auth payload)
-                              └──> 2.4 tell GV Mart  /  2.5 Supabase decision date
+                              └──> 2.4 / 2.5 (closed 2026-10-12)
 
 FLOOR      4.2 nightly pg_dump + tested restore     (do this week, in parallel)
            4.1 repo private (deploy key proven first)
@@ -553,7 +566,7 @@ CONSTRAINTS — these are not negotiable
   - Read-only for this session. No writes, no migrations, no commits.
   - Never print a secret value. Name the variable, the file and the commit.
   - Never rewrite git history.
-  - Do not re-enable autovacuum on messages, chats or contacts.
+  - Autovacuum on messages, chats and contacts was re-enabled on 2026-10-12. Do not change it.
   - Never use session-level settings over DATABASE_URL — the pooler leaks them
     between sessions. Use `begin read only` or `set local`.
   - Do not plan multi-number support or any change to
@@ -627,3 +640,17 @@ Not checked in this pass: Meta's current documentation, the live Meta webhook su
 | How the deploy reaches GitHub | Not determinable from the repo; VPS remote config needed (4.1) |
 | Unpushed commits `9a97664`, `4235a24`, `f55a97c`, `37cd0ed`, `65c5a2c` | No tokens, keys or live secrets. They publish client names, WABA and phone-number ids, a client phone number, client UUIDs, a local dev DB password in a snippet, and the default seed credentials with a statement that they still worked in production. All in `docs/HANDOVER-2026-10-03.md` except `65c5a2c`'s ids and UUIDs in this file |
 | `.claude/` tracked? | No. Only `scheduled_tasks.lock` was ever committed, untracked in `a988716`. Committing just the 3-line `.gitignore` change is safe |
+
+## Appendix D — investigation history and corrected figures (2026-10-12)
+
+Three figures this document treated as established were artifacts. They are recorded here so they are not reintroduced.
+
+| Figure once carried | What it actually was | Source of the correction |
+|---|---|---|
+| "55 of GV Mart's 66 sends failing" (was section 2.2; "55 of 66" in 1.2 and in Phase 0 item 0.1) | GV Mart's own test burst on 8 Oct to two of their own test numbers, self-diagnosed and self-fixed. **Not a Wasi failure rate** | GV Mart's own account, relayed by the project owner, 2026-10-12. The 66 rows were in GV Mart's own Supabase outbox, not Wasi's database |
+| "95 non-test API key creations in the last 30 days" | A filter artifact: the test clients had been deleted, so a "not a test client" filter could not classify them. **Real figure: 11**, all with plausible labels (auto-created "CRM Integration" keys plus `tnpscmentors_auth`, `abs`, `NUSI`, `NUSI_AD`, `EI assessment`) | `audit_log` `api_key_created`, last 30 days, label-based classification, query run 2026-10-12 |
+| "1,738 messages deleted" | The count of surviving `audit_log` rows (`actor_type='meta_webhook'`, `action='messages'`) for WABA `109558648723856`, 26 Aug to 4 Oct. These are webhook deliveries, a mix of inbound messages and status callbacks, not message rows. **The real number of deleted messages is UNKNOWN** | Same query: exactly 1,738 audit rows for that WABA id; no source for the original figure other than that match |
+
+**Established (sources in 2.4):** deletion window 7 Oct 07:04:47 to 07:08:31 UTC (bounded by the password-reset audit row and the `contacts` autovacuum timestamp, corroborated by the unique-email re-creation at 07:09:54); the cascade chain from `pg_constraint`; the old WABA failing sendability checks since 5 Oct (`audit_log`); recovery closed by decision on 2026-10-12, not by exhaustion; autovacuum restored on 2026-10-12.
+
+**Still open:** who issued the delete (nginx log review pending: the preserved logs were not available to the investigation when this was written); the deleted message count (unknown, and will stay unknown).
