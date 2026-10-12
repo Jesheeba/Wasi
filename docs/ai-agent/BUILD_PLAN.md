@@ -78,8 +78,8 @@ One run of `debug_token` prints the granted scopes, the token's owning app and t
 > - **TNPSC (`#200`):** scopes present, but `granular_scopes` `target_ids` = `["1649658386105751"]`, which is not the stored WABA. Reads work, writes do not.
 > - **GV Mart (`#100`, subcode 33):** the token's scopes are `public_profile` only: no `whatsapp_business_management`, no `whatsapp_business_messaging`, no granular scopes. Every call is HTTP 400. This also explains the `sendability_registration_check_failed` rows (my count from `audit_log`, 2026-10-12: 123 on GV Mart's current client, 47 on its deleted predecessor, 573 on `Sirah`, 744 in total; the VPS session's figure of 241 was not reproduced).
 > - **Demo (`983390651411856`):** both scopes, granted to all targets, all three calls HTTP 200. Healthy.
-> - **Sirah Digital (`#100`) and Evokz:** **not yet run.** Evokz is therefore not diagnosed; Sirah Digital's `#100` has no named cause yet. `Sirah` (`998094716164113`), the client with the most failed sendability rows, has not been run either.
-> - All three tokens are `SYSTEM_USER` tokens under the same app (`Sirah CRM Wp`, app id `27135450269410430`) with **different user ids**. Working hypothesis, not established: the WhatsApp permissions were granted inconsistently at onboarding. GV Mart's `public_profile`-only token matches the `not_authorized` failure already documented for Embedded Signup (the app was never authorised for WhatsApp).
+> - **Sirah Digital's own WABA (`351363664731426`) is healthy**: both scopes, all three calls HTTP 200 (source: VPS diagnostic session reported by the project owner, 2026-10-12). The `#100` this document attributed to "Sirah Digital" is the separate **`Sirah` client's** stored WABA (`998094716164113`), which returns code 100 subcode 33; see 3.13. That attribution is my inference from the matching error code, not something the script printed. **Evokz is still not diagnosed:** run it before concluding.
+> - All tokens checked are `SYSTEM_USER` tokens under the same app (`Sirah CRM Wp`, app id `27135450269410430`). **The system user is per business portfolio, not per client**: `Sirah` and `Sirah Digital` share user id `122106946323459883` (same business), while demo, TNPSC and GV Mart have different ids. Working hypothesis, not established: the WhatsApp permissions were granted inconsistently at onboarding. GV Mart's `public_profile`-only token matches the `not_authorized` failure already documented for Embedded Signup (the app was never authorised for WhatsApp).
 > - **Open question on `1649658386105751`:** the VPS session guessed it is "probably their business portfolio id". In-repo evidence points the other way: at connect time (17 Sep) our own discovery recorded `wabaTargetIds = [1649658386105751, 894384560175844]` in `wabas.connect_diagnostics`, and `granular_scopes` `target_ids` for `whatsapp_business_management` are WABA ids; and 8 `messages` webhooks keyed by `1649658386105751` arrived 24 Sep to 8 Oct (`audit_log`), and Meta keys a webhook entry by WABA id. The decisive check is one call on the VPS with TNPSC's token: `GET /1649658386105751?fields=name` and `/phone_numbers`.
 
 ### 2.2 GV Mart sends — closed; not a Wasi failure (corrected 2026-10-12)
@@ -314,17 +314,83 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 
 **Spec, not built:** move them into a tracked `scripts/diagnostics/` directory; pass the token as an `Authorization: Bearer <token>` header, never in a URL; and redact in every `catch` (print `err.code` and a scrubbed message, never the raw URL). **Does Meta accept Bearer?** Tested 2026-10-12 with the app access token: HTTP 200 with a `Bearer` header (and with `OAuth`) on a node read (`/{app-id}?fields=name`), on `/debug_token`, and on `/{app-id}/subscriptions`. Meta's messaging-limits page also uses an `Authorization: Bearer` header in its example for the phone-number node. **Not tested** with a client system-user token against every endpoint these scripts use (that needs the VPS); the application already sends Bearer for every non-GET Graph call.
 
+**Paging URLs leak the token even when Bearer is used.** Meta's `paging` object embeds the token in the response body: a templates response carries `"next": "https://graph.facebook.com/v25.0/…/message_templates?access_token=<TOKEN>&…"`. So printing a full response leaks it regardless of how the request was authenticated. **Rule for every diagnostic: redact `paging.next` and `paging.previous` (and any `access_token=` fragment) before anything is printed.** (Source: VPS diagnostic session reported by the project owner, 2026-10-12.) Two more places to fix in the application itself: `metaClient.debugToken` builds its URL with `input_token` **and** `access_token=${META_APP_ID}|${META_APP_SECRET}` as query parameters (`metaClient.js:123-127`), so the app secret is in a URL; and `graphFetch` puts the client token in the query on every GET (`metaClient.js:49`).
+
+**`server/scripts/diagnostics/probe_waba.js` was written 2026-10-12 (uncommitted, not yet run)** to probe `1649658386105751` with TNPSC's stored token: `--token-from 894384560175844 --target 1649658386105751`. It is read-only (GETs, one POST to `debug_token`; database in `begin read only`), sends the token only in an `Authorization: Bearer` header, drops `paging`, scrubs the token and `access_token=` fragments from everything printed (checked against a synthetic token and paging URL: nothing leaks), and masks phone numbers to the last four digits unless `--show-phone` is given. It prints scopes and `granular_scopes` `target_ids`, the target node, its phone numbers, both tier fields per number, templates and `subscribed_apps`. Run on the VPS only (`docker exec -w /app/server wasi-crm node scripts/diagnostics/probe_waba.js …`, or pipe the file in on stdin).
+
 ### 3.11 `deploy.sh` has diverged on the VPS
 
 The checkout has an uncommitted modification to `deploy.sh` (backed up on the host as `~/deploy.sh.vps-20261012`). **Before the next deploy: diff it against the repo and commit the difference.** A deploy that pulls may overwrite it. Source: VPS diagnostic session reported by the project owner, 2026-10-12.
 
-### 3.12 Messaging tier field, and `code_verification_status`
+### 3.12 Messaging tier: the field works; the bugs are elsewhere (corrected 2026-10-12)
 
-**`messaging_limit_tier` is deprecated, not "wrong".** Meta's messaging-limits page (fetched 2026-10-12, summarised; re-read before relying on it) says the field `messaging_limit_tier` "used to return" the limit and gives the replacement: `GET /{phone-number-id}?fields=whatsapp_business_manager_messaging_limit` (example value `TIER_250`). It also says the limit is **set per business portfolio and shared by all phone numbers in it**, so our per-WABA capacity maths (`routes/broadcasts.js`, `messagingTierRefreshRunner.js`) is an approximation. Our request lists `messaging_limit_tier` in `metaClient.getPhoneNumberDetails` (`metaClient.js:185`), and reads it at `messagingTierRefreshRunner.js:42-43` and `metaWebhook.js:464`.
-- **What the data shows (2026-10-12, `wabas`):** the deprecated field **does still return a value for some numbers**: `TIER_250` for Brainlit, Evokz, RD interblocks and Sirah Digital (all refreshed today) and for GV Mart (7 Oct); `unknown` for Fortune, Know Mind, TNPSC and the demo. So "absent on all numbers" is true of the three the VPS script checked, not of all nine. The refresh "ran but got no value" for some numbers and not for others; this is a deprecated-field problem, not a wrong-field-name problem.
-- **Fix, not built:** request `whatsapp_business_manager_messaging_limit`, keep reading the old field as a fallback, and handle the portfolio-level sharing.
+**`messaging_limit_tier` returns a value on some numbers.** On phone `391453774055149` (Sirah Digital) the VPS script printed `"messaging_limit_tier": "TIER_250"` and "field name is correct" (source: VPS diagnostic session reported by the project owner, 2026-10-12). The database agrees: `TIER_250` is stored for Brainlit, Evokz, GV Mart (as of 7 Oct), RD interblocks and Sirah Digital; `unknown` for Fortune Innovatives, Know Mind, TNPSC and the demo (`wabas.messaging_tier`, 2026-10-12). Earlier text in this document that called the field wrong, and then deprecated, is superseded.
 
-**`code_verification_status` = `EXPIRED`** on both numbers checked. Meta's phone-number page defines `EXPIRED` only for `name_status` and does not define it for `code_verification_status`. On the evidence it is benign: both numbers (the demo and TNPSC) are registered, `CONNECTED` and sending. It only matters if a number needs re-registration.
+**Correction to the premise "our refresh treats an absent value as a failure."** It does not. `messagingTierRefreshRunner.refreshOne` (`messagingTierRefreshRunner.js:42-48`) writes `'unknown'` when the field is absent and stamps `messaging_tier_checked_at = now()`, i.e. it handles absence as a successful "no value". That is why Fortune, Know Mind, TNPSC and the demo show `unknown` with a check from today. What the code does get wrong:
+1. **A Graph error never advances the checked-at column**, so a number whose call always fails is "due" on every hourly tick forever (`Sirah`: `messaging_tier_checked_at` is null; GV Mart likewise since its token broke). The same pattern is in the sendability monitor (3.13).
+2. **`unknown` is ambiguous downstream.** It means "Meta returned no value", which is not "no tier assigned yet"; `alertRunner` and the broadcast preflight both treat it as "no cap known".
+
+**What distinguishes the numbers that return it? Hypotheses only.** Tested against every attribute stored in `wabas` (code verification status, platform type, `is_on_biz_app`, quality rating, creation date, outbound volume), nothing separates the two groups cleanly:
+
+| | Returned `TIER_250` | Absent |
+|---|---|---|
+| Code verification | `NOT_VERIFIED` (all 5) | `NOT_VERIFIED` (Fortune, Know Mind), `EXPIRED` (TNPSC, demo) |
+| `is_on_biz_app` | true (all 5) | true (Fortune, Know Mind), false (TNPSC, demo) |
+| Quality | `UNKNOWN` or `GREEN` | `GREEN` (3), none (demo) |
+| Created | 9 Sep to 7 Oct | 17 Aug to 17 Sep (Know Mind: 9 Sep, the same day as Brainlit and RD) |
+| Outbound messages | 0 for four, 110 for Sirah Digital | 1,295 (Fortune), 302 (demo), 23 (Know Mind), 14 (TNPSC) |
+
+- **H1 (tier already above entry level):** a number that has graduated past `TIER_250` stops returning the old field. Fits Fortune (high volume) and, loosely, the demo; does not fit Know Mind (23 sent) or TNPSC (14).
+- **H2 (portfolio-level limits):** Meta now sets the limit per business portfolio. The legacy per-number field may be omitted once the owning portfolio is on portfolio-level limits. This fits the "set per business portfolio" statement on Meta's messaging-limits page, and would group numbers by portfolio, not by any number-level attribute. Not testable from stored data (the portfolio id is not stored).
+- **H3 (the two `EXPIRED` numbers are a separate case):** TNPSC and the demo differ in two ways at once (`EXPIRED`, not on the Business app). Unexplained either way.
+- **Experiment, on the VPS:** for all ten numbers in one pass, request `fields=messaging_limit_tier,whatsapp_business_manager_messaging_limit` (separately, so an unknown field cannot fail the call; `probe_waba.js` already does this per number) and compare against the portfolio each belongs to.
+
+**Meta's current guidance** (messaging-limits page, fetched 2026-10-12, summarised; re-read before relying on it): the supported field is `whatsapp_business_manager_messaging_limit` (example value `TIER_250`), and `messaging_limit_tier` "used to return" the limit. **The limit is set per business portfolio and shared by all phone numbers in it.**
+
+> **For whoever owns the plans / pricing document:** per-client capacity figures there are approximations. A portfolio's limit is shared across its numbers and is measured as unique recipients outside customer-service windows in a moving 24-hour period, so two numbers under one portfolio compete for the same allowance, and a client's "tier" is not a property of one number. Our own capacity maths (`routes/broadcasts.js`, `messagingTierRefreshRunner.js`) has the same limitation.
+
+**Fix, not built:** request `whatsapp_business_manager_messaging_limit`, keep reading `messaging_limit_tier` as a fallback, advance the checked-at column on failure (with backoff), and store the portfolio id so limits can be grouped.
+
+**`code_verification_status` = `EXPIRED`** on the demo and TNPSC numbers (Sirah Digital's is `NOT_VERIFIED`). Meta's phone-number page defines `EXPIRED` only for `name_status`. On the evidence it is benign: the demo and TNPSC are registered, `CONNECTED` and sending. It would matter only if a number needed re-registration.
+
+### 3.13 The `Sirah` client's WABA row is probed every hour and always fails
+
+**Record of the investigation, 2026-10-12.** Sources are named per line; the VPS lines are from the VPS diagnostic session reported by the project owner, 2026-10-12, the rest are database and code reads.
+
+**Established**
+- **Two client rows, not one client with two WABAs** (`clients`, 2026-10-12). `Sirah`: `30adfd9e…`, `pending_setup`, created 8 Sep 16:34 UTC, email `si***@gmail.com`, last login 7 Oct 14:07 UTC, `token_version` 1. `Sirah Digital`: `6ce697ed…`, `active`, created 21 Sep, email `ri***@gmail.com`, last login 12 Oct. The emails differ. Each client has exactly one `wabas` row.
+- **The two WABA rows are different WABAs, not a duplicate** (`wabas`). The stale one is `998094716164113`: phone-number id `1147405151797261`, display name **"Tnpsc Mentors"**, number ending `9808`, `verified_at` 8 Sep, status `connected`. The live one is `351363664731426`: `391453774055149`, "Sirah Digital", number ending `1631`. So "stale duplicate of Sirah Digital" is not quite right: it is a different WABA, with a different phone number and a different display name, that the same business's system user was once granted.
+- **How it got there** (`audit_log`, `wabas.connect_diagnostics`): on 8 Sep 16:36 UTC the `Sirah` client's connect found two candidates (`wabaTargetIds` `[998094716164113, 351363664731426]`) and recorded `needs_manual_resolution`; on 8 Sep 17:29 an admin resolved it to `998094716164113` (`whatsapp_resolve_waba`), followed by two `retry_provisioning` runs. On 21 Sep `Sirah Digital`'s connect listed `[2073496506618651, 351363664731426]`. **Today** the shared token's `granular_scopes` target only `351363664731426` (VPS), so Meta answers `#100` subcode 33 for the stored WABA ("does not exist, cannot be loaded due to missing permissions").
+- **Same token, one system user** (VPS): both rows carry a `SYSTEM_USER` token with user id `122106946323459883`, both with both WhatsApp scopes, both with `target_ids` `["351363664731426"]`. Live-row calls: HTTP 200 on all three; stale row: HTTP 400, code 100, subcode 33. The stale row's own stored probe reason says the same (`wabas.sendable_reason`).
+- **What is attached to the `Sirah` client** (every table with a `client_id` column queried; `Sirah Digital` for comparison):
+
+| | `Sirah` (stale row) | `Sirah Digital` |
+|---|---|---|
+| `wabas` | 1 | 1 |
+| `api_keys` | 1 (`CRM Integration`, created 8 Sep, **never used**) | 2 |
+| `chats` / `contacts` | 0 / 0 | 140 / 140 |
+| `messages` | 0 | 1,298 |
+| `message_templates` | 0 | 21 |
+| flows / rules / usage_logs | 0 / 0 / 0 | 1 / 2 / 22 |
+| team members | 0 | 0 |
+| Webhooks keyed by its WABA id (`audit_log`) | **0, ever** | 5,741 |
+
+  Nothing real is attached to the `Sirah` client except one unused key and the dead WABA row. Its audit trail is: key created, needs-manual-resolution, resolve, two retries, a password reset (7 Oct 14:07 UTC; `last_login_at` is the same minute) and a manual sendability check (7 Oct 14:09 UTC), and the sweep rows.
+- **The 573 failures are one dead row re-probed every hour** (`audit_log`; `sendabilityMonitorRunner.js`). `tick` runs hourly and selects `status = 'connected'` and (`registration_checked_at is null` or older than 4 h). A **failed** check never writes `registration_checked_at` (only the success path does), so a permanently failing row is due on every tick. Observed: exactly 60-minute gaps, 24 rows per day, one message shape ("Unsupported get request. Object with ID '…' does not exist…", 573 of 574; one `fetch failed`). Each cycle writes three audit rows (`…check_failed`, `sendability_unknown`, `sendable_verdict_computed`): **574 + 573 + 503 ≈ 1,650 audit rows from one dead row**, and 574 of the 744 failures (77%). `messagingTierRefreshRunner.tick` has the same shape (3.12). GV Mart's current row is the same pattern: 124 failures at 24/day since 7 Oct.
+- **Which row `findByClientId` returns:** `findByClientId(30adfd9e…)` returns the `998…` row and `findByClientId(6ce697ed…)` returns the `351…` row; there is one row per client, so a lookup can never return the other client's row. The stale row is reachable (i) in `Sirah`'s own client context (its UI shows "connected" for a WABA its token cannot see) and (ii) through the sweeps: `sendabilityMonitorRunner` (`tick` and the admin `refreshNow`), `messagingTierRefreshRunner`, and the `alertRunner` checks. **Every one of them filters on `wabas.status = 'connected'`** (`sendabilityMonitorRunner.js:283,295`, `messagingTierRefreshRunner.js:57,68`, `alertRunner.js:56,110,135,303,324`).
+- **A related selection hazard:** `wabasRepo.findAnyConnected` (`wabasRepo.js:40`) returns the newest connected WABA with no health filter. Today that is **GV Mart**, whose token has `public_profile` only, and `metaTemplateLibraryRefreshRunner` uses it (`metaTemplateLibraryRefreshRunner.js:25`) to read Meta's global catalogue. The last audited library refresh was 17 Sep, so I could not tell whether the refresh has failed since 7 Oct; it should prefer a `sendable = true` WABA.
+
+**Options to stop the probing (specified, nothing done).** `wabas.status` has **no CHECK constraint** (only the two forward-config checks), and all 10 rows are currently `connected`.
+
+| Option | Touches | Reversible | Effect | Cost / risk |
+|---|---|---|---|---|
+| **1. Set `status` to a non-`connected` value on that one row** (existing value `'failed'`), pinned by id, with a hand-written `audit_log` row giving the reason | 1 column of 1 row | Yes (set it back) | Drops the row from every sweep above at once; stops the hourly probe and its ~1,650 audit rows | `'failed'` raises the Admin overview "failed WABAs" tile by one (`admin.js:50`), which is honest; `Sirah`'s UI shows "not connected", which is true. `Sirah` can still re-connect: `upsertForClient` updates the same row |
+| 2. Set `status` to a new value (e.g. `'superseded'`) | Same | Yes | Same | No migration, but a status nothing in the UI or admin handles |
+| 3. Fix the runners: write the checked-at column on failure, with backoff | Code, a deploy | Yes | Fixes the whole class (GV Mart's 124 too) | Needs a deploy; nothing is deployable until 3.0 / 3.11 are done |
+| 4. Delete that one `wabas` row (not the client) | 1 row; only dependent is `webhook_deliveries.waba_id` (0 rows for it) | **No** | Same as 1 | Loses the display name and diagnostics; not a 38-table cascade, but irreversible |
+| 5. Delete the `Sirah` client | 38-table cascade | No | Same | **Do not**: the mechanism of the 7 Oct incident, and nothing here needs it |
+
+**Least destructive: option 1, one row, one column.** Before doing it: (a) the owner should say whether the number ending `9808` ("Tnpsc Mentors") is wanted, because it is a real WABA that a system user was once granted and may simply need re-granting rather than abandoning; (b) 3.8's audit and role gate do not apply to a `wabas` update, so write the `audit_log` row by hand; (c) it is a production write and needs your explicit approval. **Not done.**
 
 ---
 
@@ -361,6 +427,7 @@ Supabase Pro at $25/month gives 7-day daily backups; PITR is $100/month per 7 da
 | Push the `clients.status` finding | Found, never pushed. |
 | Confirm `.claude/` is in `.gitignore` **and committed** | Claude Code session transcripts live under the project directory. This is why rotated passwords must never be printed into a session. **Verified 2026-10-12: in `.gitignore` yes, committed no.** The `.claude/` line (`.gitignore:19`) is an uncommitted working-tree change; `HEAD`'s `.gitignore` only ignores `.claude/scheduled_tasks.lock`. `git ls-files .claude` is empty, so nothing under it is tracked. |
 | `clients.status` enforces nothing | A suspended client can still send. Fixed in Phase 0.5. |
+| **OPEN: Vetri Academy (Demo) owner password is still the published default** | The only live exposure found by the 2026-10-12 audit (`demo+vetri-academy@wasi.local`, `status` active, `token_version` 0; the default has been public since 23 Sep, `9cb7eeb`). **Not yet reset** as of this edit. Agreed route: `POST /api/clients/:id/reset-password` from an admin session, **response discarded** (it returns a random temporary password once; an unknown random password closes the exposure). No deploy needed; the route is in the deployed image (`511ea49`). Do **not** re-run `seedLandingDemo.js` against production: it restores the default. Close this row only when the reset has been done and a login with the old default has been shown to fail. |
 
 ### 4.4 Standing constraints — these do not expire
 
@@ -553,6 +620,8 @@ FLOOR      4.2 nightly pg_dump + TESTED restore     (first; outranks everything 
            3.8 DELETE /api/clients/:id fix           (after 4.2 and 3.9)
            4.1 repo private (deploy key proven first; HTTPS remote CONFIRMED)
            3.10 / 3.11 move diagnostic scripts into the repo; commit deploy.sh drift (before any deploy)
+           3.13 stop the hourly dead-row probe (one-row status change, audited by hand; code fix after deploy)
+           4.3 OPEN: reset the Vetri Academy (Demo) password (admin route, response discarded)
            3.1 remove the fabricated chart           (one commit, do it now)
                  [2026-10-12: the commit exists (351d133); what remains is deploying master]
 
@@ -680,17 +749,29 @@ Do not start implementing. Report the plan and stop.
 | `983390651411856` | Demo / "Sirah" | `whatsapp_business_management`, `whatsapp_business_messaging`, `public_profile` | present, **no** `target_ids` (applies to all) | all three HTTP 200 | Healthy |
 | `894384560175844` | TNPSC mentors | same two plus `public_profile` | `target_ids` = `["1649658386105751"]`, **not** the stored WABA | templates 200, `phone_numbers` 200 (reads work, writes do not) | `#200`: scope targets a different id than the stored WABA |
 | `1766605231203643` | GV Mart | **`public_profile` only** | none | every call HTTP 400, code 100, subcode 33 | `#100`: token has no WhatsApp permission at all |
+| `998094716164113` | `Sirah` client (stale row, 3.13) | both WhatsApp scopes | `target_ids` = `["351363664731426"]`, i.e. **not** the stored WABA | all three HTTP 400, code 100, subcode 33 | Stored WABA no longer in the token's scope |
+| `351363664731426` | Sirah Digital | both WhatsApp scopes | `target_ids` = `["351363664731426"]` | all three HTTP 200; phone `391453774055149`: `CLOUD_API`, `is_on_biz_app` true, quality GREEN, `CONNECTED`, `code_verification_status` `NOT_VERIFIED`, 10 templates (all `nusi_*`, `APPROVED`), `messaging_limit_tier` `TIER_250` | Healthy |
 
-All three are `SYSTEM_USER` tokens under app `Sirah CRM Wp` (app id `27135450269410430`) with **different user ids** (each client gets its own system user).
+All five are `SYSTEM_USER` tokens under app `Sirah CRM Wp` (app id `27135450269410430`). **The system user is per business portfolio, not per client**: the `Sirah` and `Sirah Digital` rows share user id `122106946323459883`; the demo, TNPSC and GV Mart tokens have different ids.
 
-**Not covered:** Brainlit, Evokz, Fortune Innovatives, Know Mind, RD interblocks, `Sirah` (`998094716164113`, 573 failed sendability rows) and Sirah Digital have **not** been run.
+**Not yet run (5 of 10 connected WABAs, plus the `1649658386105751` probe).** Copy-pasteable, ordered by `sendability_registration_check_failed` count (all five are 0, so ordered by what needs answering first: Evokz is an open client problem, Brainlit is `sendable = false`):
+
+```
+557382370790751   # Evokz               (0 failures; open template-permission problem)
+918537580543018   # Brainlit            (0; sendable=false)
+392608088696144   # Fortune Innovatives (0)
+1319892496787906  # Know Mind           (0)
+463815720015046   # RD interblocks      (0)
+```
+
+Failure counts for the five already run: `998094716164113` 574, `1766605231203643` 124, `351363664731426` 1, `894384560175844` 0, `983390651411856` 0. For `1649658386105751` (no `wabas` row): `probe_waba.js --token-from 894384560175844 --target 1649658386105751` (3.10).
 
 **Other results from the same session:**
 - **Pairing check (TNPSC):** the stored phone `1222704867593433` belongs to the stored WABA; Meta returns it as `TNPSC Mentors`, `CLOUD_API`, quality `GREEN`, `CONNECTED`. The earlier "wrong WABA" diagnosis is withdrawn (1.1).
 - **Authentication templates:** TNPSC's `signup_otp2` is `APPROVED`, category `AUTHENTICATION` (2.6).
 - **`po_quote_request_doc_v3`:** both rows approved at Meta, ids `1435455455108429` and `1437829231531979`, `UTILITY` (3.2).
-- **Coexistence:** the two numbers checked report `CLOUD_API` and `is_on_biz_app` false. Stored data says 7 of 10 are true (1.1, 5.2).
-- **Messaging tier:** `messaging_limit_tier` absent on all three; deprecated field, replacement named in 3.12.
+- **Coexistence:** the demo and TNPSC report `CLOUD_API` and `is_on_biz_app` false; stored data says 7 of 10 are true. **Confirmed live for one of those seven:** `is_on_biz_app` is `true` from Meta on `391453774055149` (Sirah Digital), matching the stored `registration_is_on_biz_app`. The stored and live values agree there, so the per-WABA live confirmation is lower priority than I said, but it is worth doing for the remaining WABAs in the same pass as the scope check (1.1, 5.2).
+- **Messaging tier:** `messaging_limit_tier` absent on TNPSC, the demo and the stale row, present (`TIER_250`) on Sirah Digital. The field works; see 3.12.
 - **`code_verification_status`:** `EXPIRED` on both numbers checked; benign on the evidence (3.12).
 
 ## Appendix B — artifacts and documents
@@ -761,3 +842,8 @@ Three figures this document treated as established were artifacts. They are reco
 | "No client is on Coexistence" (proposed) | **Not supported.** `registration_is_on_biz_app` is true for 7 of 10 WABAs | `wabas` query, 2026-10-12 |
 | "`messaging_limit_tier` is absent, so the refresh is broken" (proposed) | **Partly wrong.** The deprecated field returns `TIER_250` for five numbers; absent for four | `wabas.messaging_tier`, 2026-10-12; Meta messaging-limits page |
 | "241 failed sendability rows on GV Mart" | **Not reproduced.** 123 on the current client, 47 on its deleted predecessor (170), 744 in all (573 of them on `Sirah`) | `audit_log` `sendability_registration_check_failed`, 2026-10-12 |
+| "`Sirah` is a stale duplicate of `Sirah Digital`" (VPS session) | **Partly.** Two separate client rows, each with one WABA; the WABAs are different (`998094716164113`, display "Tnpsc Mentors", vs `351363664731426`, "Sirah Digital"). The stale one is dead for a real reason (the token's scope no longer includes it) and nothing real is attached to its client | `clients`, `wabas`, per-table counts, `audit_log`, 2026-10-12; VPS scope check |
+| "Each client gets its own system user" | **Per business portfolio.** `Sirah` and `Sirah Digital` share user id `122106946323459883` | VPS scope check |
+| "Our tier refresh treats an absent value as a failure" | **No.** Absence is stored as `'unknown'` with a fresh `checked_at`. The real bug is that a *failed call* never advances `checked_at`, so dead rows are re-probed hourly | `messagingTierRefreshRunner.js:42-48`, `sendabilityMonitorRunner.js` |
+| "`messaging_limit_tier` is wrong" / "deprecated everywhere" | **Works on some numbers** (`TIER_250` on five); absent on four. Meta's page names a replacement field and says limits are per portfolio | `wabas.messaging_tier`, VPS output, Meta page |
+| "573 failures = Sirah Digital's problem" | **The `Sirah` client's row.** Sirah Digital's own WABA has 1 failure (5 Oct) | `audit_log` |
