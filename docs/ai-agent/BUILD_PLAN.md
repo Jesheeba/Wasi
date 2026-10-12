@@ -462,7 +462,7 @@ This makes the `Sirah` row harmless on its own, and the next dead row too, but i
 
 **Least destructive: option 1, one row, one column.** Before doing it: (a) the owner should say whether the number ending `9808` ("Tnpsc Mentors") is wanted, because it is a real WABA that a system user was once granted and may simply need re-granting rather than abandoning; (b) 3.8's audit and role gate do not apply to a `wabas` update, so write the `audit_log` row by hand; (c) it is a production write and needs your explicit approval. **Not done.**
 
-**Option 1 is APPROVED, with conditions, and is NOT to be executed until the owner says go (2026-10-13 at the earliest).** Conditions and how each is met:
+**Option 1 was APPROVED with conditions and EXECUTED on 2026-10-12 at 16:52:42 UTC on the owner's go** (Statement 1 only; result: the `DO` block committed, which implies the exactly-one-row assertion passed; `wabas.status` is now `failed`; audit row `04920fbf-acd2-48f0-be9a-6928a2d9ad5f`, action `manual_db_change`). Statement 2 was not run. Before the change `Sirah` had 574 `sendability_registration_check_failed` rows (last 16:02:42 UTC); the proof that it worked is that no new one appears at the next hourly ticks, recorded below when observed. The original conditions: Conditions and how each is met:
 - **Status value already handled by the sweeps and the Admin UI; no new value: `'failed'`.** Consumers:
 
 | Consumer | Where | Effect on this row at `'failed'` |
@@ -481,7 +481,7 @@ This makes the `Sirah` row harmless on its own, and the next dead row too, but i
 - **Pinned by the `wabas` row id, not `waba_id` or `client_id`:** `362e1974-93dc-4ad9-ace2-8381f154f437` (confirmed 2026-10-12: one row for that client; `waba_id` `998094716164113`; current status `connected`).
 - **One transaction; exactly 1 row affected or it rolls back; the current value is recorded so the rollback is one statement.** Current value: **`'connected'`**.
 
-**How the audit row is attributed (changed 2026-10-12 on the owner's instruction).** The row must not credit the shared super_admin for something a person did out of band. Checked in `audit_log` (2026-10-12): `actor_type` is free text (no CHECK constraint); values in use are `meta_webhook` (19,427 rows), `system` (5,123), `admin` (960) and `client` (611); `actor_id` is a nullable `uuid` (NULL on all `meta_webhook` rows and on 26 `system` rows). **`'system'` is the only existing value that is not a person or a tenant, so it is used, with `actor_id` NULL.** Two caveats, stated so nobody has to rediscover them: (1) every other `system` row is an automated runner, and most of them put the *affected client's id* in `actor_id` (the sendability runner); I deliberately do not do that here, because it would attribute a manual change to the client; (2) `'system'` therefore blurs "a runner" and "a person at a prompt". The distinguishing signal is the **distinct action name `manual_db_change`** (no code keys on it or on `actor_type = 'system'`) and a `target` that states plainly that it was applied out of band, by whom and why. No new `actor_type` value is introduced. The target begins with the **client id**, so the row appears in that client's audit trail on the admin Client Detail page (`auditLogRepo.list` matches `target like <client id> || ': %'`). **"By whom" is written as "the project owner (git author Jesheeba)": the owner should confirm that wording before running.**
+**How the audit row is attributed (changed 2026-10-12 on the owner's instruction).** The row must not credit the shared super_admin for something a person did out of band. Checked in `audit_log` (2026-10-12): `actor_type` is free text (no CHECK constraint); values in use are `meta_webhook` (19,427 rows), `system` (5,123), `admin` (960) and `client` (611); `actor_id` is a nullable `uuid` (NULL on all `meta_webhook` rows and on 26 `system` rows). **`'system'` is the only existing value that is not a person or a tenant, so it is used, with `actor_id` NULL.** Two caveats, stated so nobody has to rediscover them: (1) every other `system` row is an automated runner, and most of them put the *affected client's id* in `actor_id` (the sendability runner); I deliberately do not do that here, because it would attribute a manual change to the client; (2) `'system'` therefore blurs "a runner" and "a person at a prompt". The distinguishing signal is the **distinct action name `manual_db_change`** (no code keys on it or on `actor_type = 'system'`) and a `target` that states plainly that it was applied out of band, by whom and why. No new `actor_type` value is introduced. The target begins with the **client id**, so the row appears in that client's audit trail on the admin Client Detail page (`auditLogRepo.list` matches `target like <client id> || ': %'`). **"By whom" is written as "the platform owner (Jesheeba)" (the owner chose this wording on 2026-10-12: a git author identity names a commit identity, not the person who ran the statement, and does not belong in a permanent audit row).**
 
 **Statement 1 (apply):**
 ```sql
@@ -497,7 +497,7 @@ BEGIN
   VALUES ('system', NULL, 'manual_db_change',
           '30adfd9e-413f-4dbf-adcc-7fec1c522dbd: wabas row 362e1974-93dc-4ad9-ace2-8381f154f437 status connected -> failed. '
           || 'MANUAL SQL CHANGE applied out of band (psql), not through the admin UI or any app route, '
-          || 'by the project owner (git author Jesheeba) at ' || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"')
+          || 'by the platform owner (Jesheeba) at ' || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"')
           || '. Reason: WABA 998094716164113 is not in its token''s scope and was being re-probed hourly; '
           || 'see docs/ai-agent/BUILD_PLAN.md 3.15. Rollback: set status back to connected on that row id.');
 END $$;
@@ -515,7 +515,7 @@ BEGIN
   INSERT INTO audit_log (actor_type, actor_id, action, target)
   VALUES ('system', NULL, 'manual_db_change',
           '30adfd9e-413f-4dbf-adcc-7fec1c522dbd: wabas row 362e1974-93dc-4ad9-ace2-8381f154f437 status failed -> connected (ROLLBACK of the earlier manual change). '
-          || 'MANUAL SQL CHANGE applied out of band (psql) by the project owner (git author Jesheeba) at '
+          || 'MANUAL SQL CHANGE applied out of band (psql) by the platform owner (Jesheeba) at '
           || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') || '.');
 END $$;
 ```
