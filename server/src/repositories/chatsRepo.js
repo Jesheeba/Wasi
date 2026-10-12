@@ -213,13 +213,23 @@ async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt
     [chatId, clientId, body, metaMessageId, sentAt || null, referral ? JSON.stringify(referral) : null]
   );
   if (rows[0]) {
+    // last_inbound_at (migration 086) is the start of Meta's 24-hour customer
+    // service window, so it takes the message's OWN send time (the row's
+    // sent_at: Meta's timestamp, or now() only when the payload had none),
+    // never now() at processing time — a late or retried webhook must not
+    // move the window forward. greatest() makes it monotonic: two webhooks
+    // processed out of order cannot move it backwards. It lives in this
+    // statement, not a separate one, so it only ever runs when the insert
+    // actually created a row (a redelivery returns no row and skips this).
+    // Outbound sends and echoes deliberately never touch it.
     await db.query(
       `update chats
        set last_message_at = now(),
+           last_inbound_at = greatest(coalesce(last_inbound_at, $3::timestamptz), $3::timestamptz),
            unread_count = unread_count + 1,
            status = case when status = 'resolved' then 'open' else status end
        where client_id = $1 and id = $2`,
-      [clientId, chatId]
+      [clientId, chatId, rows[0].sent_at]
     );
   }
   return rows[0] || null;
