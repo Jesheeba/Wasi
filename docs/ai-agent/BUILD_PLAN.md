@@ -30,9 +30,9 @@ This document has two jobs.
 | `docs/ai-agent/SPEC.md` | **Current version is as amended at `8c1e075`** (decision 14, sections 10.5/13/20); first committed at `7226a637` (full SHA `7226a6370d9f…`). Cite `8c1e075`, not `7226a637`, for the current text. 20 numbered sections (1–20; the file also has a section 0 and a closing sequencing note, 22 `##` headings in all). Verified against the codebase — the `users(id)` error, the migration-number error and the gate-4 logic error were all corrected before commit. **This is the source of truth for the AI feature. Read it, do not re-derive it.** |
 | Admin credential rotation | Done twice. `token_version` bumped to 2. No secrets are reachable through admin routes, so client WABA tokens did **not** need rotating. |
 | `server/scripts/set-password.js` | Written. Hidden prompt, 14-character minimum, bumps `token_version`, writes an audit row, never logs the value. **Uncommitted.** |
-| Echo ingestion | **Not fixed; corrected 2026-10-12.** The code path exists (`907b71d`), but the app is still **not subscribed** to `smb_message_echoes`: a live `GET /{app-id}/subscriptions` returned `messages, account_update, message_template_status_update, phone_number_name_update, message_template_quality_update, phone_number_quality_update` and nothing else. No echo has ever been delivered (zero echo rows in `audit_log`, zero `messages.source='whatsapp_app'`). Subscribing is a human dashboard action, and per 3.0 it must not happen before production runs `cb27227`. *(Verification note 2026-10-12: the dashboard subscription state and the echo payload shape were not re-checked in this pass. `SPEC.md` decision 14 still lists the payload shape as not confirmed against a live capture.)* |
+| Echo ingestion | **Not fixed; corrected 2026-10-12.** The code path exists (`907b71d`), but the app is still **not subscribed** to `smb_message_echoes`: a live `GET /{app-id}/subscriptions` returned `messages, account_update, message_template_status_update, phone_number_name_update, message_template_quality_update, phone_number_quality_update` and nothing else. No echo has ever been delivered (zero echo rows in `audit_log`, zero `messages.source='whatsapp_app'`). Subscribing is a human dashboard action, and per 3.0 it must not happen before production runs `cb27227`. **VPS note, 2026-10-12:** two numbers checked there (TNPSC and the demo) report `platform_type CLOUD_API` and `is_on_biz_app` false. That does **not** generalise: the stored `wabas.registration_is_on_biz_app` is **true for 7 of the 10 connected WABAs** (false: TNPSC, demo; unknown: Sirah). The echo thread is therefore **not** de-prioritised on current evidence; see Appendix A. *(Verification note 2026-10-12: the dashboard subscription state and the echo payload shape were not re-checked in this pass. `SPEC.md` decision 14 still lists the payload shape as not confirmed against a live capture.)* |
 | `metaWebhook.js` field guard | Fixed. `field !== 'smb_message_echoes'` now prevents echoes being processed as inbound messages. **Verified 2026-10-12:** guard present at `server/src/routes/metaWebhook.js:575`, committed in `cb27227`; the file has no uncommitted changes. **Not in production:** `cb27227` (3 Oct) is after `511ea49` (1 Oct), so the deployed server has no guard; see 3.0. |
-| TNPSC diagnosis | Complete. The stored WABA (`894384560175844`) is not the WABA Meta says owns the phone number (`1649658386105751`). Inbound has been discarded since 23 September. The diagnosis is done; the fix is not. |
+| TNPSC diagnosis | **Corrected 2026-10-12.** The earlier claim (stored WABA `894384560175844` is the wrong one; Meta says `1649658386105751` owns the phone) is **withdrawn**: `diagnostic_scope_check.js` on the VPS reports "stored phone_number_id `1222704867593433` belongs to this WABA" and Meta returns that number as `TNPSC Mentors`, `CLOUD_API`, quality GREEN, status CONNECTED (source: VPS diagnostic session reported by the project owner, 2026-10-12). The stored WABA/phone pairing is right. The real problem is **scope targeting**: the token's `whatsapp_business_management` granular scope now targets only `1649658386105751`, not the stored WABA, so reads succeed and writes fail (`#200`). See Appendix A. **Still open:** what `1649658386105751` is. It is not necessarily a portfolio id; see 2.1. |
 | Encryption | `server/src/utils/encryption.js` — AES-256-GCM, key derived from `SERVER_SECRET`. Local development cannot decrypt production tokens. **This is correct behaviour and must not be "fixed".** |
 
 ### 1.2 What does not exist
@@ -57,7 +57,7 @@ These are live, they affect paying clients, and three of them are getting worse 
 
 ### 2.1 Run the `debug_token` script
 
-**Status:** written 9 October. **Never run.** Nine days.
+**Status:** the script was written 9 October and **run on 2026-10-12 on the VPS for three WABAs** (demo, TNPSC, GV Mart), the only machine that can decrypt WABA tokens. The other seven connected WABAs have **not** been run (see Appendix A). Results are in Appendix A.
 
 **Why it is first:** four clients are failing with what is probably one cause.
 
@@ -73,6 +73,14 @@ One run of `debug_token` prints the granted scopes, the token's owning app and t
 **Already disproved:** the hypothesis that Evokz is blocked by incomplete business verification (`#141010`). Fortune Innovatives is also unverified and has 22 approved templates. Business verification is not the blocker. Do not spend more time on that theory.
 
 **Definition of done:** the script's output is pasted into this document as Appendix A, and each of the four clients has a named cause.
+
+> **Result, 2026-10-12 (source: VPS diagnostic session reported by the project owner, 2026-10-12): three causes, not one.**
+> - **TNPSC (`#200`):** scopes present, but `granular_scopes` `target_ids` = `["1649658386105751"]`, which is not the stored WABA. Reads work, writes do not.
+> - **GV Mart (`#100`, subcode 33):** the token's scopes are `public_profile` only: no `whatsapp_business_management`, no `whatsapp_business_messaging`, no granular scopes. Every call is HTTP 400. This also explains the `sendability_registration_check_failed` rows (my count from `audit_log`, 2026-10-12: 123 on GV Mart's current client, 47 on its deleted predecessor, 573 on `Sirah`, 744 in total; the VPS session's figure of 241 was not reproduced).
+> - **Demo (`983390651411856`):** both scopes, granted to all targets, all three calls HTTP 200. Healthy.
+> - **Sirah Digital (`#100`) and Evokz:** **not yet run.** Evokz is therefore not diagnosed; Sirah Digital's `#100` has no named cause yet. `Sirah` (`998094716164113`), the client with the most failed sendability rows, has not been run either.
+> - All three tokens are `SYSTEM_USER` tokens under the same app (`Sirah CRM Wp`, app id `27135450269410430`) with **different user ids**. Working hypothesis, not established: the WhatsApp permissions were granted inconsistently at onboarding. GV Mart's `public_profile`-only token matches the `not_authorized` failure already documented for Embedded Signup (the app was never authorised for WhatsApp).
+> - **Open question on `1649658386105751`:** the VPS session guessed it is "probably their business portfolio id". In-repo evidence points the other way: at connect time (17 Sep) our own discovery recorded `wabaTargetIds = [1649658386105751, 894384560175844]` in `wabas.connect_diagnostics`, and `granular_scopes` `target_ids` for `whatsapp_business_management` are WABA ids; and 8 `messages` webhooks keyed by `1649658386105751` arrived 24 Sep to 8 Oct (`audit_log`), and Meta keys a webhook entry by WABA id. The decisive check is one call on the VPS with TNPSC's token: `GET /1649658386105751?fields=name` and `/phone_numbers`.
 
 ### 2.2 GV Mart sends — closed; not a Wasi failure (corrected 2026-10-12)
 
@@ -127,6 +135,8 @@ Ask Evokz to complete business verification and add a payment method. Note that 
 
 **Known complication:** `buildAuthenticationPayload` at `server/src/utils/metaClient.js:677` posts to `/{waba}/message_templates` with a singular `language` field. Meta documents authentication templates via `POST /<WABA_ID>/upsert_message_templates` with a `languages` **array**. The comment at line 671 admits the shape is not confirmed against live Meta. **This code has never successfully run against Meta.** Expect it to be wrong, and fix it as part of the Evokz work rather than treating a failure as a permissions problem.
 
+> **Updated 2026-10-12.** Authentication templates **do** work at Meta: TNPSC has `signup_otp2`, `APPROVED`, category `AUTHENTICATION` (source: VPS diagnostic session reported by the project owner, 2026-10-12; consistent with its NULL `auth_options`, i.e. created outside this code). So Evokz is not blocked by the template category, and not necessarily by `buildAuthenticationPayload`. The most likely cause is the token's scopes, as for GV Mart. **Evokz's WABA has not been run through `diagnostic_scope_check.js` yet**, so this is a hypothesis; run it before changing any code.
+
 > **Verified 2026-10-12.** Confirmed in code: `buildAuthenticationPayload` is at `metaClient.js:677` and emits a singular `language` (default `'en_US'`); it only *builds* the payload, which `createMessageTemplate` then posts to `/{wabaId}/message_templates`. The "not doc-confirmed live" comment is at lines 668–676 (the admission is on 671). **Not verified here:** Meta's documentation for `upsert_message_templates` / `languages` was not re-read in this pass. **Evidence for "never run":** production has two approved Authentication templates (`signup_otp2`, TNPSC mentors, 17 Sep; `test_message`, Sirah Digital, 21 Sep), but both have `auth_options` NULL, which this app's create path persists. That is consistent with both having been created outside this code and synced in. It is an inference from the data, not proof (a created-then-deleted template would leave no row).
 
 > **Added 2026-10-12 — where those two templates came from.** `messageTemplatesRepo.create` (`messageTemplatesRepo.js:58-82`) always writes a non-null `auth_options` object for an Authentication template, whichever route called it (`POST /api/templates` or the Hub API). Template sync's insert path (`templateSyncService.js`, the `toInsert` branch) does not write `auth_options`, and its update branch never touches it. A NULL `auth_options` with a `meta_template_id` therefore means the row was **synced in from Meta, i.e. the template was created directly in Meta (WhatsApp Manager or Graph API), not through Wasi's code.** Both also carry language `en`, not Wasi's `en_US` default, which is consistent. **Immediate route for Evokz that does not depend on fixing `buildAuthenticationPayload`:** have the template created in WhatsApp Manager on Evokz's WABA, then run template sync. **Caveat, untested:** Evokz's error is a WABA-level permission refusal; if it is enforced by Meta on the WABA rather than on the API, WhatsApp Manager may refuse too. 2.1's `debug_token` output decides that.
@@ -166,6 +176,13 @@ A deploy turns on essentially the whole redesign (about 6,000 lines of UI change
 - **No evidence of failed deploys; it is simply not run since about 1 Oct 14:32 IST** (the served `index.html` `Last-Modified`). Nothing in `511ea49..master` can fail the migration gate (no migrations) or the build (`package*.json` unchanged; one Dockerfile change, the `design-system.css` COPY fix).
 - **Cannot be determined from the repo; check on the VPS:** `git log -1` and `git status` in the checkout (dirty? other branch?), `docker images wasi-crm-server` (created date), `docker compose logs --tail` for the last restart, that `server/.env.production` is present, and the checkout's `git remote -v` (see 4.1).
 
+**VPS facts verified 2026-10-12** (source: VPS diagnostic session reported by the project owner, 2026-10-12, from `/opt/wasi`, the compose `working_dir`, confirmed with `docker inspect`):
+- **The checkout itself is stale, not just the image.** `git log -1` is `511ea49e93c6…` (1 Oct 14:27 +0530, "UI redesign stage 4: Chat view"). Nobody has pulled since 1 Oct. The container `wasi-crm` runs `wasi-crm-server:latest`, created 2026-10-01 09:02:19 UTC.
+- **`origin` is `https://github.com/Jesheeba/Wasi.git` (HTTPS) with no credential helper.** Flipping the repo to private **will** break the deploy. See 4.1.
+- **The checkout is dirty:** `git status` shows ` M deploy.sh` and 20 untracked files (3.10, 3.11). A pull may clobber `deploy.sh`.
+- **The host has no `server/node_modules`.** Dependencies exist only inside the image, so any script needing `pg` must run as `docker exec wasi-crm node /app/server/<script>`. This is why nothing could be run from the host.
+- `server/.env.production` exists (657 bytes). It was mode 644 and was set to 600 in that session.
+
 ### 3.1 Fabricated Analytics chart — production
 
 There is a hard-coded chart in the Analytics view captioned **"Last 7 days, live from your account."** It is not live and it is not from their account. A client who checks this against their Meta dashboard will find Wasi showing them invented numbers.
@@ -199,6 +216,8 @@ The Hub API send payload has no `language` field:
 Language is resolved by looking up the template name and taking the newest `created_at`. `po_quote_request_doc_v3` exists in both `en` and `en_US` **with identical timestamps**, so which one sends is a coin flip.
 
 > **Verified 2026-10-12.** `apiMessageSendSchema` (`validate.js:658`) has no `language` field. Resolution is `messageTemplatesRepo.findByNameAndClient` (`messageTemplatesRepo.js:22-24`): `order by created_at desc limit 1`, with no status or `orphaned_at` filter. Both rows exist, both `approved`, both under the demo client `00000000-0000-0000-0000-000000000001`, both `created_at = 2026-09-08T13:24:03.793Z`.
+>
+> **At Meta (2026-10-12; source: VPS diagnostic session reported by the project owner, 2026-10-12):** both are `APPROVED`, category `UTILITY`, as template ids `1435455455108429` and `1437829231531979`. Both exist upstream, so the tie is real and `language` really is the only discriminator.
 
 **Fix:** accept an optional `language` on the payload. When absent, resolve deterministically (prefer exact `en`, then any `en_*`, then error if ambiguous) rather than by timestamp. Document the field in the API reference.
 
@@ -235,6 +254,8 @@ GV Mart runs entirely on the **demo client**, not on its own Wasi client.
 - **Fix:** create or activate a proper client row for GV Mart, migrate their credentials, chats, messages and templates onto it, verify their sends still work, then remove the demo forward.
 - **Risk:** this touches a live client's message history. Do it as a transaction with a verified rollback, during a quiet window, and prove the row counts match before and after.
 
+**Dependency, added 2026-10-12:** GV Mart's own WABA token has only `public_profile` (2.1, Appendix A), so it **cannot send or read anything today**. Moving GV Mart onto their own client row does not work until that token is replaced with one carrying the WhatsApp scopes (a clean re-onboarding). Fix 2.1 first.
+
 ### 3.6 No API request log
 
 Build one. Minimum: timestamp, client id, route, status code, error code, latency, and a truncated request id — **not** the payload, which contains customer phone numbers and message bodies. Retention 30 days.
@@ -253,7 +274,57 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 
 ### 3.8 `DELETE /api/clients/:id` is unaudited, unconfirmed and ungated
 
-**Spec only; nothing built.** Today it writes no audit row, takes no confirmation, ignores `adminRole` (no code anywhere reads it), and cascades a client's entire history in one call. At least three real clients (`a6959183…`, `792a86cf…`, `e186eb60…`) were deleted this way with no record of who did it (source: `audit_log` rows for those ids with no matching delete event; route in `server/src/routes/clients.js`). The fix spec and trade-offs were written up on 2026-10-12 in the session that produced this section; they are to be filed here when approved. Until then: treat every client deletion as irreversible and unattributed.
+**Spec only; nothing built. Decisions below were made by the project owner on 2026-10-12.**
+
+**Today** (source: `server/src/routes/clients.js`, `DELETE /:id`): `requireAdminAuth()` only; no body, no audit row, no role check (`adminRole` is never read anywhere), and every one of about 38 `client_id` foreign keys cascades. At least three real clients (`a6959183…`, `792a86cf…`, `e186eb60…`) were deleted this way with no record of who did it.
+
+**Ordering: backups outrank this route.** 4.2 (nightly `pg_dump` with a **tested** restore) comes first. With backups a wrong delete is recoverable; without them no amount of route hardening helps. Per-person admin accounts and the admin login audit (3.9) come before the role gate, because they are smaller and worth more.
+
+**Decision: hard delete stays; soft delete is rejected.** The reasons are the trade-offs, not a preference:
+
+| | Hardened hard delete (chosen) | Soft delete (rejected) |
+|---|---|---|
+| Reversible | Only through backups (4.2) | Yes, until purge |
+| Surface changed | One route | Every query, RLS policy, the background runners, webhook lookup by WABA id, API-key auth, login, team login |
+| Failure mode | Wrong client deleted | A missed code path leaves a "deleted" tenant still sending or receiving |
+| Unique constraints | None | `clients.email` and `tenant_slug` stay taken, which **blocks re-creating a client with the same email: exactly the GV Mart case that caused this review** (partial index or tombstoning needed) |
+| Erasure / retention | Data is really gone | Personal data retained; a purge job is needed anyway |
+| Meta side | WABA row gone | WABA stays subscribed unless explicitly unsubscribed |
+
+**Spec of the fix:**
+1. **Role gate:** shared middleware, `super_admin` only, applied to this route. (With a single admin account this constrains nobody until 3.9 lands, which is why 3.9 is first.)
+2. **Confirmation, in the body:** `{ "confirm_name": "<exact client name>", "reason": "<required free text>" }`. **When `confirm_name` is absent or wrong, respond `409` with the dependent-row counts** (messages, chats, contacts, templates, active API keys, WABAs incl. WABA id and phone-number id, flows) and refuse. A bare `DELETE` therefore tells the operator "this removes N messages, N chats, N contacts, 1 WABA" and does nothing. No nonce store is needed.
+3. **Audit, same transaction, before the delete:** insert the `audit_log` row, then delete; if either fails both roll back. The row records: client id, name, email, status, tenant slug, WABA id and phone-number id, the counts above, the acting admin id and role, source IP, user-agent, and the `reason`. `audit_log` has no foreign key to `clients`, so it survives the cascade. It has no detail column today, so this needs a nullable `detail jsonb` column (a migration).
+4. **Consent evidence is archived before deletion** (decision: yes; opt-in evidence is a compliance artifact that should outlive the tenant). Spec: a new platform-internal table, e.g. `deleted_client_consent_archive`, with **no foreign key to `clients`** (same treatment as `audit_log` and `alert_events`, and no `wasi_app` grant). Populated by `INSERT … SELECT` in the same transaction, one row per `consent_events` row, carrying the event fields (type, evidence, `actor_type`/`actor_id`/`batch_id`, `created_at`) plus a snapshot of the client id and name and the contact's id and phone. **Open:** that table retains personal data after a tenant is deleted, so a retention period and legal basis must be decided; this is an owner/legal call, not an engineering one.
+5. **Hold:** the suspend-first rule (delete allowed only for clients suspended for N days) waits until Phase 0.5 (`clients.status` enforcement) exists.
+
+---
+
+### 3.9 Per-person admin accounts and the admin login audit (do before 3.8's role gate)
+
+**Why:** every unattributable finding of this investigation (the exposure verdict, the three deleted clients, the 19 Aug support admin) traces to **one shared admin identity with no login audit**. This is smaller than 3.8 and worth more.
+
+**Spec:** (1) create one admin account per person (`POST /api/admin/admin-users` already exists), then stop using the shared account. (2) Deploy the admin login audit already written in the uncommitted `server/src/routes/adminAuth.js` (records `admin_login_succeeded` / `admin_login_failed` with `req.ip`) and commit it with `server/test/adminLoginAudit.test.js`. (3) Add per-action IP capture for admin writes (today only `admin_user_created` records an IP). Enforcing `adminRole` on the write routes is the follow-on.
+
+### 3.10 Twenty untracked diagnostic scripts on the production host
+
+**Facts** (source: VPS diagnostic session reported by the project owner, 2026-10-12): `/opt/wasi` contains 20 untracked `.js` scripts written directly on production: `diagnostic_scope_check.js`, `diagnostic_auth_template_retry.js`, `permission_probe.js`, `token_transport.js`, `registration_sweep.js`, `fortune_probe.js`, `check_binding.js`, `client_131042.js`, `list_wabas.js`, `other_waba.js`, `blocked_clients.js`, `send_health.js`, `health_status.js`, `find_failure.js`, `undeliverable.js`, `marketing_reasons.js`, `funding_check.js`, `optin.js`, `assigned_users.js`.
+
+**Two problems:** (1) they are invisible to version control and can collide with a `git pull` on a filename clash; (2) **they leak tokens.** `diagnostic_scope_check.js` puts `access_token` in the query string and its `catch` blocks print raw `err.message`, which can carry the full URL. One run did exactly that: the token appeared in the output file and had to be scrubbed with `sed`. (The same query-string pattern is in the application's own client, `metaClient.graphFetch`, which sets `access_token` as a query parameter on every GET, `server/src/utils/metaClient.js:49`.)
+
+**Spec, not built:** move them into a tracked `scripts/diagnostics/` directory; pass the token as an `Authorization: Bearer <token>` header, never in a URL; and redact in every `catch` (print `err.code` and a scrubbed message, never the raw URL). **Does Meta accept Bearer?** Tested 2026-10-12 with the app access token: HTTP 200 with a `Bearer` header (and with `OAuth`) on a node read (`/{app-id}?fields=name`), on `/debug_token`, and on `/{app-id}/subscriptions`. Meta's messaging-limits page also uses an `Authorization: Bearer` header in its example for the phone-number node. **Not tested** with a client system-user token against every endpoint these scripts use (that needs the VPS); the application already sends Bearer for every non-GET Graph call.
+
+### 3.11 `deploy.sh` has diverged on the VPS
+
+The checkout has an uncommitted modification to `deploy.sh` (backed up on the host as `~/deploy.sh.vps-20261012`). **Before the next deploy: diff it against the repo and commit the difference.** A deploy that pulls may overwrite it. Source: VPS diagnostic session reported by the project owner, 2026-10-12.
+
+### 3.12 Messaging tier field, and `code_verification_status`
+
+**`messaging_limit_tier` is deprecated, not "wrong".** Meta's messaging-limits page (fetched 2026-10-12, summarised; re-read before relying on it) says the field `messaging_limit_tier` "used to return" the limit and gives the replacement: `GET /{phone-number-id}?fields=whatsapp_business_manager_messaging_limit` (example value `TIER_250`). It also says the limit is **set per business portfolio and shared by all phone numbers in it**, so our per-WABA capacity maths (`routes/broadcasts.js`, `messagingTierRefreshRunner.js`) is an approximation. Our request lists `messaging_limit_tier` in `metaClient.getPhoneNumberDetails` (`metaClient.js:185`), and reads it at `messagingTierRefreshRunner.js:42-43` and `metaWebhook.js:464`.
+- **What the data shows (2026-10-12, `wabas`):** the deprecated field **does still return a value for some numbers**: `TIER_250` for Brainlit, Evokz, RD interblocks and Sirah Digital (all refreshed today) and for GV Mart (7 Oct); `unknown` for Fortune, Know Mind, TNPSC and the demo. So "absent on all numbers" is true of the three the VPS script checked, not of all nine. The refresh "ran but got no value" for some numbers and not for others; this is a deprecated-field problem, not a wrong-field-name problem.
+- **Fix, not built:** request `whatsapp_business_manager_messaging_limit`, keep reading the old field as a fallback, and handle the portfolio-level sharing.
+
+**`code_verification_status` = `EXPIRED`** on both numbers checked. Meta's phone-number page defines `EXPIRED` only for `name_status` and does not define it for `code_verification_status`. On the evidence it is benign: both numbers (the demo and TNPSC) are registered, `CONNECTED` and sending. It only matters if a number needs re-registration.
 
 ---
 
@@ -263,7 +334,7 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 
 **Order matters and getting it wrong breaks production.**
 
-> **Corrected 2026-10-12.** Production is a **VPS** (nginx on Ubuntu, `187.77.186.31`, Docker Compose, manual `deploy.sh`), not Render; see 3.0. `render.yaml` and `DEPLOY.md` describe Render and are stale, so the steps below stand. What the repo cannot tell us is how the VPS currently authenticates to GitHub: the repo's `origin` is the anonymous HTTPS URL `https://github.com/Jesheeba/Wasi.git`, and the VPS's own remote config is only on the VPS. If it pulls over anonymous HTTPS, going private breaks the deploy. If it already uses SSH or a token, it may not. Check `git remote -v` in the VPS checkout first. If a Render service still exists, it needs the Render GitHub app installed on the repo, or it breaks the same way.
+> **Verified 2026-10-12 (source: VPS diagnostic session reported by the project owner, 2026-10-12).** Production is a **VPS** (nginx on Ubuntu, `187.77.186.31`, Docker Compose, manual `deploy.sh`), not Render; `render.yaml` and `DEPLOY.md` are stale. **The checkout at `/opt/wasi` has `origin` = `https://github.com/Jesheeba/Wasi.git` over HTTPS with no credential helper, so flipping the repository to private WILL break the deploy.** The deploy-key sequence below is therefore confirmed necessary, not precautionary. If a Render service still exists, it would need the Render GitHub app on the repo or it breaks the same way.
 
 1. Create a deploy key for the VPS.
 2. Add the public half to the repository's deploy keys.
@@ -277,7 +348,7 @@ An unauthenticated `git pull` fails on a private repository. Flipping first brea
 
 ### 4.2 Nightly `pg_dump`
 
-**This is the single highest-value item in this document.** It is the only thing that would make a deletion like the 7 Oct one (2.4) reversible, and none exists.
+**This is the single highest-value item in this document, and it is sequenced before the delete-route work (3.8):** with a tested restore a wrong delete is recoverable; without one no route hardening helps. It is the only thing that would make a deletion like the 7 Oct one (2.4) reversible, and none exists.
 
 Minimum: nightly `pg_dump` to object storage, 14 days retained, **and a restore tested once into a scratch database.** An untested backup is not a backup.
 
@@ -341,6 +412,8 @@ It is **never** written from:
 - `messagingService.sendChatMessage` / `insertOutboundPending` (the shared choke points)
 
 If any of those write it, an automated message makes the agent think a human is in the conversation and the agent goes silent for 15 minutes after every flow message. The first draft of this spec had exactly that bug.
+
+> **Priority note, 2026-10-12.** The VPS session proposed de-prioritising echo handling because two numbers checked report `is_on_biz_app` false. The stored data contradicts that: `wabas.registration_is_on_biz_app` is true for 7 of 10 connected WABAs (Brainlit, Evokz, Fortune Innovatives, GV Mart, Know Mind, RD interblocks, Sirah Digital), so Coexistence echoes are plausible for most clients. Either way the check must be repeated per client at onboarding. A live per-WABA confirmation (`GET /{phone-number-id}?fields=is_on_biz_app,platform_type`) needs the VPS; it has not been run for the other eight. Whether to de-prioritise is the owner's call on that evidence.
 
 > **Corrected 2026-10-12.** An earlier version of this document excluded `insertEcho`; `SPEC.md` section 7 was right and that exclusion was wrong. **Is the id-match condition load-bearing?** Not on current evidence. Meta's Coexistence documentation lists only the WhatsApp Business app and supported companion devices as triggers for `smb_message_echoes`, and does not list Cloud API sends (inferred from the trigger list; the page does not say so outright). There is no live evidence either way, because the field has never been subscribed (1.1). So treat the condition as defensive, but keep it. `insertEcho` already does `on conflict (meta_message_id) do nothing`, so the write must be gated on that insert having actually inserted a row. One residual race: an echo that arrives before Wasi's outbound row has been given its `meta_message_id` would insert a duplicate row and count as human activity.
 
@@ -468,12 +541,18 @@ Two sub-steps. Do not merge them.
 ## 11. Sequencing
 
 ```
-BLOCKING   2.1 debug_token  ──┬──> 2.2 (closed) ──> 2.3 alerting
-                              ├──> 2.6 Evokz (+ fix 6.x metaClient auth payload)
-                              └──> 2.4 / 2.5 (closed 2026-10-12)
+BLOCKING   2.1 debug_token (run for 3 of 10 WABAs; run the rest)
+                              ├──> fix token scopes at onboarding / re-onboard GV Mart, TNPSC
+                              ├──> 2.6 Evokz (run the script first; payload fix only if still needed)
+                              ├──> 2.3 alerting
+                              └──> 3.5 GV Mart off demo client (cannot work until its token has scopes)
+           2.2, 2.4, 2.5: closed 2026-10-12
 
-FLOOR      4.2 nightly pg_dump + tested restore     (do this week, in parallel)
-           4.1 repo private (deploy key proven first)
+FLOOR      4.2 nightly pg_dump + TESTED restore     (first; outranks everything below)
+           3.9 per-person admin accounts + deploy admin login audit
+           3.8 DELETE /api/clients/:id fix           (after 4.2 and 3.9)
+           4.1 repo private (deploy key proven first; HTTPS remote CONFIRMED)
+           3.10 / 3.11 move diagnostic scripts into the repo; commit deploy.sh drift (before any deploy)
            3.1 remove the fabricated chart           (one commit, do it now)
                  [2026-10-12: the commit exists (351d133); what remains is deploying master]
 
@@ -594,7 +673,25 @@ Do not start implementing. Report the plan and stop.
 
 ## Appendix A — `debug_token` output
 
-*Empty. Fill this in when 2.1 is run. Four client diagnoses depend on it.*
+**Source:** `diagnostic_scope_check.js`, run on the production VPS (the only machine that can decrypt WABA tokens) in a session reported by the project owner, 2026-10-12. Reported, not independently re-run. No token value is reproduced here; ids and scope names only.
+
+| WABA | Client | Token scopes | `granular_scopes` | Calls | Verdict |
+|---|---|---|---|---|---|
+| `983390651411856` | Demo / "Sirah" | `whatsapp_business_management`, `whatsapp_business_messaging`, `public_profile` | present, **no** `target_ids` (applies to all) | all three HTTP 200 | Healthy |
+| `894384560175844` | TNPSC mentors | same two plus `public_profile` | `target_ids` = `["1649658386105751"]`, **not** the stored WABA | templates 200, `phone_numbers` 200 (reads work, writes do not) | `#200`: scope targets a different id than the stored WABA |
+| `1766605231203643` | GV Mart | **`public_profile` only** | none | every call HTTP 400, code 100, subcode 33 | `#100`: token has no WhatsApp permission at all |
+
+All three are `SYSTEM_USER` tokens under app `Sirah CRM Wp` (app id `27135450269410430`) with **different user ids** (each client gets its own system user).
+
+**Not covered:** Brainlit, Evokz, Fortune Innovatives, Know Mind, RD interblocks, `Sirah` (`998094716164113`, 573 failed sendability rows) and Sirah Digital have **not** been run.
+
+**Other results from the same session:**
+- **Pairing check (TNPSC):** the stored phone `1222704867593433` belongs to the stored WABA; Meta returns it as `TNPSC Mentors`, `CLOUD_API`, quality `GREEN`, `CONNECTED`. The earlier "wrong WABA" diagnosis is withdrawn (1.1).
+- **Authentication templates:** TNPSC's `signup_otp2` is `APPROVED`, category `AUTHENTICATION` (2.6).
+- **`po_quote_request_doc_v3`:** both rows approved at Meta, ids `1435455455108429` and `1437829231531979`, `UTILITY` (3.2).
+- **Coexistence:** the two numbers checked report `CLOUD_API` and `is_on_biz_app` false. Stored data says 7 of 10 are true (1.1, 5.2).
+- **Messaging tier:** `messaging_limit_tier` absent on all three; deprecated field, replacement named in 3.12.
+- **`code_verification_status`:** `EXPIRED` on both numbers checked; benign on the evidence (3.12).
 
 ## Appendix B — artifacts and documents
 
@@ -654,3 +751,13 @@ Three figures this document treated as established were artifacts. They are reco
 **Established (sources in 2.4):** deletion window 7 Oct 07:04:47 to 07:08:31 UTC (bounded by the password-reset audit row and the `contacts` autovacuum timestamp, corroborated by the unique-email re-creation at 07:09:54); the cascade chain from `pg_constraint`; the old WABA failing sendability checks since 5 Oct (`audit_log`); recovery closed by decision on 2026-10-12, not by exhaustion; autovacuum restored on 2026-10-12.
 
 **Still open:** who issued the delete (nginx log review pending: the preserved logs were not available to the investigation when this was written); the deleted message count (unknown, and will stay unknown).
+
+### Further corrections, 2026-10-12 (VPS session)
+
+| Claim once carried | Status | Source |
+|---|---|---|
+| TNPSC's stored WABA `894384560175844` is wrong; Meta says `1649658386105751` owns the phone | **Withdrawn.** The stored WABA and phone pair correctly; the issue is scope targeting. What `1649658386105751` is remains open (it keyed 8 discarded webhooks and appears in the connect-time `wabaTargetIds`, which points to a WABA id rather than a portfolio id) | `diagnostic_scope_check.js` pairing check, via the VPS session; `wabas.connect_diagnostics`; `audit_log` |
+| "One shared permission gap behind four clients" | **Three different causes** among the three WABAs run so far (healthy, scope-targeting, no scopes). Seven WABAs not yet run | Appendix A |
+| "No client is on Coexistence" (proposed) | **Not supported.** `registration_is_on_biz_app` is true for 7 of 10 WABAs | `wabas` query, 2026-10-12 |
+| "`messaging_limit_tier` is absent, so the refresh is broken" (proposed) | **Partly wrong.** The deprecated field returns `TIER_250` for five numbers; absent for four | `wabas.messaging_tier`, 2026-10-12; Meta messaging-limits page |
+| "241 failed sendability rows on GV Mart" | **Not reproduced.** 123 on the current client, 47 on its deleted predecessor (170), 744 in all (573 of them on `Sirah`) | `audit_log` `sendability_registration_check_failed`, 2026-10-12 |
