@@ -25,11 +25,11 @@ This document has two jobs.
 
 | Thing | State |
 |---|---|
-| `docs/ai-agent/SPEC.md` | First committed at `7226a637` (full SHA `7226a6370d9f…`); **amended since at `8c1e075`** (decision 14, sections 10.5/13/20), so the file at HEAD is newer than `7226a637`. 20 numbered sections (1–20; the file also has a section 0 and a closing sequencing note, 22 `##` headings in all). Verified against the codebase — the `users(id)` error, the migration-number error and the gate-4 logic error were all corrected before commit. **This is the source of truth for the AI feature. Read it, do not re-derive it.** |
+| `docs/ai-agent/SPEC.md` | **Current version is as amended at `8c1e075`** (decision 14, sections 10.5/13/20); first committed at `7226a637` (full SHA `7226a6370d9f…`). Cite `8c1e075`, not `7226a637`, for the current text. 20 numbered sections (1–20; the file also has a section 0 and a closing sequencing note, 22 `##` headings in all). Verified against the codebase — the `users(id)` error, the migration-number error and the gate-4 logic error were all corrected before commit. **This is the source of truth for the AI feature. Read it, do not re-derive it.** |
 | Admin credential rotation | Done twice. `token_version` bumped to 2. No secrets are reachable through admin routes, so client WABA tokens did **not** need rotating. |
 | `server/scripts/set-password.js` | Written. Hidden prompt, 14-character minimum, bumps `token_version`, writes an audit row, never logs the value. **Uncommitted.** |
-| Echo ingestion | Fixed. The app was never subscribed to `smb_message_echoes` in the Meta dashboard. This was a configuration gap, not a code gap. *(Verification note 2026-10-12: the dashboard subscription state and the echo payload shape were not re-checked in this pass. `SPEC.md` decision 14 still lists the payload shape as not confirmed against a live capture.)* |
-| `metaWebhook.js` field guard | Fixed. `field !== 'smb_message_echoes'` now prevents echoes being processed as inbound messages. **Verified 2026-10-12:** guard present at `server/src/routes/metaWebhook.js:575`, committed in `cb27227`; the file has no uncommitted changes. |
+| Echo ingestion | **Not fixed; corrected 2026-10-12.** The code path exists (`907b71d`), but the app is still **not subscribed** to `smb_message_echoes`: a live `GET /{app-id}/subscriptions` returned `messages, account_update, message_template_status_update, phone_number_name_update, message_template_quality_update, phone_number_quality_update` and nothing else. No echo has ever been delivered (zero echo rows in `audit_log`, zero `messages.source='whatsapp_app'`). Subscribing is a human dashboard action, and per 3.0 it must not happen before production runs `cb27227`. *(Verification note 2026-10-12: the dashboard subscription state and the echo payload shape were not re-checked in this pass. `SPEC.md` decision 14 still lists the payload shape as not confirmed against a live capture.)* |
+| `metaWebhook.js` field guard | Fixed. `field !== 'smb_message_echoes'` now prevents echoes being processed as inbound messages. **Verified 2026-10-12:** guard present at `server/src/routes/metaWebhook.js:575`, committed in `cb27227`; the file has no uncommitted changes. **Not in production:** `cb27227` (3 Oct) is after `511ea49` (1 Oct), so the deployed server has no guard; see 3.0. |
 | TNPSC diagnosis | Complete. The stored WABA (`894384560175844`) is not the WABA Meta says owns the phone number (`1649658386105751`). Inbound has been discarded since 23 September. The diagnosis is done; the fix is not. |
 | Encryption | `server/src/utils/encryption.js` — AES-256-GCM, key derived from `SERVER_SECRET`. Local development cannot decrypt production tokens. **This is correct behaviour and must not be "fixed".** |
 
@@ -120,11 +120,42 @@ Ask Evokz to complete business verification and add a payment method. Note that 
 
 > **Verified 2026-10-12.** Confirmed in code: `buildAuthenticationPayload` is at `metaClient.js:677` and emits a singular `language` (default `'en_US'`); it only *builds* the payload, which `createMessageTemplate` then posts to `/{wabaId}/message_templates`. The "not doc-confirmed live" comment is at lines 668–676 (the admission is on 671). **Not verified here:** Meta's documentation for `upsert_message_templates` / `languages` was not re-read in this pass. **Evidence for "never run":** production has two approved Authentication templates (`signup_otp2`, TNPSC mentors, 17 Sep; `test_message`, Sirah Digital, 21 Sep), but both have `auth_options` NULL, which this app's create path persists. That is consistent with both having been created outside this code and synced in. It is an inference from the data, not proof (a created-then-deleted template would leave no row).
 
+> **Added 2026-10-12 — where those two templates came from.** `messageTemplatesRepo.create` (`messageTemplatesRepo.js:58-82`) always writes a non-null `auth_options` object for an Authentication template, whichever route called it (`POST /api/templates` or the Hub API). Template sync's insert path (`templateSyncService.js`, the `toInsert` branch) does not write `auth_options`, and its update branch never touches it. A NULL `auth_options` with a `meta_template_id` therefore means the row was **synced in from Meta, i.e. the template was created directly in Meta (WhatsApp Manager or Graph API), not through Wasi's code.** Both also carry language `en`, not Wasi's `en_US` default, which is consistent. **Immediate route for Evokz that does not depend on fixing `buildAuthenticationPayload`:** have the template created in WhatsApp Manager on Evokz's WABA, then run template sync. **Caveat, untested:** Evokz's error is a WABA-level permission refusal; if it is enforced by Meta on the WABA rather than on the API, WhatsApp Manager may refuse too. 2.1's `debug_token` output decides that.
+
 ---
 
 ## 3. Correctness bugs found and not fixed
 
 These were all found during the investigation and written down nowhere but chat. They are real, they are small, and each one will eventually cost a client conversation.
+
+### 3.0 Production is behind master
+
+**This outranks everything else in section 3.** Added 2026-10-12 from a read-only investigation. Findings 1–3 below.
+
+**Production is running the build of commit `511ea49` (1 Oct 14:27 IST); `master` has 24 commits since.** The live `index.html`, `app.js` and `index.css` each match `511ea49` byte for byte (CR-stripped md5). Server code is from the same image build.
+
+**1. The echo guard is not in production, but nothing is exposed yet.**
+- `cb27227` (the `smb_message_echoes` guard, `metaWebhook.js:575`) is **after** `511ea49`; it is not an ancestor of it. Production has the echo handler (`907b71d`, 25 Sep) but not the guard.
+- The Meta subscription for `smb_message_echoes` is **not live** (checked live 2026-10-12; field list in 1.1). No echo has ever been delivered: zero echo rows in `audit_log`, zero `messages` with `source='whatsapp_app'`, zero contacts matching any WABA's own number, zero inbound messages from such contacts, zero `meta_message_id` seen in both directions.
+- **What the unguarded path would do:** only if Meta sent an echo with its array under `value.messages` (Meta documents `value.message_echoes`, which the unguarded code handles correctly) would `handleInboundMessages` ingest the business's own outgoing message as an inbound customer message: a contact for the business's own number, a chat, an inbound row, flow-engine and keyword-automation runs, and a forwarded `message.received`.
+- **Rule:** deploy `master` **before** anyone subscribes the echo field in the Meta dashboard.
+
+**2. The deploy gap: 24 commits.** Server code differs in four files (`contactsRepo.js`, `metaWebhook.js`, `seedLandingDemo.js`, `teardownLandingDemo.js`); no migrations and no dependency changes.
+
+| Group | Commits |
+|---|---|
+| Production correctness | `de4bdeb` (fixes `/design-system.css`, currently HTTP 500), `531395e` (UI survives a failed CSS load), `1d7f200` (primary tag written to `contact_tags`; segments and tag analytics stop missing tagged contacts), `892300c` (duplicate tag chip), `351d133` (fake chart removed), `4f29fc4` (test quarantine) |
+| Security / hardening | `cb27227` (echo guard). `a988716` (stop tracking the scheduler lock) is hygiene |
+| Features | `74d510f`–`995ce8b` (client app, admin console, single landing page, signup, flow-editor redesign), `4872452` and `12f67d6` (mobile), `969e51b` (landing demo seed, manual-run only) |
+| Docs | `7226a63`, `8c1e075`, `4458a75`, `9a97664`, `4235a24`, `f55a97c`, `37cd0ed`, `65c5a2c` |
+
+A deploy turns on essentially the whole redesign (about 6,000 lines of UI change; admin `app.js` alone is +2,500). CLAUDE.md records that the final full-suite run for that redesign never completed, so treat the deploy as carrying untested risk and smoke-test the admin console first.
+
+**3. Why it is stale.**
+- **Production is a VPS, not Render.** The live site answers as `nginx/1.24.0 (Ubuntu)` at `187.77.186.31`, with no Render headers, serving a Docker image. `render.yaml` and `DEPLOY.md` describe a path that is not the live one and are stale.
+- **There is no auto-deploy and no CI** (no `.github/`). The mechanism is manual: `deploy.sh` runs `docker compose build`, a gated `node-pg-migrate up`, then `docker compose up -d`. A `git pull` on the box is a prior manual step.
+- **No evidence of failed deploys; it is simply not run since about 1 Oct 14:32 IST** (the served `index.html` `Last-Modified`). Nothing in `511ea49..master` can fail the migration gate (no migrations) or the build (`package*.json` unchanged; one Dockerfile change, the `design-system.css` COPY fix).
+- **Cannot be determined from the repo; check on the VPS:** `git log -1` and `git status` in the checkout (dirty? other branch?), `docker images wasi-crm-server` (created date), `docker compose logs --tail` for the last restart, that `server/.env.production` is present, and the checkout's `git remote -v` (see 4.1).
 
 ### 3.1 Fabricated Analytics chart — production
 
@@ -180,15 +211,20 @@ Migrations 079 and 080 are applied (confirmed in `pgmigrations`, 25 September). 
 
 ### 3.5 GV Mart is on the demo client
 
-GV Mart's `whatsapp_provider_credentials` row has `client_id = 00000000-0000-0000-0000-000000000001` — the demo client. Their key was used on 8 October, so this is live, not a leftover.
+**Replaced 2026-10-12 (the earlier version of this section had the shape wrong).**
 
-> **UNVERIFIED as written, 2026-10-12.** No `whatsapp_provider_credentials` table exists in Wasi's database (no table matching `%cred%` or `%provider%`), and nothing in `server/src` references it. If it exists, it is in GV Mart's own Supabase project (`fsunrjithwcjtsutsgea`), which was not accessed. So the `client_id` value and the "used on 8 October" date could not be confirmed. **What is verifiable on the Wasi side:** (a) the demo client's WABA has `forward_to_url` set to host `fsunrjithwcjtsutsgea.supabase.co`, forwarding `message.received`, `message.status`, `message_template_status_update`, `account_update`; (b) GV Mart has its own Wasi client `4b09813e-99c8-46de-9429-0fb0b25be62f` (status `pending_setup`) with its own WABA, `connected` 7 Oct, no forward, and its own API key never used (`last_used_at` null); (c) the demo client's `CRM Integration` API key was last used 2026-10-12 13:23 UTC, so something live is still calling with the demo client's key. Note also that the "demo forward" is **data** on the demo client's `wabas` row, not code: `forwardRunner.js` has no demo-specific logic.
+GV Mart runs entirely on the **demo client**, not on its own Wasi client.
 
-**Consequence:** the demo forward in `forwardRunner` **cannot be removed** until GV Mart is moved to their own client id.
+- GV Mart's own Wasi client (`4b09813e-99c8-46de-9429-0fb0b25be62f`) has `status = 'pending_setup'`, a WABA that is `connected` (7 Oct) with no forward configured, and its own API key (`CRM Integration`, created 7 Oct) that has **never been used** (`last_used_at` null).
+- The demo client (`Wasi Demo Client`, `00000000-0000-0000-0000-000000000001`) has `status = 'active'`. Its WABA's `forward_to_url` points at host `fsunrjithwcjtsutsgea.supabase.co` (GV Mart's backend, per 4.4), forwarding `message.received`, `message.status`, `message_template_status_update` and `account_update`. Its `CRM Integration` API key was last used **2026-10-12 13:23 UTC**, i.e. today.
+- **Attribution caveat:** Wasi has no API request log (3.6), so "the demo key is GV Mart's" rests on the forward target and on what GV Mart has reported, not on a per-caller record.
+- The `whatsapp_provider_credentials` row named in the earlier version is not in Wasi's database; it would be in GV Mart's own Supabase project, which was not accessed. Its `client_id` and its "used on 8 October" date remain unverified.
 
-**Fix:** create a proper client row for GV Mart, migrate their credentials, chats, messages and templates onto it, verify their sends still work, then remove the demo forward.
-
-**Risk:** this touches a live client's message history. Do it as a transaction with a verified rollback, during a quiet window, and prove the row counts match before and after.
+**Consequences**
+- The demo forward (data on the demo client's `wabas` row; `forwardRunner.js` has no demo-specific code) **cannot be removed** until GV Mart is moved to their own client id.
+- **Phase 0.5 (`clients.status` enforcement) MUST NOT ship before GV Mart is on a real, `active` client row.** Today GV Mart's own client is `pending_setup`; enforcement that blocks non-`active` clients would cut off their own row the moment any traffic is attributed to it (their own key or WABA). It is also a wider issue: of the 14 non-test clients, 8 are `pending_setup` (5 of them with a connected WABA, none having sent in the last 14 days) and 6 are `active` (4 sent in that window, the demo client among them). Enforcement would block those 5 connected `pending_setup` clients as soon as they send. Fix the status values first, then enforce.
+- **Fix:** create or activate a proper client row for GV Mart, migrate their credentials, chats, messages and templates onto it, verify their sends still work, then remove the demo forward.
+- **Risk:** this touches a live client's message history. Do it as a transaction with a verified rollback, during a quiet window, and prove the row counts match before and after.
 
 ### 3.6 No API request log
 
@@ -214,6 +250,8 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 
 **Order matters and getting it wrong breaks production.**
 
+> **Corrected 2026-10-12.** Production is a **VPS** (nginx on Ubuntu, `187.77.186.31`, Docker Compose, manual `deploy.sh`), not Render; see 3.0. `render.yaml` and `DEPLOY.md` describe Render and are stale, so the steps below stand. What the repo cannot tell us is how the VPS currently authenticates to GitHub: the repo's `origin` is the anonymous HTTPS URL `https://github.com/Jesheeba/Wasi.git`, and the VPS's own remote config is only on the VPS. If it pulls over anonymous HTTPS, going private breaks the deploy. If it already uses SSH or a token, it may not. Check `git remote -v` in the VPS checkout first. If a Render service still exists, it needs the Render GitHub app installed on the repo, or it breaks the same way.
+
 1. Create a deploy key for the VPS.
 2. Add the public half to the repository's deploy keys.
 3. Change the VPS remote to the SSH URL.
@@ -221,6 +259,8 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 5. Only then flip the repository to private.
 
 An unauthenticated `git pull` fails on a private repository. Flipping first breaks the deploy.
+
+**Before any push, separately:** the unpushed commits publish operational detail (client names, WABA and phone-number ids, a client phone number, and a statement that the three default seed passwords still worked in production). Confirm rotation covered the demo client, the third seeded default and the 31 leftover test accounts, not only the admin account. See the 2026-10-12 audit in Appendix C.
 
 ### 4.2 Nightly `pg_dump`
 
@@ -254,7 +294,7 @@ These were established during the investigation and remain in force for every fu
 
 ## 5. AI agent — architecture summary
 
-Full specification: `docs/ai-agent/SPEC.md`, commit `7226a637`. **Read it before building. Do not re-derive the design from this section** — this is a summary for orientation, the spec is normative.
+Full specification: `docs/ai-agent/SPEC.md`, as amended at commit `8c1e075` (first committed `7226a637`). **Read it before building. Do not re-derive the design from this section** — this is a summary for orientation, the spec is normative.
 
 The three decisions worth repeating because they shape everything else:
 
@@ -275,16 +315,21 @@ get_knowledge_for(agent, message) -> string
 
 The agent's safety comes from **eight gates** evaluated in order before any model call and before any send. They are specified in the spec — read the list there rather than from memory. The one worth calling out here, because the first version of it was wrong:
 
-**Gate 4 — human active.** `chats.last_agent_reply_at` is written **only** from the human send path in `server/src/routes/chats.js`. It is **never** written from:
+**Gate 4 — human active.** `chats.last_agent_reply_at` is written from exactly two places:
+
+1. the human send path in `server/src/routes/chats.js` (send and retry), and
+2. `chatsRepo.insertEcho` (a business replying from its own WhatsApp Business app, which in a Coexistence setup is the main human reply path), **only when the echo is not Wasi's own outbound coming back**: match on the message id and skip the write if an outbound row already exists.
+
+It is **never** written from:
 - `flowRunner` / `flowEngine`
 - `broadcastRunner`
 - the Hub API (`apiV1Messages.js`)
 - the agent itself
-- `chatsRepo.insertEcho` (for now — revisit when echo semantics are settled)
+- `messagingService.sendChatMessage` / `insertOutboundPending` (the shared choke points)
 
-If any of those write it, an automated message makes the agent think a human is in the conversation and the agent goes silent for 24 hours. The first draft of this spec had exactly that bug.
+If any of those write it, an automated message makes the agent think a human is in the conversation and the agent goes silent for 15 minutes after every flow message. The first draft of this spec had exactly that bug.
 
-> **Verified 2026-10-12 — this list differs from `SPEC.md` on one item.** There are eight gates, and gate 4 is "No human active" (chat unassigned *and* `last_agent_reply_at` null or older than 15 minutes), as stated. But `SPEC.md` section 7 (gate 4 note) and section 16.1 say `last_agent_reply_at` **is** written by `chatsRepo.insertEcho` (a business replying from its own phone), alongside the human send and retry routes in `routes/chats.js`. This document excludes `insertEcho` "for now". That is a judgement that departs from the normative spec, not a fact; left as written. Section 12's prompt repeats the exclusion and tells the planner to flag contradictions, so it will surface there.
+> **Corrected 2026-10-12.** An earlier version of this document excluded `insertEcho`; `SPEC.md` section 7 was right and that exclusion was wrong. **Is the id-match condition load-bearing?** Not on current evidence. Meta's Coexistence documentation lists only the WhatsApp Business app and supported companion devices as triggers for `smb_message_echoes`, and does not list Cloud API sends (inferred from the trigger list; the page does not say so outright). There is no live evidence either way, because the field has never been subscribed (1.1). So treat the condition as defensive, but keep it. `insertEcho` already does `on conflict (meta_message_id) do nothing`, so the write must be gated on that insert having actually inserted a row. One residual race: an echo that arrives before Wasi's outbound row has been given its `meta_message_id` would insert a duplicate row and count as human activity.
 
 ### 5.3 Refusal is a first-class output
 
@@ -450,7 +495,7 @@ not Solution Partner) serving small Indian businesses. We are about to build an
 AI bot reply feature end to end. The specification is already written, already
 verified against this codebase, and committed:
 
-    docs/ai-agent/SPEC.md   (commit 7226a637)
+    docs/ai-agent/SPEC.md   (as amended at commit 8c1e075; first committed 7226a637)
 
 Read it first and in full. It is normative. Do not redesign it. If you find
 something in it that contradicts the code, say so explicitly as a finding —
@@ -542,7 +587,7 @@ Do not start implementing. Report the plan and stop.
 
 | Document | Location | State |
 |---|---|---|
-| AI Agent Specification | `docs/ai-agent/SPEC.md` (`7226a637`) | Committed, normative |
+| AI Agent Specification | `docs/ai-agent/SPEC.md` (amended at `8c1e075`; first committed `7226a637`) | Committed, normative |
 | Wasi AI Bot — Build and Launch Plan | Claude doc `f1f3ab0e-d42e-4db4-8dea-4e9ba418548e` | Live |
 | Wasi Pricing Model | Claude doc `558b65f9-c6d1-4a11-b040-cdcabfa1abaa` | Live, shared with TL and Manager |
 | Wasi Plans and Pricing | Claude doc `338248b9-4569-49dd-89c2-64b83d61cd4d` | Live, not on landing page yet |
@@ -571,3 +616,14 @@ Result of checking this document's factual claims against the repository (`maste
 | 14 | Eight 409 codes on the API | Confirmed: eight distinct 409 `error.code` values on `POST /api/v1/messages`: `waba_not_connected`, `consent_required`, `plan_limit_reached`, `session_window_closed`, `auth_code_required`, `auth_code_invalid`, `media_resolution_failed` (all via `MessagingError`, any code other than `send_failed`, `apiV1Messages.js:115`), plus `conflict` (a unique-violation, `apiV1ErrorHandler.js:29`). `auth_code_invalid` is also raised directly at `apiV1Messages.js:84`. `not_failed` is chat-retry only, not Hub API |
 
 Not checked in this pass: Meta's current documentation, the live Meta webhook subscription, GV Mart's own Supabase project, and the Render-versus-VPS question (`DEPLOY.md` and `render.yaml` describe Render; section 4.1 above says VPS).
+
+### Follow-up record, 2026-10-12 (second pass)
+
+| Question | Result |
+|---|---|
+| Is `cb27227` an ancestor of `511ea49`? | No. It is after it. Production has no guard; the subscription is not live, so no echo has been ingested |
+| Commits in `511ea49..master` | 24; 4 server files, no migrations, no dependency changes (see 3.0) |
+| Why stale | Manual VPS deploy (`deploy.sh`), no auto-deploy, no CI; last run about 1 Oct 14:32 IST |
+| How the deploy reaches GitHub | Not determinable from the repo; VPS remote config needed (4.1) |
+| Unpushed commits `9a97664`, `4235a24`, `f55a97c`, `37cd0ed`, `65c5a2c` | No tokens, keys or live secrets. They publish client names, WABA and phone-number ids, a client phone number, client UUIDs, a local dev DB password in a snippet, and the default seed credentials with a statement that they still worked in production. All in `docs/HANDOVER-2026-10-03.md` except `65c5a2c`'s ids and UUIDs in this file |
+| `.claude/` tracked? | No. Only `scheduled_tasks.lock` was ever committed, untracked in `a988716`. Committing just the 3-line `.gitignore` change is safe |
