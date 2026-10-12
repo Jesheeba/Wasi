@@ -384,6 +384,8 @@ The checkout has an uncommitted modification to `deploy.sh` (backed up on the ho
 - `meta_template_library_refresh_meta` (2026-10-12): `last_refreshed_at` = **2026-10-08 08:02:31 UTC**, `last_refresh_entry_count` = 25, **`last_refresh_error` = null**. That refresh ran **after** GV Mart's WABA became the newest connected one (7 Oct 07:50), so it used GV Mart's token and **succeeded**. The cache holds 25 rows (oldest `updated_at` 8 Oct 08:02:31).
 - The failure path writes `last_refresh_error` without touching the cache (`metaTemplateLibraryRepo.recordRefreshFailure`), and no failure is recorded. The cache is last-known-good by construction.
 - The next attempt is due once the cache is more than 7 days old: **15 Oct 08:02 UTC, at the hourly tick.** It will use whatever `findAnyConnected` returns then, so that tick is the first real test of this hypothesis.
+
+> **Dated, testable prediction (recorded 2026-10-12 on the owner's instruction).** On **15 Oct 2026 at about 08:02 UTC** the refresh runner will attempt a refresh using whatever `findAnyConnected` returns (GV Mart, unless a newer connected WABA exists by then). **If it fails** (`meta_template_library_refresh_meta.last_refresh_error` becomes non-null and `last_refreshed_at` stays at 2026-10-08 08:02:31 UTC): GV Mart's scope-less token is the cause, and the explicit-platform-WABA fix below is needed before the next scheduled attempt. **If it succeeds** (`last_refreshed_at` moves to about 15 Oct 08:02 UTC and the error stays null): the catalogue endpoint genuinely does not need WhatsApp scopes, and this item drops in priority (the arbitrary-tenant-token coupling remains, but is no longer a live failure). Either way it is answered on a known date. Check those two columns after 08:10 UTC on 15 Oct; the check is read-only. (Caveats: it assumes no newer WABA is connected before then, and that the runner is up. If the server is not restarted nothing changes; the hourly tick has been running since the last deploy on 1 Oct.)
 - **I cannot explain why a `public_profile`-only token succeeded.** GV Mart's sendability checks have failed since the day its WABA was created, so the token very likely had no WhatsApp scope on 8 Oct either. Two readings, neither verified: the catalogue endpoint does not need WhatsApp scopes, or that token had more scope on 8 Oct than it has now. Note that **the app access token does not work as a substitute:** `GET /message_template_library` with `APP_ID|APP_SECRET` returns HTTP 200 with **zero** entries (tested 2026-10-12, with and without filters), so some token with business context is genuinely required.
 
 **Client-visible dependence:** only the "Meta Official" tab of the Template Library (`routes/templateLibrary.js`, `GET /meta`) and `POST /meta/:id/use`, which read the cache. A stale cache means an entry Meta has since withdrawn can still be offered, and "use" would then fail at Meta with a described 502. Nothing else (broadcasts, flows, chat, billing) reads it.
@@ -479,6 +481,8 @@ This makes the `Sirah` row harmless on its own, and the next dead row too, but i
 - **Pinned by the `wabas` row id, not `waba_id` or `client_id`:** `362e1974-93dc-4ad9-ace2-8381f154f437` (confirmed 2026-10-12: one row for that client; `waba_id` `998094716164113`; current status `connected`).
 - **One transaction; exactly 1 row affected or it rolls back; the current value is recorded so the rollback is one statement.** Current value: **`'connected'`**.
 
+**How the audit row is attributed (changed 2026-10-12 on the owner's instruction).** The row must not credit the shared super_admin for something a person did out of band. Checked in `audit_log` (2026-10-12): `actor_type` is free text (no CHECK constraint); values in use are `meta_webhook` (19,427 rows), `system` (5,123), `admin` (960) and `client` (611); `actor_id` is a nullable `uuid` (NULL on all `meta_webhook` rows and on 26 `system` rows). **`'system'` is the only existing value that is not a person or a tenant, so it is used, with `actor_id` NULL.** Two caveats, stated so nobody has to rediscover them: (1) every other `system` row is an automated runner, and most of them put the *affected client's id* in `actor_id` (the sendability runner); I deliberately do not do that here, because it would attribute a manual change to the client; (2) `'system'` therefore blurs "a runner" and "a person at a prompt". The distinguishing signal is the **distinct action name `manual_db_change`** (no code keys on it or on `actor_type = 'system'`) and a `target` that states plainly that it was applied out of band, by whom and why. No new `actor_type` value is introduced. The target begins with the **client id**, so the row appears in that client's audit trail on the admin Client Detail page (`auditLogRepo.list` matches `target like <client id> || ': %'`). **"By whom" is written as "the project owner (git author Jesheeba)": the owner should confirm that wording before running.**
+
 **Statement 1 (apply):**
 ```sql
 DO $$
@@ -490,8 +494,12 @@ BEGIN
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION 'expected exactly 1 row, updated %', n; END IF;
   INSERT INTO audit_log (actor_type, actor_id, action, target)
-  VALUES ('admin', (SELECT id FROM admin_users ORDER BY created_at LIMIT 1), 'waba_status_changed',
-          '362e1974-93dc-4ad9-ace2-8381f154f437: connected -> failed (dead WABA row; see BUILD_PLAN 3.15)');
+  VALUES ('system', NULL, 'manual_db_change',
+          '30adfd9e-413f-4dbf-adcc-7fec1c522dbd: wabas row 362e1974-93dc-4ad9-ace2-8381f154f437 status connected -> failed. '
+          || 'MANUAL SQL CHANGE applied out of band (psql), not through the admin UI or any app route, '
+          || 'by the project owner (git author Jesheeba) at ' || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"')
+          || '. Reason: WABA 998094716164113 is not in its token''s scope and was being re-probed hourly; '
+          || 'see docs/ai-agent/BUILD_PLAN.md 3.15. Rollback: set status back to connected on that row id.');
 END $$;
 ```
 A `DO` block is a single atomic statement: any exception (the count assertion, the lock timeout, the audit insert) rolls back both writes. **Statement 2 (rollback):**
@@ -499,13 +507,16 @@ A `DO` block is a single atomic statement: any exception (the count assertion, t
 DO $$
 DECLARE n integer;
 BEGIN
+  SET LOCAL lock_timeout = '5s';
   UPDATE wabas SET status = 'connected'
    WHERE id = '362e1974-93dc-4ad9-ace2-8381f154f437' AND status = 'failed';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION 'expected exactly 1 row, updated %', n; END IF;
   INSERT INTO audit_log (actor_type, actor_id, action, target)
-  VALUES ('admin', (SELECT id FROM admin_users ORDER BY created_at LIMIT 1), 'waba_status_changed',
-          '362e1974-93dc-4ad9-ace2-8381f154f437: failed -> connected (rollback)');
+  VALUES ('system', NULL, 'manual_db_change',
+          '30adfd9e-413f-4dbf-adcc-7fec1c522dbd: wabas row 362e1974-93dc-4ad9-ace2-8381f154f437 status failed -> connected (ROLLBACK of the earlier manual change). '
+          || 'MANUAL SQL CHANGE applied out of band (psql) by the project owner (git author Jesheeba) at '
+          || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') || '.');
 END $$;
 ```
 **Verify after applying:** `select status from wabas where id = '…'` returns `failed`; then, at the next hourly tick (at most about 60 minutes), no new `sendability_registration_check_failed` row appears for client `30adfd9e…`. No session-level `SET` is used (`SET LOCAL` only, inside the block). **Not executed.**
@@ -528,6 +539,8 @@ END $$;
 | `oauth/access_token` long-lived exchange (101) | `POST` form body with `fb_exchange_token` | Parameters parsed: HTTP 400 code 190 about the dummy token |
 
 **Does it appear in an error path, as the access token did in `diagnostic_scope_check.js`?** On the evidence: no. `debugToken` throws `data?.error?.message || 'debug_token failed (status)'`, which is Meta's message, not the URL; a network error is rethrown raw, whose `message` is `fetch failed`. The remaining risk is that a *future* handler prints the error object or its `cause`, or that the container log captures something I could not see. **I cannot rule out the container log; whether the secret needs rotating is the owner's call and I have no evidence that it leaked.**
+
+**Decision (owner, 2026-10-12): DO NOT ROTATE the app secret now.** Recorded with its reasoning so nobody re-opens it without it: (1) there is no evidence of exposure (nothing in `audit_log`, no log line seen, no error path observed); (2) rotating the app secret re-issues **every client's token** (the long-lived tokens are derived under it), which means asking nine clients to re-authorise; (3) the same investigation established that **inconsistent token provisioning at onboarding is the root cause of three separate client failures** (3.15, Appendix A), so mass re-issue now would be done on a provisioning path that is itself unreliable, producing new failures on the day the old ones were diagnosed. **Instead:** fix the three call sites so the secret never touches a URL (below), then revisit rotation as a **scheduled hygiene task** once onboarding token scopes are fixed and verified, not as incident response. Re-open only on new evidence of exposure.
 
 **Fix, specified, not built:** (1) move `client_secret` and `client_id` into a `POST` form body for both token exchanges (lines 81 and 101); (2) send the app token for `debug_token` as an `Authorization: Bearer` header (line 127); (3) wrap `fetchWithTimeout` so a rethrown error carries only its `code` or `name`, never the URL or `cause`; (4) add a test that a thrown error from each of these three calls contains neither the app secret nor a client token.
 
