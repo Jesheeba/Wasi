@@ -731,8 +731,11 @@ chunks that scored highest. A question like "if I join the February batch can I 
 weekends later?" needs the batch list *and* the transfer policy. Retrieval returns one.
 
 **The cost is acceptable.** Section 12 has the arithmetic. At a 2,500-token knowledge
-base the input cost is ~₹0.22 per reply uncached and ~₹0.02 cached — within a rupee of
-what retrieval would cost once the embedding call is included.
+base the input cost is ~₹0.22 per reply (knowledge alone; ~₹0.26 for the whole prompt)
+uncached. **Corrected 2026-10-12: the "~₹0.02 cached" figure that stood here does not
+apply on Haiku 4.5.** The whole prompt (~3,000 tokens) is below Haiku 4.5's 4,096-token
+minimum cacheable prefix, so the cache never engages (decision 19). The uncached cost is
+still within a rupee of what retrieval would cost once the embedding call is included.
 
 **The budget.** Cap `knowledge_tokens` at **2,500 per client** in Phase 1. Enforce it at
 save time with a visible meter in the UI ("1,840 of 2,500 used"). A client who hits it
@@ -1103,13 +1106,22 @@ Cache read at 0.1× input, cache write at 1.25× input (5-minute TTL) or 2× (1-
 | | Per reply | Per 1,000 replies |
 | --- | --- | --- |
 | Meta service message | ₹0.115 | ₹115 |
-| Model — cache hit | ₹0.11 | ₹110 |
-| Model — cache write (miss) | ₹0.39 | ₹390 |
-| Model — no caching at all | ₹0.33 | ₹330 |
-| **All in, cache hit** | **~₹0.22** | **~₹220** |
-| **All in, cache miss** | **~₹0.51** | **~₹510** |
+| Model — no caching (what actually happens on Haiku 4.5 at these prompt sizes) | ₹0.33 | ₹330 |
+| **All in** | **~₹0.45** | **~₹445** |
+| *Model — cache hit, only if the prompt exceeded 4,096 tokens* | *₹0.11* | *₹110* |
+| *Model — cache write, same condition* | *₹0.39* | *₹390* |
+| *All in, cache hit / cache miss, same condition* | *~₹0.22 / ~₹0.51* | *~₹220 / ~₹510* |
 
-Worked example, cache hit: 2,800 cached tokens at $0.10/M = ₹0.025, plus 200 fresh at
+**Corrected 2026-10-12 (decision 19).** An earlier version of this table presented the
+cache-hit row (~₹0.22) as the expected case. It is not available at this spec's own
+sizes: Claude Haiku 4.5 has a **4,096-token minimum cacheable prefix**, and the prompt
+here is ~300 (rules and profile) + up to 2,500 (knowledge) + ~200 (conversation) ≈ 3,000
+tokens, so a `cache_control` marker silently does nothing (`cache_creation_input_tokens:
+0`, no error). The real per-reply figure is the uncached one, about **₹0.45 all in**, and
+the italic rows only apply if the model or the prompt size changes. Treat every margin
+calculation that used ₹0.22 as overstated by roughly 2x.
+
+Worked example, cache hit (hypothetical, see above): 2,800 cached tokens at $0.10/M = ₹0.025, plus 200 fresh at
 $1/M = ₹0.018, plus 150 out at $5/M = ₹0.066.
 
 **VERIFY** Meta's current free service-message allowance. There has historically been a
@@ -1143,9 +1155,11 @@ dictates prompt block order, and retrofitting it means restructuring the prompt.
 ### 12.3 The cap
 
 **Unlimited is not an option.** A busy client taking 2,000 inbound messages a month could
-generate 4,000 agent replies. At cache-hit rates that is ~₹890 all in; at cache-miss
-rates ~₹2,030. Sold as unlimited on a ₹1,499 plan, this feature loses money precisely on
-the clients who like it most.
+generate 4,000 agent replies. At the uncached cost that actually applies on Haiku 4.5
+at these prompt sizes that is ~₹1,780 all in (4,000 x ~₹0.445). The earlier ₹890 /
+₹2,030 figures assumed a cache that does not engage (decision 19). Sold as unlimited on
+a ₹1,499 plan, this feature loses money precisely on the clients who like it most, and
+on the corrected figure a single busy client exceeds the plan price outright.
 
 Both competitors meter it — AiSensy with message packs, Wati with credits. Neither
 offers it unlimited on a flat fee. There is no market pressure to.
@@ -1437,7 +1451,7 @@ Record the answers here as they are made.
 | 8 | Privacy policy rewritten and published (11.1) | **Open — blocks launch** |
 | 9 | Meta Tech Provider terms checked on third-party processing (11.3) | **Open — blocks launch** |
 | 10 | Retention period for `ai_replies.customer_text` | Open — 90 days proposed |
-| 11 | Highest migration number across all branches, and ordering against the Instagram branch | **Answered 2026-10-03: 085 on `master`.** `083_clients_last_login_at`, `084_payment_notifications`, `085_payment_reminder_schedules`. `feature/instagram-phase-1` holds `081_instagram_accounts` and `082_instagram_conversations_messages`. **Decision: Instagram lands first.** Its 081/082 are renumbered to the next free numbers, then the AI migrations take whatever follows. No AI numbers are assigned in this document (section 6) |
+| 11 | Highest migration number across all branches, and ordering against the Instagram branch | **Answered 2026-10-03: 085 on `master`.** `083_clients_last_login_at`, `084_payment_notifications`, `085_payment_reminder_schedules`. `feature/instagram-phase-1` holds `081_instagram_accounts` and `082_instagram_conversations_messages`. **Decision: Instagram lands first.** Its 081/082 are renumbered to the next free numbers, then the AI migrations take whatever follows. No AI numbers are assigned in this document (section 6) **Clarified 2026-10-12 (owner), see decision 21: "Instagram lands first" is a release-sequence statement, not a claim on specific integers. The AI build does not wait for Instagram; migrations need not be contiguous** |
 | 12 | State of `pgmigrations` on the shared database | **Answered 2026-10-03 (read-only query), and it is a problem.** Applied: ids 72–76 = `079_identity_token_version`, `080_messages_source`, `083_clients_last_login_at`, `084_payment_notifications`, `085_payment_reminder_schedules` (last run 2026-10-01). So **079 and 080 are applied** (an earlier belief that they were unrun was wrong). There is no `081` or `082` row. Consequence: Instagram's unapplied `081`/`082` sit below the applied `085` and `node-pg-migrate`'s order check would refuse them. They **must** be renumbered, not run with `--no-check-order`. **Action:** renumber the Instagram migrations before landing that branch, as part of decision 11 |
 | 13 | Uncommitted `routes/metaWebhook.js` changes (echo array read from `message_echoes`/`smb_message_echoes`/`messages`; recipient from `to`/`recipient_id`) | **Revised 2026-10-03: do not land as written.** They are not a fix for echo ingestion. The committed handler already reads `message_echoes` with `from`/`to`, which is the shape Meta documents, and it was never reached because the field is not subscribed (decision 14). The `value.messages` fallback is a latent hazard: the first dispatch branch in `router.post('/')` runs `handleInboundMessages` on any change carrying a `messages` array, so an echo in that shape would also be ingested as an inbound message from the business's own number, on top of being ingested as an echo. The new handler test passes (stubs only) but calls `handleMessageEchoes` directly, so it cannot cover dispatch. **Update, same day:** a concurrent session has since added a `field !== 'smb_message_echoes'` guard on that inbound branch plus `server/test/metaWebhookEchoRouting.test.js`, which drives the real router; with it, the two test files pass 13/13 and the hazard is closed. So the diff is safe to land only **together with that guard and router test, never the handler widening alone**. It still fixes nothing about the real failure, so landing it is not progress on decision 14. **Action:** land it as a hardening change, and add structure-only capture of the first live echoes (keys and types, no customer numbers or message text) so the payload shape can be confirmed. Still blocks agent day 1, as part of the echo subscription work |
 | 14 | Is `smb_message_echoes` subscribed and delivering in production, and is the payload shape confirmed against a live capture? (10.5) | **Answered 2026-10-03: NOT subscribed, so no echo has ever been sent to us. Not a handler bug.** Evidence, all read-only: (1) Meta's live webhook subscription for the app (`GET /<app-id>/subscriptions`, app credentials only, callback `https://wasi.sirahagents.com/webhooks/meta`, `active: true`) lists `messages`, `account_update`, `message_template_status_update`, `phone_number_name_update`, `message_template_quality_update`, `phone_number_quality_update`. **`smb_message_echoes`, `history` and `smb_app_state_sync` are absent**; Meta's Coexistence docs say all three are subscribed in App Dashboard > WhatsApp > Configuration, per app. (2) `audit_log` writes one row per delivered webhook field (`metaWebhook.js`, after the handler, whether or not any handler claimed it) and is retained since 2026-08-11: 15,126 `messages`, 128 `account_update`, 78 `message_template_status_update`, and **zero** for any `smb_*` or `history` field. (3) The webhook is healthy, so this is not an outage: `meta_webhook_log` shows roughly 300-700 deliveries a day over the last 14 days and 5 failures in total. (4) Production query: `messages` rows with `source = 'whatsapp_app'` = **0, all time**, across 10 connected WABAs, **7 of which are Coexistence** (`wabas.registration_is_on_biz_app = true`). Last 30 days: 3,895 inbound and 1,082 outbound messages, every one `source = 'api'`. No echo-related `audit_log` rows. `server/test/coexistenceEchoIngestion.test.js` does **not** answer this: it is stubs-only and feeds the handler payloads the author wrote, so it proves the handler tolerates those shapes, not that Meta sends them. The subscription (1) explains zero echoes on its own, and (2) rules out "a payload shape the handler drops": that would still have left an `audit_log` row for the field. (`meta_webhook_log` does not record field names, but `audit_log` does.) Whether owners reply from their phones is not visible to us at all, which is the point. Consequence: gate 4 cannot rely on `last_agent_reply_at` for phone replies, so `schedule_mode = 'outside_hours'` is **mandatory** for Coexistence clients and `'always'` is refused for them (10.5). (5) Checked separately: no contact in production has a phone number equal to any connected WABA's own number, so echoes have not been arriving disguised as ordinary `messages` and ingested as inbound either (the hazard described in decision 13 has never fired). **Not yet closed:** the payload shape is still unverified against a live capture. To close it, subscribe `smb_message_echoes` (a human action in the App Dashboard), send one message from a Coexistence number's own phone, and confirm an `audit_log` row for the field plus a `messages` row with `source = 'whatsapp_app'`. Do **not** subscribe `history` until a handler exists. **Past phone replies are not recoverable by us.** The Cloud API has no endpoint to read message history, and Meta's one-time `history` sync (up to 180 days, deliverable only within 24 hours of onboarding, once) was never subscribed, so that window has closed for all 7 Coexistence clients. Only offboarding and re-onboarding a client (with them accepting the history-sharing prompt) would replay it, and only with a `history` handler built first. Taken from Meta's docs via a summarized fetch: re-read the source before telling a client |
@@ -1445,6 +1459,12 @@ Record the answers here as they are made.
 | 16 | Handover wording: time-aware, or one honest static default (section 15)? | Open — time-aware preferred |
 | 17 | Who may grant AI consent (11.2)? | **Answered 2026-10-03: Owner and Admin only.** Not Manager, not Agent. It is a third-party data-processing agreement on the business's behalf, not an operational setting |
 | 18 | A flow engine exception at gate 5 | **Answered 2026-10-03: agent stays silent and logs `flow_error`**, a distinct reason from `flow_handled`, with an alert on a rising rate (section 13) |
+| 19 | Prompt caching in Phase 1 | **Answered 2026-10-12 (owner): no `cache_control` markers.** Reason: Claude Haiku 4.5's minimum cacheable prefix is **4,096 tokens** and this spec's prompt is ~3,000 (section 12.1), so a marker silently does nothing. Departs from section 12.2 ("Do not skip caching in v1"); section 12.1, 12.3 and 8.1 corrected in the same pass (the ~₹0.22 cache-hit figure is not the expected case; ~₹0.45 uncached is). Block order in section 9 is kept (stable blocks first) so caching stays available at no cost if the model or the prompt size changes. `tokens_cached` is still recorded on every reply, so the hit rate is measured, not assumed |
+| 20 | Token counting | **Answered 2026-10-12 (owner): use the API's own count (`messages.count_tokens`) for `knowledge_tokens`, not `ceil(chars / 3.5)`.** Reason: accuracy on Tamil and mixed Tamil-English text, which is most of the traffic; the character heuristic is conservative for Tamil but wrong in both directions for mixed script. Departs from section 8.3. A count call at save time adds latency and a network dependency to the knowledge-save path; that is accepted |
+| 21 | Migration numbering vs the Instagram branch | **Answered 2026-10-12 (owner): the next free number wins, and there is no conflict.** "Next free" is a rule against pre-assigning numbers in documents. Decision 11's ordering is about Instagram landing before the AI work in the release sequence, not about owning specific integers. Migrations need not be contiguous: AI work takes the next free number now, and Instagram renumbers to whatever is free when it lands. Do not block the AI build on Instagram. First use: `086_chats_last_inbound_at` (unit 0.1, commit `a640571`) |
+| 22 | Model for Phase 1, and the Haiku 5.5 question | **Answered 2026-10-12 (owner): keep Claude Haiku 4.5 through Phase 1**, so the shadow run produces a cost baseline against a fixed variable. **Open as its own evaluation task, after Phase 1:** Claude Haiku 5.5 is listed at $0.10 / $0.50 per MTok for prompts up to 100K (against $1 / $5), roughly 10x cheaper; it rejects non-default sampling parameters (this spec pins `temperature` 0.3, which would be a 400); and its cache minimum is lower, so caching may engage. Evaluate cost, the temperature handling, and reply quality on the shadow set Phase 1 will have produced. **Every per-message cost figure in section 12 may move by an order of magnitude**, and with it the unit economics behind the add-on price (decision 3) |
+| 23 | Echo subscription before auto-send | **Hard rule, 2026-10-12 (owner): `smb_message_echoes` must be subscribed AND verified live before Phase 2b (auto-send) for any Coexistence client.** Verified means a real echo captured: an `audit_log` row for the field and a `messages` row with `source = 'whatsapp_app'` (decision 14). The agent must not go live on a Coexistence client while it is blind to phone replies. Until then gate 4's only live protection for those clients is the `outside_hours` schedule (section 10.5), and unit 0.2's echo write is inert. Not subscribing is not a Phase 0 or Phase 1 blocker (shadow sends nothing); it is a Phase 2b blocker |
+| 24 | Consent and privacy before ANY model call on real traffic, shadow mode included | **Hard precondition on Phase 1, ahead of every Phase 1 unit (owner, 2026-10-12).** Shadow mode sends customer message text and the client's knowledge to a third-party model provider; "nothing is sent to the customer" is not "nothing leaves our infrastructure". Needs: (a) a privacy policy clause covering it (section 11.1; the policy is placeholder text today); (b) a consent position per client, recorded (section 11.2); (c) a decision on whether clients must tell their own customers that an AI processes their messages. **(c) is a legal question, not an engineering one. It needs an actual lawyer, not our judgement**, and so does the wording of (a). Subsumes decisions 8 and 9, which now block Phase 1, not just launch |
 
 ---
 

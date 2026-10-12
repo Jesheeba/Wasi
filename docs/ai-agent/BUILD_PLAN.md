@@ -250,7 +250,7 @@ GV Mart runs entirely on the **demo client**, not on its own Wasi client.
 
 **Consequences**
 - The demo forward (data on the demo client's `wabas` row; `forwardRunner.js` has no demo-specific code) **cannot be removed** until GV Mart is moved to their own client id.
-- **Phase 0.5 (`clients.status` enforcement) MUST NOT ship before GV Mart is on a real, `active` client row.** Today GV Mart's own client is `pending_setup`; enforcement that blocks non-`active` clients would cut off their own row the moment any traffic is attributed to it (their own key or WABA). It is also a wider issue: of the 14 non-test clients, 8 are `pending_setup` (5 of them with a connected WABA, none having sent in the last 14 days) and 6 are `active` (4 sent in that window, the demo client among them). Enforcement would block those 5 connected `pending_setup` clients as soon as they send. Fix the status values first, then enforce.
+- **[Superseded 2026-10-12 by owner decision: Phase 0.5 no longer waits on this. It blocks `suspended` only, and 0 clients are suspended, so it cannot cut anyone off. GV Mart's move is gated on the token fix (2.1), not on 0.5.] The original text follows, and applies to any design that blocks non-`active` clients: Phase 0.5 (`clients.status` enforcement) MUST NOT ship before GV Mart is on a real, `active` client row.** Today GV Mart's own client is `pending_setup`; enforcement that blocks non-`active` clients would cut off their own row the moment any traffic is attributed to it (their own key or WABA). It is also a wider issue: of the 14 non-test clients, 8 are `pending_setup` (5 of them with a connected WABA, none having sent in the last 14 days) and 6 are `active` (4 sent in that window, the demo client among them). Enforcement would block those 5 connected `pending_setup` clients as soon as they send. Fix the status values first, then enforce.
 - **Fix:** create or activate a proper client row for GV Mart, migrate their credentials, chats, messages and templates onto it, verify their sends still work, then remove the demo forward.
 - **Risk:** this touches a live client's message history. Do it as a transaction with a verified rollback, during a quiet window, and prove the row counts match before and after.
 
@@ -644,7 +644,9 @@ The model may return `NEEDS_HUMAN`. That is a success, not a failure. It routes 
 
 Claude Haiku 4.5 at $1 / $5 per million tokens (input / output).
 
-**Prompt caching is not a saving at Wasi's traffic.** Cache writes cost 1.25× and reads 0.1×, with a 5-minute default TTL. On sparse, bursty traffic the write cost is paid repeatedly and the read is rarely hit. Caching loses money here. Revisit only when a single client sustains more than one inbound message per minute during business hours.
+**Prompt caching does not engage at Wasi's prompt size (corrected 2026-10-12).** The earlier reason here was traffic shape: cache writes cost 1.25× and reads 0.1×, with a 5-minute default TTL, and on sparse, bursty traffic the write cost is paid repeatedly. That is true but secondary. The decisive reason is that **Haiku 4.5's minimum cacheable prefix is 4,096 tokens** and the spec's prompt is about 3,000 (rules and profile ~300, knowledge up to 2,500, conversation ~200), so a cache marker silently does nothing (`cache_creation_input_tokens: 0`). Record `tokens_cached` anyway so it is measured. This also means `SPEC.md` §12's "cache hit ~₹0.22" figure is not the expected case: the real figure is about **₹0.45 per reply all in**. See `SPEC.md` decisions 19 and 20.
+
+**Per-message cost assumptions may move by an order of magnitude.** Haiku 4.5 is held through Phase 1 on purpose, so the shadow run produces a baseline against a fixed variable. Claude Haiku 5.5 is listed at $0.10 / $0.50 per MTok (prompts up to 100K) against $1 / $5, roughly 10x cheaper, and it rejects non-default sampling parameters, so the spec's `temperature` 0.3 would be a 400. Whether to move is its own evaluation task after Phase 1 (section 7), not something to decide mid-build. Do not publish a per-message price, or size the add-on, on the Haiku 4.5 figures alone.
 
 `cost_paise` is stored as an **integer**. Never a float. Never a currency type.
 
@@ -690,6 +692,10 @@ Today `clients.status` enforces nothing. A suspended client can still send.
 
 Enforce it at the send path, not the route — there are several routes and one send path. `messagingService.sendChatMessage` and `getSendableWaba` are the right places. A suspended client's send fails with a clear error code; the agent does not run at all.
 
+**Gate (owner decision, 2026-10-12): P4 is NOT a gate on this unit.** The unit blocks `suspended` only. 0 of 44 client rows are `suspended`, so it is a no-op today and cannot cut anyone off. P4 (GV Mart on a real, active row with a working token) remains a gate on **3.5, moving GV Mart**, and on any design that blocks non-`active` clients. Do not conflate the two again. The gate that remains for 0.5 is the per-person admin audit (3.9).
+
+**Rejection logging: carry its own, do not wait for 3.6.** Recommended 2026-10-12. 3.6 (a general request log) is unbuilt and unscheduled, and waiting would leave this the one send rejection nobody can see for as long as it takes. Write a single `audit_log` row per client per hour (action `send_rejected_client_suspended`, `actor_type` `system`, `target` the client id plus the error code), throttled by an existence check on the last hour. The throttle is not optional: a suspended client's integration can retry every second, and the unthrottled version of this is exactly the 1,650-row flood described in 3.14. It is queryable with the existing audit tooling today and is replaced, not duplicated, when 3.6 lands. Do not widen it to `session_window_closed` in the same unit; that is a separate, smaller change.
+
 **Phase 0 definition of done:**
 - Both columns exist, are populated going forward, and 0.1 is backfilled.
 - A test proves `last_agent_reply_at` is **not** written by a broadcast, a flow, or a Hub API send.
@@ -703,6 +709,14 @@ Enforce it at the send path, not the route — there are several routes and one 
 ## 7. Phase 1 — single-turn reply, shadow mode
 
 The agent runs, produces a reply, and **does not send it.** Replies are stored and reviewed.
+
+> **HARD PRECONDITION (P6), ahead of every Phase 1 unit — added 2026-10-12, owner-accepted.** Shadow mode sends customer message text, and the client's knowledge, to a third-party model provider. It sends nothing to the customer, but it is **not** "nothing leaves our infrastructure", and shadow mode runs on real traffic. No Phase 1 unit may make a model call on real client traffic until all three of these exist:
+>
+> 1. **A privacy policy clause** that says AI features send message content to a named provider, what is and is not sent, retention, whether it is used for training, and that the feature is off unless the client turns it on (`SPEC.md` §11.1). The policy is placeholder text today.
+> 2. **A consent position per client**, recorded: who agreed, when, to which exact wording (`SPEC.md` §11.2, `ai_agent_consent_events`). Shadow mode runs only for a client who has agreed, one client first.
+> 3. **A decision on whether clients must tell their own customers** that an AI processes their messages.
+>
+> **Item 3 is a legal question, not an engineering one, and so is the wording of item 1. It needs an actual lawyer, not our judgement.** Engineering can build the consent record and the toggle; it cannot decide what the clause must say, or whether the client's own customers must be told, and must not guess. This does not block Phase 0, or Phase 1 code written and tested against stubs.
 
 **Build:**
 1. Agent configuration per client — enabled flag, `knowledge_md`, `knowledge_tokens` (capped 2,500), tone, escalation rules, business hours.
@@ -722,6 +736,8 @@ The agent runs, produces a reply, and **does not send it.** Replies are stored a
 - The refusal rate is known.
 - A human has read 50 drafts and judged them send-worthy or not, and that judgement is recorded.
 
+**After Phase 1 — evaluation task E1: Claude Haiku 5.5 (opened 2026-10-12, not part of Phase 1).** Haiku 4.5 is held through Phase 1 so the shadow run is a cost baseline against a fixed variable. Once the shadow set exists, evaluate Haiku 5.5 as its own task: (a) measured cost per turn on the same shadow messages; (b) what to do about sampling, since it rejects non-default `temperature` and the spec pins 0.3; (c) whether reply quality and the `NEEDS_HUMAN` refusal behaviour hold on the shadow set; (d) whether its lower cache minimum makes caching engage. A roughly 10x per-token price difference changes the unit economics behind the add-on price, so the answer feeds `SPEC.md` decision 3, not just a model setting.
+
 ---
 
 ## 8. Phase 2 — suggested reply, then live
@@ -731,6 +747,8 @@ Two sub-steps. Do not merge them.
 **2a — suggested reply.** The draft appears in the Wasi inbox as a one-click suggestion. A human sends it, edits it, or discards it. Record which. This is the last cheap source of evaluation data and it is also a feature worth selling on its own.
 
 **2b — auto-send, one client.** The agent sends when all gates pass. Start with the single client whose shadow results were best. Keep a kill switch per client that takes effect on the next turn, not the next deploy.
+
+> **HARD RULE (owner, 2026-10-12): the `smb_message_echoes` subscription must be live and verified BEFORE 2b.** 7 of the 9 connected WABAs are Coexistence, and the app is not subscribed to the echo field today (0 echo-sourced messages, ever). While it is not, `last_agent_reply_at` cannot move for a reply sent from the owner's own phone, gate 4 cannot see the human, and the agent would answer on top of them in front of their customer. "Verified" means a real echo captured: an `audit_log` row for the field and a `messages` row with `source = 'whatsapp_app'`. Until then, the only protection for those clients is the `outside_hours` schedule, which narrows the exposure and does not close it. The agent must not go live on a Coexistence client while it is blind to phone replies. Subscription also has an ordering constraint already recorded in 3.0: production must run `cb27227` first. Do not subscribe `history` until a handler exists.
 
 **Phase 2 definition of done:**
 - Suggestion acceptance rate over 70% unedited, measured over 100 suggestions.
