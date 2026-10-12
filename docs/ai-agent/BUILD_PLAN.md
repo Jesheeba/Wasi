@@ -32,7 +32,7 @@ This document has two jobs.
 | `server/scripts/set-password.js` | Written. Hidden prompt, 14-character minimum, bumps `token_version`, writes an audit row, never logs the value. **Uncommitted.** |
 | Echo ingestion | **Not fixed; corrected 2026-10-12.** The code path exists (`907b71d`), but the app is still **not subscribed** to `smb_message_echoes`: a live `GET /{app-id}/subscriptions` returned `messages, account_update, message_template_status_update, phone_number_name_update, message_template_quality_update, phone_number_quality_update` and nothing else. No echo has ever been delivered (zero echo rows in `audit_log`, zero `messages.source='whatsapp_app'`). Subscribing is a human dashboard action, and per 3.0 it must not happen before production runs `cb27227`. **VPS note, 2026-10-12:** two numbers checked there (TNPSC and the demo) report `platform_type CLOUD_API` and `is_on_biz_app` false. That does **not** generalise: the stored `wabas.registration_is_on_biz_app` is **true for 7 of the 10 connected WABAs** (false: TNPSC, demo; unknown: Sirah). The echo thread is therefore **not** de-prioritised on current evidence; see Appendix A. *(Verification note 2026-10-12: the dashboard subscription state and the echo payload shape were not re-checked in this pass. `SPEC.md` decision 14 still lists the payload shape as not confirmed against a live capture.)* |
 | `metaWebhook.js` field guard | Fixed. `field !== 'smb_message_echoes'` now prevents echoes being processed as inbound messages. **Verified 2026-10-12:** guard present at `server/src/routes/metaWebhook.js:575`, committed in `cb27227`; the file has no uncommitted changes. **Not in production:** `cb27227` (3 Oct) is after `511ea49` (1 Oct), so the deployed server has no guard; see 3.0. |
-| TNPSC diagnosis | **Corrected 2026-10-12.** The earlier claim (stored WABA `894384560175844` is the wrong one; Meta says `1649658386105751` owns the phone) is **withdrawn**: `diagnostic_scope_check.js` on the VPS reports "stored phone_number_id `1222704867593433` belongs to this WABA" and Meta returns that number as `TNPSC Mentors`, `CLOUD_API`, quality GREEN, status CONNECTED (source: VPS diagnostic session reported by the project owner, 2026-10-12). The stored WABA/phone pairing is right. The real problem is **scope targeting**: the token's `whatsapp_business_management` granular scope now targets only `1649658386105751`, not the stored WABA, so reads succeed and writes fail (`#200`). See Appendix A. **Still open:** what `1649658386105751` is. It is not necessarily a portfolio id; see 2.1. |
+| TNPSC diagnosis | **Corrected 2026-10-12.** The earlier claim (stored WABA `894384560175844` is the wrong one; Meta says `1649658386105751` owns the phone) is **withdrawn**: `diagnostic_scope_check.js` on the VPS reports "stored phone_number_id `1222704867593433` belongs to this WABA" and Meta returns that number as `TNPSC Mentors`, `CLOUD_API`, quality GREEN, status CONNECTED (source: VPS diagnostic session reported by the project owner, 2026-10-12). The stored WABA/phone pairing is right. The real problem is **scope targeting**: the token's `whatsapp_business_management` granular scope now targets only `1649658386105751`, not the stored WABA, so reads succeed and writes fail (`#200`). See Appendix A. **Still open:** what `1649658386105751` is (see 2.1). **TNPSC appears to have several WABAs** (`894384560175844` stored and working; `1649658386105751`; and `998094716164113`, "Tnpsc Mentors" ending 9808, which sits on the `Sirah` client's row, see 3.15). We do not know which they intend to use: a question for the client, not a database fix. |
 | Encryption | `server/src/utils/encryption.js` — AES-256-GCM, key derived from `SERVER_SECRET`. Local development cannot decrypt production tokens. **This is correct behaviour and must not be "fixed".** |
 
 ### 1.2 What does not exist
@@ -78,7 +78,7 @@ One run of `debug_token` prints the granted scopes, the token's owning app and t
 > - **TNPSC (`#200`):** scopes present, but `granular_scopes` `target_ids` = `["1649658386105751"]`, which is not the stored WABA. Reads work, writes do not.
 > - **GV Mart (`#100`, subcode 33):** the token's scopes are `public_profile` only: no `whatsapp_business_management`, no `whatsapp_business_messaging`, no granular scopes. Every call is HTTP 400. This also explains the `sendability_registration_check_failed` rows (my count from `audit_log`, 2026-10-12: 123 on GV Mart's current client, 47 on its deleted predecessor, 573 on `Sirah`, 744 in total; the VPS session's figure of 241 was not reproduced).
 > - **Demo (`983390651411856`):** both scopes, granted to all targets, all three calls HTTP 200. Healthy.
-> - **Sirah Digital's own WABA (`351363664731426`) is healthy**: both scopes, all three calls HTTP 200 (source: VPS diagnostic session reported by the project owner, 2026-10-12). The `#100` this document attributed to "Sirah Digital" is the separate **`Sirah` client's** stored WABA (`998094716164113`), which returns code 100 subcode 33; see 3.13. That attribution is my inference from the matching error code, not something the script printed. **Evokz is still not diagnosed:** run it before concluding.
+> - **Sirah Digital's own WABA (`351363664731426`) is healthy**: both scopes, all three calls HTTP 200 (source: VPS diagnostic session reported by the project owner, 2026-10-12). The `#100` this document attributed to "Sirah Digital" is the separate **`Sirah` client's** stored WABA (`998094716164113`), which returns code 100 subcode 33; see 3.15. That attribution is my inference from the matching error code, not something the script printed. **Evokz is still not diagnosed:** run it before concluding.
 > - All tokens checked are `SYSTEM_USER` tokens under the same app (`Sirah CRM Wp`, app id `27135450269410430`). **The system user is per business portfolio, not per client**: `Sirah` and `Sirah Digital` share user id `122106946323459883` (same business), while demo, TNPSC and GV Mart have different ids. Working hypothesis, not established: the WhatsApp permissions were granted inconsistently at onboarding. GV Mart's `public_profile`-only token matches the `not_authorized` failure already documented for Embedded Signup (the app was never authorised for WhatsApp).
 > - **Open question on `1649658386105751`:** the VPS session guessed it is "probably their business portfolio id". In-repo evidence points the other way: at connect time (17 Sep) our own discovery recorded `wabaTargetIds = [1649658386105751, 894384560175844]` in `wabas.connect_diagnostics`, and `granular_scopes` `target_ids` for `whatsapp_business_management` are WABA ids; and 8 `messages` webhooks keyed by `1649658386105751` arrived 24 Sep to 8 Oct (`audit_log`), and Meta keys a webhook entry by WABA id. The decisive check is one call on the VPS with TNPSC's token: `GET /1649658386105751?fields=name` and `/phone_numbers`.
 
@@ -314,9 +314,28 @@ The correct model is **phone numbers as their own table under a WABA** — a WAB
 
 **Spec, not built:** move them into a tracked `scripts/diagnostics/` directory; pass the token as an `Authorization: Bearer <token>` header, never in a URL; and redact in every `catch` (print `err.code` and a scrubbed message, never the raw URL). **Does Meta accept Bearer?** Tested 2026-10-12 with the app access token: HTTP 200 with a `Bearer` header (and with `OAuth`) on a node read (`/{app-id}?fields=name`), on `/debug_token`, and on `/{app-id}/subscriptions`. Meta's messaging-limits page also uses an `Authorization: Bearer` header in its example for the phone-number node. **Not tested** with a client system-user token against every endpoint these scripts use (that needs the VPS); the application already sends Bearer for every non-GET Graph call.
 
-**Paging URLs leak the token even when Bearer is used.** Meta's `paging` object embeds the token in the response body: a templates response carries `"next": "https://graph.facebook.com/v25.0/…/message_templates?access_token=<TOKEN>&…"`. So printing a full response leaks it regardless of how the request was authenticated. **Rule for every diagnostic: redact `paging.next` and `paging.previous` (and any `access_token=` fragment) before anything is printed.** (Source: VPS diagnostic session reported by the project owner, 2026-10-12.) Two more places to fix in the application itself: `metaClient.debugToken` builds its URL with `input_token` **and** `access_token=${META_APP_ID}|${META_APP_SECRET}` as query parameters (`metaClient.js:123-127`), so the app secret is in a URL; and `graphFetch` puts the client token in the query on every GET (`metaClient.js:49`).
+**Paging URLs leak the token even when Bearer is used.** Meta's `paging` object embeds the token in the response body: a templates response carries `"next": "https://graph.facebook.com/v25.0/…/message_templates?access_token=<TOKEN>&…"`. So printing a full response leaks it regardless of how the request was authenticated. **Rule for every diagnostic: redact `paging.next` and `paging.previous` (and any `access_token=` fragment) before anything is printed.** (Source: VPS diagnostic session reported by the project owner, 2026-10-12.) The application's own client has the same problem, and worse for the app secret: see 3.16. (`graphFetch` also puts the client token in the query on every GET, `metaClient.js:49`.)
 
-**`server/scripts/diagnostics/probe_waba.js` was written 2026-10-12 (uncommitted, not yet run)** to probe `1649658386105751` with TNPSC's stored token: `--token-from 894384560175844 --target 1649658386105751`. It is read-only (GETs, one POST to `debug_token`; database in `begin read only`), sends the token only in an `Authorization: Bearer` header, drops `paging`, scrubs the token and `access_token=` fragments from everything printed (checked against a synthetic token and paging URL: nothing leaks), and masks phone numbers to the last four digits unless `--show-phone` is given. It prints scopes and `granular_scopes` `target_ids`, the target node, its phone numbers, both tier fields per number, templates and `subscribed_apps`. Run on the VPS only (`docker exec -w /app/server wasi-crm node scripts/diagnostics/probe_waba.js …`, or pipe the file in on stdin).
+**`server/scripts/diagnostics/probe_waba.js` is committed (written 2026-10-12; not yet run against Meta)** and probes `1649658386105751` with TNPSC's stored token: `--token-from 894384560175844 --target 1649658386105751`. Read-only (GETs; database in `begin read only`); token only in an `Authorization: Bearer` header (except `debug_token`, which Meta only accepts with `input_token` as a query parameter; POST is refused, tested); `paging` dropped; token, its URL-encoded and JSON-escaped forms, and `access_token=` fragments scrubbed from everything printed; phone numbers masked to the last four digits unless `--show-phone`. Run on the VPS only (`docker cp` it in, then `docker exec -w /app/server wasi-crm node <path>/probe_waba.js …`, or pipe it on stdin).
+
+**What its redaction was actually tested on** (`server/test/probeWabaRedaction.test.js`: the real `probe()` driven against a local fake Graph server, with a synthetic token containing `|`, `+`, `/` and `=` so its raw and URL-encoded forms differ; no database, no Meta):
+1. a success body with an `access_token` key inside a data object;
+2. `paging.next` and `paging.previous`, both carrying the URL-encoded token;
+3. a Graph error body whose message embeds the **raw token** and a URL with `access_token=<encoded token>`;
+4. the `debug_token` success path (including a stray `access_token` field in the data);
+5. a **non-JSON (HTML) 200 body** containing the raw and encoded token;
+6. a **dropped connection** (socket destroyed mid-request), i.e. the network-error path;
+7. the per-number tier-field calls (one 200, one 400 whose message echoes the token);
+8. phone-number masking.
+The assertions: the raw token, its URL-encoded form and any `access_token=<value>` never appear in anything printed; the full phone number never appears; `paging` is replaced, not printed.
+
+**What it was not tested on:**
+- **Real Meta responses.** Never run against Meta. The scrubber drops known key names and string-replaces the token's raw, URL-encoded and JSON-escaped forms; a token appearing under a different encoding (base64, truncated, split) would pass through.
+- **The real `undici` error `cause` chain** for DNS and TLS failures (only a reset connection was exercised). `graph()` returns `err.code || err.name` and never prints `err.message` or `cause`, which makes it safe by construction, not by observation across failure modes.
+- **`loadToken` errors** (a `pg` or `decrypt` failure). `main`'s catch prints `redactString(err.message, null)`; the token is not yet known at that point and `decrypt` errors do not contain plaintext, but I did not exercise it.
+- **Uncaught exceptions** outside `main`'s catch (for example a bug in `sanitize` on an unexpected shape): Node's default crash output prints the message and stack unfiltered.
+- **The `--show-phone` path**, and any output redirected through other tools.
+The diagnostic that leaked a real token did so through an error path that looked safe on inspection; the same caveat applies here. **Scrub the output file before reading it regardless.**
 
 ### 3.11 `deploy.sh` has diverged on the VPS
 
@@ -327,7 +346,7 @@ The checkout has an uncommitted modification to `deploy.sh` (backed up on the ho
 **`messaging_limit_tier` returns a value on some numbers.** On phone `391453774055149` (Sirah Digital) the VPS script printed `"messaging_limit_tier": "TIER_250"` and "field name is correct" (source: VPS diagnostic session reported by the project owner, 2026-10-12). The database agrees: `TIER_250` is stored for Brainlit, Evokz, GV Mart (as of 7 Oct), RD interblocks and Sirah Digital; `unknown` for Fortune Innovatives, Know Mind, TNPSC and the demo (`wabas.messaging_tier`, 2026-10-12). Earlier text in this document that called the field wrong, and then deprecated, is superseded.
 
 **Correction to the premise "our refresh treats an absent value as a failure."** It does not. `messagingTierRefreshRunner.refreshOne` (`messagingTierRefreshRunner.js:42-48`) writes `'unknown'` when the field is absent and stamps `messaging_tier_checked_at = now()`, i.e. it handles absence as a successful "no value". That is why Fortune, Know Mind, TNPSC and the demo show `unknown` with a check from today. What the code does get wrong:
-1. **A Graph error never advances the checked-at column**, so a number whose call always fails is "due" on every hourly tick forever (`Sirah`: `messaging_tier_checked_at` is null; GV Mart likewise since its token broke). The same pattern is in the sendability monitor (3.13).
+1. **A Graph error never advances the checked-at column**, so a number whose call always fails is "due" on every hourly tick forever (`Sirah`: `messaging_tier_checked_at` is null; GV Mart likewise since its token broke). The same pattern is in the sendability monitor (3.14).
 2. **`unknown` is ambiguous downstream.** It means "Meta returned no value", which is not "no tier assigned yet"; `alertRunner` and the broadcast preflight both treat it as "no cap known".
 
 **What distinguishes the numbers that return it? Hypotheses only.** Tested against every attribute stored in `wabas` (code verification status, platform type, `is_on_biz_app`, quality rating, creation date, outbound volume), nothing separates the two groups cleanly:
@@ -353,13 +372,60 @@ The checkout has an uncommitted modification to `deploy.sh` (backed up on the ho
 
 **`code_verification_status` = `EXPIRED`** on the demo and TNPSC numbers (Sirah Digital's is `NOT_VERIFIED`). Meta's phone-number page defines `EXPIRED` only for `name_status`. On the evidence it is benign: the demo and TNPSC are registered, `CONNECTED` and sending. It would matter only if a number needed re-registration.
 
-### 3.13 The `Sirah` client's WABA row is probed every hour and always fails
+### 3.13 `findAnyConnected` picks the newest connected WABA with no health filter
 
-**Record of the investigation, 2026-10-12.** Sources are named per line; the VPS lines are from the VPS diagnostic session reported by the project owner, 2026-10-12, the rest are database and code reads.
+**Investigated read-only, 2026-10-12. Result: not currently broken; a fragile choice that will fail silently the day it picks a bad token.** This corrects the working assumption (from the VPS session) that the template-library refresh has been broken for the whole platform for five days.
+
+**Callers** (grep across `server/src`): **one.** `metaTemplateLibraryRefreshRunner.refreshNow()` (`metaTemplateLibraryRefreshRunner.js:25`), reached from (a) its hourly `tick()` when the cache is older than 7 days and (b) the admin route `POST /api/admin/template-library/meta/refresh` (`admin.js:884`). It decrypts the returned WABA's token and calls `GET /message_template_library`, whose content is Meta's global catalogue (no client data), then upserts and prunes `meta_template_library_cache`.
+
+**What the selection does:** `select * from wabas where status = 'connected' order by created_at desc limit 1` (`wabasRepo.js:40-42`). Today that is **GV Mart** (created 7 Oct 07:50 UTC), whose token has `public_profile` only (Appendix A).
+
+**What has actually failed because of it: nothing recorded.**
+- `meta_template_library_refresh_meta` (2026-10-12): `last_refreshed_at` = **2026-10-08 08:02:31 UTC**, `last_refresh_entry_count` = 25, **`last_refresh_error` = null**. That refresh ran **after** GV Mart's WABA became the newest connected one (7 Oct 07:50), so it used GV Mart's token and **succeeded**. The cache holds 25 rows (oldest `updated_at` 8 Oct 08:02:31).
+- The failure path writes `last_refresh_error` without touching the cache (`metaTemplateLibraryRepo.recordRefreshFailure`), and no failure is recorded. The cache is last-known-good by construction.
+- The next attempt is due once the cache is more than 7 days old: **15 Oct 08:02 UTC, at the hourly tick.** It will use whatever `findAnyConnected` returns then, so that tick is the first real test of this hypothesis.
+- **I cannot explain why a `public_profile`-only token succeeded.** GV Mart's sendability checks have failed since the day its WABA was created, so the token very likely had no WhatsApp scope on 8 Oct either. Two readings, neither verified: the catalogue endpoint does not need WhatsApp scopes, or that token had more scope on 8 Oct than it has now. Note that **the app access token does not work as a substitute:** `GET /message_template_library` with `APP_ID|APP_SECRET` returns HTTP 200 with **zero** entries (tested 2026-10-12, with and without filters), so some token with business context is genuinely required.
+
+**Client-visible dependence:** only the "Meta Official" tab of the Template Library (`routes/templateLibrary.js`, `GET /meta`) and `POST /meta/:id/use`, which read the cache. A stale cache means an entry Meta has since withdrawn can still be offered, and "use" would then fail at Meta with a described 502. Nothing else (broadcasts, flows, chat, billing) reads it.
+
+**The fragility, stated plainly:** (1) the token used is an arbitrary client's, chosen by creation date, so a disconnected, revoked or scope-less newest WABA makes the refresh fail; (2) it couples a platform function to one tenant's credential and rate limit; (3) on failure `last_refreshed_at` does not advance, so it retries hourly forever (the bug class in 3.14), with only `last_refresh_error` to show for it, which surfaces only on the admin Settings page.
+
+**Fix, specified, not built.** Options:
+| Option | Notes |
+|---|---|
+| **A. Health filter:** `where status = 'connected' and sendable is true order by …` (fall back to any connected) | Smallest change; still an arbitrary tenant's token, and `sendable` is null for new rows |
+| **B. Explicit platform WABA:** an env var (for example `PLATFORM_WABA_ID`) naming a WABA Wasi controls, used for every platform-level Graph call; fall back to A if unset or unhealthy | Deterministic and no tenant coupling. The demo client's WABA (`983390651411856`) is the natural candidate: healthy, both scopes on all targets, already the platform's billing-message sender |
+| C. App access token | **Does not work** (empty result, tested) |
+Recommended shape: B with A as the fallback, record which WABA id each refresh used in `meta_template_library_refresh_meta`, and apply the 3.14 backoff so a bad token produces one alert rather than an hourly retry.
+
+### 3.14 A permanently failing probe is retried forever: a bug class, not a quirk
+
+**This is the mechanism behind ~1,650 audit rows from one dead WABA row (3.15) and the same shape in two more places.** Corrected 2026-10-12: the earlier "573 failures" was one of three counts; the row produced 574 + 573 + 503 ≈ **1,650** audit rows.
+
+**The rule being violated:** a periodic job selects "due" rows by `checked_at is null or checked_at < now() - interval`, and **only the success path writes `checked_at`**. A row that fails every time is therefore due on every tick, forever. Instances in this codebase:
+| Runner | "Due" condition | Failure path writes | Observed |
+|---|---|---|---|
+| `sendabilityMonitorRunner.tick` (hourly) | `registration_checked_at` null or > 4 h | audit rows only (3 per cycle) | `Sirah` row: exactly 60-minute gaps, 24 per day, 1,650 audit rows; GV Mart: 124 failures at 24 per day since 7 Oct |
+| `messagingTierRefreshRunner.tick` (hourly) | `messaging_tier_checked_at` null or > 24 h | console only | `Sirah`: `messaging_tier_checked_at` is null; same hourly retry |
+| `metaTemplateLibraryRefreshRunner.tick` (hourly) | `last_refreshed_at` older than 7 days | `last_refresh_error` only | not yet triggered (3.13) |
+(An absent *value* is handled correctly: the tier runner stores `'unknown'` and stamps `checked_at`. It is the failed *call* that does not.)
+
+**Spec, not built.** A shared backoff for all three, so a dead row costs a handful of attempts and one alert instead of 24 rows a day:
+1. **Advance the clock on failure too.** On every failed attempt write the attempt time and increment a **consecutive-failure counter**; reset both on success.
+2. **Increasing interval:** failures 1 to 3 retry hourly (transient blips); failures 4 to 10 retry daily; failure 11 **parks** the row (no further automatic attempts).
+3. **One alert on parking**, deduped through `alertEventsRepo` (the existing path), naming the WABA and the last error; **auto-resolve on the next success** or a manual "Check now".
+4. **Audit rows only on transitions** (first failure, each interval change, parked), not on every attempt. For the `Sirah` row that is roughly ten attempts and about thirty audit rows over the row's whole life, against 1,650 in 24 days.
+5. **Manual override unchanged:** the admin "Check sendability now" and "Refresh tier" routes bypass the schedule and may un-park.
+6. **Schema:** a counter and a next-attempt (or last-attempt) column on `wabas`, and the equivalents on `meta_template_library_refresh_meta`. A migration; take the next free number at implementation time (3.4).
+This makes the `Sirah` row harmless on its own, and the next dead row too, but it needs a deploy, and nothing is deployable until 3.0 / 3.11 are done. Until then 3.15 option 1 is the stop-gap.
+
+### 3.15 The `Sirah` client's WABA row is probed every hour and always fails
+
+**Record of the investigation, 2026-10-12. Corrected the same day on the owner's reading: this is a cross-client misassignment at onboarding, not a duplicate.** `998094716164113` displays as "Tnpsc Mentors" (number ending 9808) and is a real TNPSC-related WABA that an admin assigned to the `Sirah` client row on 8 Sep via `whatsapp_resolve_waba`. The system user is per business portfolio, not per client. Sources are named per line; the VPS lines are from the VPS diagnostic session reported by the project owner, 2026-10-12, the rest are database and code reads.
 
 **Established**
 - **Two client rows, not one client with two WABAs** (`clients`, 2026-10-12). `Sirah`: `30adfd9e…`, `pending_setup`, created 8 Sep 16:34 UTC, email `si***@gmail.com`, last login 7 Oct 14:07 UTC, `token_version` 1. `Sirah Digital`: `6ce697ed…`, `active`, created 21 Sep, email `ri***@gmail.com`, last login 12 Oct. The emails differ. Each client has exactly one `wabas` row.
-- **The two WABA rows are different WABAs, not a duplicate** (`wabas`). The stale one is `998094716164113`: phone-number id `1147405151797261`, display name **"Tnpsc Mentors"**, number ending `9808`, `verified_at` 8 Sep, status `connected`. The live one is `351363664731426`: `391453774055149`, "Sirah Digital", number ending `1631`. So "stale duplicate of Sirah Digital" is not quite right: it is a different WABA, with a different phone number and a different display name, that the same business's system user was once granted.
+- **The two WABA rows are different WABAs, not a duplicate; the stale one belongs to TNPSC's business, not to Sirah** (`wabas`). The stale one is `998094716164113`: phone-number id `1147405151797261`, display name **"Tnpsc Mentors"**, number ending `9808`, `verified_at` 8 Sep, status `connected`. The live one is `351363664731426`: `391453774055149`, "Sirah Digital", number ending `1631`. So "stale duplicate of Sirah Digital" is not quite right: it is a different WABA, with a different phone number and a different display name, that the same business's system user was once granted.
 - **How it got there** (`audit_log`, `wabas.connect_diagnostics`): on 8 Sep 16:36 UTC the `Sirah` client's connect found two candidates (`wabaTargetIds` `[998094716164113, 351363664731426]`) and recorded `needs_manual_resolution`; on 8 Sep 17:29 an admin resolved it to `998094716164113` (`whatsapp_resolve_waba`), followed by two `retry_provisioning` runs. On 21 Sep `Sirah Digital`'s connect listed `[2073496506618651, 351363664731426]`. **Today** the shared token's `granular_scopes` target only `351363664731426` (VPS), so Meta answers `#100` subcode 33 for the stored WABA ("does not exist, cannot be loaded due to missing permissions").
 - **Same token, one system user** (VPS): both rows carry a `SYSTEM_USER` token with user id `122106946323459883`, both with both WhatsApp scopes, both with `target_ids` `["351363664731426"]`. Live-row calls: HTTP 200 on all three; stale row: HTTP 400, code 100, subcode 33. The stale row's own stored probe reason says the same (`wabas.sendable_reason`).
 - **What is attached to the `Sirah` client** (every table with a `client_id` column queried; `Sirah Digital` for comparison):
@@ -390,7 +456,80 @@ The checkout has an uncommitted modification to `deploy.sh` (backed up on the ho
 | 4. Delete that one `wabas` row (not the client) | 1 row; only dependent is `webhook_deliveries.waba_id` (0 rows for it) | **No** | Same as 1 | Loses the display name and diagnostics; not a 38-table cascade, but irreversible |
 | 5. Delete the `Sirah` client | 38-table cascade | No | Same | **Do not**: the mechanism of the 7 Oct incident, and nothing here needs it |
 
+**TNPSC appears to have more than one WABA, and we do not know which they intend to use.** Three TNPSC-related ids are now on record: `894384560175844` (working, stored on TNPSC's own client), `1649658386105751` (no `wabas` row; 8 message webhooks discarded, 24 Sep to 8 Oct; the token's current scope target) and `998094716164113` ("Tnpsc Mentors" ending 9808, sitting on `Sirah`'s row). **That is a question for the client, not a database fix.** It does not block option 1: disabling the `Sirah` row loses nothing, the WABA at Meta is untouched, and re-enabling is one statement. Ask in parallel.
+
 **Least destructive: option 1, one row, one column.** Before doing it: (a) the owner should say whether the number ending `9808` ("Tnpsc Mentors") is wanted, because it is a real WABA that a system user was once granted and may simply need re-granting rather than abandoning; (b) 3.8's audit and role gate do not apply to a `wabas` update, so write the `audit_log` row by hand; (c) it is a production write and needs your explicit approval. **Not done.**
+
+**Option 1 is APPROVED, with conditions, and is NOT to be executed until the owner says go (2026-10-13 at the earliest).** Conditions and how each is met:
+- **Status value already handled by the sweeps and the Admin UI; no new value: `'failed'`.** Consumers:
+
+| Consumer | Where | Effect on this row at `'failed'` |
+|---|---|---|
+| Sendability sweep (`tick`, admin `refreshNow`) | `sendabilityMonitorRunner.js:283, 295` (`status = 'connected'`) | Excluded; probing stops |
+| Tier sweep | `messagingTierRefreshRunner.js:57, 68` | Excluded |
+| Alert checks | `alertRunner.js:56, 110, 135, 303, 324` | Excluded |
+| Admin overview "failed WABAs" count | `admin.js:50` (`status = 'failed'`) | +1, which is honest |
+| Admin onboarding queue | `admin.js:80` (`failed` only matters when `client_status = 'payment_confirmed'`) | No change: `Sirah` is `pending_setup` |
+| Admin UI badge | `admin/app.js:203` (`failed: 'danger'`) | Renders red "Failed" |
+| Admin "needs attention" flag | `admin/app.js:1348` (only `needs_manual_resolution`, `incomplete_meta_linked`, `sendable === false`) | No change (`sendable` is null) |
+| `retry-provisioning` | `admin.js:113` (no special case for `failed`) | Generic path; would fail again with `#100`; harmless |
+| Client app | `routes/onboarding.js` `GET /whatsapp/status` returns `connected: status === 'connected'`; `app.js:4504, 4585, 5926` | Shows not connected (true) and offers Connect; `onboarding.js:294` already writes `'failed'`, so the state already exists |
+| Reconnect | `wabasRepo.upsertForClient` updates the newest row in place | A reconnect rewrites this same row |
+
+- **Pinned by the `wabas` row id, not `waba_id` or `client_id`:** `362e1974-93dc-4ad9-ace2-8381f154f437` (confirmed 2026-10-12: one row for that client; `waba_id` `998094716164113`; current status `connected`).
+- **One transaction; exactly 1 row affected or it rolls back; the current value is recorded so the rollback is one statement.** Current value: **`'connected'`**.
+
+**Statement 1 (apply):**
+```sql
+DO $$
+DECLARE n integer;
+BEGIN
+  SET LOCAL lock_timeout = '5s';
+  UPDATE wabas SET status = 'failed'
+   WHERE id = '362e1974-93dc-4ad9-ace2-8381f154f437' AND status = 'connected';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'expected exactly 1 row, updated %', n; END IF;
+  INSERT INTO audit_log (actor_type, actor_id, action, target)
+  VALUES ('admin', (SELECT id FROM admin_users ORDER BY created_at LIMIT 1), 'waba_status_changed',
+          '362e1974-93dc-4ad9-ace2-8381f154f437: connected -> failed (dead WABA row; see BUILD_PLAN 3.15)');
+END $$;
+```
+A `DO` block is a single atomic statement: any exception (the count assertion, the lock timeout, the audit insert) rolls back both writes. **Statement 2 (rollback):**
+```sql
+DO $$
+DECLARE n integer;
+BEGIN
+  UPDATE wabas SET status = 'connected'
+   WHERE id = '362e1974-93dc-4ad9-ace2-8381f154f437' AND status = 'failed';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'expected exactly 1 row, updated %', n; END IF;
+  INSERT INTO audit_log (actor_type, actor_id, action, target)
+  VALUES ('admin', (SELECT id FROM admin_users ORDER BY created_at LIMIT 1), 'waba_status_changed',
+          '362e1974-93dc-4ad9-ace2-8381f154f437: failed -> connected (rollback)');
+END $$;
+```
+**Verify after applying:** `select status from wabas where id = '…'` returns `failed`; then, at the next hourly tick (at most about 60 minutes), no new `sendability_registration_check_failed` row appears for client `30adfd9e…`. No session-level `SET` is used (`SET LOCAL` only, inside the block). **Not executed.**
+
+### 3.16 The Meta app secret is put in request URLs (3 places)
+
+**The app secret is the credential for the whole platform app, across every client; this is worse than an access token in a URL.** Where (`server/src/utils/metaClient.js`): line 81 (`exchangeCodeForToken`, `client_secret` query parameter), line 101 (the long-lived exchange, `client_secret`), and line 127 (`debugToken`, `access_token=${META_APP_ID}|${META_APP_SECRET}`). Investigated read-only 2026-10-12, using harmless calls with the app's own credentials only:
+
+**Is the URL ever logged?** Not by anything I could find.
+- Application code: no call site logs the URL. `fetchWithTimeout` (`metaClient.js:20-29`) rethrows a network error unchanged; Node's `fetch` raises `TypeError: fetch failed` whose `cause` carries the network error, not the request URL (I did not exercise every failure mode). The callers log `.message` only (for example `onboarding.js:195`, `discoveryErr.message`), and the audit rows store `err.message`.
+- `audit_log`: **zero** rows contain `access_token=`, `input_token`, `Bearer `, an `EAA…`-shaped token, or an `APP_ID|SECRET`-shaped string (6 patterns, queried 2026-10-12). The only rows mentioning `app_secret` are 3 `whatsapp_connect_failed` rows from 16 Aug reading "META_APP_ID / META_APP_SECRET are not configured", with no value.
+- Upstream: nginx on the VPS logs inbound requests only; it does not see the outbound call. **Not examined (no access from here): the container's stdout log, any egress proxy, and Meta's own side.**
+
+**Does Meta accept the secret outside a URL?** Yes for all three sites (tested 2026-10-12):
+| Site | Test | Result |
+|---|---|---|
+| `debug_token` (127) | `Authorization: Bearer APP_ID\|SECRET`, `input_token` as query parameter | HTTP 200, `is_valid` true. The app secret leaves the URL; `input_token` (a client token) stays in it |
+| `debug_token` | `POST` with a form body | **Refused**: HTTP 400, code 100. `input_token` must stay a query parameter |
+| `oauth/access_token` code exchange (81) | `POST`, `client_id` / `client_secret` / `code` in a form body | Parameters parsed: HTTP 400 "Invalid verification code format", the same answer as the `GET` (dummy code) |
+| `oauth/access_token` long-lived exchange (101) | `POST` form body with `fb_exchange_token` | Parameters parsed: HTTP 400 code 190 about the dummy token |
+
+**Does it appear in an error path, as the access token did in `diagnostic_scope_check.js`?** On the evidence: no. `debugToken` throws `data?.error?.message || 'debug_token failed (status)'`, which is Meta's message, not the URL; a network error is rethrown raw, whose `message` is `fetch failed`. The remaining risk is that a *future* handler prints the error object or its `cause`, or that the container log captures something I could not see. **I cannot rule out the container log; whether the secret needs rotating is the owner's call and I have no evidence that it leaked.**
+
+**Fix, specified, not built:** (1) move `client_secret` and `client_id` into a `POST` form body for both token exchanges (lines 81 and 101); (2) send the app token for `debug_token` as an `Authorization: Bearer` header (line 127); (3) wrap `fetchWithTimeout` so a rethrown error carries only its `code` or `name`, never the URL or `cause`; (4) add a test that a thrown error from each of these three calls contains neither the app secret nor a client token.
 
 ---
 
@@ -620,7 +759,10 @@ FLOOR      4.2 nightly pg_dump + TESTED restore     (first; outranks everything 
            3.8 DELETE /api/clients/:id fix           (after 4.2 and 3.9)
            4.1 repo private (deploy key proven first; HTTPS remote CONFIRMED)
            3.10 / 3.11 move diagnostic scripts into the repo; commit deploy.sh drift (before any deploy)
-           3.13 stop the hourly dead-row probe (one-row status change, audited by hand; code fix after deploy)
+           3.13 platform-level Graph calls must not pick an arbitrary tenant's token (health filter or explicit platform WABA)
+           3.14 backoff for permanently failing probes (counter + increasing interval + one alert)
+           3.15 stop the hourly dead-row probe (APPROVED, one-row status change, NOT executed; run on the owner's go)
+           3.16 move the Meta app secret out of request URLs (3 places)
            4.3 OPEN: reset the Vetri Academy (Demo) password (admin route, response discarded)
            3.1 remove the fabricated chart           (one commit, do it now)
                  [2026-10-12: the commit exists (351d133); what remains is deploying master]
@@ -749,7 +891,7 @@ Do not start implementing. Report the plan and stop.
 | `983390651411856` | Demo / "Sirah" | `whatsapp_business_management`, `whatsapp_business_messaging`, `public_profile` | present, **no** `target_ids` (applies to all) | all three HTTP 200 | Healthy |
 | `894384560175844` | TNPSC mentors | same two plus `public_profile` | `target_ids` = `["1649658386105751"]`, **not** the stored WABA | templates 200, `phone_numbers` 200 (reads work, writes do not) | `#200`: scope targets a different id than the stored WABA |
 | `1766605231203643` | GV Mart | **`public_profile` only** | none | every call HTTP 400, code 100, subcode 33 | `#100`: token has no WhatsApp permission at all |
-| `998094716164113` | `Sirah` client (stale row, 3.13) | both WhatsApp scopes | `target_ids` = `["351363664731426"]`, i.e. **not** the stored WABA | all three HTTP 400, code 100, subcode 33 | Stored WABA no longer in the token's scope |
+| `998094716164113` | `Sirah` client (stale row, 3.15) | both WhatsApp scopes | `target_ids` = `["351363664731426"]`, i.e. **not** the stored WABA | all three HTTP 400, code 100, subcode 33 | Stored WABA no longer in the token's scope |
 | `351363664731426` | Sirah Digital | both WhatsApp scopes | `target_ids` = `["351363664731426"]` | all three HTTP 200; phone `391453774055149`: `CLOUD_API`, `is_on_biz_app` true, quality GREEN, `CONNECTED`, `code_verification_status` `NOT_VERIFIED`, 10 templates (all `nusi_*`, `APPROVED`), `messaging_limit_tier` `TIER_250` | Healthy |
 
 All five are `SYSTEM_USER` tokens under app `Sirah CRM Wp` (app id `27135450269410430`). **The system user is per business portfolio, not per client**: the `Sirah` and `Sirah Digital` rows share user id `122106946323459883`; the demo, TNPSC and GV Mart tokens have different ids.
@@ -847,3 +989,6 @@ Three figures this document treated as established were artifacts. They are reco
 | "Our tier refresh treats an absent value as a failure" | **No.** Absence is stored as `'unknown'` with a fresh `checked_at`. The real bug is that a *failed call* never advances `checked_at`, so dead rows are re-probed hourly | `messagingTierRefreshRunner.js:42-48`, `sendabilityMonitorRunner.js` |
 | "`messaging_limit_tier` is wrong" / "deprecated everywhere" | **Works on some numbers** (`TIER_250` on five); absent on four. Meta's page names a replacement field and says limits are per portfolio | `wabas.messaging_tier`, VPS output, Meta page |
 | "573 failures = Sirah Digital's problem" | **The `Sirah` client's row.** Sirah Digital's own WABA has 1 failure (5 Oct) | `audit_log` |
+| "573 audit rows from the stale row" (this document, 3.13 as first written) | **~1,650.** 574 `…check_failed` + 573 `sendability_unknown` + 503 `sendable_verdict_computed`; 573 was one of three counts | `audit_log`, 2026-10-12 |
+| "The template-library refresh is broken for the whole platform, because `findAnyConnected` picks GV Mart's dead token" (proposed) | **Not supported.** The refresh succeeded on 8 Oct 08:02 UTC (25 entries, `last_refresh_error` null) with that selection in force. The selection is fragile, not currently failing; the next attempt is due 15 Oct 08:02 UTC | `meta_template_library_refresh_meta`, `meta_template_library_cache`, 2026-10-12 |
+| "`998094716164113` is a stale duplicate of Sirah Digital" | **Withdrawn again, per the owner:** a real TNPSC-related WABA assigned to the `Sirah` client at onboarding (cross-client misassignment) | `wabas`, `audit_log`, owner's reading |
