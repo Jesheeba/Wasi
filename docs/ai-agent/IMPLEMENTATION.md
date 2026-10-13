@@ -836,7 +836,7 @@ Fill this in as units land. One row per unit. This is how you know where you are
 |---|---|---|---|---|---|
 | 0.1 | `a640571` (local, not pushed) | `086_chats_last_inbound_at` (NOT applied) | 8 stub tests pass; real SQL, migration up/down/up and the backfill (dry run, batched apply, idempotent re-run) verified against a throwaway local Postgres | 12 Oct 2026 | Backfill script written, not run. Apply migration before deploying code. Null = unknown = window closed. |
 | 0.2 | `7c0b739` (local, not pushed) | `087_chats_last_agent_reply_at` (NOT applied) | 17 stub tests: W1-W6 write-rule tests individually + non-fatal/409/source-scan/migration + 6 gate-4 null tests; mutation check (planted bug fails W2-W4 and the scan); real SQL, migration guard and missing-column path on a throwaway local Postgres | 13 Oct 2026 | Echo write inert until `smb_message_echoes` is subscribed. Human write is on ATTEMPT (before the send), not on delivery. Null polarity differs from `last_inbound_at`. Apply migration before code. |
-| 0.3 | | | | | |
+| 0.3 | see `git log` (local, not pushed) | none | 17 outcome tests (O1-O11 + startFlow + evaluateSafely + agentMayAnswer allow-list + caller-list pin) + 2 router call-site tests; 4 mutation checks all caught | 13 Oct 2026 | No schema. Outcome table in `flowEngine.js`. Caller list: `metaWebhook.js:260`, `flowEngine.js:491`, `automationEngine.js:34`. `unmatched_input`, `flow_error` and `rule_*_failed` are non-answerable outcomes beyond SPEC's list; unit 0.4 must use `agentMayAnswer`, not `!handled`. |
 | 0.4 | | | | | |
 | 0.5 | | | | | |
 | 1.1 | | | | | |
