@@ -829,7 +829,7 @@ Fill this in as units land. One row per unit. This is how you know where you are
 | Unit | Commit | Migration | Tests | Verified | Notes |
 |---|---|---|---|---|---|
 | 0.1 | `a640571` (local, not pushed) | `086_chats_last_inbound_at` (NOT applied) | 8 stub tests pass; real SQL, migration up/down/up and the backfill (dry run, batched apply, idempotent re-run) verified against a throwaway local Postgres | 12 Oct 2026 | Backfill script written, not run. Apply migration before deploying code. Null = unknown = window closed. |
-| 0.2 | | | | | |
+| 0.2 | `7c0b739` (local, not pushed) | `087_chats_last_agent_reply_at` (NOT applied) | 17 stub tests: W1-W6 write-rule tests individually + non-fatal/409/source-scan/migration + 6 gate-4 null tests; mutation check (planted bug fails W2-W4 and the scan); real SQL, migration guard and missing-column path on a throwaway local Postgres | 13 Oct 2026 | Echo write inert until `smb_message_echoes` is subscribed. Human write is on ATTEMPT (before the send), not on delivery. Null polarity differs from `last_inbound_at`. Apply migration before code. |
 | 0.3 | | | | | |
 | 0.4 | | | | | |
 | 0.5 | | | | | |
@@ -893,3 +893,6 @@ Each was re-checked on 12 October 2026 (evening). "Re-checked" below says by wha
 17. **Caching and token counting departures recorded** with their reasons (`SPEC.md` decisions 19, 20), and `SPEC.md` §12's ~₹0.22 cache-hit figure corrected to ~₹0.45 uncached.
 18. **Haiku 4.5 held through Phase 1; Haiku 5.5 is evaluation task E1 after it** (`SPEC.md` decision 22).
 19. **Unit 0.1 built** and committed locally as `a640571`; migration and backfill not applied.
+20. **P5 dropped as a gate on 0.5** (13 Oct). Correction recorded: `paymentReminderRunner` does auto-suspend (5 days after an admin marks unpaid), so 0.5 will bite on the first such client; 0 are marked unpaid today.
+21. **Unit economics UNRESOLVED**, four options specified in `BUILD_PLAN` 5.5. E1 raised to "as soon as Phase 1 shadow provides a quality baseline".
+22. **Unit 0.2 built** and committed locally as `7c0b739`; migration `087` not applied. Two behaviours worth knowing: the human write happens when a person *attempts* a reply (a failed or rejected send still means a person is working the chat; a false "human active" is the safe error), and `last_agent_reply_at` null reads as "no recent human reply" while `last_inbound_at` null reads as "window closed".
