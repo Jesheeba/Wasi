@@ -185,6 +185,11 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
   if (!chat.phone) return res.status(400).json({ error: 'This chat has no phone number to send to.' });
 
   const data = messageSendSchema.parse(req.body);
+  // A person is replying from the inbox: gate 4's human-active signal
+  // (migration 087). This route and the retry route below are the ONLY
+  // places in the server that write it from a Wasi send; it must never move
+  // into messagingService, which flows/broadcasts/the Hub API share.
+  await chatsRepo.markAgentReplyNonFatal(req.db, req.clientId, chat.id);
   try {
     // Releases the tenant DB connection before the Meta call and reacquires
     // one only for the result write — see messagingService.sendChatMessage's
@@ -235,6 +240,9 @@ router.post('/:id/messages/:messageId/retry', requireRole('Admin', 'Manager', 'A
   const message = await chatsRepo.findMessageById(req.db, req.clientId, req.params.id, req.params.messageId);
   if (!message) return res.status(404).json({ error: 'Message not found' });
 
+  // A person retrying a failed message is working this chat (see the send
+  // route above). One of the two permitted writers of last_agent_reply_at.
+  await chatsRepo.markAgentReplyNonFatal(req.db, req.clientId, chat.id);
   try {
     const updated = await messagingService.retryMessage(req.db, req.clientId, chat, message, {
       release: req.commitAndRelease,

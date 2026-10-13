@@ -275,12 +275,60 @@ async function insertEcho(db, clientId, chatId, { metaMessageId, body, sentAt, s
     [chatId, clientId, body, metaMessageId, sentAt || null, source]
   );
   if (rows[0]) {
+    // last_agent_reply_at (migration 087) — a person just replied from their
+    // own phone. Written ONLY here, inside `if (rows[0])`: an echo of a
+    // message Wasi itself already has (its own send coming back) conflicts
+    // on meta_message_id, inserts nothing, and so never counts as a human.
+    // Uses the echo's own send time (the row's sent_at), not now(), so a late
+    // delivery doesn't look like a fresh human reply; greatest() keeps it
+    // monotonic against out-of-order delivery.
     await db.query(
-      `update chats set last_message_at = now(), unread_count = 0 where client_id = $1 and id = $2`,
-      [clientId, chatId]
+      `update chats
+          set last_message_at = now(),
+              unread_count = 0,
+              last_agent_reply_at = greatest(coalesce(last_agent_reply_at, $3::timestamptz), $3::timestamptz)
+        where client_id = $1 and id = $2`,
+      [clientId, chatId, rows[0].sent_at]
     );
   }
   return rows[0] || null;
+}
+
+// Records that a PERSON is working this chat from the Wasi inbox
+// (last_agent_reply_at, migration 087). Called only from routes/chats.js's
+// human send and retry routes, before the send is attempted: an attempted
+// reply is a person at work whether or not Meta then accepts it, and the two
+// possible mistakes are not symmetric (a false "human active" silences the
+// agent for 15 minutes; a false "nobody there" lets it talk over a person in
+// front of their customer, which SPEC.md section 4.2 calls unrecoverable).
+//
+// Never throws, and never poisons the caller's transaction: req.db is a
+// client inside a transaction, where one failed statement would otherwise
+// abort every later statement (including the message's own sent/failed write,
+// which would then be rolled back). A savepoint isolates it. The send itself
+// must not fail because this bookkeeping did.
+//
+// `db` MUST be a client already inside a transaction (req.db is). A SAVEPOINT
+// outside a transaction block errors, which this function would swallow and
+// report as false, so calling it with the bare pool would silently never
+// write. That is why it is not exported for general use: the only caller is
+// routes/chats.js.
+async function markAgentReplyNonFatal(db, clientId, chatId) {
+  try {
+    await db.query('savepoint mark_agent_reply');
+    await db.query(
+      `update chats
+          set last_agent_reply_at = greatest(coalesce(last_agent_reply_at, now()), now())
+        where client_id = $1 and id = $2`,
+      [clientId, chatId]
+    );
+    await db.query('release savepoint mark_agent_reply');
+    return true;
+  } catch (err) {
+    console.error('chatsRepo.markAgentReplyNonFatal failed (send continues):', err.message);
+    try { await db.query('rollback to savepoint mark_agent_reply'); } catch (_) { /* connection already unusable */ }
+    return false;
+  }
 }
 
 // Monotonic status guard, added 2026-09-25 — not echo-specific (WhatsApp
@@ -397,6 +445,7 @@ module.exports = {
   markFailed,
   insertInbound,
   insertEcho,
+  markAgentReplyNonFatal,
   updateStatusByMetaId,
   decideStatusTransition,
 };
