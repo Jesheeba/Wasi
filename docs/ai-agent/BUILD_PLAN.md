@@ -141,6 +141,73 @@ Ask Evokz to complete business verification and add a payment method. Note that 
 
 > **Added 2026-10-12 — where those two templates came from.** `messageTemplatesRepo.create` (`messageTemplatesRepo.js:58-82`) always writes a non-null `auth_options` object for an Authentication template, whichever route called it (`POST /api/templates` or the Hub API). Template sync's insert path (`templateSyncService.js`, the `toInsert` branch) does not write `auth_options`, and its update branch never touches it. A NULL `auth_options` with a `meta_template_id` therefore means the row was **synced in from Meta, i.e. the template was created directly in Meta (WhatsApp Manager or Graph API), not through Wasi's code.** Both also carry language `en`, not Wasi's `en_US` default, which is consistent. **Immediate route for Evokz that does not depend on fixing `buildAuthenticationPayload`:** have the template created in WhatsApp Manager on Evokz's WABA, then run template sync. **Caveat, untested:** Evokz's error is a WABA-level permission refusal; if it is enforced by Meta on the WABA rather than on the API, WhatsApp Manager may refuse too. 2.1's `debug_token` output decides that.
 
+### 2.7 GV Mart Embedded Signup, Meta error 3441047 ("not available for accounts using marketing messages") — MM Lite check (read-only, 2026-10-13)
+
+**Status:** investigated; **the app's own config does not enable MM Lite, and the question of when GV Mart's WABA was enrolled cannot be answered from our data.** No writes were made to the database, nothing pushed or deployed. Queries ran in `begin read only` transactions against the shared database.
+
+**Q1. Does our Embedded Signup enable MM Lite? Not from our code.**
+
+- The only place the signup config is built is `embeddedSignup.js:358-402` (`FB.login(..., options)`). The options object is `{ config_id: configId, response_type: 'code', override_default_response_type: true, auth_type: 'reauthenticate', extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding' } }` (`embeddedSignup.js:359-401`; `extras` is on line 401).
+- There is **no `extras.features` array**, no `marketing_messages_lite`, and no multi-product / "products" key. `featureType: 'whatsapp_business_app_onboarding'` is the Coexistence sub-flow, which is what GV Mart's error says is incompatible with MM Lite.
+- `configId` comes from `process.env.META_CONFIG_ID` (`server/src/routes/onboarding.js:31`) and is passed through unchanged (`app.js:7339`, `marketing/signup.js:403`). A grep of the repository's `*.js`/`*.html` for `marketing_messages`, `MM Lite`, `AD_ACCOUNT_LINKED` and `features:` finds nothing relevant (the only `features:` hits are pricing-plan copy in `marketing/plans.js`).
+- **What this does NOT rule out:** a Facebook Login for Business configuration stores its own product/feature list on Meta's side, keyed by `META_CONFIG_ID`. If that configuration were set up with a marketing-messages product, it would apply to every client without appearing anywhere in our code. That is checkable only in the App Dashboard (Facebook Login for Business > Configurations > the config's selected products/features). **Action for the project owner: open the config and confirm no marketing-messages product is ticked.**
+- **Evidence it is probably not the config:** 7 of 9 `wabas` rows have `registration_is_on_biz_app = true` (see Q3), including WABAs onboarded on 9, 19 and 21 Sep, i.e. the same config produced successful Coexistence connections, and GV Mart's own previous WABA itself reported `is_on_biz_app=true` (below). A config that enrolled every client in MM Lite would have blocked those. The conclusion is that enrolment is specific to GV Mart's Meta business, not caused by Wasi.
+
+**Q2. When was GV Mart's WABA enrolled? Not determinable from our data. Reasons, and what the data does bound.**
+
+1. **We do not store the event type.** `metaWebhook.js:442-443` — `handleAccountUpdate` returns `false` immediately when `value.phone_number` is absent, before the audit write at `:472-477` (the only place the payload is recorded, truncated to 500 chars). An MM Lite onboarding event (`AD_ACCOUNT_LINKED`) has an `event` field and WABA info, not a `phone_number`, so it takes that early-return path. The only trace is the generic per-field row at `:642-647` (`action = 'account_update'`, `target = entry.id`), which has **no payload**. `meta_webhook_log` stores only `success`, `duration_ms`, `entries_processed`, `waba_ids_touched` and `error_summary`, so it carries no payload either.
+2. **Search results (queries 7 Oct; `audit_log`, retained since 2026-08-11):**
+   - `audit_log` rows whose `target` mentions `AD_ACCOUNT`, `marketing_messages`, `mm_lite` or `3441047`: **0**.
+   - `account_update` rows for WABA `1766605231203643`: **0**. For WABA `109558648723856`: **0**. Their only webhook rows are `messages`: 1,738 for `109558648723856` (26 Aug 11:31:22Z to 4 Oct 17:47:02Z) and **1** for `1766605231203643` (7 Oct 08:22:45.724Z).
+   - Every `account_update` row (139 total, 20 Aug to 7 Oct) has a bare entry id as `target`; 106 are under `1206549993706435`, which matches **no** `wabas.waba_id` (current or the two asked about); 1 under `463815720015046` (28 Sep); 32 are `test_suite_messagingtier_waba_id` test rows. **Inference, not proven:** `1206549993706435` is not a client WABA; its rows cluster in the minutes before each `whatsapp_connected`/`wabas` insert (e.g. 17 Sep 07:57:35Z to 07:58:34Z before the 07:58:43Z row; 7 Oct 07:28Z to 07:50Z before the 07:50:41Z connect), which fits an app/business-level entry id that Meta uses for onboarding events. Since no payload was kept, this cannot be confirmed.
+3. **Timeline for GV Mart, with sources (all `audit_log`, UTC):**
+
+   | When | Event | Source |
+   |---|---|---|
+   | 2026-08-26 11:28:54 | old client e186eb60 `whatsapp_connected` | CLAUDE.md / section 2.4 |
+   | 2026-10-04 17:47:02 | last webhook for old WABA `109558648723856` | `audit_log` |
+   | 2026-10-05 09:02 to 10-07 07:02 | old client's registration check failing (47 rows) | section 2.4 |
+   | 2026-10-07 07:04:47 to 07:08:31 | old client deleted | section 2.4 |
+   | 2026-10-07 07:09:54 | new client `4b09813e` created (same email) | `audit_log` `api_key_created` 07:09:55 |
+   | 2026-10-07 07:28:48 to 07:50:18 | 7 `account_update` bare rows under entry `1206549993706435` | `audit_log` |
+   | 2026-10-07 07:50:41 | `whatsapp_connected` for `4b09813e` | `audit_log` |
+   | 2026-10-07 08:02:32 | **registration check: `is_on_biz_app=true`, `platform_type=CLOUD_API`**; verdict `sendable=false`, "WABA is BLOCKED (#141006) — error with the payment method" | `audit_log` `sendability_registration_checked`, `sendable_verdict_computed` |
+   | 2026-10-07 08:22:45 | the single webhook for WABA `1766605231203643` | `audit_log` |
+   | 2026-10-07 08:54:07 | last 2 `account_update` rows (post-connect) | `audit_log` |
+   | 2026-10-07 13:02:31 onward, hourly | registration check fails: "Object with ID `1379147205282259` does not exist" (138 times, last 13 Oct 06:02:31) | `audit_log` |
+   | 2026-10-13 06:59:35 | a third GV Mart client `a84e3c27` created, status `pending_setup` | `clients`, `audit_log` |
+
+4. **What this bounds.** The 7 Oct connection (`4b09813e`) **did complete Coexistence** (`is_on_biz_app=true`), which is not possible for a WABA already on MM Lite at that moment. So on this evidence the enrolment happened **after 7 Oct 07:50:41Z, not during the recreation window**: either in the six hours before the registration check began failing (08:02 to 13:02Z), or later. The `#141006` payment-method block at 08:02:33Z is a separate billing state on the same WABA and is the nearest recorded sign of a Meta-side account change in that window. This is an inference from "Coexistence completed once"; it is **not** a recorded enrolment time, and a 08:54:07Z `account_update` pair is the only post-connect event we hold for that entry.
+5. **Caveat on identity.** GV Mart's current `a84e3c27` has no `wabas` row, so which WABA the failing 3441047 attempt is against was not read from our DB; `1766605231203643` is taken from the request. `4b09813e` and its `wabas` row no longer exist (its probes ran through 13 Oct 06:02Z, then it was deleted before `a84e3c27` was created at 06:59Z). Section 2.4's "replacement client `4b09813e`" is therefore itself superseded. That second deletion is **unaudited**, like the first (`DELETE /api/clients/:id` writes no audit row, see 3.8).
+6. **How to get the real answer (needs Meta, not our DB).** Business Settings > WhatsApp Accounts > GV Mart's WABA > Marketing Messages, or `GET /{waba-id}?fields=marketing_messages_lite_api_status` / the equivalent in the MM Lite docs (field name **not verified here**; check the current Meta docs before using it). Meta's webhook delivery log in the App Dashboard may also still hold the `account_update` payload for 7 Oct.
+
+**Q3. The other nine WABAs.**
+
+`wabas` has 9 rows (not 10; `wabas` does not contain GV Mart's current WABA at all):
+
+| `waba_id` | status | `registration_is_on_biz_app` |
+|---|---|---|
+| 983390651411856 (Wasi Demo) | connected | **false** |
+| 392608088696144 | connected | true |
+| 998094716164113 | failed | null |
+| 918537580543018 | connected | true |
+| 1319892496787906 | connected | true |
+| 463815720015046 | connected | true |
+| 894384560175844 | connected | **false** |
+| 557382370790751 | connected | true |
+| 351363664731426 | connected | true |
+
+- **7 `true`, 2 `false`, 1 `null`** (the `failed` row). That matches "7 completed Coexistence".
+- **No WABA shows an MM Lite signal in our data. This is an absence of recording, not confirmation:** the event would not have been stored (Q2.1). The single `account_update` row under a client WABA id is `463815720015046` on 28 Sep 11:25:41Z, bare, so its type is unknown. For those 7 the stronger evidence is the Coexistence completion itself, which Meta says is blocked for an MM Lite account, **but only at the time of onboarding**: it says nothing about a WABA enrolled afterwards. That is the GV Mart pattern (Q2.4), so these 7 could be enrolled later without our knowing.
+- The two `false` rows (Wasi Demo, `894384560175844`) are not Coexistence at all, so MM Lite is not excluded for them by that argument.
+
+**Recommended follow-ups (none done):**
+
+1. **Persist `account_update` payloads for events without `phone_number`.** Move the audit write in `handleAccountUpdate` ahead of the `phone_number` early return, or add an `else` branch recording `value.event` and the waba id. Without it this question is unanswerable next time. It is a few lines, and the payload contains no customer data. Mind `audit_log.target`'s 500-char truncation convention and CLAUDE.md's webhook-contract rule for `enqueueForwards` (do not forward it unintentionally).
+2. Confirm in the App Dashboard what products `META_CONFIG_ID` carries (Q1).
+3. Ask GV Mart (or read in their Meta Business Manager) whether they enabled "Marketing Messages Lite" or accepted its prompt; the error says they did, or that someone did on their behalf. Opting out of MM Lite on their side is the only fix; nothing in Wasi can do it.
+4. Do not re-run Embedded Signup for GV Mart until (3) is done: each failed attempt is another unaudited `wabas` row to clean up.
+
 ---
 
 ## 3. Correctness bugs found and not fixed
