@@ -78,6 +78,27 @@ Across nine days of this project, every attempt to move several things at once p
 
 One unit, one session, one verification. Then the next.
 
+### 1.4 Two sessions in one working tree (owner question, 13 Oct)
+
+**Recommendation: yes. Put each concurrent session on its own git worktree and its own branch, and do it before unit 0.5.** Unit 0.4 was safe in the shared tree only because none of its files were dirty (checked before starting); that is luck, not a mechanism.
+
+**What the shared tree risks.** The other session has uncommitted edits in `admin.js`, `onboarding.js`, `wabasRepo.js`, `app.js`, `adminAuth.js`, `alertRunner.js`, `clientNotifier.js`, `validate.js`, plus untracked `wabaDisconnectService.js`. What has kept us apart is one habit on my side: staging explicit paths, never `git add -A` or `commit -a`. Either session breaking that habit sweeps the other's half-finished work into a commit. A `git stash`, `git checkout .` or `git reset --hard` by either session destroys the other's uncommitted work with no undo. Unit 0.5 edits `messagingService.js` (`getSendableWaba`), which calls `wabasRepo.findByClientId`, a file the disconnect build is changing now.
+
+**What it costs (about ten minutes once):**
+
+| Step | Cost |
+|---|---|
+| `git worktree add ../wasi-ai-agent -b ai-agent` (from current `master`, which already holds the AI commits) | under a minute |
+| `cp server/.env` into it (gitignored; it holds the shared database URL, so the existing shared-DB rules apply there too, no new exposure) | seconds |
+| `npm ci` in `server/` inside the worktree | about 6 seconds (measured 13 Oct) |
+| `npm ci` at the repo root, for the Playwright UI tests | not measured; only needed if a session runs UI tests |
+| Confirm with one test file | about 10 seconds |
+| **Per unit afterwards:** merge `ai-agent` back to `master` and re-run the touched tests | about 5 minutes |
+
+**What it does not fix.** (1) The database is shared, so migration numbers are still allocated across both branches: take the next free number at the moment of writing, and whoever merges second renumbers. `088` is `ai_jobs`; the disconnect build has no migration yet. (2) Merge conflicts are deferred, not removed; they surface at merge time in `messagingService.js` and `wabasRepo.js` rather than as lost work. (3) Playwright tests that bind port 4000 still collide if run at once. (4) `CLAUDE.md`, `BUILD_PLAN.md` and `SPEC.md` are edited by both; those merges are textual and small.
+
+**One hard rule from 13 Oct: never link `node_modules` into a worktree with a junction or symlink.** `git worktree remove --force` followed the junction and emptied the real `server/node_modules` (restored with `npm ci`). Run `npm ci` inside the worktree instead; at 6 seconds there is no reason to share it.
+
 ---
 
 ## 2. Phase 0 — foundations
@@ -415,6 +436,19 @@ CONSTRAINTS
 
 Commit. Do not push.
 ```
+
+
+**Built 13 Oct 2026 (local commit, migration NOT applied).** `088_ai_jobs.js`, `aiJobsRepo.js`, `aiAgentRunner.js`, the webhook hand-off in `metaWebhook.js`, and a real-Postgres test harness (`test/support/embeddedPostgres.js`, about 10 seconds to boot and migrate; Postgres 18.x against production's 17.x, so it is evidence for the SQL's logic, not for 17-specific planner behaviour). What differs from the plan above:
+
+- **3.14 was not a gate and had not landed** (see `BUILD_PLAN` 3.14). The queue copies `forwardRunner`, not the three buggy runners.
+- **Retries are three, not five** (30 s, 2 min, 10 min): an answer to a customer's question is worth little hours later, and a handover is the fallback.
+- **The attempt is counted at claim time**, so a worker that keeps dying cannot loop forever; a failed result is guarded by attempt number, so a slow worker whose lease expired cannot overwrite the live attempt.
+- **The enqueue decision is `flowEngine.agentMayAnswer`**, never `!handled`. Today it enqueues nothing for anyone: the default `isEligible` returns false until unit 1.1 supplies the `ai_agents` lookup, and the poller only starts when `AI_AGENT_RUNNER_ENABLED=true`.
+- **Handler is a placeholder** that throws; the pipeline (gates, prompt, model, send) is units 1.x. The runner is the queue, not the agent.
+- **Audit:** retries are console lines (as in `forwardRunner`); exactly one `audit_log` row (`ai_job_failed`, actor `system`) per terminal failure.
+- **Retention:** finished rows are purged after 7 days, checked hourly.
+- **A job older than 24 hours is failed (`window_expired`)**, not retried.
+- **No grant to `wasi_app`**, asserted by a test.
 
 ---
 
@@ -837,7 +871,7 @@ Fill this in as units land. One row per unit. This is how you know where you are
 | 0.1 | `a640571` (local, not pushed) | `086_chats_last_inbound_at` (NOT applied) | 8 stub tests pass; real SQL, migration up/down/up and the backfill (dry run, batched apply, idempotent re-run) verified against a throwaway local Postgres | 12 Oct 2026 | Backfill script written, not run. Apply migration before deploying code. Null = unknown = window closed. |
 | 0.2 | `7c0b739` (local, not pushed) | `087_chats_last_agent_reply_at` (NOT applied) | 17 stub tests: W1-W6 write-rule tests individually + non-fatal/409/source-scan/migration + 6 gate-4 null tests; mutation check (planted bug fails W2-W4 and the scan); real SQL, migration guard and missing-column path on a throwaway local Postgres | 13 Oct 2026 | Echo write inert until `smb_message_echoes` is subscribed. Human write is on ATTEMPT (before the send), not on delivery. Null polarity differs from `last_inbound_at`. Apply migration before code. |
 | 0.3 | see `git log` (local, not pushed) | none | 17 outcome tests (O1-O11 + startFlow + evaluateSafely + agentMayAnswer allow-list + caller-list pin) + 2 router call-site tests; 4 mutation checks all caught | 13 Oct 2026 | No schema. Outcome table in `flowEngine.js`. Caller list: `metaWebhook.js:260`, `flowEngine.js:491`, `automationEngine.js:34`. `unmatched_input`, `flow_error` and `rule_*_failed` are non-answerable outcomes beyond SPEC's list; unit 0.4 must use `agentMayAnswer`, not `!handled`. |
-| 0.4 | | | | | |
+| 0.4 | see `git log` (local, not pushed) | `088_ai_jobs` (NOT applied) | 13 on a real Postgres (J1 to J5 plus window expiry, purge, no-grant, down-guard) + 7 stub gating tests (E1 to E7) + 3 router hand-off tests; 9 mutation checks, all caught | 13 Oct 2026 | Runner off unless `AI_AGENT_RUNNER_ENABLED=true`; enqueues nothing until unit 1.1 supplies eligibility. 3.14 not landed and not needed. Apply migration before enabling. |
 | 0.5 | | | | | |
 | 1.1 | | | | | |
 | 1.2 | | | | | |
@@ -902,3 +936,6 @@ Each was re-checked on 12 October 2026 (evening). "Re-checked" below says by wha
 20. **P5 dropped as a gate on 0.5** (13 Oct). Correction recorded: `paymentReminderRunner` does auto-suspend (5 days after an admin marks unpaid), so 0.5 will bite on the first such client; 0 are marked unpaid today.
 21. **Unit economics UNRESOLVED**, four options specified in `BUILD_PLAN` 5.5. E1 raised to "as soon as Phase 1 shadow provides a quality baseline".
 22. **Unit 0.2 built** and committed locally as `7c0b739`; migration `087` not applied. Two behaviours worth knowing: the human write happens when a person *attempts* a reply (a failed or rejected send still means a person is working the chat; a false "human active" is the safe error), and `last_agent_reply_at` null reads as "no recent human reply" while `last_inbound_at` null reads as "window closed".
+23. **Unit 0.3 built** (13 Oct): `{handled, how}` contract; `agentMayAnswer` is an allow-list (`SPEC.md` decision 28).
+24. **Unit 0.4 built** (13 Oct): `ai_jobs` and the runner, on a real-Postgres harness. The owner's restated "3.14 must have landed" precondition conflicted with the accepted correction 5 (not a gate); proceeded on 5 and flagged it, since the unit does not inherit the buggy pattern.
+25. **Worktrees recommended** before 0.5 (section 1.4).
