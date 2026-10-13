@@ -80,6 +80,8 @@ One unit, one session, one verification. Then the next.
 
 ### 1.4 Two sessions in one working tree (owner question, 13 Oct)
 
+> **DONE 13 Oct night (owner: "yes, exactly as specified").** The AI work now lives in a separate worktree, `C:\Users\JESHEEBA\Desktop\wasi-ai-agent`, on branch `ai-agent`, created from `master` at `846e47b`. `npm ci` took 13 s; `server/.env` copied; no junction. The main tree stays on `master` for the other session. **Rule: AI-agent units are built, tested and committed only in the worktree; nothing AI is committed to `master` directly; merge `ai-agent` into `master` per accepted unit.** The 0.1 to 0.4 commits already on `master` are also the base of `ai-agent`, so the first merge is a fast-forward unless `master` has moved.
+
 **Recommendation: yes. Put each concurrent session on its own git worktree and its own branch, and do it before unit 0.5.** Unit 0.4 was safe in the shared tree only because none of its files were dirty (checked before starting); that is luck, not a mechanism.
 
 **What the shared tree risks.** The other session has uncommitted edits in `admin.js`, `onboarding.js`, `wabasRepo.js`, `app.js`, `adminAuth.js`, `alertRunner.js`, `clientNotifier.js`, `validate.js`, plus untracked `wabaDisconnectService.js`. What has kept us apart is one habit on my side: staging explicit paths, never `git add -A` or `commit -a`. Either session breaking that habit sweeps the other's half-finished work into a commit. A `git stash`, `git checkout .` or `git reset --hard` by either session destroys the other's uncommitted work with no undo. Unit 0.5 edits `messagingService.js` (`getSendableWaba`), which calls `wabasRepo.findByClientId`, a file the disconnect build is changing now.
@@ -453,6 +455,14 @@ Commit. Do not push.
 ---
 
 ### Unit 0.5 - `clients.status` enforcement
+
+**Scope additions (owner decisions, 13 Oct night; full text in `BUILD_PLAN` 0.5). The banner is part of this unit, not a follow-up, and the suspension does not ship without it.**
+
+- The client-app banner (persistent, two wordings by cause, "inbound still arrives", amount only if stored, a defined way to pay) ships in the same change as the enforcement.
+- A running broadcast **pauses** (existing `Paused` status) instead of failing recipients; unsent recipients stay `pending`.
+- Inbound is never blocked; asserted by a test.
+- **Flows:** the owner's assumption that stalled flows resume is false today (nothing resumes `stalled`). Needs the defer-instead-of-stall decision recorded in `BUILD_PLAN` 0.5 before building.
+- **Not started.** Held for a fresh morning and a careful review: this is the only Phase 0 unit that can stop a live client's sending.
 
 **Product decision required before this ships (owner, 13 Oct): shipping it makes a client's sends stop five days after an admin marks them unpaid, with no person present that day, and the Wasi app shows no suspended indicator.** What the client experiences and the open questions are in `BUILD_PLAN` 0.5.
 

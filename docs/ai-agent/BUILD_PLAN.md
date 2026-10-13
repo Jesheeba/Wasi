@@ -488,7 +488,7 @@ Recommended shape: B with A as the fallback, record which WABA id each refresh u
 6. **Schema:** a counter and a next-attempt (or last-attempt) column on `wabas`, and the equivalents on `meta_template_library_refresh_meta`. A migration; take the next free number at implementation time (3.4).
 This makes the `Sirah` row harmless on its own, and the next dead row too, but it needs a deploy, and nothing is deployable until 3.0 / 3.11 are done. Until then 3.15 option 1 is the stop-gap.
 
-**Status as of 2026-10-13, and how unit 0.4 relates to it.** 3.14 has **not** landed: the three runners above are unchanged. It is not a gate for unit 0.4 (`IMPLEMENTATION.md` correction 5, accepted 2026-10-12), because 0.4 builds a new queue and does not inherit the pattern. `ai_jobs` advances its clock on every outcome: a claim leases the row and counts the attempt, a failure schedules the next attempt with backoff, a result is guarded by attempt number, the third failure is terminal, and only the terminal transition writes an `audit_log` row (verified on a real Postgres, `test/aiJobs.test.js`, J2 to J5, with nine mutation checks). It copies the `forwardRunner` / `webhookDeliveriesRepo` shape, with two differences that make it stricter: the attempt is counted at claim time (so a worker that keeps dying cannot loop forever with a counter that never moves), and a late result from an expired lease cannot overwrite the live attempt. **Observation, not a finding:** `webhookDeliveriesRepo.claimBatch` still uses the `where id in (select ... limit ... for update skip locked)` form that `broadcastRecipientsRepo.claimBatch` was found to mishandle on production's Postgres 17 (CLAUDE.md). The test harness runs Postgres 18, so it cannot confirm or refute that on 17; worth one check against the production version before assuming it is harmless.
+**Status as of 2026-10-13, and how unit 0.4 relates to it.** 3.14 has **not** landed: the three runners above are unchanged. It is not a gate for unit 0.4 (`IMPLEMENTATION.md` correction 5, accepted 2026-10-12), because 0.4 builds a new queue and does not inherit the pattern. `ai_jobs` advances its clock on every outcome: a claim leases the row and counts the attempt, a failure schedules the next attempt with backoff, a result is guarded by attempt number, the third failure is terminal, and only the terminal transition writes an `audit_log` row (verified on a real Postgres, `test/aiJobs.test.js`, J2 to J5, with nine mutation checks). It copies the `forwardRunner` / `webhookDeliveriesRepo` shape, with two differences that make it stricter: the attempt is counted at claim time (so a worker that keeps dying cannot loop forever with a counter that never moves), and a late result from an expired lease cannot overwrite the live attempt. **Raised to its own item, 3.19 (owner, 2026-10-13):** `webhookDeliveriesRepo.claimBatch` still uses the `where id in (select ... limit ... for update skip locked)` form that `broadcastRecipientsRepo.claimBatch` was found to mishandle on production's Postgres 17 (CLAUDE.md). The test harness runs Postgres 18, so it cannot confirm or refute that on 17; worth one check against the production version before assuming it is harmless.
 
 ### 3.15 The `Sirah` client's WABA row is probed every hour and always fails
 
@@ -589,6 +589,55 @@ BEGIN
 END $$;
 ```
 **Verify after applying:** `select status from wabas where id = '…'` returns `failed`; then, at the next hourly tick (at most about 60 minutes), no new `sendability_registration_check_failed` row appears for client `30adfd9e…`. No session-level `SET` is used (`SET LOCAL` only, inside the block). **Not executed.**
+
+### 3.19 `claimBatch`: two live production queries use the form that over-claimed on Postgres 17 (opened 2026-10-13, owner). NOT FIXED. Confirm first.
+
+**Why this is its own item.** It was recorded as an "observation" under 3.14. It is live production code delivering webhooks to clients, so it is raised here.
+
+**What is in production.** Two repository functions claim rows with `update ... where id in (select id ... order by ... limit $n for update skip locked)`:
+
+| Function | Caller | Intended batch | Effect if the limit is not honoured |
+|---|---|---|---|
+| `webhookDeliveriesRepo.claimBatch` | `forwardRunner.tick` (every 5 s) | 25 | The batch is unbounded: every due delivery is claimed and leased for 2 minutes at once. With a backlog (a client endpoint down, then back) the batch is unbounded: in the worst case, every delivery timing out at 10 s with concurrency 5, N rows take about 2N seconds, so past roughly 60 rows the work outlasts the 2-minute lease, the lease expires mid-run, and the next tick **re-claims and delivers the same event a second time**. (If deliveries are fast the harm is smaller; the unbounded claim is the defect either way.) Duplicate webhooks to a client's CRM. |
+| `contactFlowStateRepo.claimDueBatch` | `flowRunner.tick` | its batch size | The same unbounded claim (intended 25 every 5 s) of due flow states; each is moved to `processing` and processed serially. A slow tick past the 5-minute stale-`processing` reclaim can process a state twice, i.e. **send a flow message to a customer twice**. |
+
+`broadcastRecipientsRepo.claimBatch` had the same shape and was fixed on 2026-08-28 after being observed to claim all 5 pending rows for `limit = 1` on production's Postgres 17.6 (CLAUDE.md, Known Gaps). `aiJobsRepo.claimDueBatch` uses the CTE form and is not affected.
+
+**What is known and not known.**
+- On **local Postgres 18.4** (the test harness; not production) the shape does **not** over-claim: in five scenarios (5 rows / limit 1, 300 rows / limit 25, 5,000 rows / limit 25, with and without statistics) it claimed exactly the limit, and `EXPLAIN` shows a Hash Semi Join with the `Limit` evaluated once beneath the hash. So this is **not** a property of the SQL in isolation.
+- On production's **17.6**, for `broadcast_recipients`, it did over-claim, deterministically, over three trials. The likely mechanism is a different plan (the sub-select executed per outer row, so each row it locks changes what the next execution returns), which depends on version, table size and statistics, not on the SQL text alone.
+- **Therefore whether these two queries over-claim in production today is unknown**, and may differ between the two tables and change as they grow.
+
+**The one read needed.** Pure read, no writes, no locks held, run through the usual `begin read only` on production's actual version, for each of the two tables:
+
+```sql
+begin read only;
+show server_version;                       -- expect 17.x; record it
+-- webhook_deliveries (shape copied from webhookDeliveriesRepo.claimBatch)
+explain
+update webhook_deliveries
+   set next_attempt_at = now() + interval '2 minutes'
+ where id in (select id from webhook_deliveries
+               where status = 'pending' and next_attempt_at <= now()
+               order by created_at asc limit 25 for update skip locked)
+returning *;
+-- contact_flow_state (shape copied from contactFlowStateRepo.claimDueBatch)
+explain
+update contact_flow_state
+   set status = 'processing', updated_at = now()
+ where id in (select id from contact_flow_state
+               where (status = 'active' and due_at is not null and due_at <= now())
+                  or (status = 'processing' and updated_at < now() - interval '5 minutes')
+               order by due_at asc nulls last, updated_at asc limit 25 for update skip locked)
+returning *;
+rollback;
+```
+
+`EXPLAIN` without `ANALYZE` plans the statement and executes nothing. **Reading the result:** a `Hash Semi Join` / `Hash` over a `Subquery Scan` with the `Limit` beneath it means the limit is evaluated once: **refuted**. A `Nested Loop` (semi) whose inner side contains the `Limit` + `LockRows`, so the sub-select re-runs per outer row, means the limit can be exceeded: **confirmed**. The plan can flip with table size, so this read must be taken on the real tables at the time, and ideally once while a backlog exists (after a client endpoint outage) as well as at rest.
+
+**If confirmed:** the fix is the CTE form `aiJobsRepo` already uses (`with due as (select ... limit $n for update skip locked) update ... from due ...`), in two functions, with the same concurrency test pattern as `test/aiJobs.test.js` (J2). Separately review the lease (2 minutes) against worst-case batch time. **If refuted:** record the plan and the version here and close the item; keep the CTE form for any new claim query regardless.
+
+**Not done, by instruction:** nothing changed, and the read above has not been run.
 
 ### 3.16 The Meta app secret is put in request URLs (3 places)
 
@@ -855,6 +904,40 @@ What the client experiences, checked against the code (2026-10-13):
 | Marked paid | Auto-reactivates, but only if this mechanism did the suspending | Sends resume; recipients already failed stay failed |
 
 **Open product questions this raises** (none are engineering): is a hard stop at day 5 the intent, given a client mid-campaign; what exactly should the rejection message say (it is the only explanation the client gets); should the Wasi app show a suspended banner and the reason; should a running broadcast pause instead of failing every recipient; and who is told, internally, when it fires. 0.5's error text and the banner are small, but they are the whole of the client's experience.
+
+
+**OWNER DECISIONS ON THE DAY-5 AUTO-SUSPEND (2026-10-13, night). These are part of unit 0.5's scope, not a follow-up.**
+
+| | Decision | Verified against the code, and what it changes |
+|---|---|---|
+| a | **A hard stop at day 5 is acceptable only with a visible banner in the app.** Blocking sends with no on-screen explanation makes the client conclude Wasi is broken, not that they owe money, which is worse for Wasi than not suspending. **If the banner is not built, the suspension does not ship.** | The enforcement and the banner are one change and one review; neither merges alone. Enforcement without the banner is a defect, not a partial delivery. A test must assert that a suspended client's app shows the banner. |
+| b | **The banner says: sends are paused, why, the amount owed if we have it, and how to pay. It also says inbound still arrives**, so they know no customer message is being lost. | See "Banner specification" below. Two inputs do not exist yet: an **amount** (no field anywhere in the schema; billing is a manual Paid/Unpaid flag) and an unambiguous **how to pay** (see below). |
+| c | **A running broadcast must PAUSE, not fail every remaining recipient.** Failing is destructive and unrecoverable (they would have to rebuild it); pausing is resumable the moment they pay. | A `Paused` status and manual `POST /:id/pause` / `/resume` already exist (Admin/Manager), and the runner already skips non-`Sending` broadcasts. What is missing is the runner pausing itself. See "Broadcast pause" below. Today a non-`send_failed` error is terminal per recipient (`broadcastRunner.js`), which is exactly the destructive behaviour to avoid. |
+| d | **Flow send nodes stalling is acceptable; they resume.** | **The premise is false today, and this needs a decision.** A `stalled` `contact_flow_state` is excluded from `findActive` (`active`/`processing` only) and from `flowRunner`'s claim (`active` with a due time, or a stale `processing`). Nothing resumes a stalled flow; admin only lists them. So a flow that stalls on a suspended client's send stays stalled after they pay. See "Flows" below. |
+| e | **Inbound continues. Never drop a customer's message over billing.** | Verified: the gate sits in `messagingService.sendChatMessage` / `retryMessage` only. The inbound webhook path (insert, forward, opt-out recording) is untouched. A test must assert that an inbound message from a suspended client's customer is stored and forwarded. |
+
+**Banner specification (part of 0.5).**
+
+- **Where.** The client app (`index.html` / `app.js`), visible on every view while the client is suspended. Not a toast: a persistent, non-dismissible strip, because the failure it explains is persistent.
+- **What triggers it, and no new API is needed.** `GET /api/auth/me` already returns `status`, `payment_status`, `auto_suspended_for_nonpayment` and `payment_marked_unpaid_at`. The app already calls it on every load.
+- **Two wordings, chosen by cause.** `status = 'suspended'` is also set by an admin for reasons that are not payment. Saying "you owe money" to a client suspended for another reason is worse than saying nothing. Nonpayment wording only when `auto_suspended_for_nonpayment` (or `payment_status = 'unpaid'`); a neutral wording otherwise ("Sending is paused on this account. Contact support.") with the support route.
+- **Required content (nonpayment).** Sends are paused; the reason (payment is overdue); the amount owed **only if one is stored, otherwise omitted rather than invented**; how to pay; and that incoming customer messages are still received and nothing is lost.
+- **Inputs that do not exist yet (need an owner answer, not engineering).** (1) *Amount owed:* there is no amount on a client row or anywhere in the billing tables used for this flow. Showing one needs the admin "Mark unpaid" action to record it. (2) *How to pay:* the client app has billing routes (`/api/billing/checkout`, `/invoices`), wallet recharge (`/api/wallet/recharge`) and payment links (`/api/payment-links`), and none of them corresponds to "the overdue subscription amount" on a client the admin marked unpaid by hand. Either a defined pay action, or an explicit "contact us at <route>".
+- **Optional, cheap, recommended:** show the same banner from day 3 (the warning stage) in a softer wording, so day 5 is never a first notice in-app.
+- **Copy and the chat error.** The 409 shown in the chat UI when a reply is rejected must say the same thing in one line and point at the banner: without it an unexplained error would be the client's entire experience.
+
+**Broadcast pause (decision c).**
+
+- On `client_suspended` from a send, the runner sets the broadcast to `Paused` (the existing status), records the cause so the UI can say "paused: account suspended" rather than "paused by you", and **leaves the unsent recipients `pending`**. The recipient whose send was rejected, and any recipients already claimed into `sending` for that batch, go back to `pending`; none is marked `failed`.
+- **Resume.** The existing Resume button works as is. **Open sub-decision:** auto-resume when the client is reactivated, or require a manual click. Recommendation: manual. A campaign that fires on its own days after it was written, to a list that may have changed, is a new risk; the banner and the paused-campaign label make the manual click discoverable.
+- A *scheduled* broadcast that comes due while the client is suspended starts, fails its first send, and pauses by the same rule. No special case.
+- Anything already `sent` stays sent. Per-recipient `failed` for other reasons is unchanged.
+
+**Flows (decision d).** Options, with a recommendation:
+1. **Accept the loss.** The flow stays `stalled`; the customer's next keyword can start a new one (a stalled row is not "active"). Simplest; a customer mid-flow at suspension never gets the rest.
+2. **Defer instead of stall (recommended).** In `runToRest`'s send-node catch, a `client_suspended` error leaves the state `active` with a retry `due_at` (for example 6 hours later) and records no `stalled` event, so `flowRunner` re-attempts it after payment. Cap it (for example 7 days, then stall) so a client that never pays does not retry forever. Cost: a small, contained change in `flowEngine.js` and tests; no new mechanism, because `flowRunner` already claims `active` states whose `due_at` has passed (every 5 s, batch 25), which is exactly how `delay` nodes resume.
+
+**Other effects to state in the release note, not decide.** Hub API sends return `409` with the new code (the integration must handle it); keyword-rule replies are logged and dropped (rule errors are swallowed by design); the AI agent, when it exists, is silent for a suspended client because it sends through the same function; and marking Paid reactivates only if this mechanism did the suspending, so a manual suspension needs a manual reactivation, and the banner must not promise otherwise.
 
 
 **Rejection logging: carry its own, do not wait for 3.6.** Recommended 2026-10-12. 3.6 (a general request log) is unbuilt and unscheduled, and waiting would leave this the one send rejection nobody can see for as long as it takes. Write a single `audit_log` row per client per hour (action `send_rejected_client_suspended`, `actor_type` `system`, `target` the client id plus the error code), throttled by an existence check on the last hour. The throttle is not optional: a suspended client's integration can retry every second, and the unthrottled version of this is exactly the 1,650-row flood described in 3.14. It is queryable with the existing audit tooling today and is replaced, not duplicated, when 3.6 lands. Do not widen it to `session_window_closed` in the same unit; that is a separate, smaller change.
