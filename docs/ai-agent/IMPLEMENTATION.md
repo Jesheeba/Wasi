@@ -420,6 +420,8 @@ Commit. Do not push.
 
 ### Unit 0.5 — `clients.status` enforcement
 
+**Product decision required before this ships (owner, 13 Oct): shipping it makes a client's sends stop five days after an admin marks them unpaid, with no person present that day, and the Wasi app shows no suspended indicator.** What the client experiences and the open questions are in `BUILD_PLAN` 0.5.
+
 **No precondition gates this unit (owner decision 13 Oct). P5 (per-person admin accounts + login audit) was dropped as a gate and is a high-priority backlog item (`BUILD_PLAN` 3.9). P4 is not a gate on this unit** (owner decision 12 Oct, §1.1): it blocks `suspended` only and 0 clients are suspended, so it changes nothing today. P4 stays a gate on moving GV Mart (`BUILD_PLAN` 3.5), which is a different piece of work.
 
 **The hazard, in numbers [corrected 12 Oct evening].** Of 14 non-test clients, **8 are `pending_setup`**, and **4 of those hold a connected WABA today** (5 on the morning of 12 Oct, before the `Sirah` row was set to `failed`). 6 are `active`, 5 of them with a connected WABA. **0 clients are `suspended`.** Enforcing "not active" naively blocks the pending_setup clients the moment they send, so a blanket gate on `status = 'active'` is not viable. Blocking `suspended` only changes nothing for any client today; its first effect will be on the next client suspended (note the payment-reminder feature auto-suspends at day 5 unpaid, so this will start to bite real clients the first time that fires).
@@ -815,6 +817,10 @@ Phases 3 and 4 are in `BUILD_PLAN.md` §9 and §10.
 **Hard rule before 2b (owner, 12 Oct): the `smb_message_echoes` subscription must be live and verified first.** Verified means a real echo captured (an `audit_log` row for the field, and a `messages` row with `source = 'whatsapp_app'`). The agent must not go live on a Coexistence client while it is blind to phone replies. Unit 0.2 is built as designed because the design is right, but until that subscription exists its echo write is inert, and gate 4's only live protection for the 7 Coexistence clients is the `outside_hours` schedule (`SPEC.md` decision 23).
 
 **E1, as soon as Phase 1 shadow provides a quality baseline (raised 13 Oct from "after Phase 1"): evaluate Claude Haiku 5.5** on the shadow set: cost per turn, what to do about `temperature` 0.3 (it rejects non-default sampling), whether quality and `NEEDS_HUMAN` behaviour hold, and whether its lower cache minimum makes caching engage. Per-message cost assumptions may move by an order of magnitude and with them the add-on's unit economics (`SPEC.md` decision 22).
+
+**Two more Phase 2b entry criteria (owner, 13 Oct, both in `BUILD_PLAN` §8):** an automated echo must be distinguishable from a human one (an away/greeting message configured in the Business app may echo and silence the agent after every inbound; specified, not built; `SPEC.md` decision 26), and the gate-4 asymmetry governs every judgement call (`SPEC.md` decision 25).
+
+**Meta's service-message fee is an OPEN QUESTION that blocks the pricing document (`BUILD_PLAN` 5.6, `SPEC.md` decision 27).** Every per-reply figure is unverified until Meta answers.
 
 **Unit economics are UNRESOLVED (owner, 13 Oct).** At ~₹0.45 per reply the ₹1,499 tier cannot absorb unlimited AI replies (4,000 replies ~ ₹1,780). Four options are specified, with a breakdown of where the ~3,000 input tokens go, in `BUILD_PLAN` 5.5. Nothing is decided or built. Phase 1 must record per-turn token counts precisely enough to settle it: input and output tokens separately, and `knowledge_tokens` per client.
 

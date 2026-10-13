@@ -733,9 +733,11 @@ Claude Haiku 4.5 at $1 / $5 per million tokens (input / output).
 
 **Prompt caching does not engage at Wasi's prompt size (corrected 2026-10-12).** The earlier reason here was traffic shape: cache writes cost 1.25× and reads 0.1×, with a 5-minute default TTL, and on sparse, bursty traffic the write cost is paid repeatedly. That is true but secondary. The decisive reason is that **Haiku 4.5's minimum cacheable prefix is 4,096 tokens** and the spec's prompt is about 3,000 (rules and profile ~300, knowledge up to 2,500, conversation ~200), so a cache marker silently does nothing (`cache_creation_input_tokens: 0`). Record `tokens_cached` anyway so it is measured. This also means `SPEC.md` §12's "cache hit ~₹0.22" figure is not the expected case: the real figure is about **₹0.45 per reply all in**. See `SPEC.md` decisions 19 and 20.
 
-**Per-message cost assumptions may move by an order of magnitude.** Haiku 4.5 is held through Phase 1 on purpose, so the shadow run produces a baseline against a fixed variable. Claude Haiku 5.5 is listed at $0.10 / $0.50 per MTok (prompts up to 100K) against $1 / $5, roughly 10x cheaper, and it rejects non-default sampling parameters, so the spec's `temperature` 0.3 would be a 400. Whether to move is its own evaluation task (E1, section 7), started as soon as Phase 1 shadow provides a quality baseline (raised 2026-10-13), not something to decide mid-build. **The unit economics are unresolved: see 5.5.** Do not publish a per-message price, or size the add-on, on the Haiku 4.5 figures alone.
+**Per-message cost assumptions may move by an order of magnitude, and the Meta fee inside them is unverified (5.6).** Haiku 4.5 is held through Phase 1 on purpose, so the shadow run produces a baseline against a fixed variable. Claude Haiku 5.5 is listed at $0.10 / $0.50 per MTok (prompts up to 100K) against $1 / $5, roughly 10x cheaper, and it rejects non-default sampling parameters, so the spec's `temperature` 0.3 would be a 400. Whether to move is its own evaluation task (E1, section 7), started as soon as Phase 1 shadow provides a quality baseline (raised 2026-10-13), not something to decide mid-build. **The unit economics are unresolved: see 5.5.** Do not publish a per-message price, or size the add-on, on the Haiku 4.5 figures alone.
 
 ### 5.5 Unit economics — UNRESOLVED (recorded 2026-10-13, owner)
+
+> **UNVERIFIED INPUT: every figure below that includes Meta's ₹0.115 fee is unconfirmed until Meta answers (5.6). Whether that fee is Wasi's cost or the client's is itself open.**
 
 **The AI feature's unit economics are unresolved, and the ₹1,499 tier cannot absorb unlimited AI replies.** At about ₹0.445 per reply all in (`SPEC.md` §12.1, decision 19), a client taking 4,000 AI replies a month costs about ₹1,780, which is more than the ₹1,499 plan price. Nothing below is built. Four options are specified so the choice can be made on numbers, and they combine: they are not alternatives.
 
@@ -770,6 +772,28 @@ Input is about 80% of the model cost (₹0.264 of ₹0.330) and about 59% of the
 **Sensitivity that is not engineering and is not settled: Meta's service-message fee.** `SPEC.md` assumes ₹0.115 per agent reply and flags it VERIFY. A web search on 2026-10-13 returned conflicting, secondary-source reports: service messages inside the 24-hour window were free through early 2026 ([AiSensy, Jan 2026 pricing note](https://m.aisensy.com/blog/whatsapp-per-message-pricing-update-effective-january-1-2026/)); and from 1 October 2026 they become chargeable at the utility rate (reported ₹0.115 by [Free Press Journal](https://www.freepressjournal.in/tech/how-much-does-india-have-to-pay-for-whatsapp-messages-from-october-1)), with a reported 1,000 free service messages per WABA per month ([AiSensy, Oct 2026 note](https://m.aisensy.com/blog/whatsapp-pricing-update-october-2026/)). **None of this was confirmed against Meta's own rate card**, and sources disagree on the utility rate (₹0.145 vs ₹0.115). If the 1,000-free allowance is real, a client under 1,000 replies a month pays no Meta fee at all, and the baseline falls to model cost only (₹0.330 per reply). Verify on Meta's India rate card before pricing anything.
 
 **Nothing is decided.** Do not publish a price, or size a plan's reply allowance, until Option 4's quality evidence and the Meta fee are both known.
+
+### 5.6 OPEN QUESTION — Meta's service-message fee. BLOCKS THE PRICING DOCUMENT, not only the AI feature (recorded 2026-10-13, owner)
+
+**Status: UNVERIFIED. The owner is asking Meta directly. Until Meta answers, every per-conversation and per-message figure in this document and in `SPEC.md` §12 is unverified and must be read as an assumption, not a fact.** That includes every figure containing the ₹0.115 Meta fee (the ₹0.445 baseline, the ₹1,780 at 4,000 replies, the add-on price table, the Haiku 5.5 figures) and the "1,000 free per WABA" allowance. On Haiku 5.5 Meta's fee is about 78% of per-reply cost, so it is now the largest single unknown in the model. The reported change date (1 Oct 2026) has already passed.
+
+It blocks more than the AI add-on: any plan, any "cost per conversation" shown to a client (`SPEC.md` §12.4), and the platform's own per-message pricing document rely on the same number.
+
+**What was found (web search, 2026-10-13; secondary sources only, none from Meta's own rate card):** service messages inside the 24-hour window were free through early 2026; reports from September 2026 say they become chargeable from 1 October 2026 at the utility rate (₹0.115 reported by [Free Press Journal](https://www.freepressjournal.in/tech/how-much-does-india-have-to-pay-for-whatsapp-messages-from-october-1); ₹0.145 by [AiSensy](https://m.aisensy.com/blog/whatsapp-pricing-update-october-2026/)), with a reported 1,000 free service messages per WABA per month. The sources disagree on the rate, and none could be tied to a Meta page.
+
+**The question sent to Meta, verbatim (owner, 2026-10-13):**
+
+> We are a Tech Provider in India. Our clients pay Meta directly.
+>
+> 1. As of October 2026, are service messages (free-form replies inside the 24-hour customer service window) chargeable in India? If so, from what date and at what rate?
+> 2. Is there a free allowance, and is it per WABA, per phone number, or per business portfolio? We have seen 1,000 per WABA per month reported but cannot find it on your rate card.
+> 3. Where is the authoritative current rate card for India?
+> 4. For a Tech Provider whose clients pay Meta directly, do these charges appear on the client's payment method or ours?
+
+**Why question 4 matters as much as the rate.** The unit-economics tables treat Meta's fee as a cost to Wasi. The owner's premise is that clients pay Meta directly. If that holds for service messages too, the ₹0.115 is the **client's** cost, not Wasi's: Wasi's own per-reply cost is the model alone (₹0.330 on Haiku 4.5, about ₹0.033 on Haiku 5.5), and the figure to show a client under `SPEC.md` §12.4 is different again. That would change which option in 5.5 matters (Haiku 5.5 becomes much less urgent for Wasi's margin, Option 1's reply cap becomes a client-facing cost control). Do not resolve this by assumption.
+
+**Do not** publish a price, size a plan's reply allowance, or show a client a per-conversation cost until questions 1 to 4 are answered from Meta.
+
 
 `cost_paise` is stored as an **integer**. Never a float. Never a currency type.
 
@@ -816,6 +840,20 @@ Today `clients.status` enforces nothing. A suspended client can still send.
 Enforce it at the send path, not the route — there are several routes and one send path. `messagingService.sendChatMessage` and `getSendableWaba` are the right places. A suspended client's send fails with a clear error code; the agent does not run at all.
 
 **Gate (owner decision, 2026-10-12): P4 is NOT a gate on this unit.** The unit blocks `suspended` only. 0 of 44 client rows are `suspended`, so it is a no-op today and cannot cut anyone off. P4 (GV Mart on a real, active row with a working token) remains a gate on **3.5, moving GV Mart**, and on any design that blocks non-`active` clients. Do not conflate the two again. **No gate remains for 0.5 (owner decision, 2026-10-13): P5, the per-person admin audit in 3.9, is dropped as a gate and is its own high-priority backlog item.** One correction to the reasoning recorded with that decision: "nothing suspends automatically" is not quite true. `paymentReminderRunner` (started in `index.js`) auto-suspends a client 5 days after an admin marks them unpaid (`auto_suspended_for_nonpayment`). No client is marked unpaid today (0 of 14 non-test clients; 0 auto-suspended), so it is a no-op now, but once 0.5 ships the first such suspension will cut off sends without a person flipping a switch on that day. That is the feature working as designed; it is a reason to make sure the admin can see who is suspended and why (the Client Detail banner already does), not a reason to hold 0.5.
+
+**DECISION REQUIRED BEFORE 0.5 SHIPS (recorded 2026-10-13, owner): shipping 0.5 makes a client's sends stop five days after an admin marks them unpaid, with no person present on the day it happens.** `paymentReminderRunner` (started in `index.js`, hourly tick) auto-suspends at day 5 (`SUSPEND_AFTER_DAYS = 5`) and sets `auto_suspended_for_nonpayment`. Today that suspension changes nothing about sending (that is the gap 0.5 closes), so the feature has never had a visible consequence. After 0.5 it does. This is to be decided as a product question, not discovered. Nothing is marked unpaid today (0 of 14 non-test clients), so the exposure begins with the first admin "Mark unpaid".
+
+What the client experiences, checked against the code (2026-10-13):
+
+| When | What happens | What the client sees |
+|---|---|---|
+| Day 3 unpaid | One WhatsApp warning from the Wasi demo WABA (`wasi_suspension_warning`), once | A message on their `contact_phone` (or their WABA's display number if none). Nothing in the Wasi app |
+| Day 5 unpaid | `status` becomes `suspended`; a `wasi_service_suspended` notice is sent, once | The same: a WhatsApp message. The Wasi client app has **no suspended banner or indicator at all** (`app.js` contains no suspension handling) |
+| After 0.5, any send | The send is rejected with a new `MessagingError` code (409) before any Meta call | **Chat reply:** an error with whatever message 0.5 chooses, nothing else explains it. **Hub API:** HTTP 409 with the new code. **A running broadcast:** every remaining recipient fails (non-`send_failed` errors are terminal in `broadcastRunner`), so a campaign dies part-way. **Flows:** send nodes stall. **Keyword rules:** logged, nothing sent. Inbound messages are still received and forwarded; login works |
+| Marked paid | Auto-reactivates, but only if this mechanism did the suspending | Sends resume; recipients already failed stay failed |
+
+**Open product questions this raises** (none are engineering): is a hard stop at day 5 the intent, given a client mid-campaign; what exactly should the rejection message say (it is the only explanation the client gets); should the Wasi app show a suspended banner and the reason; should a running broadcast pause instead of failing every recipient; and who is told, internally, when it fires. 0.5's error text and the banner are small, but they are the whole of the client's experience.
+
 
 **Rejection logging: carry its own, do not wait for 3.6.** Recommended 2026-10-12. 3.6 (a general request log) is unbuilt and unscheduled, and waiting would leave this the one send rejection nobody can see for as long as it takes. Write a single `audit_log` row per client per hour (action `send_rejected_client_suspended`, `actor_type` `system`, `target` the client id plus the error code), throttled by an existence check on the last hour. The throttle is not optional: a suspended client's integration can retry every second, and the unthrottled version of this is exactly the 1,650-row flood described in 3.14. It is queryable with the existing audit tooling today and is replaced, not duplicated, when 3.6 lands. Do not widen it to `session_window_closed` in the same unit; that is a separate, smaller change.
 
@@ -872,6 +910,28 @@ Two sub-steps. Do not merge them.
 **2b — auto-send, one client.** The agent sends when all gates pass. Start with the single client whose shadow results were best. Keep a kill switch per client that takes effect on the next turn, not the next deploy.
 
 > **HARD RULE (owner, 2026-10-12): the `smb_message_echoes` subscription must be live and verified BEFORE 2b.** 7 of the 9 connected WABAs are Coexistence, and the app is not subscribed to the echo field today (0 echo-sourced messages, ever). While it is not, `last_agent_reply_at` cannot move for a reply sent from the owner's own phone, gate 4 cannot see the human, and the agent would answer on top of them in front of their customer. "Verified" means a real echo captured: an `audit_log` row for the field and a `messages` row with `source = 'whatsapp_app'`. Until then, the only protection for those clients is the `outside_hours` schedule, which narrows the exposure and does not close it. The agent must not go live on a Coexistence client while it is blind to phone replies. Subscription also has an ordering constraint already recorded in 3.0: production must run `cb27227` first. Do not subscribe `history` until a handler exists.
+
+> **ENTRY CRITERION 2 FOR 2b (owner, 2026-10-13): an automated echo must be distinguishable from a human one. SPECIFIED, NOT BUILT. We do not auto-send on a Coexistence client until this is resolved.**
+>
+> **The risk.** A client with an away or greeting message configured in the WhatsApp Business app may produce an echo that reads as a human reply. Unit 0.2 would then set `last_agent_reply_at` and silence the agent for 15 minutes after every inbound, with no visible cause: the agent would look broken. Away messages are common among our clients. This is the same family as the gate-4 gap: our only view of what happens on the phone is the echo, and an echo does not say who or what sent it.
+>
+> **What is unknown (nothing here is confirmed).** No echo has ever been delivered (the app is not subscribed), so we have never seen a real payload. We do not know whether Business-app away/greeting/quick-reply messages are echoed at all, nor what an echo carries. Do not guess field names.
+>
+> **Candidate ways to tell them apart, in order of how much evidence each needs:**
+>
+> | # | Candidate | What it needs | Weakness |
+> |---|---|---|---|
+> | 1 | **A marker in the payload** that says the message was automated | The first live echoes, captured structure-only (keys and types, no numbers or text). Check what Meta's Coexistence documentation says an echo carries, re-read at the source, not a summary | May not exist. If it does, it is the only candidate that is both cheap and certain |
+> | 2 | **Match the echo body against the client's configured away/greeting text** | A place to hold that text. The Cloud API has no endpoint to read the Business app's settings, so the client would have to paste it into Wasi (a field on the agent settings screen), and the match would be on normalised text | Manual and brittle: the client edits the message in the app and forgets Wasi; templated placeholders; but precise when it is set |
+> | 3 | **Latency from the inbound to the echo**: an automated reply lands within seconds, a human takes much longer | Echo timestamp vs `chats.last_inbound_at` (unit 0.1 already gives this), plus real data to choose a threshold | A fast human reply (a person already holding the phone) looks automated. **That is the unsafe direction** (see below) |
+> | 4 | **Identical body across different chats in a short window** (one text sent to 3+ customers within minutes, per WABA) | Echoes bucketed by a hash of the normalised body | A person pasting the same FAQ answer to several customers looks automated. Unsafe direction again |
+>
+> **The asymmetry governs the choice** (`SPEC.md` decision 25). Calling an automated echo "human" costs 15 minutes of silence and a confused client. Calling a human echo "automated" lets the agent talk over a person in front of their customer, which is unrecoverable. So a classifier may mark an echo automated **only on positive evidence**: candidate 1 (a marker) or candidate 2 (an exact match to configured text). Candidates 3 and 4 are heuristics and are only good enough to **alert** ("this chat's echoes look automated, check the client's away message"), never to override a human reading on their own.
+>
+> **Until resolved**, the options for a Coexistence client are: confirm with the client that no away/greeting message is configured in the Business app (and record that), or do not auto-send for that client. The `outside_hours` schedule does not help here: the away message is sent by the phone outside hours too.
+>
+> **Evidence to collect first (cheap, no new build beyond decision 13's structure-only capture):** for the first N live echoes per WABA, record keys and types, the echo's `timestamp` minus the preceding inbound's, and a hash of the normalised body. That is enough to evaluate candidates 1, 3 and 4 and to know whether candidate 2 is even needed.
+
 
 **Phase 2 definition of done:**
 - Suggestion acceptance rate over 70% unedited, measured over 100 suggestions.
