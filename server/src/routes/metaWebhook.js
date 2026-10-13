@@ -13,6 +13,7 @@ const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
 const messageStatusForwardsRepo = require('../repositories/messageStatusForwardsRepo');
 const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo');
 const flowEngine = require('../services/flowEngine');
+const aiAgentRunner = require('../services/aiAgentRunner');
 const forwardRunner = require('../services/forwardRunner');
 const { isOptOutMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -266,6 +267,27 @@ async function handleInboundMessages(waba, value) {
       if (flowOutcome.how === 'flow_error') {
         console.error('metaWebhook: flowEngine.evaluate FAILED — forwarding continues regardless:', {
           clientId, metaMessageId: msg.id, error: flowOutcome.error,
+        });
+      }
+
+      // AI agent (docs/ai-agent unit 0.4): hand the message to the agent's
+      // queue ONLY when the flow/automation layer left it alone. The decision
+      // is flowEngine.agentMayAnswer (inside enqueueIfEligible), never
+      // `!flowOutcome.handled`: an active flow that recognised nothing and a
+      // flow-engine failure are both handled:false and both must stay silent.
+      // Isolated for the same reason as the blocks above: the message insert
+      // is idempotent, so an uncaught throw would 500, Meta would retry, the
+      // retry's insert would be a no-op and enqueueForwards below would be
+      // skipped for good. Fire-and-forget past the enqueue itself (the
+      // runner's attemptImmediately is never awaited). For every client today
+      // this is a no-op: no client is eligible until the agent exists.
+      try {
+        await aiAgentRunner.enqueueIfEligible({
+          clientId, conversationId: chat.id, inboundMessageId: inserted.id, flowOutcome,
+        });
+      } catch (err) {
+        console.error('metaWebhook: AI agent enqueue FAILED — forwarding continues regardless:', {
+          clientId, metaMessageId: msg.id, error: err.message,
         });
       }
 

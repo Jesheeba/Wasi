@@ -32,6 +32,7 @@ const auditLogRepo = require('../src/repositories/auditLogRepo');
 const clientWebhooksRepo = require('../src/repositories/clientWebhooksRepo');
 const zapierSubscriptionsRepo = require('../src/repositories/zapierSubscriptionsRepo');
 const flowEngine = require('../src/services/flowEngine');
+const aiAgentRunner = require('../src/services/aiAgentRunner');
 
 const TEST_APP_SECRET = 'test-suite-echo-routing-app-secret';
 const WABA_ROW = { id: 'waba-row-echo', client_id: 'client-echo', waba_id: 'echo-routing-waba', forward_to_url: null, forward_events: [] };
@@ -74,6 +75,7 @@ beforeEach(() => {
     findByClientId: clientWebhooksRepo.findByClientId,
     listByClientAndEvent: zapierSubscriptionsRepo.listByClientAndEvent,
     evaluate: flowEngine.evaluate,
+    enqueueIfEligible: aiAgentRunner.enqueueIfEligible,
     poolQuery: pool.query,
   };
 
@@ -112,6 +114,7 @@ afterEach(() => {
   clientWebhooksRepo.findByClientId = originals.findByClientId;
   zapierSubscriptionsRepo.listByClientAndEvent = originals.listByClientAndEvent;
   flowEngine.evaluate = originals.evaluate;
+  aiAgentRunner.enqueueIfEligible = originals.enqueueIfEligible;
   pool.query = originals.poolQuery;
 });
 
@@ -220,5 +223,50 @@ test('router (unit 0.3): a flow engine returning something that is not an outcom
     assert.match(failure[1].error, /unrecognised outcome/);
   } finally {
     console.error = originalError;
+  }
+});
+
+// ---- unit 0.4: the webhook's hand-off to the AI agent queue ----------------
+
+test('router (unit 0.4): after the flow engine, the webhook hands the message and the flow OUTCOME to the agent queue', async () => {
+  const outcome = { handled: false, how: null };
+  flowEngine.evaluate = async () => outcome;
+  const seen = [];
+  aiAgentRunner.enqueueIfEligible = async (args) => { seen.push(args); return { enqueued: false, reason: 'agent_not_available' }; };
+  const status = await postInbound('wamid.AI_HANDOFF');
+  assert.equal(status, 200);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].clientId, WABA_ROW.client_id);
+  assert.equal(seen[0].conversationId, `chat-${CUSTOMER_NUMBER}`);
+  assert.equal(seen[0].inboundMessageId, 'message-in');
+  assert.deepEqual(seen[0].flowOutcome, outcome, 'the OUTCOME is passed through, not just a boolean');
+});
+
+test('router (unit 0.4): an unmatched-input outcome is passed through as such (the runner, not the webhook, decides silence)', async () => {
+  flowEngine.evaluate = async () => ({ handled: false, how: 'unmatched_input' });
+  const seen = [];
+  aiAgentRunner.enqueueIfEligible = async (args) => { seen.push(args.flowOutcome); return { enqueued: false, reason: 'flow_unmatched_input' }; };
+  assert.equal(await postInbound('wamid.AI_UNMATCHED'), 200);
+  assert.deepEqual(seen, [{ handled: false, how: 'unmatched_input' }]);
+});
+
+test('router (unit 0.4): a THROWING enqueue is logged and cannot block forwarding or the 200 to Meta', async () => {
+  flowEngine.evaluate = async () => ({ handled: false, how: null });
+  aiAgentRunner.enqueueIfEligible = async () => { throw new Error('ai_jobs table missing'); };
+  let forwardLookups = 0;
+  const original = clientWebhooksRepo.findByClientId;
+  clientWebhooksRepo.findByClientId = async () => { forwardLookups += 1; return null; };
+  const logged = [];
+  const originalError = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    assert.equal(await postInbound('wamid.AI_THROWS'), 200);
+    assert.ok(forwardLookups >= 1, 'enqueueForwards still ran after the enqueue threw');
+    const failure = logged.find((a) => String(a[0]).includes('AI agent enqueue FAILED'));
+    assert.ok(failure, 'the failure is logged');
+    assert.equal(failure[1].error, 'ai_jobs table missing');
+  } finally {
+    console.error = originalError;
+    clientWebhooksRepo.findByClientId = original;
   }
 });

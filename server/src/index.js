@@ -9,6 +9,7 @@ const metaTemplateLibraryRefreshRunner = require('./services/metaTemplateLibrary
 const paymentReminderRunner = require('./services/paymentReminderRunner');
 const messagingTierRefreshRunner = require('./services/messagingTierRefreshRunner');
 const sendabilityMonitorRunner = require('./services/sendabilityMonitorRunner');
+const aiAgentRunner = require('./services/aiAgentRunner');
 
 // Defense-in-depth, not a replacement for fixing specific gaps (see
 // db/pool.js and broadcastRunner.js's own listeners for the two confirmed
@@ -75,4 +76,9 @@ app.listen(port, () => {
   paymentReminderRunner.start();
   messagingTierRefreshRunner.start();
   sendabilityMonitorRunner.start();
+  // AI agent queue poller (docs/ai-agent unit 0.4). Off unless explicitly
+  // enabled: the feature must be invisible when off, and migration 088 must
+  // exist before this polls (otherwise every tick would log a missing-table
+  // error). Enabling is a deliberate deploy-time act.
+  if (process.env.AI_AGENT_RUNNER_ENABLED === 'true') aiAgentRunner.start();
 });
