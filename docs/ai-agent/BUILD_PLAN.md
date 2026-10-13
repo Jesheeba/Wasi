@@ -611,6 +611,20 @@ END $$;
 
 **Fix, specified, not built:** (1) move `client_secret` and `client_id` into a `POST` form body for both token exchanges (lines 81 and 101); (2) send the app token for `debug_token` as an `Authorization: Bearer` header (line 127); (3) wrap `fetchWithTimeout` so a rethrown error carries only its `code` or `name`, never the URL or `cause`; (4) add a test that a thrown error from each of these three calls contains neither the app secret nor a client token.
 
+### 3.17 `alertRunner.checkWabaRestrictions` has no status filter: a sweep with no exit condition (found 2026-10-13)
+
+**Status:** fixed in the Disconnect WhatsApp unit (see 3.18).
+
+`checkWabaRestrictions` (`alertRunner.js`) selected every `wabas` row with `restriction_status is not null`, with no `status = 'connected'` filter, unlike the other four sweeps. Any non-connected row (`failed`, `needs_manual_resolution`, now `disconnected`) carrying a restriction therefore raised a critical alert forever, with no way to close it. Same family as 3.14 (the retry bug class) and the Sirah row (3.15): a sweep whose loop has no exit condition. Fix: `where w.status = 'connected' and w.restriction_status is not null`.
+
+### 3.18 No way to disconnect or retry a WhatsApp connection; the only route was deleting the client (fixed locally 2026-10-13)
+
+**Status:** built, committed locally, not pushed or deployed.
+
+GV Mart's client was deleted twice in six days (7 Oct and 13 Oct) because there was no retry path, and `DELETE /api/clients/:id` cascades across ~38 tables with no audit. Built: a `disconnected` status, client and admin disconnect actions with a typed-name server-side confirmation, a pre-confirmation impact summary, an audit row, and a connect path that never mutates a working row until Meta confirms. Decisions (owner, 2026-10-13): new `disconnected` value rather than overloading `failed`; the encrypted access token is nulled on disconnect **and** `clientNotifier.resolveSenderWaba` checks status (nulling closes this row, the status check closes every future caller that resolves a WABA by "has a token" instead of "is connected"); an ambiguous discovery or a failed attempt never mutates a `connected` row. `wabas.waba_id` is UNIQUE, so reconnect **reuses** the disconnected row in place; `findByClientId` is untouched.
+
+**Limitation to revisit when offboarding exists:** webhooks keep arriving for a disconnected WABA because nothing is unsubscribed at Meta (by design: no Meta calls). They are still ingested and forwarded, which loses nothing. If a client disconnects because they are leaving Wasi, continuing to ingest their customers' messages has a privacy dimension. Not solved here.
+
 ---
 
 ## 4. Security and infrastructure
@@ -628,6 +642,12 @@ END $$;
 5. Only then flip the repository to private.
 
 An unauthenticated `git pull` fails on a private repository. Flipping first breaks the deploy.
+
+> **DECISION 2026-10-13 (owner): the push is HELD.** Reason: the rotation is NOT complete, and this is not about the documents' contents. Appendix C found only 2 accounts carrying `token_version >= 2` (the admin and the demo client). **32 accounts matching the published defaults were missed: Vetri Academy (Demo) and the 31 leftover test accounts.** Vetri has not been reset and can still log in. Handover 4.11's statement is therefore currently true, and publishing it to a public repo points at a live credential. Once the repository is private, nothing in the unpushed commits matters. The ordering below is load-bearing; each step is its own approved write:
+> a. Reset Vetri Academy's owner password via the admin reset-password endpoint, response discarded.
+> b. Delete the 31 test accounts using the transaction specified in Appendix C: pinned id list, count assertions of 31/18/14, commit only on match.
+> c. Deploy key on the VPS, then **prove it**: `git ls-remote` over SSH from `/opt/wasi` must succeed while the repository is still public (origin is HTTPS with no credential helper, so flipping private first breaks the deploy).
+> d. Flip the repository to private. Then push.
 
 **Before any push, separately:** the unpushed commits publish operational detail (client names, WABA and phone-number ids, a client phone number, and a statement that the three default seed passwords still worked in production). Confirm rotation covered the demo client, the third seeded default and the 31 leftover test accounts, not only the admin account. See the 2026-10-12 audit in Appendix C.
 
