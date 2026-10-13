@@ -357,8 +357,16 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallb
 
 // Called from automationEngine.js when a matched rule has flow_id set.
 // flow.status !== 'active' is checked by the caller, not here.
+//
+// Returns { started: true } when a flow actually ran for this contact, or
+// { started: false, reason } when nothing did ('no_entry_node': a draft flow
+// with nothing to run; 'already_active': a concurrent trigger got there
+// first, so a flow already owns this contact's conversation). Before unit
+// 0.3 this returned undefined and every caller ignored it; the distinction
+// exists so automationEngine can tell the AI agent's gate whether a flow
+// engaged (docs/ai-agent/SPEC.md section 7, gate 5).
 async function startFlow(db, clientId, contact, chat, flow) {
-  if (!flow.entry_node_id) return; // draft flow with no entry node — nothing to run
+  if (!flow.entry_node_id) return { started: false, reason: 'no_entry_node' }; // draft flow with no entry node — nothing to run
 
   let state;
   try {
@@ -366,7 +374,7 @@ async function startFlow(db, clientId, contact, chat, flow) {
       clientId, contactId: contact.id, flowId: flow.id, currentNodeId: flow.entry_node_id,
     });
   } catch (err) {
-    if (err.code === '23505') return; // another concurrent trigger already started a flow for this contact — first one wins
+    if (err.code === '23505') return { started: false, reason: 'already_active' }; // another concurrent trigger already started a flow for this contact — first one wins
     throw err;
   }
 
@@ -376,6 +384,7 @@ async function startFlow(db, clientId, contact, chat, flow) {
     expectedNodeId: flow.entry_node_id, expectedVersion: state.version,
     ...rest,
   });
+  return { started: true };
 }
 
 async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge, eventType = 'button_clicked', extraDetail = {}) {
@@ -441,6 +450,37 @@ async function advanceDueNode(db, clientId, contact, chat, flowState) {
   return runToRest(db, clientId, contact, chat, flowState.flow_id, edge.to_node_id, flowState.current_node_id);
 }
 
+// What evaluating one inbound message tells the caller (AI agent gate 5,
+// docs/ai-agent/SPEC.md section 7). Every path returns one of:
+//
+//   { handled: true,  how: 'flow_continued' }       an active flow's current node matched
+//   { handled: true,  how: 'flow_capture_reply' }   an active capture_reply node took the message
+//   { handled: true,  how: 'rule_started_flow' }    a keyword rule started (or a flow already owns) a flow
+//   { handled: true,  how: 'rule_text_reply' }      a keyword rule sent its free-text action
+//   { handled: true,  how: 'rule_text_reply_failed' | 'rule_flow_start_failed' }
+//                       a rule matched and claimed the message but its action threw
+//                       (automationEngine swallows that so ingestion is never blocked);
+//                       the agent must still stay silent, and the gate log can say why
+//   { handled: false, how: 'unmatched_input' }      an active flow exists but no branch
+//                       recognised the message. Not "handled", yet the agent must stay
+//                       silent: the flow holds state it cannot see (SPEC decision 15)
+//   { handled: false, how: 'flow_error', error }    evaluation threw (evaluateSafely only)
+//   { handled: false, how: null }                   nothing engaged: the ONLY outcome on
+//                       which the agent may answer (see agentMayAnswer)
+//
+// `how` is a short identifier for logs and the gate log, never a sentence.
+const NOT_ENGAGED = () => ({ handled: false, how: null });
+
+// The single place that decides whether the agent may answer a message that
+// the flow/automation layer has already looked at. Written as an allow-list
+// of ONE outcome on purpose: any new `how` value added later defaults to
+// "agent stays silent" until someone decides otherwise, which is the safe
+// direction (a missed answer costs a handover; speaking over a flow gives the
+// customer two parallel conversations).
+function agentMayAnswer(outcome) {
+  return !!outcome && outcome.handled === false && outcome.how === null;
+}
+
 // Called from routes/metaWebhook.js in place of the previous direct
 // automationEngine.evaluate() call. `contact` and `chat` are the rows
 // metaWebhook.js already resolved for this inbound message; `msg` is the
@@ -465,7 +505,7 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
       if (alwaysEdge) {
         const outcome = await captureReply(db, clientId, contact, currentNode, inboundEvent.text);
         await continueFlow(db, clientId, contact, chat, flowState, alwaysEdge, 'reply_captured', { capture: outcome });
-        return;
+        return { handled: true, how: 'flow_capture_reply' };
       }
       // No 'always' edge — a mis-authored flow (flowValidation.js flags
       // this before activation) that somehow reached runtime anyway. Falls
@@ -475,7 +515,7 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
       const matched = resolveInboundEdge(edges, inboundEvent);
       if (matched) {
         await continueFlow(db, clientId, contact, chat, flowState, matched);
-        return;
+        return { handled: true, how: 'flow_continued' };
       }
     }
     // No branch recognized this input — flow state is left untouched on
@@ -488,11 +528,36 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
     });
   }
 
-  await automationEngine.evaluate(db, clientId, chat, inboundBody, contact);
+  const ruleOutcome = await automationEngine.evaluate(db, clientId, chat, inboundBody, contact);
+  if (ruleOutcome && ruleOutcome.handled) return ruleOutcome;
+  // An active flow that recognised nothing and no rule claimed the message:
+  // not handled, but the agent must not speak into a flow it cannot see.
+  if (flowState) return { handled: false, how: 'unmatched_input' };
+  return NOT_ENGAGED();
+}
+
+// evaluate() for the webhook: never throws, and never returns an outcome the
+// caller could mistake for "nothing engaged" when something went wrong. A
+// throw becomes { handled: false, how: 'flow_error', error } (so the agent
+// stays silent AND the failure is visible as its own gate reason, SPEC
+// decision 18), and so does a return value that is not a recognisable
+// outcome: an engine bug must fail toward silence, not toward the agent
+// talking over a flow. Calls through module.exports so a test (or any
+// caller) that replaces evaluate is still intercepted.
+async function evaluateSafely(db, clientId, contact, chat, msg, inboundBody) {
+  try {
+    const outcome = await module.exports.evaluate(db, clientId, contact, chat, msg, inboundBody);
+    if (!outcome || typeof outcome.handled !== 'boolean') {
+      return { handled: false, how: 'flow_error', error: 'flow engine returned an unrecognised outcome' };
+    }
+    return { handled: outcome.handled, how: outcome.how === undefined ? null : outcome.how };
+  } catch (err) {
+    return { handled: false, how: 'flow_error', error: err.message };
+  }
 }
 
 module.exports = {
-  evaluate, startFlow, advanceDueNode,
+  evaluate, evaluateSafely, agentMayAnswer, startFlow, advanceDueNode,
   normalizeInboundEvent, resolveInboundEdge, dueEdgeType, isEdgeTypeLegalForNode, renderBody,
   captureReply,
 };

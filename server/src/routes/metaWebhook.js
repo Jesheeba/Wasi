@@ -256,11 +256,16 @@ async function handleInboundMessages(waba, value) {
       // receiving CRM silently losing an inbound message is worse than one
       // client's automation rule silently not firing once, so this
       // deliberately does NOT re-throw — do not "simplify" this away.
-      try {
-        await flowEngine.evaluate(pool, clientId, contact, chat, msg, body);
-      } catch (err) {
+      //
+      // evaluateSafely never throws: it returns the outcome ({handled, how},
+      // flowEngine.js's table), with a throw reported as how:'flow_error'.
+      // The outcome is what the AI agent's gate 5 will read (docs/ai-agent,
+      // unit 0.4 wires the enqueue); nothing consumes it yet, so today this
+      // is behaviourally identical to the try/catch it replaced.
+      const flowOutcome = await flowEngine.evaluateSafely(pool, clientId, contact, chat, msg, body);
+      if (flowOutcome.how === 'flow_error') {
         console.error('metaWebhook: flowEngine.evaluate FAILED — forwarding continues regardless:', {
-          clientId, metaMessageId: msg.id, error: err.message,
+          clientId, metaMessageId: msg.id, error: flowOutcome.error,
         });
       }
 

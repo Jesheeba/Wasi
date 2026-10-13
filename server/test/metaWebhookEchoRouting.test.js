@@ -95,7 +95,8 @@ beforeEach(() => {
   auditLogRepo.record = async () => {};
   clientWebhooksRepo.findByClientId = async () => null;
   zapierSubscriptionsRepo.listByClientAndEvent = async () => [];
-  flowEngine.evaluate = async (db, clientId, contact, chat, msg, body) => { calls.flowEvaluate.push({ contactPhone: contact.phone, body }); };
+  // Returns a real outcome ({handled, how}, unit 0.3): the webhook now reads it.
+  flowEngine.evaluate = async (db, clientId, contact, chat, msg, body) => { calls.flowEvaluate.push({ contactPhone: contact.phone, body }); return { handled: false, how: null }; };
   // The router persists one meta_webhook_log row per delivery via pool.query.
   pool.query = async () => { calls.poolQuery += 1; return { rows: [], rowCount: 0 }; };
 });
@@ -172,4 +173,52 @@ test('router: an ordinary inbound customer message under field `messages` still 
   assert.equal(calls.incrementReceived, 1);
   assert.equal(calls.insertEcho.length, 0);
   assert.deepEqual(calls.upsertByPhone.map((c) => c.phone), [CUSTOMER_NUMBER]);
+});
+
+// ---- unit 0.3: the webhook's call into the flow engine ---------------------
+
+async function postInbound(id) {
+  return postChange('messages', {
+    contacts: [{ profile: { name: 'Customer' }, wa_id: CUSTOMER_NUMBER }],
+    messages: [{ id, from: CUSTOMER_NUMBER, timestamp: '1758700400', type: 'text', text: { body: 'hello' } }],
+  });
+}
+
+test('router (unit 0.3): a flow engine that THROWS is logged as a failure and forwarding still runs (the message must never be lost)', async () => {
+  flowEngine.evaluate = async () => { throw new Error('flow tables unavailable'); };
+  let forwardLookups = 0;
+  const original = clientWebhooksRepo.findByClientId;
+  clientWebhooksRepo.findByClientId = async () => { forwardLookups += 1; return null; };
+  const logged = [];
+  const originalError = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    const status = await postInbound('wamid.FLOW_THROWS');
+    assert.equal(status, 200, 'Meta must still get a 200');
+    assert.equal(calls.insertInbound.length, 1);
+    assert.ok(forwardLookups >= 1, 'enqueueForwards must still have run after the flow engine threw');
+    const failure = logged.find((a) => String(a[0]).includes('flowEngine.evaluate FAILED'));
+    assert.ok(failure, 'the failure is still logged with the same message as before');
+    assert.equal(failure[1].error, 'flow tables unavailable');
+  } finally {
+    console.error = originalError;
+    clientWebhooksRepo.findByClientId = original;
+  }
+});
+
+test('router (unit 0.3): a flow engine returning something that is not an outcome is treated as a failure (silence, logged), and forwarding still runs', async () => {
+  flowEngine.evaluate = async () => undefined;
+  const logged = [];
+  const originalError = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    const status = await postInbound('wamid.FLOW_MALFORMED');
+    assert.equal(status, 200);
+    assert.equal(calls.insertInbound.length, 1);
+    const failure = logged.find((a) => String(a[0]).includes('flowEngine.evaluate FAILED'));
+    assert.ok(failure, 'a malformed outcome must be visible, not silently read as "nothing engaged"');
+    assert.match(failure[1].error, /unrecognised outcome/);
+  } finally {
+    console.error = originalError;
+  }
 });

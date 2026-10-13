@@ -12,6 +12,13 @@ const messagingService = require('../services/messagingService');
 // (see repositories/tagsRepo.js's module comment for the convention).
 // `contact` is required only for a flow-starting rule (flow_id set) — every
 // current caller already has it resolved, so it's not optional.
+//
+// Returns { handled, how } (see flowEngine.js's outcome table). A rule that
+// matched claims the message even when its action then throws: the exception
+// is still swallowed here (a bad rule must never block ingestion), but it is
+// reported as handled:true with a `_failed` how, so the AI agent stays silent
+// instead of answering over a rule that did match, and the gate log can tell
+// a rule that worked from one that did not.
 async function evaluate(db, clientId, chat, inboundBody, contact) {
   const rules = await automationRulesRepo.list(db, clientId);
   const enabled = rules.filter((r) => r.status === 'Enabled');
@@ -31,21 +38,34 @@ async function evaluate(db, clientId, chat, inboundBody, contact) {
         const flowEngine = require('./flowEngine');
         const flow = await automationFlowsRepo.findById(db, clientId, rule.flow_id);
         if (flow && flow.status === 'active') {
-          await flowEngine.startFlow(db, clientId, contact, chat, flow);
+          const started = await flowEngine.startFlow(db, clientId, contact, chat, flow);
+          // 'already_active' means a concurrent trigger's flow already owns
+          // this contact's conversation: still a flow handling it. A draft
+          // flow with no entry node ran nothing, so nothing engaged.
+          if (started && (started.started || started.reason === 'already_active')) {
+            return { handled: true, how: 'rule_started_flow' };
+          }
         }
-      } else {
-        // The reply is itself a free-form text send — always legal here
-        // since we're running this right after the inbound message that
-        // just reopened the 24h window.
-        await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: rule.action });
+        // Rule matched but there was no active flow to run (missing,
+        // inactive or empty): nothing was done for the customer.
+        return { handled: false, how: null };
       }
+      // The reply is itself a free-form text send — always legal here
+      // since we're running this right after the inbound message that
+      // just reopened the 24h window.
+      await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: rule.action });
+      return { handled: true, how: 'rule_text_reply' };
     } catch (err) {
       // Don't let one bad rule (e.g. WABA disconnected mid-flight) block
       // ingestion of the message that triggered it — already committed.
       console.error(`automation rule "${rule.title}" failed for chat ${chat.id}:`, err.message);
+      return { handled: true, how: rule.flow_id ? 'rule_flow_start_failed' : 'rule_text_reply_failed' };
     }
-    break; // first match wins — avoids firing multiple auto-replies for one message
+    // First match wins (avoids firing multiple auto-replies for one
+    // message): each branch above returns, so the loop never continues past
+    // a matched rule.
   }
+  return { handled: false, how: null };
 }
 
 module.exports = { evaluate };
