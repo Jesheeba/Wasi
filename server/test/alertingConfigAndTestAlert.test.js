@@ -32,6 +32,7 @@ const alertNotifier = require('../src/services/alertNotifier');
 const emailService = require('../src/utils/emailService');
 const { getAlertingConfigStatus } = require('../src/utils/alertingConfig');
 const { encrypt } = require('../src/utils/encryption');
+const messageTemplatesRepo = require('../src/repositories/messageTemplatesRepo');
 
 let server, baseUrl, adminToken, testClientId;
 
@@ -72,7 +73,7 @@ before(async () => {
   const adminLogin = await fetch(`${baseUrl}/api/admin/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@wasi.local', password: 'admin12345' }),
+    body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
   assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
@@ -98,6 +99,15 @@ before(async () => {
     phone_number_id: `${SUITE_PREFIX}phone`,
     status: 'connected',
     access_token_encrypted: encrypt('fake-token-never-sent-to-meta'),
+  });
+
+  // alertNotifier.sendWhatsAppChannel now resolves wasi_ops_alert's real
+  // approved language from its local row (the hardcoded-language fix under
+  // test elsewhere) instead of guessing 'en_US' — a local row is required
+  // for test 4's whatsapp-channel sends to even attempt a Meta call.
+  await messageTemplatesRepo.create(pool, {
+    client_id: testClientId, name: 'wasi_ops_alert', category: 'Utility', status: 'approved',
+    body: 'Wasi alert: {{alert_message}}', language: 'en_US',
   });
 });
 

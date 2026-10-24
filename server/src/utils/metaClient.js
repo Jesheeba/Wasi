@@ -486,9 +486,28 @@ async function sendListMessage(phoneNumberId, accessToken, toPhone, { bodyText, 
 // old positional shape (an ordered array), each object here carries its own
 // `parameter_name`, so order doesn't matter. Pass {} (or omit) for a
 // template with no variables — sendTemplateMessage defaults `components` to [].
+//
+// A template approved with classic positional placeholders ({{1}}, {{2}}, …)
+// rejects a send that uses the named form (`parameter_name`) — Meta expects
+// plain positional `{type:'text', text}` entries, in order, with no
+// parameter_name at all. The keys themselves say which form is needed
+// unambiguously: a named placeholder can never be "1"/"2"/... and a
+// positional one can never be "customer_name" — so detect purely numeric
+// keys and emit the positional shape for them instead of guessing from a
+// client/category flag.
 function buildNamedBodyComponents(paramValues) {
   const names = Object.keys(paramValues || {});
   if (names.length === 0) return [];
+  const positional = names.every((n) => /^[1-9][0-9]*$/.test(n));
+  if (positional) {
+    return [{
+      type: 'body',
+      parameters: names
+        .slice()
+        .sort((a, b) => Number(a) - Number(b))
+        .map((n) => ({ type: 'text', text: String(paramValues[n]) })),
+    }];
+  }
   return [{
     type: 'body',
     parameters: names.map((parameter_name) => ({

@@ -13,6 +13,7 @@
 // ALERT_WABA_ID's borrowed client number.
 const metaClient = require('../utils/metaClient');
 const wabasRepo = require('../repositories/wabasRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const { decrypt } = require('../utils/encryption');
 const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
@@ -43,7 +44,10 @@ async function resolveSenderWaba() {
   const waba = overrideId
     ? await wabasRepo.findByWabaId(overrideId)
     : await wabasRepo.findByClientId(WASI_SENDER_CLIENT_ID);
-  if (!waba || !waba.access_token_encrypted) {
+  // Status, not just "has a token": a disconnected/failed row must never be
+  // used as the sender (BUILD_PLAN 3.18). Callers that resolve a WABA by "has
+  // a token" instead of "is connected" are the actual defect.
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
     throw new ClientNotifyError(overrideId
       ? 'PAYMENT_REMINDER_WABA_ID does not match a connected WABA.'
       : 'The Wasi Demo Client has no connected WhatsApp account to send from.');
@@ -71,13 +75,27 @@ async function mirrorToSenderInbox(waba, client, to, templateName, metaMessageId
   }
 }
 
-// name/language/bodyParams describe an already-approved WhatsApp template
-// (see this feature's 3 candidate templates, held for review — Part C).
+// name/bodyParams describe an already-approved WhatsApp template (see this
+// feature's 3 candidate templates, held for review — Part C). `language` is
+// no longer a caller-supplied/defaulted field (see the real bug this fix
+// closes, below) — it is always resolved from the template's own local row.
 // Every caller in this feature is best-effort by design (a reminder/warning
 // that fails to send should never abort the runner's tick for every other
 // client) — callers catch and log, this function just throws with a clear
 // reason so the caller's log line says something real.
-async function sendTemplateToClient(client, { name, language = 'en_US', bodyParams = {} }) {
+//
+// Real bug, fixed (same class as apiV1Messages.js/broadcastRunner.js/
+// flowEngine.js): this used to accept a `language` option defaulting to
+// 'en_US', and its one caller (paymentNotificationService.sendAndLog) never
+// passed one — so every billing WhatsApp send (reminder/warning/suspension)
+// was sent as 'en_US' regardless of what language the template is actually
+// approved under. Resolved the same way as the other fixes: look up the
+// real local row (scoped to the sender WABA's own client, since that is
+// whose template this is — never the recipient client's) and use its
+// `language` column. No local row means there is no reasonable language to
+// guess, so this throws a clear local reason instead of attempting a send
+// that would fail against Meta anyway, less specifically.
+async function sendTemplateToClient(client, { name, bodyParams = {} }) {
   const to = await resolveRecipientPhone(client);
   if (!to) {
     throw new ClientNotifyError(`${client.name} (${client.id}) has no contact_phone and no connected WhatsApp number on file — nothing to send to.`);
@@ -85,12 +103,17 @@ async function sendTemplateToClient(client, { name, language = 'en_US', bodyPara
 
   const waba = await resolveSenderWaba();
 
+  const template = await messageTemplatesRepo.findByNameAndClient(pool, waba.client_id, name);
+  if (!template) {
+    throw new ClientNotifyError(`Template "${name}" not found locally for the sender WABA's client — cannot determine its real approved language to send correctly.`);
+  }
+
   const accessToken = decrypt(waba.access_token_encrypted);
   // Returns Meta's message id (wamid) so the caller can log it and match
   // later delivered/read webhooks back to this send.
   const metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, to, {
     name,
-    language,
+    language: template.language,
     components: metaClient.buildNamedBodyComponents(bodyParams),
   });
   await mirrorToSenderInbox(waba, client, to, name, metaMessageId);

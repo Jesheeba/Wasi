@@ -408,6 +408,28 @@ test('buildNamedBodyComponents: empty/no values -> empty array, matches sendTemp
   assert.deepEqual(buildNamedBodyComponents(undefined), []);
 });
 
+test('buildNamedBodyComponents: purely numeric keys build the positional shape, in order, with no parameter_name', () => {
+  const components = buildNamedBodyComponents({ 2: 'second', 1: 'first' });
+  assert.deepEqual(components, [{
+    type: 'body',
+    parameters: [
+      { type: 'text', text: 'first' },
+      { type: 'text', text: 'second' },
+    ],
+  }]);
+});
+
+test('buildNamedBodyComponents: a mix of numeric and named keys still builds the named shape', () => {
+  const components = buildNamedBodyComponents({ 1: 'AAA', customer_name: 'Alex' });
+  assert.deepEqual(components, [{
+    type: 'body',
+    parameters: [
+      { type: 'text', parameter_name: '1', text: 'AAA' },
+      { type: 'text', parameter_name: 'customer_name', text: 'Alex' },
+    ],
+  }]);
+});
+
 // --- looksLikeAuthenticationContent / checkCategoryContentMismatch ---
 // Real, not hypothetical: Riyaz (Sirah Digital)'s 'booking_otp' template
 // was rejected by Meta with rejection_reason 'INCORRECT_CATEGORY' for

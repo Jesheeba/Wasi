@@ -20,7 +20,9 @@
 const emailService = require('../utils/emailService');
 const metaClient = require('../utils/metaClient');
 const wabasRepo = require('../repositories/wabasRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const { decrypt } = require('../utils/encryption');
+const { pool } = require('../db/pool');
 
 // notify() returns { email, whatsapp } — each a
 // { attempted, sent, error, reason? } result — added for the admin "Send
@@ -79,10 +81,22 @@ async function sendWhatsAppChannel(subject, message) {
       console.error(`alertNotifier: ${reason} — skipping WhatsApp alert`);
       return { attempted: false, sent: false, error: reason };
     }
+    // Real bug, fixed (same class as apiV1Messages.js/broadcastRunner.js/
+    // flowEngine.js/clientNotifier.js): this used to hardcode
+    // language: 'en_US' for wasi_ops_alert regardless of what language it is
+    // actually approved under on the borrowed client's WABA. Resolved the
+    // same way — the real local row's language, scoped to the WABA's own
+    // client (ALERT_WABA_ID's), not guessed.
+    const template = await messageTemplatesRepo.findByNameAndClient(pool, waba.client_id, 'wasi_ops_alert');
+    if (!template) {
+      const reason = 'wasi_ops_alert has no local template row for this WABA\'s client — cannot determine its real approved language';
+      console.error(`alertNotifier: ${reason} — skipping WhatsApp alert`);
+      return { attempted: false, sent: false, error: reason };
+    }
     const accessToken = decrypt(waba.access_token_encrypted);
     await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, to, {
       name: 'wasi_ops_alert',
-      language: 'en_US',
+      language: template.language,
       components: metaClient.buildNamedBodyComponents({ alert_message: `${subject}: ${message}`.slice(0, 300) }),
     });
     return { attempted: true, sent: true, error: null };

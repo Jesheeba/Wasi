@@ -70,14 +70,24 @@ test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REM
   let call = null; const mirrored = {};
   const contactsRepo = require('../src/repositories/contactsRepo');
   const chatsRepo = require('../src/repositories/chatsRepo');
-  const orig = { up: contactsRepo.upsertByPhone, foc: chatsRepo.findOrCreateByContact, ins: chatsRepo.insertOutboundPending, ms: chatsRepo.markSent };
+  const messageTemplatesRepo = require('../src/repositories/messageTemplatesRepo');
+  const orig = {
+    up: contactsRepo.upsertByPhone, foc: chatsRepo.findOrCreateByContact, ins: chatsRepo.insertOutboundPending, ms: chatsRepo.markSent,
+    find: messageTemplatesRepo.findByNameAndClient,
+  };
   contactsRepo.upsertByPhone = async (db, clientId, c) => { mirrored.clientId = clientId; mirrored.phone = c.phone; return { id: 'ct1' }; };
   chatsRepo.findOrCreateByContact = async () => ({ id: 'ch1' });
   chatsRepo.insertOutboundPending = async (db, cid, chatId, body) => { mirrored.body = body; return { id: 'm1' }; };
   chatsRepo.markSent = async (db, cid, id, metaId) => { mirrored.metaId = metaId; return {}; };
   wabasRepo.findByClientId = async (id) => {
     return id === '00000000-0000-0000-0000-000000000001'
-      ? { client_id: '00000000-0000-0000-0000-000000000001', phone_number_id: 'PN1', access_token_encrypted: encrypt('tok') } : null;
+      ? { client_id: '00000000-0000-0000-0000-000000000001', phone_number_id: 'PN1', status: 'connected', access_token_encrypted: encrypt('tok') } : null;
+  };
+  // The real approved language, not the old hardcoded/defaulted 'en_US' —
+  // this is the fix under test here.
+  messageTemplatesRepo.findByNameAndClient = async (db, clientId, name) => {
+    return clientId === '00000000-0000-0000-0000-000000000001' && name === 'wasi_payment_reminder'
+      ? { language: 'en' } : null;
   };
   metaClient.sendTemplateMessage = async (...args) => { call = args; return 'wamid.Y'; };
   try {
@@ -88,6 +98,7 @@ test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REM
     assert.equal(call[0], 'PN1');
     assert.equal(call[1], 'tok');
     assert.equal(call[2], '919999900009');
+    assert.equal(call[3].language, 'en', 'the real approved language must be used, not a hardcoded/defaulted en_US');
     assert.equal(mirrored.clientId, '00000000-0000-0000-0000-000000000001');
     assert.equal(mirrored.phone, '919999900009');
     assert.equal(mirrored.body, '[template: wasi_payment_reminder]');
@@ -95,6 +106,7 @@ test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REM
   } finally {
     metaClient.sendTemplateMessage = realSendTpl;
     contactsRepo.upsertByPhone = orig.up; chatsRepo.findOrCreateByContact = orig.foc; chatsRepo.insertOutboundPending = orig.ins; chatsRepo.markSent = orig.ms;
+    messageTemplatesRepo.findByNameAndClient = orig.find;
     if (saved !== undefined) process.env.PAYMENT_REMINDER_WABA_ID = saved;
     if (savedSecret === undefined) delete process.env.SERVER_SECRET; else process.env.SERVER_SECRET = savedSecret;
   }
