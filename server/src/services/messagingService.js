@@ -192,9 +192,26 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
         ? await metaClient.sendListMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttonText: button, sections, header, footer })
         : await metaClient.sendInteractiveMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttons, header, footer });
     } else {
+      // Real bug, fixed (same class as apiV1Messages.js/broadcastRunner.js/
+      // flowEngine.js/clientNotifier.js/alertNotifier.js): `template` (the
+      // real local row, already fetched above) was loaded and used for the
+      // consent/Authentication/media-header checks, but the actual Meta send
+      // still trusted the caller-supplied `templateLanguage` outright, with
+      // no DB-backed check or fallback. Every caller that goes through one
+      // of the 5 already-fixed call sites happens to pass the real
+      // `template.language` itself, but this function is the shared choke
+      // point (routes/chats.js's inbox manual-reply send/retry route also
+      // calls it directly, forwarding whatever `templateLanguage` the
+      // request body supplied) — nothing here stopped a stale or missing
+      // caller-supplied value from silently reaching Meta as the wrong
+      // language. `template.language` now wins whenever a local row exists;
+      // `templateLanguage` is kept only as the fallback for the one case
+      // where it doesn't (no local row — the same "nothing reasonable to
+      // guess" case the other fixes leave alone), so behavior there is
+      // unchanged.
       metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
         name: templateName,
-        language: templateLanguage,
+        language: template?.language || templateLanguage,
         components: finalComponents,
       });
     }
