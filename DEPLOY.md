@@ -76,15 +76,19 @@ curl https://<your-render-url>/health
 
 curl -X POST https://<your-render-url>/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"demo@wasi.local","password":"demo12345"}'
+  -d '{"email":"demo@wasi.local","password":"<SEED_DEMO_PASSWORD>"}'
 # returns a JWT — confirms auth + DB round-trip in production
 ```
 
 Then open `https://<your-render-url>/` (CRM), `/admin` (admin panel — login
-`admin@wasi.local` / `admin12345`, seeded), and `/marketing` (landing +
+`admin@wasi.local` with the `SEED_ADMIN_PASSWORD` you seeded it with), and `/marketing` (landing +
 signup wizard) in a browser.
 
-**Before onboarding real clients:** rotate the seeded demo credentials, set
-real `JWT_SECRET`/`SERVER_SECRET` if Render's auto-generated ones weren't
-used, and complete the Meta/Razorpay checklists in the platform spec before
+**Before onboarding real clients:** rotate the seeded demo credentials with
+`node server/scripts/set-password.js admin admin@wasi.local` (and the
+`client` variant for `demo@wasi.local`) — it prompts for the new password
+with hidden input, never a CLI arg or printed value, and revokes every
+existing session. Also set real `JWT_SECRET`/`SERVER_SECRET` if Render's
+auto-generated ones weren't used, and complete the Meta/Razorpay checklists
+in the platform spec before
 sending real client data through this deployment.

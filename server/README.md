@@ -20,8 +20,13 @@ npm run db:seed
 npm run dev                 # http://localhost:4000
 ```
 
-Seeded demo logins (printed by `db:seed`): client `demo@wasi.local` / `demo12345`,
-admin `admin@wasi.local` / `admin12345`.
+Seeded demo logins: `demo@wasi.local` and `admin@wasi.local`. Against a local database `db:seed` uses
+fixed dev-only passwords; against any other database it refuses to run unless
+`SEED_ADMIN_PASSWORD` and `SEED_DEMO_PASSWORD` are set (never commit real values).
+To set or rotate either password directly, use `node scripts/set-password.js
+admin admin@wasi.local` (or `client demo@wasi.local`) — prompts for the new
+password with hidden input, never a CLI arg/env var/printed value, and
+revokes every existing session for that account.
 
 ### No Docker?
 
