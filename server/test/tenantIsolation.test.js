@@ -94,7 +94,7 @@ test('2. the admin path still works — sees across every tenant, unaffected by 
   const adminLogin = await fetch(`${baseUrl}/api/admin/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@wasi.local', password: 'admin12345' }),
+    body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   assert.ok(adminLogin.token, 'demo admin login must succeed — run `npm run db:seed` first');
 

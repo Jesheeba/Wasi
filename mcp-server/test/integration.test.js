@@ -70,7 +70,7 @@ before(async () => {
   const adminLogin = await fetch(`${backendBaseUrl}/api/admin/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@wasi.local', password: 'admin12345' }),
+    body: JSON.stringify({ email: 'admin@wasi.local', password: (process.env.TEST_ADMIN_PASSWORD || 'dev-only-admin-password') }),
   }).then((r) => r.json());
   assert.ok(adminLogin.token, 'demo admin login must succeed — run `npm run db:seed` first');
 

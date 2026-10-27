@@ -38,7 +38,7 @@ before(async () => {
   const login = await fetch(`${baseUrl}/api/admin/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@wasi.local', password: 'admin12345' }),
+    body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = login.token;
   adminProfile = login.admin;
@@ -92,7 +92,7 @@ async function openAdmin(viewport = { width: 1366, height: 800 }, hash = '', { u
   await page.goto(`${baseUrl}/admin/${hash}`);
   if (ui) {
     await page.fill('#login-email', 'admin@wasi.local');
-    await page.fill('#login-password', 'admin12345');
+    await page.fill('#login-password', require('./helpers/adminCredentials').ADMIN_PASSWORD);
     await page.click('#login-form button[type="submit"]');
   }
   await page.waitForSelector('#app-shell', { state: 'visible', timeout: 5000 });
