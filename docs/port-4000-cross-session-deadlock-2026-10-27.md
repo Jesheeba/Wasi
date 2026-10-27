@@ -1,7 +1,21 @@
-# Port 4000: a cross-session test deadlock, not a test defect
+# Concurrent test runs deadlock — not a test defect, and not one single cause
 
-**Status:** root cause identified, fix not yet applied. This has cost two
-sessions most of a day — document first, fix later, per direct instruction.
+**Status:** two confirmed mechanisms, fix not yet applied to either. This has
+cost two sessions most of a day — document first, fix later, per direct
+instruction.
+
+**The finding is "concurrent test runs against this project deadlock," not
+"port 4000 is the problem."** Two independent mechanisms have been directly
+observed causing the identical symptom (near-zero CPU, no further output,
+hangs indefinitely under `--test-timeout=0`, blocks the rest of that
+session's suite behind it because `--test-concurrency=1` runs files
+strictly one-after-another): (1) the hardcoded-port collision below, and (2)
+contention on the single shared test-database container when two sessions'
+test processes hit it at once. Finding and fixing (1) does not mean (2) is
+solved, and finding (2) does not mean (1) isn't real — both have been
+observed directly, in this exact investigation, on different stuck process
+chains. Treat this as an open class of hazard with (at least) two known
+instances, not a single root cause with a single fix.
 
 ## The symptom
 
@@ -33,7 +47,7 @@ to a different worktree, different env vars, and a different seed state — it
 is not evidence about this session's hang, and the two are not reconciled
 against each other.
 
-## Root cause
+## Mechanism 1: hardcoded port 4000 (11 Playwright files)
 
 **13 files reference `4000`; 11 of them actually bind it**, every one a
 Playwright UI test that opens a real browser against a real running Express
@@ -94,13 +108,72 @@ This reproduces specifically when two sessions run tests concurrently, and
 not when a single session runs alone, because a solo run has no second
 process competing for the same socket.
 
-**This exonerates `metaTemplateLibraryQA.test.js`.** An earlier theory
-(from the other session) suspected a defect in that file's own real-cache
-backup/restore logic (documented in CLAUDE.md's Known Gaps as a past, real,
-separate incident). That file is unrelated to this hang — it never binds a
-port at all. The other session was right to rule it out.
+**This rules out one specific theory about `metaTemplateLibraryQA.test.js`,
+not the whole class of problem.** An earlier theory (from the other
+session) suspected a defect in that file's own real-cache backup/restore
+logic (documented in CLAUDE.md's Known Gaps as a past, real, separate
+incident). That specific file-level defect is not implicated in *this*
+collision — it never binds a port at all, so it cannot be the port-4000
+mechanism. The other session was right to rule that specific theory out.
+**It does not mean the underlying hazard — two sessions' test processes
+running concurrently — is solved.** See Mechanism 2 below: the file's own
+paired sibling (`metaTemplateLibrary.test.js`) is the one found stuck for
+4.5 hours in this same investigation, via a different mechanism.
 
-## The fix (not yet applied)
+## Mechanism 2: shared test-database contention
+
+A second, independent stuck process chain was found during this same
+investigation — predating this session's own run, started 15:48:37 (before
+this session's 16:12 run even began), near-zero CPU, sitting on
+`test/metaTemplateLibrary.test.js` for roughly 4.5 hours:
+
+```
+PID 24560: node ... npm-cli.js test
+  → PID 16572: node --test --test-concurrency=1
+    → PID 38268: node ... test\metaTemplateLibrary.test.js
+```
+
+**This file does not bind a port at all** — `server = app.listen(0)`, an
+ephemeral port, confirmed by reading the file directly. So this hang cannot
+be Mechanism 1. What it does do heavily is real `pool.query()` calls against
+shared, non-tenant-scoped tables (`meta_template_library_cache`, `clients`,
+`message_templates`) on the one shared test-database container every
+session's run in this environment ultimately points at. `metaTemplateLibrary
+.test.js` and its sibling `metaTemplateLibraryQA.test.js` already have one
+documented history of exactly this class of race (CLAUDE.md, Conventions:
+"both trigger real admin refreshes against mutually-exclusive fake partial
+catalogs on the same shared cache table... `npm test` now forces
+`--test-concurrency=1`... which resolved every instance of this found so
+far") — but that fix only ever serializes files *within one `node --test`
+invocation*. It was never designed to, and cannot, prevent a second,
+independent invocation (a second session, its own process tree, its own
+`--test-concurrency=1`) from running the identical file against the
+identical shared database container at the same time. Two sessions each
+correctly serializing their own files internally can still collide with
+each other on the same shared Postgres container — row locks, long-held
+transactions, or a query waiting on a lock the other session's transaction
+holds — which presents identically to the port-4000 hang: near-zero CPU, no
+further output, no recovery under `--test-timeout=0`.
+
+**Likely common cause, not confirmed in full detail**: the earlier session
+reported running `metaTemplateLibrary.test.js` and `metaTemplateLibraryQA
+.test.js` together and getting 15/15 passing — meaning the pairing itself is
+fine when nothing else is concurrently touching the same database. The
+single variable that changed between that passing run and this stuck chain
+is a second session's test process also being active against the same
+Postgres container at an overlapping time — the same class of hazard this
+session caught itself triggering earlier today (running a single test file
+manually while a different full-suite background run was still active
+against the same test database, confirmed contaminated and discarded before
+being used as evidence for anything).
+
+## The fix for Mechanism 1 (not yet applied)
+
+This closes the port-collision mechanism only. It does nothing for
+Mechanism 2 (shared test-database contention), which has no proposed fix
+yet beyond the operational rule below — a real fix there would mean either
+a separate test database per session/worktree, or some form of
+cross-session locking/coordination, neither designed here.
 
 Each of the 11 files above should switch from a hardcoded `listen(4000)` to
 an ephemeral port, exactly matching `adminLoginAudit.test.js`'s existing
@@ -131,11 +204,15 @@ when this is done.
 
 ## Operational rule, effective immediately
 
-**Nobody runs any Playwright-based test file while another session is also
-running tests, until the port is de-collided (the fix above is applied).**
-This is not a suggestion — a second session's test run can silently hang a
-first session's run (or vice versa) for hours with zero visible error,
-exactly as happened here. Check for a live `node --test`/`npm test` process
-and a listener on port 4000 (`netstat -ano | findstr :4000` / `Get-NetTCPConnection
--LocalPort 4000`) before starting a Playwright-touching test run, until the
-fix above ships.
+**One test run at a time, across all sessions — Playwright or not.** The
+port-4000 fix above, even once applied, only closes Mechanism 1. Mechanism
+2 (shared test-database contention) can hang a non-Playwright, DB-touching
+test file just as silently, with no port involved at all — confirmed
+directly by the `metaTemplateLibrary.test.js` chain above. Narrowing this
+rule to "Playwright files only" would leave Mechanism 2 live. Before
+starting any test run that touches the database: check for another
+session's live `node --test`/`npm test` process
+(`Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match
+'node --test|npm test' }` or equivalent) and a listener on port 4000
+(`netstat -ano | findstr :4000` / `Get-NetTCPConnection -LocalPort 4000`).
+If either is present, wait.
