@@ -14,3 +14,6 @@ AISENSY_END_TO_END_ARCHITECTURE_AND_FLOWS.md
 
 # Claude Code scheduler runtime lock (session id + pid), recreated every session
 .claude/scheduled_tasks.lock
+
+# Claude Code per-project runtime state / session data
+.claude/
