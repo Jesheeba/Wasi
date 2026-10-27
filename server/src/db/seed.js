@@ -6,10 +6,15 @@ const { pool } = require('./pool');
 
 const DEMO_CLIENT_ID = process.env.DEV_CLIENT_ID || '00000000-0000-0000-0000-000000000001';
 
-// Dev-only credentials, printed at the end of the run. Change before any real deploy.
-const DEMO_CLIENT_PASSWORD = 'demo12345';
+// Passwords come from the environment. A fixed, published default is allowed
+// ONLY against a local database (localhost / 127.0.0.1): the old hardcoded
+// admin12345 / demo12345 pair was committed to a public repo and found live in
+// production on 2026-10-09, and this script's ON CONFLICT clauses below would
+// silently re-set a rotated password back to whatever value is in here.
+const IS_LOCAL_DB = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '');
+const DEMO_CLIENT_PASSWORD = process.env.SEED_DEMO_PASSWORD || (IS_LOCAL_DB ? 'dev-only-demo-password' : null);
 const DEMO_ADMIN_EMAIL = 'admin@wasi.local';
-const DEMO_ADMIN_PASSWORD = 'admin12345';
+const DEMO_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || (IS_LOCAL_DB ? 'dev-only-admin-password' : null);
 
 const MOCK_TAGS = [
   { name: 'Lead', bg: '#DCFCE7', color: '#166534' },
@@ -49,6 +54,9 @@ async function seed() {
   // to avoid an uncaught-exception crash on a dropped connection.
   client.on('error', (err) => console.error('seed: checked-out client error:', err.message));
   try {
+    if (!DEMO_CLIENT_PASSWORD || !DEMO_ADMIN_PASSWORD) {
+      throw new Error('Refusing to seed a non-local database without SEED_ADMIN_PASSWORD and SEED_DEMO_PASSWORD set (no default password is used outside localhost).');
+    }
     await client.query('BEGIN');
 
     const clientPasswordHash = await bcrypt.hash(DEMO_CLIENT_PASSWORD, 10);
@@ -138,8 +146,10 @@ async function seed() {
 
     await client.query('COMMIT');
     console.log(`Seed complete for client ${DEMO_CLIENT_ID}`);
-    console.log(`Demo client login: demo@wasi.local / ${DEMO_CLIENT_PASSWORD}`);
-    console.log(`Demo admin login: ${DEMO_ADMIN_EMAIL} / ${DEMO_ADMIN_PASSWORD}`);
+    // Never echo a password that came from the environment; the local-only
+    // defaults are fixed strings in this file, so naming them leaks nothing.
+    console.log(`Demo client login: demo@wasi.local (password: ${process.env.SEED_DEMO_PASSWORD ? 'from SEED_DEMO_PASSWORD' : 'local dev default'})`);
+    console.log(`Demo admin login: ${DEMO_ADMIN_EMAIL} (password: ${process.env.SEED_ADMIN_PASSWORD ? 'from SEED_ADMIN_PASSWORD' : 'local dev default'})`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
