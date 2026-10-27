@@ -45,6 +45,40 @@ Use the connection **pooler** string, not a direct `db.<ref>.supabase.co` host �
 host is IPv6-only and fails to resolve on most networks/hosts. See `../DEPLOY.md` for
 the exact gotcha and fix (`PGSSLMODE=no-verify`, no `?sslmode=` query param).
 
+### Running tests
+
+This project has no separate dev database — `DATABASE_URL` is the same Supabase
+instance as production — so any test that actually touches the database (not a
+stubs-only test) refuses to run under `node --test`/`npm test` unless
+`TEST_DATABASE_URL` is set (`src/utils/dbSafety.js`; `ALLOW_SHARED_PRODUCTION_DB` is
+**not** honored in a test context, on purpose). Stand up a real, separate database —
+Postgres **17**, pinned to match production, not a newer major:
+
+```bash
+docker run -d --name wasi-test-postgres -p 5433:5432 \
+  -e POSTGRES_USER=wasi_test -e POSTGRES_PASSWORD=wasi_test_pw \
+  -e POSTGRES_DB=wasi_test postgres:17-alpine
+```
+
+Setting `TEST_DATABASE_URL` alone only satisfies the guard's presence check —
+`src/db/pool.js` always connects using `DATABASE_URL`, so point both at the test
+database for the invocation (don't put this value in your real `.env`'s
+`DATABASE_URL` — that would repoint `npm run dev` at it too):
+
+```bash
+export DATABASE_URL="postgres://wasi_test:wasi_test_pw@localhost:5433/wasi_test?sslmode=disable"
+export TEST_DATABASE_URL="$DATABASE_URL"
+npx node-pg-migrate up -m src/db/migrations
+node src/db/seed.js
+node src/db/seedTemplateLibrary.js   # needed by the Template Library UI tests
+npm test                              # port 4000 must be free — Playwright tests hard-code it
+```
+
+Run one test file at a time against this database, never alongside another test
+process — two `node --test` invocations hitting the same database concurrently race
+each other (confirmed to produce real, confusing failures; see "Conventions" in the
+root `CLAUDE.md`).
+
 ## Auth
 
 Real JWT auth for both actor types — no dev header stub. `POST /api/auth/register` /
