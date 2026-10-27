@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const adminUsersRepo = require('../repositories/adminUsersRepo');
 const authTokensRepo = require('../repositories/authTokensRepo');
+const auditLogRepo = require('../repositories/auditLogRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { hashPassword, comparePassword, signAdminToken } = require('../utils/auth');
 const { sendEmail } = require('../utils/emailService');
@@ -12,6 +13,21 @@ const router = Router();
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
+// Admin authentication events had no record at all: /login wrote nothing, so
+// after the published seed password was found live in production there was
+// no way to say who had logged in, or from where. req.ip is the real client
+// address — app.js sets `trust proxy` to 1 (the host's nginx), so this reads
+// nginx's X-Forwarded-For, not the proxy's own address. A failed audit write
+// must never block (or break) a login, so it is logged and swallowed; the
+// attempted email is recorded, never the password.
+async function recordAdminAuthEvent(req, action, adminId, target) {
+  try {
+    await auditLogRepo.record({ actor_type: 'admin', actor_id: adminId, action, target, actor_ip: req.ip });
+  } catch (err) {
+    console.error(`audit_log write failed for ${action} (non-fatal):`, err.message);
+  }
+}
+
 // app.js mounts this whole router behind authLimiter (20/15min per IP) —
 // /login gets this additional, stricter limiter on top (5/15min per
 // IP+email) since it's the single highest-blast-radius login in the app.
@@ -20,11 +36,18 @@ router.post('/login', adminLoginLimiter, asyncHandler(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
   const admin = await adminUsersRepo.findByEmail(email);
-  if (!admin) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!admin) {
+    await recordAdminAuthEvent(req, 'admin_login_failed', null, `${email}: unknown email`);
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
 
   const valid = await comparePassword(password, admin.password_hash);
-  if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!valid) {
+    await recordAdminAuthEvent(req, 'admin_login_failed', admin.id, `${email}: wrong password`);
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
 
+  await recordAdminAuthEvent(req, 'admin_login_succeeded', admin.id, email);
   const token = signAdminToken(admin);
   res.json({ token, admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
 }));
@@ -40,6 +63,7 @@ router.post('/forgot-password', asyncHandler(async (req, res) => {
   const { email } = forgotPasswordSchema.parse(req.body);
   const admin = await adminUsersRepo.findByEmail(email);
   if (admin) {
+    await recordAdminAuthEvent(req, 'admin_password_reset_requested', admin.id, email);
     const token = await authTokensRepo.create('admin', admin.id, 'password_reset', 60);
     await sendEmail({
       to: email,
@@ -59,6 +83,7 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
   const password_hash = await hashPassword(password);
   await adminUsersRepo.updatePassword(consumed.subject_id, password_hash);
   await adminUsersRepo.bumpTokenVersion(consumed.subject_id);
+  await recordAdminAuthEvent(req, 'admin_password_reset_completed', consumed.subject_id, consumed.subject_id);
   res.json({ message: 'Password updated — you can log in now.' });
 }));
 
