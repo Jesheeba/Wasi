@@ -69,7 +69,7 @@ after(async () => {
 });
 
 async function login(page) {
-  await page.goto(`${baseUrl}/`);
+  await page.goto(`${baseUrl}/app`);
   await page.fill('#login-email', EMAIL);
   await page.fill('#login-password', PASSWORD);
   await page.click('#login-form button[type="submit"]');
@@ -83,7 +83,7 @@ async function login(page) {
 
 test('a short, real server error (wrong password) stays a toast, not the error dialog', async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
-  await page.goto(`${baseUrl}/`);
+  await page.goto(`${baseUrl}/app`);
   await page.waitForTimeout(500);
 
   await page.fill('#login-email', EMAIL);

@@ -56,7 +56,7 @@ after(async () => {
 });
 
 async function login(page) {
-  await page.goto(`${baseUrl}/`);
+  await page.goto(`${baseUrl}/app`);
   await page.fill('#login-email', EMAIL);
   await page.fill('#login-password', PASSWORD);
   await page.click('#login-form button[type="submit"]');
@@ -123,7 +123,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
 
   test(`${label}: forgot-password prompt() site — input autofocuses on open, Enter submits`, async () => {
     const page = await browser.newPage({ viewport });
-    await page.goto(`${baseUrl}/`);
+    await page.goto(`${baseUrl}/app`);
     await page.waitForTimeout(500);
 
     await page.click('#forgot-password-link');

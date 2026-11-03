@@ -59,7 +59,7 @@ after(async () => {
 });
 
 async function login(page) {
-  await page.goto(`${baseUrl}/`);
+  await page.goto(`${baseUrl}/app`);
   await page.fill('#login-email', EMAIL);
   await page.fill('#login-password', PASSWORD);
   await page.click('#login-form button[type="submit"]');

@@ -67,7 +67,7 @@ after(async () => {
 // only difference between them is the viewport itself.
 async function openNewCampaignModal(viewport) {
   const page = await browser.newPage({ viewport });
-  await page.goto(`${baseUrl}/`);
+  await page.goto(`${baseUrl}/app`);
   await page.fill('#login-email', EMAIL);
   await page.fill('#login-password', PASSWORD);
   await page.click('#login-form button[type="submit"]');

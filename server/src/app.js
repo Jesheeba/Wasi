@@ -217,7 +217,14 @@ function createApp() {
   // Static frontends (no build step) — mounted explicitly by directory
   // rather than serving the whole repo root, so server/.env, node_modules,
   // etc. are never reachable over HTTP even by path-guessing.
-  app.get('/', (req, res) => res.sendFile(path.join(REPO_ROOT, 'index.html')));
+  //
+  // The public domain root is the marketing landing page, not the CRM app —
+  // a first-time visitor to wasi.sirahagents.com should see the pitch, not
+  // an unauthenticated app shell. The CRM app itself (this same root
+  // index.html/app.js) is reachable at /app; marketing's own "Log in" links
+  // point there (marketing/index.html, marketing/signup.html).
+  app.get('/', (req, res) => res.sendFile(path.join(REPO_ROOT, 'marketing', 'index.html')));
+  app.get(['/app', '/app/', '/app/index.html'], (req, res) => res.sendFile(path.join(REPO_ROOT, 'index.html')));
   app.get('/index.html', (req, res) => res.sendFile(path.join(REPO_ROOT, 'index.html')));
   app.get('/index.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'index.css')));
   app.get('/breakpoints.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'breakpoints.css')));
