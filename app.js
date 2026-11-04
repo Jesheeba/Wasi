@@ -2217,6 +2217,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // template shape, but this is a one-off ad hoc send with values typed
   // directly, not a contact-field/static mapping like broadcasts use.
   function requiredParamsFor(template) {
+    // Authentication templates have no custom body/header for Meta to scan
+    // placeholders out of (Meta generates that text itself) — the usual
+    // {{name}} extraction below always returns []. Found live 2026-11-04:
+    // that left the Send modal showing "This template has no parameters"
+    // with no input field at all, while the server (messagingService.js)
+    // unconditionally requires a code for this category — a real dead end,
+    // not just a cosmetic mismatch. 'code' is a fixed single param, not
+    // extracted, since Authentication templates always need exactly one.
+    if (template.category === 'Authentication') return ['code'];
     const names = extractTemplateParams(template.body || '');
     if (template.header_type === 'TEXT' && template.header_content) {
       extractTemplateParams(template.header_content).forEach(p => { if (!names.includes(p)) names.push(p); });
@@ -2282,6 +2291,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // the send flow ("will send with the file you chose above") — omitted
   // entirely for a read-only preview, where there's nothing to choose.
   function renderTemplateBubbleMarkup(t, values, headerMediaNote) {
+    // Authentication templates store no body/header of their own (Meta
+    // generates that wording) — the generic rendering below would otherwise
+    // show a blank bubble. This approximates Meta's real auto-generated
+    // text (a verification-code message + an auto-added Copy Code button)
+    // so the preview isn't misleadingly empty; it's not Meta's exact
+    // wording, which this app never receives or stores.
+    if (t.category === 'Authentication') {
+      const code = (values && values.code) || '[code]';
+      return `<div>Your verification code is ${escapeHtml(code)}. ${t.auth_options?.codeExpirationMinutes ? `This code expires in ${escapeHtml(String(t.auth_options.codeExpirationMinutes))} minutes. ` : ''}${t.auth_options?.addSecurityDisclaimer ? 'Do not share this code with anyone. ' : ''}</div>
+        <div class="template-preview-buttons"><div class="template-preview-button">&#128203; Copy code</div></div>`;
+    }
     let html = '';
     if (t.header_type === 'TEXT' && t.header_content) {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(t.header_content, values))}</div>`;
@@ -2328,6 +2348,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // extractTemplateParams — a template's body and header params share the
   // same {{name}} syntax but Meta sends them as separate component types.
   function buildSendTemplateComponents(template, values) {
+    // Authentication templates: messagingService.js reads the code off
+    // `finalComponents.find(c => c.type === 'body')?.parameters?.[0]?.text`
+    // (positional, no parameter_name — that's a Marketing/Utility-only
+    // concept) and re-emits it into both the body and the Copy Code button
+    // itself server-side. This is the send-side half of requiredParamsFor's
+    // fix above — without it, the 'code' value collected from that input
+    // field had nowhere to go.
+    if (template.category === 'Authentication') {
+      return [{ type: 'body', parameters: [{ type: 'text', text: values.code || '' }] }];
+    }
     const bodyNames = extractTemplateParams(template.body || '');
     const headerNames = template.header_type === 'TEXT' && template.header_content
       ? extractTemplateParams(template.header_content)
