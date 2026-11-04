@@ -63,6 +63,22 @@
   // arriving afterward and would just sit until the 10-minute hard timeout.
   let pendingCodeReject = null;
 
+  // Found live 2026-11-04 (TNPSC Mentors, a second attempt at a new number):
+  // real console log showed FINISH arrive, connect() reject immediately with
+  // the "incomplete" error at the 290,549ms mark, and FB.login's own callback
+  // fire WITH A VALID CODE about 1,013ms later — already in flight, thrown
+  // away because pendingCodeReject had already fired. The FINISH branch below
+  // used to call `reject` synchronously the instant FINISH arrived, with zero
+  // grace period — asymmetric with the opposite order (code-then-FINISH),
+  // which already grants FINISH_GRACE_MS. CODE_GRACE_MS closes that gap: on
+  // FINISH, the reject is deferred by this long instead of fired immediately,
+  // so a code that's already in flight (as this real one was) still lands.
+  // Only applies to FINISH, never CANCEL/ERROR — those are explicit outcomes
+  // with no code ever coming, so they still reject synchronously. The pending
+  // timer is tracked here (module scope) so FB.login's own resolve path can
+  // cancel it the moment a code actually arrives.
+  let pendingCodeGraceTimer = null;
+
   // CHANGED AGAIN 2026-09-08, same day: the fix below (wait up to the full
   // 10-minute hard timeout for FINISH) was itself wrong in the other
   // direction. A live check of the client's actual 14:25 UTC attempt found
@@ -183,13 +199,27 @@
       if (pendingCodeReject) {
         const reject = pendingCodeReject;
         pendingCodeReject = null;
-        console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') is ending connect()\'s wait for a code — FB.login\'s callback never delivered one.');
         if (parsed.event === 'CANCEL') {
+          console.log('[WasiEmbeddedSignup] terminal postMessage (CANCEL) is ending connect()\'s wait for a code — FB.login\'s callback never delivered one.');
           reject(new Error('Signup was cancelled in the Facebook popup.'));
         } else if (parsed.event === 'ERROR') {
+          console.log('[WasiEmbeddedSignup] terminal postMessage (ERROR) is ending connect()\'s wait for a code — FB.login\'s callback never delivered one.');
           reject(new Error(`Facebook reported an error: ${sessionData.error_message || 'unknown error'}`));
         } else {
-          reject(new Error('Meta reported the WhatsApp signup finished, but this browser did not receive the authorization code.'));
+          // FINISH only — see CODE_GRACE_MS's declaration for the real
+          // incident that motivated this: a code can still be in flight
+          // (observed ~1s behind FINISH) when this fires, so give FB.login's
+          // own callback a short grace window to deliver it instead of
+          // rejecting instantly. If it arrives in time, the FB.login callback
+          // below resolves the promise directly and cancels this timer. If
+          // not, this fires the exact same "incomplete" rejection as before,
+          // just CODE_GRACE_MS later.
+          console.log('[WasiEmbeddedSignup] terminal postMessage (' + parsed.event + ') arrived while still waiting for a code — granting ' + CODE_GRACE_MS + 'ms in case FB.login\'s callback is already in flight.');
+          pendingCodeGraceTimer = setTimeout(() => {
+            pendingCodeGraceTimer = null;
+            console.log('[WasiEmbeddedSignup] CODE_GRACE_MS elapsed with no code — ending connect()\'s wait.');
+            reject(new Error('Meta reported the WhatsApp signup finished, but this browser did not receive the authorization code.'));
+          }, CODE_GRACE_MS);
         }
       } else if (pendingTerminalWake) {
         // Wakes connect()'s brief post-code grace wait the moment a real
@@ -239,6 +269,17 @@
   // (currently unproven) case where FINISH happens to already be in transit.
   const FINISH_GRACE_MS = 5000;
 
+  // How long to wait for FB.login's callback to deliver a code AFTER FINISH
+  // has already arrived, before giving up and routing to the "incomplete"
+  // state. See pendingCodeGraceTimer's declaration above for the real
+  // 2026-11-04 incident this closes: a code arrived ~1s behind FINISH and was
+  // discarded because the old code rejected the instant FINISH showed up,
+  // with no grace at all. 5s (matching FINISH_GRACE_MS, for the same
+  // "free, cheap shortcut" reasoning in the opposite direction) comfortably
+  // covers that observed gap without meaningfully delaying a genuine
+  // incomplete case.
+  const CODE_GRACE_MS = 5000;
+
   // Reassures the user during the wait instead of leaving a bare spinner —
   // onProgress(message) is optional so callers without a status UI can omit it.
   const PROGRESS_STEPS = [
@@ -268,6 +309,10 @@
     terminalEvent = null;
     pendingCodeReject = null;
     pendingTerminalWake = null;
+    if (pendingCodeGraceTimer) {
+      clearTimeout(pendingCodeGraceTimer);
+      pendingCodeGraceTimer = null;
+    }
 
     const timers = [];
     if (onProgress) {
@@ -354,6 +399,17 @@
             }
             console.log('[WasiEmbeddedSignup] FB.login callback fired after', elapsedMs, 'ms WITH a code.');
             pendingCodeReject = null;
+            // Cancels CODE_GRACE_MS's deferred rejection if FINISH already
+            // arrived first and the code landed within the grace window —
+            // without this, that timer would still fire after resolve() and
+            // attempt to reject an already-settled promise (a harmless no-op
+            // on the promise itself, but it would log a confusing "elapsed
+            // with no code" line for a case that, in fact, got one in time).
+            if (pendingCodeGraceTimer) {
+              clearTimeout(pendingCodeGraceTimer);
+              pendingCodeGraceTimer = null;
+              console.log('[WasiEmbeddedSignup] code arrived within CODE_GRACE_MS of FINISH — cancelled the pending incomplete-state rejection.');
+            }
             resolve(response.authResponse.code);
           }, {
             config_id: configId,
@@ -428,6 +484,10 @@
     } finally {
       timers.forEach(clearTimeout);
       pendingCodeReject = null;
+      if (pendingCodeGraceTimer) {
+        clearTimeout(pendingCodeGraceTimer);
+        pendingCodeGraceTimer = null;
+      }
     }
 
     // PHASE 2, REWRITTEN 2026-09-08: server-side discovery is now the
