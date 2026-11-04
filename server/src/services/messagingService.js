@@ -256,9 +256,37 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
 // Cloud API error); a template retry should go through sendChatMessage again
 // with the template explicitly, since we don't persist which template a
 // message used.
+// Matches the exact placeholder sendChatMessage's displayBody builds for a
+// template send (`[template: ${templateName}]`) — template names are
+// restricted to lowercase/digits/underscore by messageTemplateCreateSchema,
+// so this can't false-positive on a real customer-facing text message that
+// merely starts with a literal "[template:" (that's not realistic sendable
+// text to begin with, but the anchored full-string match rules it out either
+// way).
+const TEMPLATE_PLACEHOLDER_BODY_RE = /^\[template: ([a-z0-9_]+)\]$/;
+
 async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   if (message.status !== 'failed') {
     throw new MessagingError('Only a failed message can be retried.', 'not_failed');
+  }
+  // Found live 2026-11-04 (TNPSC Mentors): this function's own top-of-file
+  // comment already documented the limitation ("we don't persist which
+  // template a message used") but nothing actually enforced it — a failed
+  // template send's row has no `type` column to tell retryMessage apart
+  // from a failed plain-text send, and without this check it fell through
+  // to sendTextMessage(..., message.body) below, which for a template is
+  // literally the internal placeholder string `[template: <name>]` — sent,
+  // delivered, and read by a real customer as that exact literal text.
+  // Confirmed in production, not theoretical. There's no schema to properly
+  // re-run the original template (parameters aren't persisted either), so
+  // this refuses cleanly instead of guessing at a fix that could itself
+  // send something wrong.
+  const templateMatch = message.body?.match(TEMPLATE_PLACEHOLDER_BODY_RE);
+  if (templateMatch) {
+    throw new MessagingError(
+      `This was a template message ("${templateMatch[1]}"), not plain text — Retry can't resend it correctly. Open Templates and send "${templateMatch[1]}" again instead.`,
+      'cannot_retry_template'
+    );
   }
   if (!(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
