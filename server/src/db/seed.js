@@ -49,7 +49,7 @@ const OPEN_CHAT_MESSAGES = [
 
 async function seed() {
   const client = await pool.connect();
-  // See server/src/db/pool.js's comment — a checked-out client is a
+  // See server/src/db/pool.js's comment - a checked-out client is a
   // separate EventEmitter from the pool and needs its own 'error' listener
   // to avoid an uncaught-exception crash on a dropped connection.
   client.on('error', (err) => console.error('seed: checked-out client error:', err.message));
@@ -100,7 +100,7 @@ async function seed() {
 
     // No mock message_templates rows: a fake 'approved' status here was
     // actively misleading (these were never real Meta submissions) and the
-    // real create flow — POST /api/templates — is exactly what the
+    // real create flow - POST /api/templates - is exactly what the
     // template form exists to exercise, not something to bypass with
     // fixtures pretending to already be approved.
 

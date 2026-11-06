@@ -1,4 +1,4 @@
-// PLAN.md item 8 — multi-tag contacts, additive to contacts.tag_id (the
+// PLAN.md item 8 - multi-tag contacts, additive to contacts.tag_id (the
 // permanent "primary tag", untouched by any function here).
 async function listForContact(db, clientId, contactId) {
   const { rows } = await db.query(
@@ -12,7 +12,7 @@ async function listForContact(db, clientId, contactId) {
   return rows;
 }
 
-// ON CONFLICT DO NOTHING against the (contact_id, tag_id) primary key —
+// ON CONFLICT DO NOTHING against the (contact_id, tag_id) primary key -
 // attaching an already-attached tag is a safe no-op, not an error (same
 // idempotent-import discipline as contactsRepo.importFromRows).
 async function add(db, clientId, contactId, tagId) {

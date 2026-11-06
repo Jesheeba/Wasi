@@ -1,4 +1,4 @@
-// Pure unit tests — no network, no database. Named-parameter parsing,
+// Pure unit tests - no network, no database. Named-parameter parsing,
 // validation, and Meta payload-shape construction (server/src/utils/
 // templateParams.js + the payload builders in metaClient.js) are all plain
 // functions, so these run without a real Meta App or Postgres.
@@ -68,7 +68,7 @@ test('validateTemplateText: named parameters in the middle are valid', () => {
   assert.deepEqual(result.params, ['customer_name', 'order_number']);
 });
 
-test('validateTemplateText: numbered parameters are rejected — Meta no longer accepts them', () => {
+test('validateTemplateText: numbered parameters are rejected - Meta no longer accepts them', () => {
   const result = validateTemplateText('Hi {{1}}, your order #{{2}} shipped.');
   assert.equal(result.valid, false);
   assert.match(result.errors[0], /numbered parameters/i);
@@ -99,14 +99,14 @@ test('validateTemplateText: a variable at the end is rejected', () => {
 });
 
 test('validateTemplateText: duplicate param names collapse to one entry in params, but still count twice for the words ratio', () => {
-  const result = validateTemplateText('Hi {{customer_name}}, thanks so much for your business today, {{customer_name}} — we really do appreciate having you as part of our community!');
+  const result = validateTemplateText('Hi {{customer_name}}, thanks so much for your business today, {{customer_name}} - we really do appreciate having you as part of our community!');
   assert.equal(result.valid, true);
   assert.deepEqual(result.params, ['customer_name']);
 });
 
 test('validateTemplateText: rejects a real body that Meta rejected live (error 2388293 regression)', () => {
   // The exact body that triggered error_subcode 2388293 ("Params Words
-  // Ratio Exceeds Limit") against real Meta during Phase 2 verification —
+  // Ratio Exceeds Limit") against real Meta during Phase 2 verification -
   // must be caught locally now, not just by the round trip to Meta.
   const result = validateTemplateText('Hello {{customer_name}}, thanks!');
   assert.equal(result.valid, false);
@@ -129,9 +129,9 @@ test('countWords / minWordsRequired: formula matches the documented reverse-engi
 });
 
 test('validateTemplateText: rejects a real body Meta rejected live for Sirah Digital (2026-08-31) that the OLD formula would have wrongly passed', () => {
-  // "1_hour_reminder" — 18 words, 3 params (ratio 6.0). The old formula
+  // "1_hour_reminder" - 18 words, 3 params (ratio 6.0). The old formula
   // (3*params+2=11) passed this locally; Meta's real server-side check
-  // rejected it anyway — the coefficient itself was too lenient, not just
+  // rejected it anyway - the coefficient itself was too lenient, not just
   // under-margined. See templateParams.js's MIN_WORDS_PER_PARAM comment.
   const result = validateTemplateText('Hi {{name}}, a quick reminder: your call with Sirah Digital is in 1 hour, {{when}}.\nJoin here: {{meet_link}}.');
   assert.equal(result.valid, false);
@@ -139,11 +139,11 @@ test('validateTemplateText: rejects a real body Meta rejected live for Sirah Dig
 });
 
 test('validateTemplateText: still passes a real body Meta actually approved live for Sirah Digital (2026-08-31)', () => {
-  // "booking_confirmation" — 48 words, 3 params (ratio 16.0), real approved
-  // template — confirms the raised coefficient isn't overcorrecting into
+  // "booking_confirmation" - 48 words, 3 params (ratio 16.0), real approved
+  // template - confirms the raised coefficient isn't overcorrecting into
   // rejecting things Meta is fine with.
   const result = validateTemplateText(
-    "Hi {{name}}, your 3D build call with Sirah Digital is confirmed for {{when}}.\nGoogle Meet: {{meet_link}}\nTap below to confirm you're joining — it takes a second and means I hold your slot.\nIf something changes, just message me here and we'll move it, no problem at all."
+    "Hi {{name}}, your 3D build call with Sirah Digital is confirmed for {{when}}.\nGoogle Meet: {{meet_link}}\nTap below to confirm you're joining - it takes a second and means I hold your slot.\nIf something changes, just message me here and we'll move it, no problem at all."
   );
   assert.equal(result.valid, true);
 });
@@ -247,7 +247,7 @@ test('validateHeaderText: one named parameter is valid', () => {
 });
 
 test('validateHeaderText: rejects more than one variable', () => {
-  const result = validateHeaderText('{{customer_name}} — order {{order_number}}');
+  const result = validateHeaderText('{{customer_name}} - order {{order_number}}');
   assert.equal(result.valid, false);
   assert.match(result.errors.join(' '), /at most one variable/i);
 });
@@ -351,7 +351,7 @@ test('messageTemplateCreateSchema: Utility with no body is rejected', () => {
   assert.equal(result.success, false);
 });
 
-test('messageTemplateCreateSchema: IMAGE/VIDEO/DOCUMENT header types are accepted — the file requirement is enforced in routes/templates.js, not this schema', () => {
+test('messageTemplateCreateSchema: IMAGE/VIDEO/DOCUMENT header types are accepted - the file requirement is enforced in routes/templates.js, not this schema', () => {
   for (const type of ['IMAGE', 'VIDEO', 'DOCUMENT']) {
     const result = messageTemplateCreateSchema.safeParse({
       name: 'x',
@@ -390,7 +390,7 @@ test('messageTemplateCreateSchema: more than 2 URL buttons is rejected', () => {
   assert.equal(result.success, false);
 });
 
-test('messageTemplateCreateSchema: a numbered-param body still parses at the schema layer (rejected later by validateTemplateText, not here — see routes/templates.js)', () => {
+test('messageTemplateCreateSchema: a numbered-param body still parses at the schema layer (rejected later by validateTemplateText, not here - see routes/templates.js)', () => {
   // Regression guard for the bug this exact test file's PR fixed: the
   // schema must NOT try to judge param validity itself (it can't yet tell
   // {{1}} from a real name) or reject with a confusing "sample value

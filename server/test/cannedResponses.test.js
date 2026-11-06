@@ -1,8 +1,8 @@
-// PLAN.md item 4 — canned responses (/slash commands). Verifies:
+// PLAN.md item 4 - canned responses (/slash commands). Verifies:
 // 1. Create/list round trip, scoped to the caller's own client.
 // 2. GET reachable by Admin/Manager/Agent; POST/DELETE Admin/Manager only.
 // 3. Duplicate shortcut within a client is rejected (409, real DB
-//    constraint — canned_responses_client_shortcut_unique).
+//    constraint - canned_responses_client_shortcut_unique).
 // 4. Tenant isolation: another client's canned responses are invisible.
 // Same dedicated-disposable-test-client convention as every other file in
 // this directory.

@@ -16,7 +16,7 @@ async function create(db, { client_id, plan, status, payment_provider_ref }) {
   return rows[0];
 }
 
-// Looked up by provider ref rather than client_id — used both by the
+// Looked up by provider ref rather than client_id - used both by the
 // Razorpay webhook (privileged connection, no client context at all) and by
 // billing.js's client-initiated cancel route (req.db); RLS's policy still
 // applies on top of whatever WHERE clause is here, so either caller is safe.
@@ -31,7 +31,7 @@ async function updateByProviderRef(db, payment_provider_ref, fields) {
   return rows[0] || null;
 }
 
-// Latest subscription per client, joined with client identity — powers the
+// Latest subscription per client, joined with client identity - powers the
 // admin Billing page (spec §5 "Billing" row). Admin-only, privileged.
 async function listAllWithClient(db) {
   const { rows } = await db.query(`

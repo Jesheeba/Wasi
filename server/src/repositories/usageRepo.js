@@ -16,7 +16,7 @@ async function incrementReceived(db, clientId) {
   );
 }
 
-// Approximates plan usage as total outbound messages this calendar month —
+// Approximates plan usage as total outbound messages this calendar month -
 // a proxy for Meta's actual 24h "conversation" billing unit, which would
 // need per-conversation-window tracking to compute exactly. Good enough to
 // gate against a plan's conversation_limit without overbuilding this.

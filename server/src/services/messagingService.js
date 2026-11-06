@@ -1,16 +1,16 @@
-// Central place any outbound WhatsApp send goes through — chat replies,
+// Central place any outbound WhatsApp send goes through - chat replies,
 // automation-rule actions, and (server/src/services/broadcastRunner.js)
 // campaign sends all call this, so the session-window rule and
 // sent/failed bookkeeping only exist in one place.
 //
 // Every function here takes `db` first, forwarded straight through from the
 // caller (req.db for a client-authenticated chat reply, the privileged
-// `pool` for broadcastRunner/automationEngine) — same convention as the
+// `pool` for broadcastRunner/automationEngine) - same convention as the
 // repos it calls (see repositories/tagsRepo.js's module comment). The one
 // exception is the WABA lookup in getSendableWaba: it always uses the
 // privileged `pool` directly, never the passed-in `db`, because
 // wabas.access_token_encrypted is revoked from the restricted role at the
-// column level (migration 013_tenant_isolation.js) — see wabasRepo.js's
+// column level (migration 013_tenant_isolation.js) - see wabasRepo.js's
 // module comment for the full reasoning.
 const wabasRepo = require('../repositories/wabasRepo');
 const chatsRepo = require('../repositories/chatsRepo');
@@ -46,13 +46,13 @@ async function canSendFreeform(db, clientId, chatId) {
   return Date.now() - new Date(lastIn).getTime() < SESSION_WINDOW_MS;
 }
 
-// Marketing consent gate (build plan Phase 4) — the send path is the
+// Marketing consent gate (build plan Phase 4) - the send path is the
 // enforcement point precisely so it can't be bypassed by a different
 // caller (chats.js's manual send route, broadcastRunner, or anything
 // future) the way a UI-only check could be. Utility and authentication
 // templates are exempt; a template whose category can't be determined
-// locally is treated as marketing — fail closed, not open.
-// Takes the template row directly, not a name — sendChatMessage now looks
+// locally is treated as marketing - fail closed, not open.
+// Takes the template row directly, not a name - sendChatMessage now looks
 // it up once (also needed for the media-header resolution below) rather
 // than this function re-fetching it a second time.
 async function assertConsentForTemplate(db, clientId, chat, template) {
@@ -62,17 +62,17 @@ async function assertConsentForTemplate(db, clientId, chat, template) {
   const contact = chat.contact_id ? await contactsRepo.findById(db, clientId, chat.contact_id) : null;
   if (!contact || contact.opt_in_status !== 'opted_in') {
     throw new MessagingError(
-      'This contact has not opted in to marketing messages — utility/authentication templates are unaffected.',
+      'This contact has not opted in to marketing messages - utility/authentication templates are unaffected.',
       'consent_required'
     );
   }
 }
 
-// Approximate plan enforcement — see usageRepo.monthToDateSent for the
+// Approximate plan enforcement - see usageRepo.monthToDateSent for the
 // "outbound messages this month" proxy this checks against.
 async function assertWithinPlanLimit(db, clientId) {
   const subscription = await subscriptionsRepo.findByClientId(db, clientId);
-  if (!subscription || subscription.status !== 'active') return; // no active paid plan to enforce yet — don't block dev/demo use
+  if (!subscription || subscription.status !== 'active') return; // no active paid plan to enforce yet - don't block dev/demo use
   const plan = await plansRepo.findById(subscription.plan);
   if (!plan || plan.conversation_limit == null) return; // unlimited (Scale) or unknown plan
   const used = await usageRepo.monthToDateSent(db, clientId);
@@ -85,7 +85,7 @@ async function assertWithinPlanLimit(db, clientId) {
 }
 
 // type: 'text' -> { body }. type: 'interactive' -> { body, buttons: [{id,
-// title}] } (flowEngine.js's send_interactive_buttons node — see
+// title}] } (flowEngine.js's send_interactive_buttons node - see
 // metaClient.sendInteractiveMessage; same session-window rule as 'text',
 // no template approval). type: 'template' -> { templateName,
 // templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }.
@@ -93,14 +93,14 @@ async function assertWithinPlanLimit(db, clientId) {
 // uploaded asset (see templateMediaCacheRepo.insertAsset / migration 030) to
 // send instead of the template's approval-time default sample.
 // headerMediaUrl (optional, media-header templates only, mutually exclusive
-// with headerMediaAssetId — this one wins if somehow both are given): a
+// with headerMediaAssetId - this one wins if somehow both are given): a
 // document/image/video the caller hasn't uploaded through this app at all,
 // fetched and uploaded to Meta on the fly (see mediaHeaderService's
 // resolveMediaIdFromUrl). Exposed today only via the Hub API
 // (routes/apiV1Messages.js) for a client's own external CRM to point at.
 // connectionHooks ({ release, reacquire }) is only populated by a caller
 // holding a single connection across the whole request (routes/chats.js, via
-// tenantContext.js's req.db) — callers on the plain `pool` (metaWebhook.js,
+// tenantContext.js's req.db) - callers on the plain `pool` (metaWebhook.js,
 // apiV1Messages.js) have nothing to release, since pool.query() already
 // acquires/releases per call. When present, release() commits and frees the
 // connection right before the Meta network call below and reacquire()
@@ -109,7 +109,7 @@ async function assertWithinPlanLimit(db, clientId) {
 async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }, connectionHooks = {}) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
-      'This chat is outside the 24-hour customer service window — send a template message instead.',
+      'This chat is outside the 24-hour customer service window - send a template message instead.',
       'session_window_closed'
     );
   }
@@ -125,7 +125,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
   const toPhone = chat.phone;
   const displayBody = type === 'template' ? `[template: ${templateName}]` : body;
 
-  // Resolved before the pending message row exists — same treatment as
+  // Resolved before the pending message row exists - same treatment as
   // consent_required/session_window_closed above: a media id that can't be
   // resolved is a pre-flight rejection (nothing was ever attempted with
   // Meta), not a "sent then failed" message bubble.
@@ -143,7 +143,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     const code = bodyComponent?.parameters?.[0]?.text;
     if (!code) {
       throw new MessagingError(
-        'This is an Authentication template — pass the one-time code as a param (e.g. params: { "code": "123456" }).',
+        'This is an Authentication template - pass the one-time code as a param (e.g. params: { "code": "123456" }).',
         'auth_code_required'
       );
     }
@@ -152,7 +152,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     // Meta rejection.
     if (code.length > 15) {
       throw new MessagingError(
-        `The one-time code is ${code.length} characters — WhatsApp allows at most 15 for an Authentication template.`,
+        `The one-time code is ${code.length} characters - WhatsApp allows at most 15 for an Authentication template.`,
         'auth_code_invalid'
       );
     }
@@ -183,7 +183,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     if (type === 'text') {
       metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body);
     } else if (type === 'interactive') {
-      // Two distinct interactive shapes share type: 'interactive' — a
+      // Two distinct interactive shapes share type: 'interactive' - a
       // reply-button message (buttons) or a list message (sections),
       // decided by which one is present. validate.js's apiMessageSendSchema
       // already guarantees exactly one of them is set before this is ever
@@ -202,11 +202,11 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
       // `template.language` itself, but this function is the shared choke
       // point (routes/chats.js's inbox manual-reply send/retry route also
       // calls it directly, forwarding whatever `templateLanguage` the
-      // request body supplied) — nothing here stopped a stale or missing
+      // request body supplied) - nothing here stopped a stale or missing
       // caller-supplied value from silently reaching Meta as the wrong
       // language. `template.language` now wins whenever a local row exists;
       // `templateLanguage` is kept only as the fallback for the one case
-      // where it doesn't (no local row — the same "nothing reasonable to
+      // where it doesn't (no local row - the same "nothing reasonable to
       // guess" case the other fixes leave alone), so behavior there is
       // unchanged.
       metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
@@ -217,13 +217,13 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     }
   } catch (err) {
     console.error(
-      `messagingService.sendChatMessage: send failed — client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
+      `messagingService.sendChatMessage: send failed - client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
       err.metaError || err.message
     );
     if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
     await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code, err.metaError?.error_subcode);
     // Commits the failure write right here, on this connection, before
-    // returning control to the route — NOT left for the response's own
+    // returning control to the route - NOT left for the response's own
     // finalize(res.statusCode < 500) to decide. A 502 for a "send_failed"
     // MessagingError is exactly what that blanket rule reads as an aborted
     // transaction and rolls back, which is what silently discarded this
@@ -233,13 +233,13 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     if (connectionHooks.release) await connectionHooks.release();
     const sendError = new MessagingError(err.message, 'send_failed');
     // Carries Meta's raw error object through, if this failure came from a
-    // real Graph API rejection (see metaClient.js's graphFetch) — the hub
+    // real Graph API rejection (see metaClient.js's graphFetch) - the hub
     // API surfaces it; the internal chat-send route ignores the extra field.
     sendError.metaError = err.metaError || null;
     throw sendError;
   }
 
-  // Meta already accepted the message by this point — anything that goes
+  // Meta already accepted the message by this point - anything that goes
   // wrong from here (reacquiring a connection, the bookkeeping writes) must
   // never be reported as a failed SEND, since it really did go out. Left
   // deliberately unguarded (no catch-and-mark-failed here): a bookkeeping
@@ -252,12 +252,12 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
 }
 
 // Re-attempts a previously failed send using its original text body. Only
-// supports retrying free-form text (the common failed case — a transient
+// supports retrying free-form text (the common failed case - a transient
 // Cloud API error); a template retry should go through sendChatMessage again
 // with the template explicitly, since we don't persist which template a
 // message used.
 // Matches the exact placeholder sendChatMessage's displayBody builds for a
-// template send (`[template: ${templateName}]`) — template names are
+// template send (`[template: ${templateName}]`) - template names are
 // restricted to lowercase/digits/underscore by messageTemplateCreateSchema,
 // so this can't false-positive on a real customer-facing text message that
 // merely starts with a literal "[template:" (that's not realistic sendable
@@ -271,11 +271,11 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   }
   // Found live 2026-11-04 (TNPSC Mentors): this function's own top-of-file
   // comment already documented the limitation ("we don't persist which
-  // template a message used") but nothing actually enforced it — a failed
+  // template a message used") but nothing actually enforced it - a failed
   // template send's row has no `type` column to tell retryMessage apart
   // from a failed plain-text send, and without this check it fell through
   // to sendTextMessage(..., message.body) below, which for a template is
-  // literally the internal placeholder string `[template: <name>]` — sent,
+  // literally the internal placeholder string `[template: <name>]` - sent,
   // delivered, and read by a real customer as that exact literal text.
   // Confirmed in production, not theoretical. There's no schema to properly
   // re-run the original template (parameters aren't persisted either), so
@@ -284,13 +284,13 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   const templateMatch = message.body?.match(TEMPLATE_PLACEHOLDER_BODY_RE);
   if (templateMatch) {
     throw new MessagingError(
-      `This was a template message ("${templateMatch[1]}"), not plain text — Retry can't resend it correctly. Open Templates and send "${templateMatch[1]}" again instead.`,
+      `This was a template message ("${templateMatch[1]}"), not plain text - Retry can't resend it correctly. Open Templates and send "${templateMatch[1]}" again instead.`,
       'cannot_retry_template'
     );
   }
   if (!(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
-      'This chat is outside the 24-hour customer service window — send a template message instead.',
+      'This chat is outside the 24-hour customer service window - send a template message instead.',
       'session_window_closed'
     );
   }
@@ -305,12 +305,12 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
     metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
   } catch (err) {
     console.error(
-      `messagingService.retryMessage: retry failed — client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
+      `messagingService.retryMessage: retry failed - client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
       err.metaError || err.message
     );
     if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
     await chatsRepo.markFailed(db, clientId, message.id, err.message, err.metaError?.code, err.metaError?.error_subcode);
-    // Same commit-before-throw reasoning as sendChatMessage's catch above —
+    // Same commit-before-throw reasoning as sendChatMessage's catch above -
     // see that comment for the full bug writeup.
     if (connectionHooks.release) await connectionHooks.release();
     const sendError = new MessagingError(err.message, 'send_failed');

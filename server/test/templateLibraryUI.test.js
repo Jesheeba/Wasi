@@ -1,9 +1,9 @@
 // Real-browser coverage for the Template Library's frontend behavior
 // (index.html's #view-template-library, app.js's Template Library section)
-// — the filter/browse UI and the "Use this Template" prefill flow, which
+// - the filter/browse UI and the "Use this Template" prefill flow, which
 // have no server-side equivalent to test via a plain HTTP request. This is
 // the first Playwright-based test in server/test/ (every other file drives
-// the app via plain fetch()) — `playwright` is a real, already-declared
+// the app via plain fetch()) - `playwright` is a real, already-declared
 // dependency (repo-root package.json), used for real ad-hoc verification of
 // this same feature and the project's mobile-responsiveness work before
 // this file existed; this formalizes that same approach as a permanent,
@@ -12,10 +12,10 @@
 // Same dedicated-disposable-test-client convention as every other file in
 // this directory: a real client via /api/auth/register, deleted in
 // after(). Runs against the real seeded template_library content (36 rows)
-// — this IS the same content real clients see, not a fixture.
+// - this IS the same content real clients see, not a fixture.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 // Default ALLOWED_ORIGINS only lists :3000 (app.js's own comment: the
-// split-origin local-dev setup) — binding this suite's server to :4000
+// split-origin local-dev setup) - binding this suite's server to :4000
 // (below, matching app.js's own API_BASE same-origin branch) means the
 // browser's own same-origin fetch()es still send an Origin header
 // Chromium doesn't omit, so :4000 needs allowlisting for this one suite.
@@ -38,13 +38,13 @@ const EMAIL = `test-suite-templatelibraryui-${Date.now()}@wasi.local`;
 const PASSWORD = 'test-suite-password-12345';
 
 // Playwright's selectOption() drives a real synthetic mouse interaction and
-// polls its own actionability checks (visible/stable/receives-events) —
+// polls its own actionability checks (visible/stable/receives-events) -
 // against this app, that polling proved unreliable under real backend
 // latency (confirmed by direct DOM inspection at the exact failure point:
 // getComputedStyle/getBoundingClientRect/elementFromPoint all agreed the
 // element was fully visible, unobscured, and correctly targeted, yet
 // selectOption still timed out waiting for its own internal check to agree)
-// — a known category of flakiness with <select> actionability polling, not
+// - a known category of flakiness with <select> actionability polling, not
 // an application bug. Setting the value directly and dispatching the same
 // 'change' event a real user's selection would fire exercises the exact
 // application code path (renderLibraryGrid's change-listener) that matters
@@ -62,7 +62,7 @@ before(async () => {
   const app = createApp();
   // The root app's app.js picks its API_BASE based on the page's own
   // origin/port (split-origin local-dev convention: same-origin unless on
-  // localhost and NOT already port 4000) — binding here to 4000 keeps
+  // localhost and NOT already port 4000) - binding here to 4000 keeps
   // every fetch() same-origin, matching how the app actually runs in both
   // local dev and production (one process serving both static files and
   // the API), rather than needing a second server. See app.js's own
@@ -90,7 +90,7 @@ before(async () => {
   await page.click('#login-form button[type="submit"]');
   // Explicit wait, not a selector-visibility auto-wait: the nav sidebar
   // lives inside #app-shell, which only becomes visible after login's own
-  // async fetch + state update settles — waiting on the nav item's
+  // async fetch + state update settles - waiting on the nav item's
   // visibility directly proved unreliable (intermittently resolved before
   // the shell's display actually flipped), so this waits for the real
   // signal instead.
@@ -181,7 +181,7 @@ test('"Use This Template" opens the real Create Template modal, prefilled exactl
   assert.equal(modalState.category, 'Marketing');
   assert.equal(modalState.headerText, 'Still thinking it over?');
   assert.equal(modalState.body, 'Hi {{customer_name}}, you left {{item_name}} in your cart. Complete your purchase now before it sells out.');
-  assert.match(modalState.body, /\{\{customer_name\}\}/, 'the FORM FIELD must keep the raw {{placeholder}}, unlike the preview bubble — this is what actually gets submitted');
+  assert.match(modalState.body, /\{\{customer_name\}\}/, 'the FORM FIELD must keep the raw {{placeholder}}, unlike the preview bubble - this is what actually gets submitted');
   assert.equal(modalState.footer, 'Reply STOP to unsubscribe');
   assert.deepEqual(Object.fromEntries(modalState.samples), { customer_name: 'Priya', item_name: 'Wireless Earbuds' });
   assert.equal(modalState.buttonCount, 1);
@@ -196,10 +196,10 @@ test('"Use This Template" opens the real Create Template modal, prefilled exactl
   await page.click('#modal-create-template .close-modal-btn');
 });
 
-test('Authentication entries do not prefill body/header/footer/buttons — only category, matching the schema\'s own rule', async () => {
+test('Authentication entries do not prefill body/header/footer/buttons - only category, matching the schema\'s own rule', async () => {
   // The previous test's "Use This Template" click navigated the underlying
   // view to Templates (switchView('template') inside useTemplateFromLibrary)
-  // before opening the modal on top of it — closing that modal leaves us on
+  // before opening the modal on top of it - closing that modal leaves us on
   // Templates, not Template Library, so the library's own filter controls
   // are inactive/hidden until we navigate back.
   await page.click('[data-view="template-library"]');
@@ -221,7 +221,7 @@ test('Authentication entries do not prefill body/header/footer/buttons — only 
     standardFieldsHidden: document.getElementById('template-fields-standard')?.style.display === 'none',
   }));
   assert.equal(state.category, 'Authentication');
-  assert.equal(state.body, '', 'Authentication prefill must not populate body — messageTemplateCreateSchema rejects it for this category');
+  assert.equal(state.body, '', 'Authentication prefill must not populate body - messageTemplateCreateSchema rejects it for this category');
   assert.equal(state.footer, '');
   assert.equal(state.authFieldsVisible, true, 'the modal\'s own Authentication-specific fields must take over, matching how a manually-authored Authentication template already works');
   assert.equal(state.standardFieldsHidden, true);

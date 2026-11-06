@@ -1,5 +1,5 @@
 // Backs the five Settings/Payments/Wallet screens that were previously
-// client-side-only (a modal submit just appended a DOM row — nothing
+// client-side-only (a modal submit just appended a DOM row - nothing
 // persisted past a page refresh): Team, Attributes, Payment Links, Wallet,
 // Webhook callback config.
 

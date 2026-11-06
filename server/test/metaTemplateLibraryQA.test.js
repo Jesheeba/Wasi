@@ -1,4 +1,4 @@
-// Independent QA pass, Phase 2b (Meta Official Template Library) — targets
+// Independent QA pass, Phase 2b (Meta Official Template Library) - targets
 // blind spots NOT covered by metaTemplateLibrary.test.js: stale-entry
 // removal on re-refresh, duplicate (name,language) submission, missing
 // button inputs for a button-bearing entry, unvalidated/garbage button
@@ -8,19 +8,19 @@
 // dedicated disposable test client cleaned up in after().
 //
 // Originally written to PASS while proving each defect existed
-// ("FINDING:"/"BUG CONFIRMED" — same convention as this project's other
+// ("FINDING:"/"BUG CONFIRMED" - same convention as this project's other
 // GAP-proving test suites). 3 of the 4 real defects this file found were
-// fixed the same session (stale-entry pruning — metaTemplateLibraryRepo.js's
+// fixed the same session (stale-entry pruning - metaTemplateLibraryRepo.js's
 // pruneMissing, wired into metaTemplateLibraryRefreshRunner.js; the
 // duplicate (name,language) pre-check and the buttonInputs-vs-buttons_json
-// cross-validation — both in routes/templateLibrary.js) — assertions below
+// cross-validation - both in routes/templateLibrary.js) - assertions below
 // are flipped to prove the fixes instead. The "no buttonInputs at all"
 // case is now caught by the new cross-validation check BEFORE it ever
 // reaches Meta, so that test's expected outcome changed from a 502
-// (simulated Meta rejection) to a 400 (this app's own validation) — an
+// (simulated Meta rejection) to a 400 (this app's own validation) - an
 // earlier, clearer failure, not a regression.
 //
-// This file races with metaTemplateLibrary.test.js — see that file's own
+// This file races with metaTemplateLibrary.test.js - see that file's own
 // header comment for why: both trigger real admin refreshes
 // (metaTemplateLibraryRepo.pruneMissing) against fake, mutually-exclusive
 // partial catalogs on the SAME shared cache table; run concurrently, each
@@ -28,7 +28,7 @@
 // the "stale entries never pruned" defect this file itself found.
 //
 // FIXED at the runner level, 2026-09-03: `npm test` now passes
-// `--test-concurrency=1`, so this can no longer happen — see that file's
+// `--test-concurrency=1`, so this can no longer happen - see that file's
 // header for detail. This file no longer needs its own separate
 // invocation.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -156,7 +156,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
@@ -185,7 +185,7 @@ test('FIXED: a cache entry dropped from Meta\'s catalog on re-refresh is now act
   });
 
   cached = await pool.query(`select * from meta_template_library_cache where name like $1 order by name`, [`${SUITE_PREFIX}%`]);
-  assert.equal(cached.rows.length, 1, 'FIX PROOF: entry_b must be pruned from the cache once Meta stops returning it — metaTemplateLibraryRepo.pruneMissing now removes any row not in the latest fetch');
+  assert.equal(cached.rows.length, 1, 'FIX PROOF: entry_b must be pruned from the cache once Meta stops returning it - metaTemplateLibraryRepo.pruneMissing now removes any row not in the latest fetch');
   assert.equal(cached.rows[0].name, `${SUITE_PREFIX}entry_a`);
 
   const clientRes = await fetch(`${baseUrl}/api/template-library/meta`, { headers: authed(clientToken) });
@@ -211,7 +211,7 @@ test('FIXED: submitting the same Meta library entry twice with the same name is 
     });
     assert.equal(res1.status, 201, await res1.text());
 
-    // Second submission, same client, same (name, language) — now rejected
+    // Second submission, same client, same (name, language) - now rejected
     // BEFORE ever reaching Meta (routes/templateLibrary.js now calls
     // messageTemplatesRepo.findActiveByNameAndLanguage, same guard
     // routes/templates.js's POST / already had).
@@ -227,13 +227,13 @@ test('FIXED: submitting the same Meta library entry twice with the same name is 
       `select id from message_templates where client_id = $1 and name = $2 and language = $3`,
       [testClientId, dupName, entry.language]
     );
-    assert.equal(rows.rows.length, 1, 'FIX PROOF: exactly one local row must exist, not two — the second submission never reached messageTemplatesRepo.create');
+    assert.equal(rows.rows.length, 1, 'FIX PROOF: exactly one local row must exist, not two - the second submission never reached messageTemplatesRepo.create');
   });
 });
 
 test('FIXED (caught earlier than before): button-bearing entry submitted with NO buttonInputs is now rejected by this app\'s own cross-validation, never reaching Meta at all', async () => {
   // entry_b was deliberately pruned from the cache by the FIRST test in
-  // this file (proving stale-entry removal now works) — re-refresh with
+  // this file (proving stale-entry removal now works) - re-refresh with
   // both entries present before this test needs entry_b again, rather
   // than relying on cross-test leftover state.
   await withFakeGraphFetch(catalogWithTwoEntries, async () => {
@@ -246,7 +246,7 @@ test('FIXED (caught earlier than before): button-bearing entry submitted with NO
   assert.ok(entry, 'entry_b (has a URL button) must be cached again after the re-refresh above');
   assert.ok(entry.buttons_json && entry.buttons_json.length > 0, 'sanity: entry_b really does have a button');
 
-  // graphCreateBehavior stays 'always-succeed' here on purpose — the whole
+  // graphCreateBehavior stays 'always-succeed' here on purpose - the whole
   // point is proving this never reaches the fake Meta call at all anymore.
   await withFakeGraphFetch(catalogWithTwoEntries, async () => {
     const res = await fetch(`${baseUrl}/api/template-library/meta/${entry.id}/use`, {
@@ -262,7 +262,7 @@ test('FIXED (caught earlier than before): button-bearing entry submitted with NO
   });
 });
 
-test('FIXED: buttonInputs count/type is now cross-checked against the entry\'s real buttons_json — garbage is rejected, not forwarded to Meta', async () => {
+test('FIXED: buttonInputs count/type is now cross-checked against the entry\'s real buttons_json - garbage is rejected, not forwarded to Meta', async () => {
   const cached = await pool.query(`select * from meta_template_library_cache where name = $1`, [`${SUITE_PREFIX}entry_a`]);
   const entry = cached.rows[0];
   assert.ok(entry, 'entry_a (ZERO buttons) must still be cached');
@@ -270,7 +270,7 @@ test('FIXED: buttonInputs count/type is now cross-checked against the entry\'s r
 
   await withFakeGraphFetch(catalogWithTwoEntries, async () => {
     // Submit 3 bogus PHONE_NUMBER button inputs against an entry with ZERO
-    // buttons — validateButtonInputsMatchEntry (routes/templateLibrary.js)
+    // buttons - validateButtonInputsMatchEntry (routes/templateLibrary.js)
     // must now reject this before it ever reaches metaClient.createTemplateFromLibrary.
     const res = await fetch(`${baseUrl}/api/template-library/meta/${entry.id}/use`, {
       method: 'POST', headers: authed(clientToken),
@@ -302,14 +302,14 @@ test('POST /meta/:id/use with a random non-existent uuid: clean 404, not a crash
 
 // ROOT CAUSE (2026-08-28), precisely, not just "self-reported": an earlier
 // draft of this test's restore step passed pg's own SELECT * result
-// straight back into the restore INSERT's parameters — but `pool.query`
+// straight back into the restore INSERT's parameters - but `pool.query`
 // auto-parses jsonb columns (industry/buttons_json/body_params) into native
 // JS arrays/objects, and node-postgres does NOT serialize a raw JS array
 // back to JSON text for a jsonb column parameter; it applies its own
 // Postgres-array-literal serialization instead (e.g. `{RETAIL}`, not
 // `["RETAIL"]`). Postgres then rejected that as invalid JSON syntax
 // (error 22P02) on the very first restore row. Since the DELETE above had
-// already committed (no transaction wraps it — see the note below on why
+// already committed (no transaction wraps it - see the note below on why
 // one can't be used here) and this failure happened inside the `finally`
 // block's own loop with no per-row guard, the exception propagated out of
 // `finally` immediately, aborting the restore after row 1 and leaving the
@@ -324,7 +324,7 @@ test('POST /meta/:id/use with a random non-existent uuid: clean 404, not a crash
 // A transaction-wrapped delete+restore (BEGIN...ROLLBACK) was considered
 // and rejected: the assertions below need the SERVER's own connection
 // (routes/templateLibrary.js's `req.db`, a completely separate connection
-// from this test) to see the DELETE — which requires it to actually COMMIT,
+// from this test) to see the DELETE - which requires it to actually COMMIT,
 // not stay inside an uncommitted transaction only this test's own
 // connection can see. A rollback-based approach literally cannot produce
 // the "empty cache, from another connection's point of view" state this
@@ -352,7 +352,7 @@ test('GET /api/template-library/meta with an entirely empty cache degrades to an
     assert.equal(status.cached_total_count, 0);
   } finally {
     // Restore whatever was really there before this test touched it.
-    // Per-row try/catch (guard #2 above) — one bad row must never abort
+    // Per-row try/catch (guard #2 above) - one bad row must never abort
     // every row after it the way it did the first time this test existed.
     await pool.query('delete from meta_template_library_cache');
     let restoredCount = 0;
@@ -388,11 +388,11 @@ test('GET /api/template-library/meta with an entirely empty cache degrades to an
     // notices. Never fires when backup.rows was legitimately empty (nothing
     // to restore is not a failure).
     if (backup.rows.length > 0 && restoredCount < backup.rows.length) {
-      console.error(`metaTemplateLibraryQA.test.js: restored ${restoredCount}/${backup.rows.length} cache rows — triggering a real refresh to self-heal the rest.`);
+      console.error(`metaTemplateLibraryQA.test.js: restored ${restoredCount}/${backup.rows.length} cache rows - triggering a real refresh to self-heal the rest.`);
       try {
         await metaTemplateLibraryRefreshRunner.refreshNow();
       } catch (err) {
-        console.error('metaTemplateLibraryQA.test.js: self-heal refresh also failed — cache may still be incomplete:', err.message);
+        console.error('metaTemplateLibraryQA.test.js: self-heal refresh also failed - cache may still be incomplete:', err.message);
       }
     }
   }

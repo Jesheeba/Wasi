@@ -1,35 +1,35 @@
 // Database-level tenant isolation (build plan Phase 3). Until now, tenant
 // separation relied entirely on every query including `where client_id = $1`
-// — one query written without it exposes one client's data to another, and
+// - one query written without it exposes one client's data to another, and
 // nothing catches it. This moves enforcement into Postgres so the guarantee
 // stops depending on application code being perfect.
 //
 // Investigated before writing this (see wasi-build-plan.md Phase 3 / the
-// conversation this migration came out of) — the load-bearing finding: the
+// conversation this migration came out of) - the load-bearing finding: the
 // app's DATABASE_URL connects as Supabase's `postgres` role, which has
 // rolbypassrls = true (confirmed live via `select rolbypassrls from pg_roles
 // where rolname = current_user`). Enabling RLS alone would be a complete
-// no-op for that connection — every query would keep seeing every tenant's
+// no-op for that connection - every query would keep seeing every tenant's
 // rows, silently. So this migration also provisions a second, restricted
 // role (`wasi_app`, NOLOGIN, NOBYPASSRLS) that ordinary client-authenticated
 // request traffic runs as (via `SET LOCAL ROLE` inside a request-scoped
-// transaction — see server/src/middleware/tenantContext.js), while the
+// transaction - see server/src/middleware/tenantContext.js), while the
 // existing `postgres` connection keeps its privileged, cross-tenant access
 // for admin routes, the webhook receiver, the broadcast runner, seed data,
 // and migrations. `wasi_app` is NOLOGIN because nothing connects to Postgres
-// directly as it — the app's single pooled connection switches into it
+// directly as it - the app's single pooled connection switches into it
 // per-transaction via SET LOCAL ROLE, which only works if the connecting
 // role (postgres) is a member of it.
 //
 // broadcast_recipients has no client_id column today (only reachable via
-// broadcast_id -> broadcasts.client_id) — added here so it gets the same
+// broadcast_id -> broadcasts.client_id) - added here so it gets the same
 // direct, indexable policy as every other tenant table instead of being a
 // join-dependent special case.
 //
 // wabas and clients are NOT granted to wasi_app for SELECT/UPDATE beyond
 // what's below and are not routed through it anywhere in the app today
 // (see server/src/repositories/wabasRepo.js's and clientsRepo.js's module
-// comments) — wabas.access_token_encrypted specifically must never be
+// comments) - wabas.access_token_encrypted specifically must never be
 // readable by the restricted role (mirrors Sirah CRM's approach), and since
 // column-level SELECT can't be "partially" satisfied by a `select *` query,
 // every wabas read stays on the privileged connection rather than
@@ -82,7 +82,7 @@ exports.up = (pgm) => {
     end
     $$;
   `);
-  // Lets the connecting role (postgres) SET LOCAL ROLE wasi_app — Postgres
+  // Lets the connecting role (postgres) SET LOCAL ROLE wasi_app - Postgres
   // requires membership to switch into a role, even for its own creator.
   pgm.sql(`grant wasi_app to current_user`);
   pgm.sql(`grant usage on schema public to wasi_app`);
@@ -92,12 +92,12 @@ exports.up = (pgm) => {
     pgm.sql(`grant select, insert, update, delete on ${table} to wasi_app`);
   }
 
-  // plans: global reference data, no client_id, no RLS — read-only grant.
+  // plans: global reference data, no client_id, no RLS - read-only grant.
   pgm.sql(`grant select on plans to wasi_app`);
 
   // clients: the tenant table itself. Policy is keyed on id, not client_id.
   // password_hash is excluded from both the grant and (see repositories/
-  // clientsRepo.js) every query text that could run under this role — the
+  // clientsRepo.js) every query text that could run under this role - the
   // column-level revoke below is belt-and-suspenders, not the only guard.
   pgm.sql(`
     grant select (id, name, email, status, tenant_slug, email_verified, created_at), update, delete
@@ -116,7 +116,7 @@ exports.up = (pgm) => {
   // --- RLS ---
   // nullif(..., '') matters, not just style: the first time a session ever
   // runs SET LOCAL on a custom (unregistered) GUC like app.current_client_id,
-  // Postgres creates a session-local placeholder for it — and once that
+  // Postgres creates a session-local placeholder for it - and once that
   // placeholder exists, current_setting(..., true) returns '' (empty
   // string) after the transaction that set it ends, not NULL, even though
   // nothing is "set" from the app's point of view. On a pooled connection
@@ -125,7 +125,7 @@ exports.up = (pgm) => {
   // error ("invalid input syntax for type uuid") instead of cleanly
   // matching no rows. nullif converts that '' to NULL first, so the cast
   // succeeds, the comparison evaluates to NULL (not true), and the policy
-  // fails closed — 0 rows, no error — the same way it does when the GUC
+  // fails closed - 0 rows, no error - the same way it does when the GUC
   // has genuinely never been touched in the session.
   const setting = `nullif(current_setting('app.current_client_id', true), '')::uuid`;
   for (const table of TENANT_TABLES) {

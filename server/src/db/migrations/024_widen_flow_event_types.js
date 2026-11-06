@@ -1,7 +1,7 @@
 // flow_events.event_type (migration 023) didn't anticipate one real case
 // discovered while building flowEngine.js (Stage 3): a mid-flow contact
 // sends something that matches no outgoing edge on their current node. That
-// isn't a failure ('stalled') and isn't a race ('superseded') — the flow
+// isn't a failure ('stalled') and isn't a race ('superseded') - the flow
 // state is untouched on purpose (see migration 023's module comment: a
 // non-flow automation_rules keyword like "agent"/"help" should still be
 // able to interrupt a flow), but it's still worth its own label for

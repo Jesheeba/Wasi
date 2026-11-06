@@ -1,4 +1,4 @@
-// Consent hardening Phase 1 (safety, no UI) — approved plan:
+// Consent hardening Phase 1 (safety, no UI) - approved plan:
 //   A. opted_out is sticky in consentRepo.recordEvent: an 'opted_in' event
 //      against a contact whose CURRENT status is already 'opted_out' throws
 //      ConsentBlockedError instead of silently overwriting it.
@@ -10,32 +10,32 @@
 //      populated by routes/contacts.js's POST /:id/consent today; nothing
 //      else writes them yet (Phase 2/3 build the callers that will).
 //
-// Dedicated disposable test client, own SUITE_PREFIX — not shared with
+// Dedicated disposable test client, own SUITE_PREFIX - not shared with
 // consentTracking.test.js, which already covers the pre-existing (unchanged)
 // consent-gate/broadcast-skip/inbound-STOP-happy-path behavior; this file
 // covers only what's new in Phase 1. Every Meta call is stubbed where one
-// could be reached at all (it can't be, from any path this file exercises —
+// could be reached at all (it can't be, from any path this file exercises -
 // noted per test).
 //
 // Test 5 (recordOptOutDurable's fully-failed path) stubs every side-effecting
-// call — alertEventsRepo.findOpen/open/touch/markNotified,
-// failedConsentWritesRepo.record, and alertNotifier.notify — by monkey-
+// call - alertEventsRepo.findOpen/open/touch/markNotified,
+// failedConsentWritesRepo.record, and alertNotifier.notify - by monkey-
 // patching the exported functions on those required singleton modules
 // (Node's require cache means this test's references and consentRepo.js's
 // own internal references are the exact same objects). This is a deliberate
 // correction: an earlier version of this test let recordOptOutDurable run
 // for real against alert_events/failed_consent_writes on the shared
 // database, relying on ALERT_EMAIL_TO/ALERT_WABA_ID being unset locally to
-// keep alertNotifier's own send a safe no-op — but that's an environment
+// keep alertNotifier's own send a safe no-op - but that's an environment
 // assumption, not a guarantee, and the test still left real rows in two
 // shared tables (cleaned up by hand afterward, twice, while this file was
 // being debugged). The instruction was stubs only, no production writes,
-// full stop — this file now satisfies that unconditionally, not just in
+// full stop - this file now satisfies that unconditionally, not just in
 // whatever environment happens to have those env vars unset. Confirmed
 // directly (not assumed) that nothing was actually delivered by the earlier
 // version: RESEND_API_KEY/ALERT_EMAIL_TO/ALERT_WABA_ID are all unset in
 // this repo's .env, and every real run's console output showed
-// alertNotifier's own "would have sent" no-op line, never an actual send —
+// alertNotifier's own "would have sent" no-op line, never an actual send -
 // but the DB rows themselves were real regardless, which is the part this
 // rewrite actually fixes.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -128,7 +128,7 @@ test('1. consentRepo.recordEvent: opted_out is sticky against a later opted_in, 
     }
   );
 
-  // The blocked attempt must not have changed anything — status still
+  // The blocked attempt must not have changed anything - status still
   // opted_out, and no new consent_events row from the blocked attempt.
   const stillOptedOut = await contactsRepo.findById(pool, testClientId, contact.id);
   assert.equal(stillOptedOut.opt_in_status, 'opted_out');
@@ -157,7 +157,7 @@ test('2. POST /:id/consent: the blocked case is a clean 409, not a 500; actor_ty
   assert.match(blocked.data.error, /opted out/i);
 
   // This test's requests all go through the client's own owner-level JWT
-  // (registered via /api/auth/register, no team member involved) — the
+  // (registered via /api/auth/register, no team member involved) - the
   // route threads req.actorType/req.actorId, so every successful write here
   // must be actor_type = 'owner', actor_id = null (chats.js's own
   // established convention: null actor_id means "the account owner", not
@@ -189,15 +189,15 @@ test('3. a flow set_opt_in node trying to re-opt-in an opted-out contact stalls 
   assert.equal(withEntry.entry_node_id, node.id);
 
   // flowEngine always runs on the privileged `pool` (metaWebhook.js is its
-  // only real caller) — same convention followed here, not req.db.
+  // only real caller) - same convention followed here, not req.db.
   await flowEngine.startFlow(pool, testClientId, contact, chat, withEntry);
 
-  // The contact must still be opted_out — the flow node must NOT have
+  // The contact must still be opted_out - the flow node must NOT have
   // silently overwritten a real opt-out (the whole point of this change).
   const afterFlow = await contactsRepo.findById(pool, testClientId, contact.id);
   assert.equal(afterFlow.opt_in_status, 'opted_out', 'a flow must never re-opt-in a contact who has opted out');
 
-  // runToRest's existing generic node-failure handling recorded why —
+  // runToRest's existing generic node-failure handling recorded why -
   // ConsentBlockedError propagates like any other action-node error.
   const { rows: flowEvents } = await pool.query(
     `select event_type, detail from flow_events where client_id = $1 and contact_id = $2 and flow_id = $3 and node_id = $4 order by created_at desc limit 1`,
@@ -232,20 +232,20 @@ test('4. consentRepo.recordOptOutDurable: the ordinary case (write succeeds) beh
   assert.equal(failedWrites.length, 0, 'the durable fallback table must stay empty when the write succeeds');
 });
 
-test('5. consentRepo.recordOptOutDurable: a write that fails on every attempt calls the durable-write and alert functions correctly — fully stubbed, zero real alert_events/failed_consent_writes rows, zero real alertNotifier sends', async () => {
+test('5. consentRepo.recordOptOutDurable: a write that fails on every attempt calls the durable-write and alert functions correctly - fully stubbed, zero real alert_events/failed_consent_writes rows, zero real alertNotifier sends', async () => {
   const contact = await contactsRepo.create(pool, testClientId, { name: 'z', phone: `91714${Date.now()}`.slice(0, 12) });
-  await consentRepo.recordEvent(testClientId, contact.id, { event: 'opted_in', source: 'test' }); // real, valid contact — this test simulates the WRITE failing, not a bad id
+  await consentRepo.recordEvent(testClientId, contact.id, { event: 'opted_in', source: 'test' }); // real, valid contact - this test simulates the WRITE failing, not a bad id
 
   // Simulates the main write genuinely failing (e.g. pool exhaustion, a
   // transient network blip) by making pool.connect() itself throw for the
-  // first 2 calls — recordEvent's own `const client = await pool.connect()`
+  // first 2 calls - recordEvent's own `const client = await pool.connect()`
   // is the very first thing it does, outside its own try block, so this
   // fails it before any query runs. This part still touches the real
   // database (recordEvent's own write path is genuinely what's under test);
-  // it's everything DOWNSTREAM of both attempts failing — the durable
-  // fallback and the alert — that must never touch real infrastructure,
+  // it's everything DOWNSTREAM of both attempts failing - the durable
+  // fallback and the alert - that must never touch real infrastructure,
   // stubbed below.
-  // Own restore, separate from the alert/durable-write stubs below —
+  // Own restore, separate from the alert/durable-write stubs below -
   // pool.connect is stubbed and restored freshly around EACH
   // recordOptOutDurable call (each needs its own independent "fail the
   // first 2 attempts" counter), while the alert/durable-write stubs stay
@@ -253,7 +253,7 @@ test('5. consentRepo.recordOptOutDurable: a write that fails on every attempt ca
   // at the very end. A real, found-by-this-test bug in an earlier draft:
   // restoring every stub (including the alert ones) after the FIRST call
   // meant the SECOND call ran against the real alertEventsRepo/
-  // failedConsentWritesRepo/alertNotifier — writing a real row to the
+  // failedConsentWritesRepo/alertNotifier - writing a real row to the
   // shared database despite this test's own purpose, and it was found only
   // because test 7 below then tripped over that leftover row.
   const originalConnect = pool.connect.bind(pool);
@@ -270,14 +270,14 @@ test('5. consentRepo.recordOptOutDurable: a write that fails on every attempt ca
   }
 
   // Monkey-patches the exact functions consentRepo.recordOptOutDurable
-  // calls once both attempts fail — findOpen/open/touch/markNotified,
-  // failedConsentWritesRepo.record, alertNotifier.notify — on the same
+  // calls once both attempts fail - findOpen/open/touch/markNotified,
+  // failedConsentWritesRepo.record, alertNotifier.notify - on the same
   // singleton module objects consentRepo.js itself required (Node's require
   // cache guarantees this test and consentRepo.js share one object per
   // module). No real row is ever written to alert_events or
   // failed_consent_writes, and alertNotifier.notify never attempts a real
   // send, regardless of what ALERT_EMAIL_TO/ALERT_WABA_ID are set to in
-  // whatever environment this runs in — this is by construction, not by
+  // whatever environment this runs in - this is by construction, not by
   // relying on those env vars being unset. `openAlert` simulates
   // alert_events' own "is one already open" state across calls, in memory
   // only, so the dedup behavior (second failure touches, doesn't re-open)
@@ -344,21 +344,21 @@ test('5. consentRepo.recordOptOutDurable: a write that fails on every attempt ca
     assert.equal(calls.opened[0].severity, 'critical');
     assert.equal(calls.opened[0].dedupKey, 'global');
     assert.equal(calls.opened[0].details.phone, contact.phone);
-    assert.equal(calls.notified.length, 1, 'alertNotifier.notify must have been called exactly once — a stub call, never a real channel');
+    assert.equal(calls.notified.length, 1, 'alertNotifier.notify must have been called exactly once - a stub call, never a real channel');
     assert.equal(calls.markedNotified, 1);
 
-    // A second, unrelated-looking failure must NOT open a second alert —
+    // A second, unrelated-looking failure must NOT open a second alert -
     // deduped to one open alert for the whole failure class, same as
     // chatSlaLogsRepo.alertOnWriteFailure's own established behavior.
     // Verified purely against the in-memory openAlert state above, still
-    // stubbed (not yet restored) — no real table involved.
+    // stubbed (not yet restored) - no real table involved.
     try {
       stubConnectToFailTwice();
       await consentRepo.recordOptOutDurable(testClientId, contact.id, { source: 'inbound_stop_keyword', evidence: {} });
     } finally {
       restoreConnect();
     }
-    assert.equal(calls.opened.length, 1, 'still exactly one open() call total — the second failure must touch, not open a second alert');
+    assert.equal(calls.opened.length, 1, 'still exactly one open() call total - the second failure must touch, not open a second alert');
     assert.ok(calls.touched >= 1, 'touch must have been called for the second failure');
     assert.equal(calls.notified.length, 1, 'no second real notify call for an already-open alert');
   } finally {
@@ -366,9 +366,9 @@ test('5. consentRepo.recordOptOutDurable: a write that fails on every attempt ca
   }
 
   // Proof this test left nothing behind on the shared database, not an
-  // assumption — the stubs above make this true by construction, but it's
+  // assumption - the stubs above make this true by construction, but it's
   // asserted directly anyway since that's the whole point of this rewrite.
-  // Scoped to THIS test's own contact id, not a generic error-text pattern —
+  // Scoped to THIS test's own contact id, not a generic error-text pattern -
   // a message-pattern match would also catch (and misreport as a failure)
   // unrelated historical rows genuinely resolved by earlier work on this
   // same file, since this table is a shared, never-deleted audit trail.
@@ -403,9 +403,9 @@ test('6. consentRepo.recordOptOutDurable: when the durable write ALSO fails (a f
   };
   const calls = { notified: [], errors: [] };
   // Simulates the database being unreachable for BOTH the durable-write
-  // insert and the DB-backed alert dedup check — the "full outage" case
+  // insert and the DB-backed alert dedup check - the "full outage" case
   // this last-resort path exists for. alertNotifier.notify is still stubbed
-  // (not left real) even here, per the same no-real-send rule as test 5 —
+  // (not left real) even here, per the same no-real-send rule as test 5 -
   // this test verifies it gets CALLED correctly, not that it actually sends.
   failedConsentWritesRepo.record = async () => { throw new Error('simulated: database unreachable (durable write)'); };
   alertEventsRepo.findOpen = async () => { throw new Error('simulated: database unreachable (alert dedup check)'); };
@@ -430,7 +430,7 @@ test('6. consentRepo.recordOptOutDurable: when the durable write ALSO fails (a f
   assert.equal(result, null);
 
   // The last-resort notify must have fired directly, bypassing the DB
-  // entirely — no alertEventsRepo.open/touch/markNotified call could have
+  // entirely - no alertEventsRepo.open/touch/markNotified call could have
   // supplied this shape, since findOpen itself was made to throw before
   // ever reaching them.
   assert.equal(calls.notified.length, 1, 'alertNotifier.notify must still have been called once, via the DB-independent fallback');
@@ -442,7 +442,7 @@ test('6. consentRepo.recordOptOutDurable: when the durable write ALSO fails (a f
   assert.equal(calls.notified[0].details.durableWriteSucceeded, false);
 
   // The unconditional last-resort console.error line must carry the full
-  // detail (client, contact, phone, time) regardless of what else failed —
+  // detail (client, contact, phone, time) regardless of what else failed -
   // this is the "last resort" trace even if literally nothing else landed.
   const lastResortLine = calls.errors.find((args) => typeof args[0] === 'string' && args[0].includes('CONSENT OPT-OUT WRITE FAILED'));
   assert.ok(lastResortLine, 'the unconditional last-resort console.error line must have been printed');
@@ -453,18 +453,18 @@ test('6. consentRepo.recordOptOutDurable: when the durable write ALSO fails (a f
   assert.equal(detail.event, 'opted_out');
   assert.equal(detail.source, 'inbound_stop_keyword');
   assert.equal(detail.durableWriteSucceeded, false);
-  assert.equal(detail.alerted, true, 'alerted must be true — the last-resort notify succeeded even though the DB-backed path did not');
+  assert.equal(detail.alerted, true, 'alerted must be true - the last-resort notify succeeded even though the DB-backed path did not');
   assert.ok(detail.at, 'a timestamp must be recorded');
 });
 
 test('7. alertRunner.replayFailedConsentWrites/checkPendingFailedConsentWrites: a pending row is retried, resolved on success, and the pending-count alert clears', async () => {
   // Safety check, not just documentation: replayFailedConsentWrites has no
-  // per-client scoping (by design — it exists to clear ALL backlog across
+  // per-client scoping (by design - it exists to clear ALL backlog across
   // every client), so this test only calls it after confirming the table
-  // holds nothing but what this test is about to insert — same discipline
+  // holds nothing but what this test is about to insert - same discipline
   // this project's own conventions require before touching a background-
   // runner-owned table on the shared database.
-  // Scoped to UNRESOLVED rows — that's what replayFailedConsentWrites'
+  // Scoped to UNRESOLVED rows - that's what replayFailedConsentWrites'
   // listPending() and countPending() actually operate on; a resolved row
   // left over from an earlier test/real usage (migration 078's own module
   // comment: resolved rows are meant to persist as history, not be
@@ -472,7 +472,7 @@ test('7. alertRunner.replayFailedConsentWrites/checkPendingFailedConsentWrites: 
   const { rows: preExisting } = await pool.query(
     'select id, client_id, contact_id, error_message from failed_consent_writes where resolved_at is null'
   );
-  assert.equal(preExisting.length, 0, `failed_consent_writes must have no UNRESOLVED rows before this test runs — found ${preExisting.length}, not safe to sweep with a global replay call: ${JSON.stringify(preExisting)}`);
+  assert.equal(preExisting.length, 0, `failed_consent_writes must have no UNRESOLVED rows before this test runs - found ${preExisting.length}, not safe to sweep with a global replay call: ${JSON.stringify(preExisting)}`);
 
   const contact = await contactsRepo.create(pool, testClientId, { name: 'replay test', phone: `91716${Date.now()}`.slice(0, 12) });
   assert.equal(contact.opt_in_status, 'unknown');
@@ -492,7 +492,7 @@ test('7. alertRunner.replayFailedConsentWrites/checkPendingFailedConsentWrites: 
 
   await alertRunner.replayFailedConsentWrites();
 
-  // The contact must now actually be opted_out — the whole point of replay:
+  // The contact must now actually be opted_out - the whole point of replay:
   // a customer who said STOP is no longer left reachable for marketing just
   // because the first attempt to record it failed.
   const replayed = await contactsRepo.findById(pool, testClientId, contact.id);
@@ -506,19 +506,19 @@ test('7. alertRunner.replayFailedConsentWrites/checkPendingFailedConsentWrites: 
   assert.ok(rowsAfter[0].resolved_at, 'the row must be marked resolved after a successful replay');
 
   const afterCandidates = await alertRunner.checkPendingFailedConsentWrites();
-  assert.equal(afterCandidates.length, 0, 'no candidates once every row is resolved — the ongoing alert would auto-resolve via reconcile()\'s own resolveStale');
+  assert.equal(afterCandidates.length, 0, 'no candidates once every row is resolved - the ongoing alert would auto-resolve via reconcile()\'s own resolveStale');
 });
 
 test('8. alertRunner.replayFailedConsentWrites: a hypothetical pending opted_in row against a contact who has since opted out is resolved as moot, not retried forever', async () => {
   const { rows: preExisting } = await pool.query('select id from failed_consent_writes where resolved_at is null');
-  assert.equal(preExisting.length, 0, 'failed_consent_writes must have no UNRESOLVED rows before this test runs — not safe to sweep with a global replay call otherwise');
+  assert.equal(preExisting.length, 0, 'failed_consent_writes must have no UNRESOLVED rows before this test runs - not safe to sweep with a global replay call otherwise');
 
   const contact = await contactsRepo.create(pool, testClientId, { name: 'moot replay test', phone: `91717${Date.now()}`.slice(0, 12) });
   await consentRepo.recordEvent(testClientId, contact.id, { event: 'opted_in', source: 'test' });
   await consentRepo.recordEvent(testClientId, contact.id, { event: 'opted_out', source: 'test' });
 
   // No real code path writes an 'opted_in' failed_consent_writes row today
-  // — recordOptOutDurable only ever writes 'opted_out' — inserted directly
+  // - recordOptOutDurable only ever writes 'opted_out' - inserted directly
   // to exercise replayFailedConsentWrites' defensive ConsentBlockedError
   // branch, in case a future caller ever does.
   await failedConsentWritesRepo.record({

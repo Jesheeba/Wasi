@@ -1,4 +1,4 @@
-// PLAN.md item 7 — per-contact custom attribute values.
+// PLAN.md item 7 - per-contact custom attribute values.
 async function listForContact(db, clientId, contactId) {
   const { rows } = await db.query(
     `select v.attribute_id as "attributeId", a.name, a.type, v.value
@@ -11,7 +11,7 @@ async function listForContact(db, clientId, contactId) {
   return rows;
 }
 
-// Upsert on (contact_id, attribute_id) — migration 049's unique constraint.
+// Upsert on (contact_id, attribute_id) - migration 049's unique constraint.
 // Value format is already validated by the route (validateContactAttributeValue,
 // against the attribute's declared type) before this is ever called.
 async function upsert(db, clientId, contactId, attributeId, value) {

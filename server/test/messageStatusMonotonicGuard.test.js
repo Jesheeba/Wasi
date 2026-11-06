@@ -1,9 +1,9 @@
 // Monotonic status guard for chatsRepo.updateStatusByMetaId, added
-// 2026-09-25 — not echo-specific (WhatsApp status webhooks aren't
+// 2026-09-25 - not echo-specific (WhatsApp status webhooks aren't
 // guaranteed to arrive in order for any outbound message), but made urgent
 // by coexistence echo ingestion: an echo starts at 'delivered' immediately,
 // so a later 'sent' webhook for the same id would previously have silently
-// regressed it. Stubs only — decideStatusTransition is pure (no DB at all);
+// regressed it. Stubs only - decideStatusTransition is pure (no DB at all);
 // the updateStatusByMetaId tests use a fake `db.query`, same pattern as
 // coexistenceEchoIngestion.test.js.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -48,7 +48,7 @@ test("decideStatusTransition: 'failed' is accepted while the row isn't already d
   assert.equal(decideStatusTransition('failed', 'failed').accept, true, 'a redelivered failed status is still accepted (idempotent no-op write)');
 });
 
-test("decideStatusTransition: 'failed' is rejected once the row is already delivered or read — logged as an anomaly", () => {
+test("decideStatusTransition: 'failed' is rejected once the row is already delivered or read - logged as an anomaly", () => {
   const d1 = decideStatusTransition('delivered', 'failed');
   assert.equal(d1.accept, false);
   assert.ok(d1.reason);
@@ -109,7 +109,7 @@ test('updateStatusByMetaId: a blocked failed (already delivered) does not pass e
   await chatsRepo.updateStatusByMetaId(db, 'client-1', 'wamid.C', 'failed', 'Some Meta error', 131047);
   const updateCall = db.queries.find((q) => /^update messages set/.test(q.sql));
   assert.equal(updateCall.params[2], 'delivered', 'status must stay delivered');
-  assert.equal(updateCall.params[6], false, 'recordFailureDetail must be false — no error_reason/meta_error_code/failed_at write for an anomalous failed-after-delivered');
+  assert.equal(updateCall.params[6], false, 'recordFailureDetail must be false - no error_reason/meta_error_code/failed_at write for an anomalous failed-after-delivered');
 });
 
 test('updateStatusByMetaId: an accepted failed (not yet delivered/read) does pass error detail into the update', async () => {
@@ -120,7 +120,7 @@ test('updateStatusByMetaId: an accepted failed (not yet delivered/read) does pas
   assert.equal(updateCall.params[6], true, 'recordFailureDetail must be true for a legitimate failure');
 });
 
-test('updateStatusByMetaId: no matching row is a no-op (send raced ahead of the webhook) — no update query at all', async () => {
+test('updateStatusByMetaId: no matching row is a no-op (send raced ahead of the webhook) - no update query at all', async () => {
   const db = fakeDb({ currentStatus: undefined });
   const result = await chatsRepo.updateStatusByMetaId(db, 'client-1', 'wamid.MISSING', 'sent', null, null);
   assert.equal(result, null);

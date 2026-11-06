@@ -1,16 +1,16 @@
-// Independent QA pass (Phase 4) — regression tests for
+// Independent QA pass (Phase 4) - regression tests for
 // triggers/newMessageReceived.js's perform() against malformed/unexpected
-// bundle shapes. No backend/DB needed — exercises the real Zapier app code
+// bundle shapes. No backend/DB needed - exercises the real Zapier app code
 // through zapier-platform-core's own test harness only.
 //
 // Originally found two real gaps (a raw TypeError crash on an empty bundle,
 // and a non-object [null] trigger result when cleanedRequest.data was
-// absent) — both fixed the same session, alongside the separate HMAC
+// absent) - both fixed the same session, alongside the separate HMAC
 // signature-verification fix (see zapier-app/test/app.test.js for the
 // signature-specific tests against a real backend). perform() now checks
 // the signature FIRST, before ever touching cleanedRequest.data, so most of
 // the malformed-bundle cases below now fail fast with a clear, controlled
-// "no verifiable signature" error rather than the old raw TypeError —
+// "no verifiable signature" error rather than the old raw TypeError -
 // stricter than the original ask, since a request with no way to prove it's
 // really from Wasi shouldn't be processed at all, malformed or not.
 const { test } = require('node:test');
@@ -40,7 +40,7 @@ test('sanity: perform() unwraps a well-formed, correctly-signed { data } envelop
   assert.deepEqual(results, [{ message_id: '1', message: { body: 'hi' } }]);
 });
 
-test('FIXED: perform() no longer throws a raw TypeError on a completely empty bundle — rejects with a clear, controlled error', async () => {
+test('FIXED: perform() no longer throws a raw TypeError on a completely empty bundle - rejects with a clear, controlled error', async () => {
   await assert.rejects(
     () => appTester(App.triggers.new_message_received.operation.perform, {}),
     /no verifiable signature/i,

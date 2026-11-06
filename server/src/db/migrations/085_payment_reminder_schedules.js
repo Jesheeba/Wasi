@@ -1,14 +1,14 @@
 // Admin-defined monthly schedules for the payment reminder: "on day N of every
 // month, at hour H (India time), send the reminder to every active client."
 // Distinct from the pre-existing per-client reminder anchored to each client's
-// own activated_at day (paymentReminderRunner.sendReminderIfDue) — that one is
+// own activated_at day (paymentReminderRunner.sendReminderIfDue) - that one is
 // automatic and per-client; this one is a single admin-chosen date for
 // everyone.
 //
 // last_run_on is the once-per-day guard: paymentReminderRunner claims a
 // schedule with a conditional UPDATE on it before sending, so two server
 // instances (or two ticks in the same hour) can never both fire it.
-// Platform-internal, privileged connection only — no wasi_app grant.
+// Platform-internal, privileged connection only - no wasi_app grant.
 //
 // Also widens payment_notifications.trigger (migration 084) with
 // 'admin_schedule' so a scheduled-by-admin send is distinguishable in the

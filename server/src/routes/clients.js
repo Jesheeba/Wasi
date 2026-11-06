@@ -15,7 +15,7 @@ const router = Router();
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 // clientsRepo.findById/create/update already exclude password_hash from
-// what they select/return (see clientsRepo.js) — this is now a no-op
+// what they select/return (see clientsRepo.js) - this is now a no-op
 // safety net, not the only guard.
 const omitPasswordHash = ({ password_hash, ...safe }) => safe;
 
@@ -38,7 +38,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // Admin-created client. Unlike self-signup (routes/auth.js's /register), an
-// admin only supplies name/email — no tenant_slug (auto-derived from name,
+// admin only supplies name/email - no tenant_slug (auto-derived from name,
 // same collision-suffix loop /register uses) and no password is required
 // (auto-generated if omitted). The plaintext password is returned exactly
 // once in this response, never stored or logged, so the admin can hand it
@@ -79,7 +79,7 @@ router.post('/', asyncHandler(async (req, res) => {
   });
 
   // Every client gets a Hub API key (build plan Phase 5) at creation time,
-  // not as a separate manual step — so their CRM/dev team can integrate
+  // not as a separate manual step - so their CRM/dev team can integrate
   // (POST /api/v1/messages, /api/v1/templates) from day one. Same
   // "generate, hash, persist only the hash, return raw key once" contract
   // as the manual /api/admin/api-keys route; see apiKeysRepo.js.
@@ -99,7 +99,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // creation's temporary password: generated here, hashed before it touches
 // clientsRepo.update, returned in plaintext exactly once in this response,
 // never stored or logged anywhere. Deliberately its own route rather than a
-// field on PATCH — clientUpdateSchema has no password_hash column to set
+// field on PATCH - clientUpdateSchema has no password_hash column to set
 // (see validate.js) and this should never be reachable by silently including
 // a password in an otherwise-unrelated update.
 router.post('/:id/reset-password', asyncHandler(async (req, res) => {
@@ -118,10 +118,10 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
 }));
 
 // Real, previously-existing gap: this route never wrote an audit_log entry
-// at all — the only automatic clients.status transition anywhere in this
+// at all - the only automatic clients.status transition anywhere in this
 // codebase (razorpayWebhook.js's pending_setup -> payment_confirmed) is
 // logged, but every MANUAL admin status change (including suspend/
-// reactivate — the "Service" toggle in admin) was silently untracked.
+// reactivate - the "Service" toggle in admin) was silently untracked.
 // Fixed alongside this feature since it directly matters here: an admin
 // flipping Service off/on is exactly the kind of action that needs a paper
 // trail (see this feature's own visible-not-just-reachable requirement for
@@ -133,17 +133,17 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
   // activated_at is set exactly once, the moment status genuinely
-  // transitions TO 'active' — this is the "date they started using the
+  // transitions TO 'active' - this is the "date they started using the
   // application" the payment reminder's monthly cycle anchors to
   // (paymentReminderRunner.js). Never overwritten on a later active-again
-  // transition (e.g. reactivated after a suspension) — the original
+  // transition (e.g. reactivated after a suspension) - the original
   // activation date stays the billing-cycle anchor, not a reset one.
   const fields = { ...data };
   if (data.status === 'active' && existing.status !== 'active' && !existing.activated_at) {
     fields.activated_at = new Date().toISOString();
   }
   // A manual status change always supersedes whatever the auto-suspend
-  // mechanism was tracking — an admin explicitly setting status here (to
+  // mechanism was tracking - an admin explicitly setting status here (to
   // ANY value, not just back to active) means this client is no longer in
   // the auto-suspend flow's territory, so it shouldn't later auto-reactivate
   // them based on a stale flag.
@@ -165,11 +165,11 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   res.json(omitPasswordHash(client));
 }));
 
-// The "Paid"/"Unpaid" toggle (admin UI) — separate from the generic status
+// The "Paid"/"Unpaid" toggle (admin UI) - separate from the generic status
 // PATCH above since it has its own side effects beyond a raw column set
 // (starting/clearing the nonpayment countdown, and auto-reactivating
 // Service if THIS mechanism, not an unrelated manual suspension, was what
-// suspended it — see auto_suspended_for_nonpayment's own comment above and
+// suspended it - see auto_suspended_for_nonpayment's own comment above and
 // in migration 068).
 router.post('/:id/payment-status', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
@@ -182,7 +182,7 @@ router.post('/:id/payment-status', asyncHandler(async (req, res) => {
     : { payment_status: 'unpaid', payment_marked_unpaid_at: new Date().toISOString(), payment_warning_sent_at: null };
 
   // Marking paid restores Service automatically, but ONLY if THIS feature
-  // was what suspended it — an admin who suspended a client for an
+  // was what suspended it - an admin who suspended a client for an
   // unrelated reason (abuse, a support dispute, anything else) shouldn't
   // have that decision silently undone by a payment status flip.
   if (paid && existing.auto_suspended_for_nonpayment) {
@@ -202,7 +202,7 @@ router.post('/:id/payment-status', asyncHandler(async (req, res) => {
 }));
 
 // NOTE: deletes cascade to every tenant table for this client (contacts, chats,
-// messages, everything). Fine for a dev scaffold — a real admin panel needs a
+// messages, everything). Fine for a dev scaffold - a real admin panel needs a
 // soft-delete/confirmation gate before this ships.
 router.delete('/:id', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);

@@ -1,11 +1,11 @@
 // Regression coverage for the admin-panel secret-masking work
 // (wasi-mcp-server-plan.md-adjacent session note: this had NO prior test
-// coverage at all — this file is the first). Directly triggered by a real
+// coverage at all - this file is the first). Directly triggered by a real
 // leak found by inspection: POST /api/admin/clients/:id/retry-provisioning
 // stripped access_token_encrypted but forgot forward_secret before
 // responding, because it hand-rolled its own destructure instead of reusing
 // maskWaba() (admin.js:27-30) like every other waba-returning route. Fixed
-// by reusing maskWaba() there too — this file asserts that fix AND locks in
+// by reusing maskWaba() there too - this file asserts that fix AND locks in
 // every other maskWaba()/maskWebhook() call site so a third unmasked leak
 // can't land unnoticed.
 //
@@ -35,7 +35,7 @@ function authed(token) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 }
 
-// Whole-response-body string check, not just a field-by-field assertion —
+// Whole-response-body string check, not just a field-by-field assertion -
 // catches the secret leaking under a renamed key, nested somewhere
 // unexpected, or via a future field addition, not just its documented spot.
 function assertNoSecretInBody(bodyText, secret, label) {
@@ -67,10 +67,10 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
-  // A WABA with BOTH secrets set — access_token_encrypted (always masked)
-  // and forward_secret (the one that leaked) — so any route that forgets
+  // A WABA with BOTH secrets set - access_token_encrypted (always masked)
+  // and forward_secret (the one that leaked) - so any route that forgets
   // to mask either one is caught.
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: `${SUITE_PREFIX}waba`,
@@ -115,7 +115,7 @@ test('THE BUG, FIXED: retry-provisioning never returns forward_secret (or access
   assertNoSecretInBody(bodyText, FAKE_FORWARD_SECRET, 'retry-provisioning');
   assertNoSecretInBody(bodyText, 'fake-meta-access-token-never-sent-anywhere', 'retry-provisioning');
 
-  // Not just "the secret is absent" — confirm maskWaba() actually ran
+  // Not just "the secret is absent" - confirm maskWaba() actually ran
   // (rather than, say, some other code path that happens to omit it too),
   // by checking its documented masked-shape fields are present.
   const body = JSON.parse(bodyText);
@@ -174,7 +174,7 @@ test('GET /api/client-webhook (clientWebhook.js): no raw secret leaked to the ow
   assert.equal(body.has_secret, true);
 });
 
-// A different table than the waba/webhook secrets above — api_keys.key_hash
+// A different table than the waba/webhook secrets above - api_keys.key_hash
 // (the SHA-256 lookup value requireApiKey.js hashes an incoming bearer key
 // against, not a reversible secret, but internal and never meant to leave
 // this process). apiKeysRepo.create/revoke both `returning *`, so both
@@ -191,7 +191,7 @@ test('POST /api/admin/api-keys: response never includes key_hash', async () => {
   const body = await res.json();
   assert.equal(res.status, 201, JSON.stringify(body));
   assert.equal('key_hash' in body, false);
-  assert.ok(body.key, 'the raw key itself must still be returned — that part is intentional');
+  assert.ok(body.key, 'the raw key itself must still be returned - that part is intentional');
 });
 
 test('POST /api/admin/api-keys/:id/revoke: response never includes key_hash', async () => {
@@ -209,5 +209,5 @@ test('POST /api/admin/api-keys/:id/revoke: response never includes key_hash', as
   const body = await res.json();
   assert.equal(res.status, 200, JSON.stringify(body));
   assert.equal('key_hash' in body, false);
-  assert.ok(body.revoked_at, 'the revoke confirmation itself must still come through — that part is intentional');
+  assert.ok(body.revoked_at, 'the revoke confirmation itself must still come through - that part is intentional');
 });

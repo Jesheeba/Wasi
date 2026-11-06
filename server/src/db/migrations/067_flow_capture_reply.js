@@ -1,13 +1,13 @@
-// Adds a new flow node type, 'capture_reply' — sends a prompt, waits for the
+// Adds a new flow node type, 'capture_reply' - sends a prompt, waits for the
 // contact's next inbound message (same waiting mechanism runToRest already
-// uses for send_interactive_buttons — see flowEngine.js), and stores
+// uses for send_interactive_buttons - see flowEngine.js), and stores
 // whatever they sent as a contact_attribute_value. No new flow_edges
 // condition_type is needed: it uses the existing 'always' (continue after
 // capturing) and optional 'timeout' (no reply in time), exactly like
 // send_interactive_buttons already does.
 //
 // 'reply_captured' is a new flow_events.event_type, mirroring migration
-// 024_widen_flow_event_types.js's precedent — a captured reply is neither a
+// 024_widen_flow_event_types.js's precedent - a captured reply is neither a
 // button click nor a plain auto-advance, so it deserves its own label for
 // debugging "what did this contact's flow actually record."
 exports.up = (pgm) => {

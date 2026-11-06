@@ -1,13 +1,13 @@
-// PLAN.md item 15 — Meta conversation pricing / cost calculator.
+// PLAN.md item 15 - Meta conversation pricing / cost calculator.
 // conversation_pricing is NOT a tenant table: no client_id, not RLS-scoped
-// — it's global reference data Sirah's own admins enter, read by every
+// - it's global reference data Sirah's own admins enter, read by every
 // client identically. Same shape as plans/template_library (migration
 // 036's comment): admin-owned, select-only to the restricted wasi_app
 // role, writes stay on the privileged pool via admin routes only.
 //
 // Shipped EMPTY on purpose (PLAN.md's own instruction, Revision 2): the
 // reference spec's own figures (e.g. "~0.78 INR") are unverified and
-// possibly stale — never seeded here or anywhere else. An admin enters
+// possibly stale - never seeded here or anywhere else. An admin enters
 // real current rates through the new conversation-pricing admin route.
 exports.up = (pgm) => {
   pgm.createTable('conversation_pricing', {

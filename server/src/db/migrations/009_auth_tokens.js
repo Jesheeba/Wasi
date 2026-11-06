@@ -1,5 +1,5 @@
 // Password reset + email verification for both clients and admins, via one
-// reusable token table (only the hash is stored — the raw token exists only
+// reusable token table (only the hash is stored - the raw token exists only
 // in the emailed link, same principle as never storing a plaintext password).
 
 exports.up = (pgm) => {

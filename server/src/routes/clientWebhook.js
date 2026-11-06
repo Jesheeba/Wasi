@@ -6,7 +6,7 @@ const { clientWebhookSchema } = require('../utils/validate');
 
 const router = Router();
 
-// Never put the raw secret in a response object literally — always build
+// Never put the raw secret in a response object literally - always build
 // the masked shape below so a future field addition to `webhook` (a bare
 // `select *`) can't silently start leaking it again through this route.
 function maskWebhook(webhook) {
@@ -26,12 +26,12 @@ router.post('/', asyncHandler(async (req, res) => {
   const isNewSecret = !existing?.secret;
   const secret = existing?.secret || crypto.randomBytes(24).toString('hex');
   const saved = await clientWebhooksRepo.upsert(req.db, req.clientId, callback_url, secret, events);
-  // Only a genuinely new secret (first-time setup) is ever returned raw —
+  // Only a genuinely new secret (first-time setup) is ever returned raw -
   // saving the URL/events on top of an existing secret must not re-expose it.
   res.json(isNewSecret ? { ...maskWebhook(saved), secret } : maskWebhook(saved));
 }));
 
-// Separate, explicit action — force-generates a new secret even if one
+// Separate, explicit action - force-generates a new secret even if one
 // already exists, invalidating the old one immediately. The frontend must
 // warn before calling this; it's not reachable from the regular save path.
 router.post('/regenerate-secret', asyncHandler(async (req, res) => {

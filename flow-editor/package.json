@@ -2,7 +2,7 @@
   "name": "wasi-flow-editor",
   "private": true,
   "version": "0.0.0",
-  "description": "Stage 1 spike: React + React Flow (@xyflow/react) flow editor. Own package.json, own node_modules, own build — deliberately isolated from the root app.js/index.html (no build step) and from server/ (its own package.json). Built by the Dockerfile's flow-editor-build stage; only the built static output (dist/) ships in the final image, never this project's node_modules.",
+  "description": "Stage 1 spike: React + React Flow (@xyflow/react) flow editor. Own package.json, own node_modules, own build - deliberately isolated from the root app.js/index.html (no build step) and from server/ (its own package.json). Built by the Dockerfile's flow-editor-build stage; only the built static output (dist/) ships in the final image, never this project's node_modules.",
   "type": "module",
   "scripts": {
     "dev": "vite",

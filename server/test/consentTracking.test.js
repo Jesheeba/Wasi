@@ -3,7 +3,7 @@
 // 'opted_in' (fail closed for unknown-category templates too), utility sends
 // are unaffected, inbound STOP flips status, broadcasts skip non-opted-in
 // recipients and report the count, and creation never bulk-marks anyone
-// opted_in. Dedicated, disposable test client — see api.test.js's `before()`
+// opted_in. Dedicated, disposable test client - see api.test.js's `before()`
 // comment for why: this client never gets a real WABA, so nothing here can
 // reach a real phone.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -51,7 +51,7 @@ async function createTemplate(category, name = `${SUITE_PREFIX}template_${Date.n
     body: JSON.stringify({
       name,
       category,
-      body: 'Hello {{customer_name}}, thank you so much for reaching out to us today — we truly appreciate it!',
+      body: 'Hello {{customer_name}}, thank you so much for reaching out to us today - we truly appreciate it!',
       bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
@@ -93,7 +93,7 @@ before(async () => {
   assert.ok(clientToken && testClientId, 'dedicated test client registration must succeed');
 
   // Needed only for the inbound-STOP test (webhook dispatch resolves the
-  // client via wabas.waba_id) — never given a real access token, so it can
+  // client via wabas.waba_id) - never given a real access token, so it can
   // never actually send.
   await wabasRepo.upsertForClient(testClientId, { waba_id: TEST_WABA_ID, status: 'connected' });
 });
@@ -138,7 +138,7 @@ test('3. utility send to an unknown-status contact is allowed through the consen
 
   const res = await sendTemplate(chat.id, template.name);
   const data = await res.json();
-  // Blocked further downstream by the test client having no connected WABA —
+  // Blocked further downstream by the test client having no connected WABA -
   // the point here is it is NOT blocked by the consent gate.
   assert.notEqual(data.code, 'consent_required');
   assert.equal(data.code, 'waba_not_connected');
@@ -199,7 +199,7 @@ test('5. inbound STOP-keyword message flips the contact to opted_out and writes 
 });
 
 test('6. broadcast skips non-opted-in recipients and reports the skipped count', async () => {
-  // Scoped to a dedicated tag, not the client's whole audience — this test
+  // Scoped to a dedicated tag, not the client's whole audience - this test
   // file shares one client across all 7 tests, so an untagged (audience =
   // every contact) broadcast here would also sweep up contacts created by
   // the earlier scenarios.
@@ -228,7 +228,7 @@ test('6. broadcast skips non-opted-in recipients and reports the skipped count',
   assert.ok(created.consentWarning, 'majority-unopted-in audience must surface a pre-send warning');
 
   // broadcastRunner normally picks this up on its 5s tick (started only from
-  // server/src/index.js, not from createApp()/this test process) — invoked
+  // server/src/index.js, not from createApp()/this test process) - invoked
   // directly here, scoped to only this one broadcast, rather than calling
   // tick()/listActive() which would reach across every client's broadcasts
   // in the shared dev database.
@@ -245,7 +245,7 @@ test('6. broadcast skips non-opted-in recipients and reports the skipped count',
   assert.equal(byPhone[unknownA.phone].status, 'skipped');
   assert.match(byPhone[unknownA.phone].error_reason, /not opted in/i);
   assert.equal(byPhone[unknownB.phone].status, 'skipped');
-  // Opted-in recipient is attempted (not skipped for consent) — it fails for
+  // Opted-in recipient is attempted (not skipped for consent) - it fails for
   // an unrelated reason (no connected WABA on this test client).
   assert.equal(byPhone[optedInContact.phone].status, 'failed');
 
@@ -266,7 +266,7 @@ test('6b. creating a broadcast against a template with an unmapped parameter fai
   const res = await fetch(`${baseUrl}/api/broadcasts`, {
     method: 'POST',
     headers: authed(clientToken),
-    // No paramMappings at all — template.body has {{customer_name}}.
+    // No paramMappings at all - template.body has {{customer_name}}.
     body: JSON.stringify({ title: `${SUITE_PREFIX}broadcast_${Date.now()}`, templateName: template.name, tag_id: tag.id }),
   });
   assert.equal(res.status, 400);

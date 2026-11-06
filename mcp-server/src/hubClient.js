@@ -1,11 +1,11 @@
 // Thin fetch wrapper around Wasi's Hub API (server/src/routes/apiV1*.js).
-// Every tool in src/tools/ goes through this — no tool ever builds its own
-// fetch call — so auth, error normalization, and the "never log the key"
+// Every tool in src/tools/ goes through this - no tool ever builds its own
+// fetch call - so auth, error normalization, and the "never log the key"
 // rule live in exactly one place.
 //
 // Security note: the raw API key is read from process.env.WASI_API_KEY once
 // and held only in memory for the process's lifetime. It is never logged,
-// never included in a tool's returned content, and never written to disk —
+// never included in a tool's returned content, and never written to disk -
 // see README.md's "Security" section for the full statement.
 
 class HubApiError extends Error {
@@ -19,7 +19,7 @@ class HubApiError extends Error {
   }
 }
 
-// WASI_API_BASE_URL has no built-in default — Wasi is deployed per-instance
+// WASI_API_BASE_URL has no built-in default - Wasi is deployed per-instance
 // (there is no single fixed public domain for every user of this server the
 // way there is for, say, a single-tenant SaaS API), so guessing one here
 // would silently point at the wrong backend instead of failing clearly.
@@ -77,7 +77,7 @@ async function hubRequest(method, path, { query, body } = {}) {
     try {
       data = JSON.parse(text);
     } catch {
-      // Non-JSON body (e.g. an upstream proxy error page) — fall through
+      // Non-JSON body (e.g. an upstream proxy error page) - fall through
       // with an empty object so the status-based error below still fires
       // with a sane message instead of throwing on the body itself.
     }
@@ -85,7 +85,7 @@ async function hubRequest(method, path, { query, body } = {}) {
 
   if (!res.ok) {
     // Hub API v1's error shape is { error: { code, message, ...extra } }
-    // (server/src/utils/apiError.js) — every /api/v1/* endpoint returns
+    // (server/src/utils/apiError.js) - every /api/v1/* endpoint returns
     // this same nested shape now, so there's exactly one place to parse it.
     const errBody = data.error && typeof data.error === 'object' ? data.error : {};
     throw new HubApiError(errBody.message || `Hub API request failed (HTTP ${res.status})`, {
@@ -99,7 +99,7 @@ async function hubRequest(method, path, { query, body } = {}) {
 }
 
 // Resolves and caches this API key's own client_id via GET /api/v1/account
-// — see that route's comment for why this exists: apiMessageSendSchema
+// - see that route's comment for why this exists: apiMessageSendSchema
 // requires a client_id body field, but no tool caller should ever need to
 // know or supply Wasi's internal client UUID. Cached for the process
 // lifetime (one MCP server process = one API key = one client, for the

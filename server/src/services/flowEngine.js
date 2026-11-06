@@ -1,8 +1,8 @@
-// Multi-step, branching, stateful automation — replaces automationEngine.js
+// Multi-step, branching, stateful automation - replaces automationEngine.js
 // as metaWebhook.js's entry point (see routes/metaWebhook.js). automationEngine
 // itself is unchanged in shape and is still exactly what runs when there's no
 // active flow for a contact, or when a rule sends free text rather than
-// starting a flow — this module wraps it, rather than duplicating its
+// starting a flow - this module wraps it, rather than duplicating its
 // matching logic.
 //
 // automationEngine.js lazily requires this module (inside its evaluate()
@@ -11,7 +11,7 @@
 // circular-at-call-time require: this file requires automationEngine at the
 // top (safe, automationEngine has no top-level dependency back on this
 // file), and automationEngine only reaches back into this file once both
-// modules have already finished loading — the standard CommonJS fix for a
+// modules have already finished loading - the standard CommonJS fix for a
 // two-way dependency between "the fallback" and "the thing it falls back
 // from."
 //
@@ -20,7 +20,7 @@
 // partial unique index to reject a second concurrent flow-start for the
 // same contact) or .advance (a compare-and-swap UPDATE keyed on
 // current_node_id + version). Nothing in this file holds a Postgres lock
-// across a Meta API call — runToRest executes nodes (which may call out to
+// across a Meta API call - runToRest executes nodes (which may call out to
 // Meta) entirely before the single CAS write that persists the result,
 // exactly mirroring broadcastRunner's claim -> send -> finalize shape.
 const automationEngine = require('./automationEngine');
@@ -38,22 +38,22 @@ const messagingService = require('../services/messagingService');
 const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
 const { validateContactAttributeValue } = require('../utils/validate');
 
-// Node types that don't wait for a reply — after executing, the engine
+// Node types that don't wait for a reply - after executing, the engine
 // follows the node's single 'always' edge automatically, in the same pass
 // (no separate inbound event needed to continue). send_template joins
 // send_text/action here rather than waiting: this engine doesn't route on
 // template QUICK_REPLY button clicks (a separate webhook shape from
-// send_interactive_buttons' free-form buttons — scoped out, see the plan's
+// send_interactive_buttons' free-form buttons - scoped out, see the plan's
 // "needs its own spike" note on template button-edge routing), so a
 // send_template node has nothing to wait for. Anything not in this set
-// pauses here and persists that as the contact's resting state — either
+// pauses here and persists that as the contact's resting state - either
 // waiting for a reply (send_interactive_buttons, capture_reply) or waiting
 // for time to pass (delay, handled as its own case in runToRest since it always pauses
 // unconditionally, never advances in the same pass).
 const AUTO_ADVANCE_TYPES = new Set(['send_text', 'send_template', 'action']);
 
 // Which flow_edges.condition_type values make sense on an edge FROM a given
-// node type — the write-time half of the guarantee flowEdgesRepo's ordering
+// node type - the write-time half of the guarantee flowEdgesRepo's ordering
 // is the runtime half of (see its module comment). A 'keyword' edge hanging
 // off a 'delay' node can never evaluate (delay never sees an inbound
 // event), same for 'button_id'/'default' off any auto-advance type; 'end'
@@ -69,7 +69,7 @@ const LEGAL_EDGE_TYPES_BY_NODE_TYPE = {
   action: new Set(['always']),
   end: new Set([]),
   // Doesn't branch on WHAT the contact replied with (that's
-  // send_interactive_buttons' job) — it accepts anything as the captured
+  // send_interactive_buttons' job) - it accepts anything as the captured
   // value and always continues via 'always'; 'timeout' is the same
   // optional "no reply arrived" escape hatch send_interactive_buttons has.
   capture_reply: new Set(['always', 'timeout']),
@@ -80,7 +80,7 @@ function isEdgeTypeLegalForNode(nodeType, conditionType) {
 }
 
 // A node that pauses "is due" for one of two reasons, each following a
-// different edge type — delay always fires its single unconditional edge;
+// different edge type - delay always fires its single unconditional edge;
 // a waiting-for-reply node (send_interactive_buttons) fires its 'timeout'
 // edge if the reply never came. Pure, so it's unit-testable
 // (server/test/flowEngine.test.js) without needing a real due contact_flow_state row.
@@ -91,7 +91,7 @@ function dueEdgeType(nodeType) {
 // Normalizes a raw Meta inbound message (plus the display body
 // routes/metaWebhook.js already derived from it) into what edge-matching
 // actually branches on. A button click's `text` is its title, purely for
-// symmetry with the plain-text case — matching never uses it; button
+// symmetry with the plain-text case - matching never uses it; button
 // branches match buttonId, never the (editable) title.
 function normalizeInboundEvent(msg, inboundBody) {
   const buttonReply = msg?.interactive?.button_reply;
@@ -107,7 +107,7 @@ function normalizeKeyword(s) {
 
 // The one placeholder the flow editor's Send Text/Send Buttons fields
 // advertise (see FlowNodeCard.jsx's "Hi {{customer_name}}, …" placeholder)
-// — unlike send_template's configurable paramMappings, this is a fixed,
+// - unlike send_template's configurable paramMappings, this is a fixed,
 // always-on substitution over free text, not something authored per node.
 // contact.name is never null in practice (contactsRepo.upsertByPhone
 // defaults it to the phone number when Meta doesn't supply a display name),
@@ -116,10 +116,10 @@ function renderBody(body, contact) {
   return (body || '').replace(/\{\{\s*customer_name\s*\}\}/g, contact.name || '');
 }
 
-// Pure — no DB, no network — deliberately, so it's unit-testable the same
+// Pure - no DB, no network - deliberately, so it's unit-testable the same
 // way templateSyncService.reconcileTemplates is (server/test/flowEngine.test.js).
 // `edges` must already be in flowEdgesRepo.listForNode's order (default
-// last) — this just walks them and returns the first structural match.
+// last) - this just walks them and returns the first structural match.
 // 'always'/'timeout' edges are never matched here; those apply to
 // auto-advance and the (Stage 4) timeout poller respectively, not to an
 // inbound reply.
@@ -138,7 +138,7 @@ function resolveInboundEdge(edges, inboundEvent) {
 
 // Stores an inbound reply against a capture_reply node's configured
 // contact attribute. Never throws and never blocks the flow from
-// continuing — a captured value that doesn't match the attribute's
+// continuing - a captured value that doesn't match the attribute's
 // declared type (e.g. a number attribute, free-text reply "twenty-five")
 // is skipped rather than written, per contactAttributeValuesRepo's own
 // documented assumption that a stored value already matches its
@@ -169,13 +169,13 @@ async function executeAction(db, clientId, contact, node) {
     await contactsRepo.update(db, clientId, contact.id, { tag_id: node.config.tag_id });
   } else if (kind === 'set_opt_in') {
     // consentRepo manages its own transaction and is deliberately not
-    // db-first (see its module comment) — always called on the privileged
+    // db-first (see its module comment) - always called on the privileged
     // pool here, same as every other flowEngine call (metaWebhook.js is the
     // only caller, on `pool`).
     //
     // Consent hardening Phase 1, behaviour change accepted by direct
     // instruction: opted_in is sticky-blocked against an already-opted-out
-    // contact (consentRepo.ConsentBlockedError). No special handling here —
+    // contact (consentRepo.ConsentBlockedError). No special handling here -
     // it propagates like any other action-node failure, and runToRest's
     // existing generic catch records a 'stalled' flow_event with the real
     // reason and stops the flow at this node, rather than this node
@@ -186,7 +186,7 @@ async function executeAction(db, clientId, contact, node) {
       evidence: { flow_node_id: node.id },
     });
   } else if (kind === 'human_handoff') {
-    // No dedicated handoff queue in v1 — ending automation here is enough;
+    // No dedicated handoff queue in v1 - ending automation here is enough;
     // the chat is already visible to a human agent in the normal inbox.
     // Broader visibility (e.g. a "needs attention" filter) is out of scope,
     // same as the plan's stall-visibility note limits itself to surfacing,
@@ -197,13 +197,13 @@ async function executeAction(db, clientId, contact, node) {
 }
 
 // Sends/acts for one node. send_template is a valid flow_nodes.type value
-// (migration 023) but has no case here yet — Stage 5 adds it. Until then, a
+// (migration 023) but has no case here yet - Stage 5 adds it. Until then, a
 // a node type this engine doesn't know about throws here, which runToRest
-// catches and turns into a 'stalled' state — a safe failure (nothing sent,
+// catches and turns into a 'stalled' state - a safe failure (nothing sent,
 // nothing silently skipped), not a crash.
 async function executeNode(db, clientId, contact, chat, node) {
   if (node.type === 'send_text' || node.type === 'capture_reply') {
-    // capture_reply's send side is identical to send_text — it's the SAME
+    // capture_reply's send side is identical to send_text - it's the SAME
     // prompt-then-wait shape, the only difference is what happens to the
     // reply once it arrives (see captureReply() below, called from evaluate()).
     await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: renderBody(node.config.body, contact) });
@@ -218,7 +218,7 @@ async function executeNode(db, clientId, contact, chat, node) {
   } else if (node.type === 'action') {
     await executeAction(db, clientId, contact, node);
   } else if (node.type === 'delay' || node.type === 'end') {
-    // no-op — delay has nothing to send, it just pauses (runToRest sets
+    // no-op - delay has nothing to send, it just pauses (runToRest sets
     // due_at); 'end' is terminal, runToRest treats reaching it as completion
   } else {
     throw new Error(`flowEngine: node type "${node.type}" is not yet supported by the engine`);
@@ -226,11 +226,11 @@ async function executeNode(db, clientId, contact, chat, node) {
 }
 
 // Same param-mapping shape and resolution as broadcasts (build plan
-// priority fix) — node.config.paramMappings is { [paramName]: {source,
+// priority fix) - node.config.paramMappings is { [paramName]: {source,
 // field, value} }, reusing utils/templateParamMapping.js rather than a
 // second implementation. Unlike broadcasts, there's no dedicated
 // creation-time coverage check yet (Stage 6's editor is what should enforce
-// every {{param}} has a mapping before a flow can go 'active') — an
+// every {{param}} has a mapping before a flow can go 'active') - an
 // unmapped param here just resolves to '' via resolveParamValues' own
 // fallback and sends with it blank, which Meta will likely reject; that
 // surfaces as a normal 'stalled' state via runToRest's catch, not a crash.
@@ -238,24 +238,24 @@ async function executeSendTemplate(db, clientId, contact, chat, node) {
   const template = await messageTemplatesRepo.findByNameAndClient(db, clientId, node.config.templateName);
   // Real bug, fixed (same fix as apiV1Messages.js/broadcastRunner.js): this
   // used to prefer node.config.templateLanguage, falling back to a
-  // hardcoded 'en_US' — but no flow-builder UI (root app or the standalone
+  // hardcoded 'en_US' - but no flow-builder UI (root app or the standalone
   // flow-editor) has ever written templateLanguage into a node's config
   // (confirmed by reading both editors' Send Template node config
   // builders), so the fallback fired unconditionally in every real flow,
   // same silent-failure class a read-only production check confirmed for
   // Sirah Digital and Wasi Demo Client's non-en_US templates. `template`
-  // is already fetched right above for templateComponents — its real
+  // is already fetched right above for templateComponents - its real
   // `language` column is what should have been used all along, not a
   // config field nothing ever populates.
   if (!template) {
     // No local row at all (e.g. the template was deleted after this flow
-    // was built) — there is no reasonable language to guess, and sending
+    // was built) - there is no reasonable language to guess, and sending
     // one anyway would just reproduce the exact silent-failure class this
     // fix closes. Throwing here surfaces as a real, clear 'stalled' state
     // via runToRest's existing catch (same mechanism this function's own
     // header comment already documents for an unmapped-param send Meta
-    // rejects), not a crash — better than a vague Meta-side rejection later.
-    throw new Error(`Template "${node.config.templateName}" not found locally — cannot determine its real approved language to send correctly.`);
+    // rejects), not a crash - better than a vague Meta-side rejection later.
+    throw new Error(`Template "${node.config.templateName}" not found locally - cannot determine its real approved language to send correctly.`);
   }
   const templateComponents = buildTemplateComponents(template, resolveParamValues(node.config.paramMappings, contact));
   await messagingService.sendChatMessage(db, clientId, chat, {
@@ -270,22 +270,22 @@ async function executeSendTemplate(db, clientId, contact, chat, node) {
 // Executes nodes starting at startNodeId, following 'always' edges
 // automatically for auto-advance types, until reaching a node that waits
 // for a reply, a terminal 'end', a node with no outgoing edge (implicit
-// end), or a failed send/action. Returns the resting state to persist —
+// end), or a failed send/action. Returns the resting state to persist -
 // does NOT touch contact_flow_state itself, so the caller can distinguish
 // "starting a new flow" (INSERT) from "continuing one" (CAS UPDATE) without
 // this function needing to know which.
 //
 // fallbackNodeId is the contact's own current_node_id at the moment this
 // call started (defaults to startNodeId, correct for startFlow's brand-new
-// row — see its comment on why that specific race is already prevented
-// elsewhere). It exists because startNodeId — or a later node reached by
-// following an 'always' edge — can legitimately not exist: only a
+// row - see its comment on why that specific race is already prevented
+// elsewhere). It exists because startNodeId - or a later node reached by
+// following an 'always' edge - can legitimately not exist: only a
 // contact's CURRENT node is FK-protected against deletion (migration
 // 023_automation_flows.js's current_node_id has no onDelete, so Postgres
 // blocks that one specific delete); a node one hop further along a chain
 // has no such protection and can be deleted out from under an in-flight
 // advance. flowNodesRepo.findById returns null, not a throw, for a missing
-// row — without this fallback, that null would either be dereferenced
+// row - without this fallback, that null would either be dereferenced
 // directly (a crash) or get written into contact_flow_state.current_node_id
 // (NOT NULL, so that's a second, different crash) instead of leaving the
 // contact at the real node they're still safely on.
@@ -298,7 +298,7 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallb
       await flowEventsRepo.record(db, {
         clientId, contactId: contact.id, flowId, nodeId: lastRealNodeId,
         eventType: 'stalled',
-        detail: { error: 'The next node in this flow no longer exists — it was likely deleted while this contact was mid-flow.' },
+        detail: { error: 'The next node in this flow no longer exists - it was likely deleted while this contact was mid-flow.' },
       });
       return { nodeId: lastRealNodeId, status: 'stalled' };
     }
@@ -323,7 +323,7 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallb
       return { nodeId: node.id, status: 'completed' };
     }
     if (node.type === 'delay') {
-      // Always pauses unconditionally — never advances in this same pass,
+      // Always pauses unconditionally - never advances in this same pass,
       // unlike AUTO_ADVANCE_TYPES. flowRunner.js's tick is the only thing
       // that ever moves a contact off a delay node, once due_at arrives.
       const minutes = Number(node.config?.duration_minutes);
@@ -332,7 +332,7 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallb
     }
     if (!AUTO_ADVANCE_TYPES.has(node.type)) {
       // Waits for a reply (send_interactive_buttons). Also sets due_at if
-      // this node defines a 'timeout' edge and a timeout_minutes config —
+      // this node defines a 'timeout' edge and a timeout_minutes config -
       // both are required together; a timeout edge with no duration (or
       // vice versa) is treated as "no timeout configured" rather than
       // guessing a default, since Stage 6's editor is what should enforce
@@ -366,7 +366,7 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallb
 // exists so automationEngine can tell the AI agent's gate whether a flow
 // engaged (docs/ai-agent/SPEC.md section 7, gate 5).
 async function startFlow(db, clientId, contact, chat, flow) {
-  if (!flow.entry_node_id) return { started: false, reason: 'no_entry_node' }; // draft flow with no entry node — nothing to run
+  if (!flow.entry_node_id) return { started: false, reason: 'no_entry_node' }; // draft flow with no entry node - nothing to run
 
   let state;
   try {
@@ -374,7 +374,7 @@ async function startFlow(db, clientId, contact, chat, flow) {
       clientId, contactId: contact.id, flowId: flow.id, currentNodeId: flow.entry_node_id,
     });
   } catch (err) {
-    if (err.code === '23505') return { started: false, reason: 'already_active' }; // another concurrent trigger already started a flow for this contact — first one wins
+    if (err.code === '23505') return { started: false, reason: 'already_active' }; // another concurrent trigger already started a flow for this contact - first one wins
     throw err;
   }
 
@@ -395,7 +395,7 @@ async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge,
   });
 
   // fallbackNodeId = flowState.current_node_id, not the default (matchedEdge.to_node_id)
-  // — if that target (or a node further along an 'always' chain from it)
+  // - if that target (or a node further along an 'always' chain from it)
   // doesn't exist, the contact must stay reported at the real node they're
   // still on, never at the nonexistent one (see runToRest's comment).
   const rest = await runToRest(db, clientId, contact, chat, flowState.flow_id, matchedEdge.to_node_id, flowState.current_node_id);
@@ -414,13 +414,13 @@ async function continueFlow(db, clientId, contact, chat, flowState, matchedEdge,
 
 // Called from flowRunner.js's tick for a contact_flow_state row it has
 // already atomically claimed into 'processing' (see contactFlowStateRepo's
-// claimDueBatch) — the row being due means the contact's CURRENT node has
+// claimDueBatch) - the row being due means the contact's CURRENT node has
 // timed out (delay's unconditional wait elapsed, or a
 // send_interactive_buttons reply never arrived). dueEdgeType picks which
 // edge type means "time's up" for this node; runToRest then executes
 // forward from there exactly like a webhook-driven advance would. Returns
 // the resting state for flowRunner to finalize via
-// contactFlowStateRepo.finalizeProcessing — this function never writes to
+// contactFlowStateRepo.finalizeProcessing - this function never writes to
 // contact_flow_state itself, same separation runToRest's own callers use.
 async function advanceDueNode(db, clientId, contact, chat, flowState) {
   const node = await flowNodesRepo.findById(db, clientId, flowState.current_node_id);
@@ -428,7 +428,7 @@ async function advanceDueNode(db, clientId, contact, chat, flowState) {
   const edge = edges.find((e) => e.condition_type === dueEdgeType(node.type));
 
   if (!edge) {
-    // No edge to advance along — shouldn't happen given Stage 6's
+    // No edge to advance along - shouldn't happen given Stage 6's
     // write-time validation (a delay node always needs an 'always' edge; a
     // node with a timeout_minutes config always needs a 'timeout' edge),
     // but this row was already claimed into 'processing' and must be
@@ -444,7 +444,7 @@ async function advanceDueNode(db, clientId, contact, chat, flowState) {
     clientId, contactId: contact.id, flowId: flowState.flow_id, nodeId: node.id,
     eventType: 'timed_out', detail: { edgeId: edge.id, conditionType: edge.condition_type },
   });
-  // fallbackNodeId = flowState.current_node_id — same reasoning as
+  // fallbackNodeId = flowState.current_node_id - same reasoning as
   // continueFlow's call: if edge.to_node_id (or a node further along an
   // 'always' chain from it) doesn't exist, stay reported at the real node.
   return runToRest(db, clientId, contact, chat, flowState.flow_id, edge.to_node_id, flowState.current_node_id);
@@ -495,7 +495,7 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
     const currentNode = await flowNodesRepo.findById(db, clientId, flowState.current_node_id);
 
     // capture_reply doesn't branch on WHAT was said (resolveInboundEdge's
-    // button_id/keyword/default matching is meaningless here) — any
+    // button_id/keyword/default matching is meaningless here) - any
     // inbound event is accepted as the answer, stored, and the node's
     // single 'always' edge is always the target. Handled before
     // resolveInboundEdge entirely so a captured value that happens to look
@@ -507,7 +507,7 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
         await continueFlow(db, clientId, contact, chat, flowState, alwaysEdge, 'reply_captured', { capture: outcome });
         return { handled: true, how: 'flow_capture_reply' };
       }
-      // No 'always' edge — a mis-authored flow (flowValidation.js flags
+      // No 'always' edge - a mis-authored flow (flowValidation.js flags
       // this before activation) that somehow reached runtime anyway. Falls
       // through to the same 'unmatched_input' recording every other
       // no-match case gets, rather than a special case here.
@@ -518,7 +518,7 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
         return { handled: true, how: 'flow_continued' };
       }
     }
-    // No branch recognized this input — flow state is left untouched on
+    // No branch recognized this input - flow state is left untouched on
     // purpose (see migration 023's module comment) rather than guessing.
     // automationEngine still runs below as a global override, so a
     // non-flow keyword rule (e.g. "agent"/"help") can interrupt a flow.

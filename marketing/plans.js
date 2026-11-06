@@ -1,4 +1,4 @@
-// Wasi marketing — the ONE place plan names, prices and feature copy live for
+// Wasi marketing - the ONE place plan names, prices and feature copy live for
 // the public site (landing pricing cards + comparison table, and the signup
 // wizard's plan picker). Checkout math in signup.js still overrides prices from
 // GET /api/billing/plans once the visitor is logged in; this is the static
@@ -62,7 +62,7 @@
         COMPARE.map(function (r) {
           return '<tr><td>' + r[0] + '</td>' + r.slice(1).map(function (v) {
             if (v === 1) return '<td class="yes">✓</td>';
-            if (v === 0) return '<td>—</td>';
+            if (v === 0) return '<td>-</td>';
             return '<td>' + v + '</td>';
           }).join('') + '</tr>';
         }).join('') + '</tbody>';

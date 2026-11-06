@@ -1,4 +1,4 @@
-// Opt-in/consent tracking (build plan Phase 4). Not a feature — a blocker:
+// Opt-in/consent tracking (build plan Phase 4). Not a feature - a blocker:
 // before this, nothing in the schema distinguished a contact who consented
 // to marketing messages from one who never has. Quality ratings are
 // assessed at Business Portfolio level, not per phone number, so one
@@ -6,7 +6,7 @@
 // client on the account.
 //
 // Existing contacts default to 'unknown' on this migration, same as any new
-// one — consent can't be retroactively assumed for rows recorded before it
+// one - consent can't be retroactively assumed for rows recorded before it
 // was tracked. Do not backfill 'unknown' to 'opted_in' for any reason.
 
 exports.up = (pgm) => {
@@ -22,7 +22,7 @@ exports.up = (pgm) => {
     opt_out_at: { type: 'timestamptz' },
   });
 
-  // Append-only — no update()/remove() in the repo layer for this table by
+  // Append-only - no update()/remove() in the repo layer for this table by
   // design. Changing consent creates a new row; this is the record a
   // client's sending practices would be judged against if ever challenged.
   pgm.createTable('consent_events', {
@@ -38,7 +38,7 @@ exports.up = (pgm) => {
   pgm.createIndex('consent_events', 'contact_id');
 
   // broadcast_recipients.status previously only covered actual send
-  // attempts ('pending'/'sending'/'sent'/'failed') — a non-opted-in
+  // attempts ('pending'/'sending'/'sent'/'failed') - a non-opted-in
   // recipient is deliberately never attempted, so it needs its own status
   // rather than being reported as a failure that didn't happen.
   pgm.dropConstraint('broadcast_recipients', 'broadcast_recipients_status_check');

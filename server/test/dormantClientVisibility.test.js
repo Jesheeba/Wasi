@@ -1,6 +1,6 @@
-// Task B — "make a dormant client visible." Stubs only, per direct
+// Task B - "make a dormant client visible." Stubs only, per direct
 // instruction (production has 6 live clients sending real WhatsApp
-// messages) — nothing here ever reaches the real database.
+// messages) - nothing here ever reaches the real database.
 // pool.js's DB-safety guard moved to call-time (2026-09-25, see its own
 // module comment), so requiring pool.js/alertRunner.js is safe on its own;
 // this file goes one step further and replaces pool.query itself with a
@@ -36,7 +36,7 @@ test('alertRunner.checkDormantNoOutbound: flags a connected client with real inb
   }
 });
 
-test('alertRunner.checkDormantNoOutbound: a client with zero inbound traffic is not flagged — silence isn\'t the same as unanswered', async () => {
+test('alertRunner.checkDormantNoOutbound: a client with zero inbound traffic is not flagged - silence isn\'t the same as unanswered', async () => {
   const restore = stubPoolQuery([
     { waba_row_id: 'w1', waba_id: '1', client_id: 'c1', client_name: 'No Traffic Co', inbound_7d: 0, outbound_7d: 0 },
   ]);
@@ -65,7 +65,7 @@ test('alertRunner.checkNeverLoggedInStale: flags a connected-3+-days client with
   }
 });
 
-test('alertRunner.checkNeverLoggedInStale: an empty result (nobody matches — the SQL itself already excludes recent/logged-in clients) produces no candidates', async () => {
+test('alertRunner.checkNeverLoggedInStale: an empty result (nobody matches - the SQL itself already excludes recent/logged-in clients) produces no candidates', async () => {
   const restore = stubPoolQuery([]);
   try {
     const candidates = await alertRunner.checkNeverLoggedInStale();
@@ -75,7 +75,7 @@ test('alertRunner.checkNeverLoggedInStale: an empty result (nobody matches — t
   }
 });
 
-test('clientsRepo.touchLastLogin: issues an update against the given db handle only — no assumption about which pool', async () => {
+test('clientsRepo.touchLastLogin: issues an update against the given db handle only - no assumption about which pool', async () => {
   const calls = [];
   const stubDb = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [] }; } };
   await clientsRepo.touchLastLogin(stubDb, 'client-123');

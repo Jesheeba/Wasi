@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validateFlow } = require('../src/services/flowValidation');
 
-// Fake `db` — validateFlow only ever reaches the DB through
+// Fake `db` - validateFlow only ever reaches the DB through
 // messageTemplatesRepo.findByNameAndClient(db, clientId, name), which runs
 // `select * from message_templates where client_id = $1 and name = $2 ...`.
 // No real Postgres needed; this stands in for it precisely enough for
@@ -21,7 +21,7 @@ function fakeDb(templatesByName) {
 
 // Separate fake for capture_reply's own DB hop
 // (contactAttributesRepo.findById: `select * from contact_attributes where
-// client_id = $1 and id = $2`) — kept apart from fakeDb() above since that
+// client_id = $1 and id = $2`) - kept apart from fakeDb() above since that
 // one's own assertion (sql must mention message_templates) would fail the
 // moment this different query ran through it.
 function fakeAttributesDb(attributesById) {
@@ -37,7 +37,7 @@ function fakeAttributesDb(attributesById) {
 
 const CLIENT_ID = 'client-1';
 
-test('validateFlow: an unrouted button on a node with a default branch — falls-through message', async () => {
+test('validateFlow: an unrouted button on a node with a default branch - falls-through message', async () => {
   const nodes = [
     { id: 'n1', type: 'send_interactive_buttons', config: { buttons: [{ id: 'yes', title: 'Yes' }, { id: 'no', title: 'No' }] } },
     { id: 'n2', type: 'send_text', config: {} },
@@ -55,7 +55,7 @@ test('validateFlow: an unrouted button on a node with a default branch — falls
   assert.match(issues[0].message, /falls through to the default branch/);
 });
 
-test('validateFlow: an unrouted button with NO default branch either — dropped message, not "falls through"', async () => {
+test('validateFlow: an unrouted button with NO default branch either - dropped message, not "falls through"', async () => {
   const nodes = [
     { id: 'n1', type: 'send_interactive_buttons', config: { buttons: [{ id: 'yes', title: 'Yes' }] } },
   ];
@@ -66,7 +66,7 @@ test('validateFlow: an unrouted button with NO default branch either — dropped
   assert.match(issues[0].message, /silently dropped/);
 });
 
-test('validateFlow: every button routed — no issue', async () => {
+test('validateFlow: every button routed - no issue', async () => {
   const nodes = [
     { id: 'n1', type: 'send_interactive_buttons', config: { buttons: [{ id: 'yes', title: 'Yes' }] } },
     { id: 'n2', type: 'end', config: {} },
@@ -78,7 +78,7 @@ test('validateFlow: every button routed — no issue', async () => {
   assert.equal(issues.length, 0);
 });
 
-test('validateFlow: a delay node with no always edge stalls every contact — flagged', async () => {
+test('validateFlow: a delay node with no always edge stalls every contact - flagged', async () => {
   const nodes = [{ id: 'n1', type: 'delay', config: { duration_minutes: 5 } }];
   const issues = await validateFlow(fakeDb({}), CLIENT_ID, nodes, []);
   assert.equal(issues.length, 1);
@@ -86,7 +86,7 @@ test('validateFlow: a delay node with no always edge stalls every contact — fl
   assert.equal(issues[0].nodeId, 'n1');
 });
 
-test('validateFlow: a delay node WITH an always edge — no issue', async () => {
+test('validateFlow: a delay node WITH an always edge - no issue', async () => {
   const nodes = [
     { id: 'n1', type: 'delay', config: { duration_minutes: 5 } },
     { id: 'n2', type: 'end', config: {} },
@@ -126,7 +126,7 @@ test('validateFlow: send_template referencing a pending (not approved) template'
   assert.match(issues[0].message, /pending/);
 });
 
-test('validateFlow: send_template referencing an approved template — no issue', async () => {
+test('validateFlow: send_template referencing an approved template - no issue', async () => {
   const nodes = [{ id: 'n1', type: 'send_template', config: { templateName: 'good_template' } }];
   const issues = await validateFlow(fakeDb({ good_template: { status: 'approved' } }), CLIENT_ID, nodes, []);
   assert.equal(issues.length, 0);
@@ -148,7 +148,7 @@ test('validateFlow: an edge pointing at a node that no longer exists in the give
   assert.equal(issues[0].edgeId, 'e1');
 });
 
-test('validateFlow: a capture_reply node with no always edge stalls every contact — flagged', async () => {
+test('validateFlow: a capture_reply node with no always edge stalls every contact - flagged', async () => {
   const nodes = [{ id: 'n1', type: 'capture_reply', config: { body: 'What is your name?', attribute_id: 'attr-1' } }];
   const issues = await validateFlow(fakeAttributesDb({ 'attr-1': { id: 'attr-1', name: 'full_name', type: 'text' } }), CLIENT_ID, nodes, []);
   assert.equal(issues.length, 1);
@@ -188,7 +188,7 @@ test('validateFlow: a capture_reply node with no question text set', async () =>
   assert.equal(issues[0].code, 'capture_body_missing');
 });
 
-test('validateFlow: a fully-configured capture_reply node — no issue', async () => {
+test('validateFlow: a fully-configured capture_reply node - no issue', async () => {
   const nodes = [
     { id: 'n1', type: 'capture_reply', config: { body: 'What is your name?', attribute_id: 'attr-1' } },
     { id: 'n2', type: 'end', config: {} },
@@ -200,7 +200,7 @@ test('validateFlow: a fully-configured capture_reply node — no issue', async (
 
 test('validateFlow: a dangling edge from n1 does not count toward n1s own routed-button coverage', async () => {
   // A button_id edge whose TARGET is missing shouldn't be treated as having
-  // "covered" that button — it's dangling, so the button is effectively
+  // "covered" that button - it's dangling, so the button is effectively
   // still unrouted for any real execution.
   const nodes = [
     { id: 'n1', type: 'send_interactive_buttons', config: { buttons: [{ id: 'yes', title: 'Yes' }] } },

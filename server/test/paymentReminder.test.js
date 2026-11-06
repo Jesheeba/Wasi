@@ -7,7 +7,7 @@
 // clients. Meta calls faked by stubbing global.fetch for graph.facebook.com
 // only. Runner tests call the PER-CLIENT functions (sendReminderIfDue/
 // enforceNonpaymentForClient) directly, never the bulk sendReminders()/
-// enforceNonpayment()/tick() — those scan every real active/unpaid client
+// enforceNonpayment()/tick() - those scan every real active/unpaid client
 // in this shared production database, and calling them from a test would
 // process (and potentially message) real clients, not just this file's
 // disposable one. See CLAUDE.md's "live background workers" convention.
@@ -21,11 +21,11 @@ const assert = require('node:assert/strict');
 // remove this block.
 //   - Cause of the failures: setup() below asserts that the demo admin can log
 //     in (`admin@wasi.local` / `admin12345`, line ~57, "demo admin login must
-//     succeed — run `npm run db:seed` first"). That assertion fails in 3 of the
+//     succeed - run `npm run db:seed` first"). That assertion fails in 3 of the
 //     tests (the PATCH /api/clients/:id and both POST .../payment-status
 //     tests). It still failed against a local crm_dev after
 //     `node src/db/seed.js` had seeded that very admin, so the cause is NOT
-//     just a missing seed — not yet diagnosed. (The repo's DB guard also
+//     just a missing seed - not yet diagnosed. (The repo's DB guard also
 //     refuses any test touching the shared production DB, which is the other
 //     way this file fails on a clean checkout.)
 //   - Cause of the hang: every failed setup() leaves the `app.listen(0)`
@@ -36,7 +36,7 @@ const assert = require('node:assert/strict');
 // To run it anyway (against a local DB, and expect to kill it if it hangs):
 //   RUN_PAYMENT_REMINDER_TESTS=1 node --test test/paymentReminder.test.js
 if (process.env.RUN_PAYMENT_REMINDER_TESTS !== '1') {
-  test.skip('paymentReminder.test.js is quarantined — see the TODO at the top of this file', () => {});
+  test.skip('paymentReminder.test.js is quarantined - see the TODO at the top of this file', () => {});
   return;
 }
 
@@ -78,7 +78,7 @@ async function setup() {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   const adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   await wabasRepo.upsertForClient(clientId, {
     waba_id: `${SUITE_PREFIX}waba`,
@@ -110,13 +110,13 @@ test('isReminderDueToday: matches activated_at\'s day-of-month, skips the activa
   assert.equal(isReminderDueToday(client, new Date('2026-07-14T12:00:00Z')), false, 'not the anniversary day yet');
 });
 
-test('isReminderDueToday: month-end fallback — activated on the 31st still fires on a 30-day month\'s last day', () => {
+test('isReminderDueToday: month-end fallback - activated on the 31st still fires on a 30-day month\'s last day', () => {
   const { isReminderDueToday } = require('../src/services/paymentReminderRunner');
   const client = { activated_at: '2026-01-31T00:00:00.000Z', last_reminder_sent_on: null };
 
-  assert.equal(isReminderDueToday(client, new Date('2026-04-30T12:00:00Z')), true, 'April has 30 days — fires on the 30th');
+  assert.equal(isReminderDueToday(client, new Date('2026-04-30T12:00:00Z')), true, 'April has 30 days - fires on the 30th');
   assert.equal(isReminderDueToday(client, new Date('2026-04-29T12:00:00Z')), false);
-  assert.equal(isReminderDueToday(client, new Date('2026-05-31T12:00:00Z')), true, 'May has 31 — fires on the real day again');
+  assert.equal(isReminderDueToday(client, new Date('2026-05-31T12:00:00Z')), true, 'May has 31 - fires on the real day again');
 });
 
 test('isReminderDueToday: already sent today is not due again', () => {
@@ -176,7 +176,7 @@ test('sendReminderIfDue: a due client sends the template, logs audit, stamps las
   }
 });
 
-test('sendReminderIfDue: a not-due client is skipped entirely — no send, no audit row, no column change', async () => {
+test('sendReminderIfDue: a not-due client is skipped entirely - no send, no audit row, no column change', async () => {
   const ctx = await setup();
   const { pool, clientsRepo, auditLogRepo, paymentReminderRunner, clientId, server } = ctx;
   try {
@@ -242,7 +242,7 @@ test('enforceNonpaymentForClient: 3+ days unpaid sends the warning once, not twi
     assert.ok(afterWarning.payment_warning_sent_at, 'payment_warning_sent_at must be stamped');
     assert.equal(afterWarning.status, 'active', 'a warning must not suspend the account');
 
-    // Second call the same day must be a no-op — warning already sent.
+    // Second call the same day must be a no-op - warning already sent.
     const secondAction = await paymentReminderRunner.enforceNonpaymentForClient(afterWarning, new Date(), pool);
     assert.equal(secondAction, null);
 
@@ -295,7 +295,7 @@ test('PATCH /api/clients/:id: first transition to active stamps activated_at, lo
     assert.equal(body.auto_suspended_for_nonpayment, false, 'a manual status change clears the auto-suspend flag');
 
     // A second, later transition (e.g. suspend then reactivate) must NOT
-    // move the original activation date — it's the billing-cycle anchor.
+    // move the original activation date - it's the billing-cycle anchor.
     const firstActivatedAt = body.activated_at;
     await fetch(`${baseUrl}/api/clients/${clientId}`, {
       method: 'PATCH', headers: authed(adminToken), body: JSON.stringify({ status: 'suspended' }),

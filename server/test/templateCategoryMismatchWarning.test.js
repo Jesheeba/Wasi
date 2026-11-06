@@ -2,10 +2,10 @@
 // 'booking_otp' template was rejected by Meta (rejection_reason
 // 'INCORRECT_CATEGORY') for OTP/verification-code content submitted under
 // Utility instead of Authentication. This is the server-side half of the
-// fix — templateParams.js's checkCategoryContentMismatch, unit-tested in
+// fix - templateParams.js's checkCategoryContentMismatch, unit-tested in
 // templateParams.test.js, wired into POST / and PUT /:id as a non-blocking
 // `warnings` field on an otherwise-successful response (the template still
-// really gets submitted to Meta — this only adds a heads-up, it never
+// really gets submitted to Meta - this only adds a heads-up, it never
 // withholds the 201/200). Real DB writes through a disposable test client
 // (same pattern as templateEdit.test.js); Meta calls faked by stubbing
 // global.fetch for graph.facebook.com only.
@@ -46,7 +46,7 @@ async function teardown({ pool, clientId, server }) {
   await new Promise((resolve) => server.close(resolve));
 }
 
-// No WABA connected for this disposable client — these templates save
+// No WABA connected for this disposable client - these templates save
 // locally as 'pending' without ever calling Meta (routes/templates.js's own
 // documented behavior for a client with no connected WABA yet), which is
 // exactly what's needed here: the warning is checked independent of
@@ -120,7 +120,7 @@ test('PUT /api/templates/:id: editing a draft\'s body into OTP-shaped content un
       headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         // Long enough to clear the pre-existing, unrelated words-ratio rule
-        // (7 words per param + 2, so 1 param needs >= 9 words) — this test
+        // (7 words per param + 2, so 1 param needs >= 9 words) - this test
         // is about the category-mismatch warning, not that rule.
         body: 'Your one-time password to finish signing in today is {{code}}. Please enter it within the next few minutes.',
         bodyParamExamples: { code: '483920' },

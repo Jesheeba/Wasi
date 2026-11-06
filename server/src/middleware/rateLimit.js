@@ -20,17 +20,17 @@ const webhookLimiter = rateLimit({
   message: { error: 'Too many requests.' },
 });
 
-// Hub API (build plan Phase 5) — server-to-server, so a much higher ceiling
+// Hub API (build plan Phase 5) - server-to-server, so a much higher ceiling
 // than a browser-facing limiter, but still bounded: a leaked/compromised API
 // key shouldn't be able to hammer this without limit just because it's a
 // valid credential.
 //
 // legacyHeaders is on (unlike authLimiter/webhookLimiter above) specifically
-// to emit X-RateLimit-Limit/Remaining/Reset on every /api/v1/* response —
+// to emit X-RateLimit-Limit/Remaining/Reset on every /api/v1/* response -
 // wasi-master-plan.md §8.6's rate-limit visibility requirement. This is
 // express-rate-limit's own built-in header set (see its setLegacyHeaders),
 // not custom Wasi logic, and it fires on both allowed and 429 responses for
-// free. standardHeaders (the draft RateLimit-* headers) stays on too —
+// free. standardHeaders (the draft RateLimit-* headers) stays on too -
 // additive, already present before this change, no reason to remove it.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -38,18 +38,18 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: true,
   // Hub API v1's own {error: {code, message}} shape (utils/apiError.js),
-  // not the plain {error: 'string'} authLimiter/webhookLimiter above use —
+  // not the plain {error: 'string'} authLimiter/webhookLimiter above use -
   // a 429 from this limiter is still a /api/v1/* response and must match
   // every other error this API returns.
   message: { error: { code: 'rate_limited', message: 'Too many requests.' } },
 });
 
 // Client self-serve API key creation (build plan Phase 4, routes/apiKeys.js
-// POST /) — mints a live Bearer credential on every call, the one
+// POST /) - mints a live Bearer credential on every call, the one
 // capability this route family didn't have to consider abuse-throttling for
 // until now (independent audit finding: unlike every /api/v1/* route above,
 // nothing bounded how many keys an authenticated client could mint in a
-// loop). Keyed by the authenticated client (req.clientId), not IP — the
+// loop). Keyed by the authenticated client (req.clientId), not IP - the
 // abuse case here is one account looping this endpoint after a valid
 // login, not one IP spreading requests across accounts.
 const apiKeyCreationLimiter = rateLimit({
@@ -62,18 +62,18 @@ const apiKeyCreationLimiter = rateLimit({
 });
 
 // Client "who am I" session check (routes/auth.js's GET /me,
-// POST /verify-email/request) — called on every page load/reload to
+// POST /verify-email/request) - called on every page load/reload to
 // resume a session. Fundamentally different risk profile from
 // /login /register /forgot-password /reset-password: it already requires
 // a valid signed JWT to do anything (requireClientAuth runs first), so
 // brute-forcing it isn't a meaningful attack the way guessing a password
 // is. Found live (2026-09-01): these routes used to share authLimiter's
-// 20-per-15-min bucket with /login and /register — a client who simply
+// 20-per-15-min bucket with /login and /register - a client who simply
 // reloaded the app repeatedly during completely normal use could exhaust
 // it purely from routine session checks, and land on a bare,
 // unexplained login screen for up to 15 minutes with no visible error
 // (the resume-check IIFE in app.js correctly doesn't wipe the token on a
-// non-401 failure — see that fix's own history — but a 429 here still
+// non-401 failure - see that fix's own history - but a 429 here still
 // means neither the resume-confirmation card nor the app ever appears).
 // 60/min is generous enough that even reloading every few seconds
 // wouldn't hit it, while still bounding abuse of an authenticated
@@ -86,13 +86,13 @@ const sessionCheckLimiter = rateLimit({
   message: { error: 'Too many requests, please try again shortly.' },
 });
 
-// Admin login specifically (routes/adminAuth.js POST /login) — the admin
+// Admin login specifically (routes/adminAuth.js POST /login) - the admin
 // account reaches every client's data and there's exactly one of it, so it
 // needs a tighter bucket than authLimiter's 20/15min (which stays applied
 // to this whole router at the app.js mount point, forgot/reset-password
-// included — this is an additional, stricter limiter stacked on top of
+// included - this is an additional, stricter limiter stacked on top of
 // that, for /login only). Keyed by IP + the submitted email together, not
-// IP alone — an attacker cycling IPs (a botnet, a proxy pool) would
+// IP alone - an attacker cycling IPs (a botnet, a proxy pool) would
 // otherwise get a fresh 5-attempt bucket per IP against the same admin
 // account; tying the key to the email closes that.
 const adminLoginLimiter = rateLimit({

@@ -1,5 +1,5 @@
 // MVP secret storage: AES-256-GCM with a server-held key from env.
-// NOT a substitute for real KMS/Vault (spec §8 point 7) — the key still lives
+// NOT a substitute for real KMS/Vault (spec §8 point 7) - the key still lives
 // on the app server. Upgrade before handling real client WABA tokens in production.
 const crypto = require('crypto');
 

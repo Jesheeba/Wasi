@@ -1,10 +1,10 @@
-// PLAN.md item 5 — SLA / First Response Time tracking. One row per
-// (chat, triggering inbound message) — first_response_seconds and
+// PLAN.md item 5 - SLA / First Response Time tracking. One row per
+// (chat, triggering inbound message) - first_response_seconds and
 // resolved_seconds are both measured from that SAME inbound's arrival, not
 // from each other, so a resolved chat that never got a tracked first reply
 // (an agent silently resolves without responding) still gets a real
 // resolution-latency row, and a first response that never gets resolved
-// still gets a real FRT row — the two are independently nullable on the
+// still gets a real FRT row - the two are independently nullable on the
 // same row rather than forcing one to exist before the other can.
 //
 // inbound_message_id is nullable (ON DELETE SET NULL) for the same reason
@@ -48,7 +48,7 @@ exports.up = (pgm) => {
 };
 
 exports.down = async (pgm) => {
-  // Same discipline as every other tenant-table down() in this plan — real
+  // Same discipline as every other tenant-table down() in this plan - real
   // historical agent-performance data could exist by the time a rollback
   // runs on this shared database.
   const [{ count }] = await pgm.db.select('select count(*)::int as count from chat_sla_logs');

@@ -1,6 +1,6 @@
 // Minimal RFC4180-ish CSV parsing for contact-list import
 // (routes/contactLists.js). No CSV library exists anywhere in this
-// codebase (confirmed via grep during Phase 3 planning) — this is a small,
+// codebase (confirmed via grep during Phase 3 planning) - this is a small,
 // bounded parser for exactly the 2-column shape a contact export needs
 // (name, phone), not a general-purpose CSV engine, so hand-rolling it with
 // real test coverage is more controllable than adding a new dependency for
@@ -10,7 +10,7 @@
 // order, case-insensitive), double-quoted fields containing commas, and
 // "" as an escaped quote inside a quoted field (the one RFC4180 escaping
 // rule contact exports actually use in practice). Does NOT support custom
-// delimiters or multi-line quoted fields — out of scope for this use case.
+// delimiters or multi-line quoted fields - out of scope for this use case.
 
 function parseCsvLine(line) {
   const fields = [];
@@ -43,7 +43,7 @@ function parseCsvLine(line) {
 }
 
 // Digits-only, matching how phone numbers are actually stored throughout
-// this codebase (e.g. "919876543210", never "+91 98765 43210" — that
+// this codebase (e.g. "919876543210", never "+91 98765 43210" - that
 // formatting only ever appears in display-only seed/mock data). Accepts an
 // optional leading '+' and strips spaces/hyphens/parens before validating,
 // so a human-formatted export ("+91 98765-43210") still normalizes cleanly.
@@ -59,18 +59,18 @@ function isValidPhone(normalized) {
   return /^[0-9]{10,15}$/.test(normalized);
 }
 
-// Only name/phone are ever read by default — a column like "tags" is not
+// Only name/phone are ever read by default - a column like "tags" is not
 // silently dropped: see the unrecognized-column check below. `tags` becomes
 // a third known/read column, but ONLY for a caller that opts in via
 // `{ includeTags: true }` (routes/contacts.js, since item 8's contact_tags
-// table gives it somewhere real to go) — routes/contactLists.js's campaign-
+// table gives it somewhere real to go) - routes/contactLists.js's campaign-
 // audience import calls this with no options and still gets an honest
 // "ignored" notice for a tags column, since that path genuinely doesn't
 // wire tags through.
 const KNOWN_COLUMNS = new Set(['name', 'phone']);
 const TAGS_COLUMN = 'tags';
 
-// A cell like "VIP;Repeat Customer" — semicolon-separated since comma is
+// A cell like "VIP;Repeat Customer" - semicolon-separated since comma is
 // this parser's field delimiter. Free-text names, no format validation
 // (unlike contact_attribute_values): tagsRepo.findOrCreateByName makes any
 // non-empty name usable.
@@ -81,7 +81,7 @@ function parseTagNames(raw) {
     .filter(Boolean);
 }
 
-// Returns { validRows: [{name, phone, tags?}], errors: [{row, reason}] } —
+// Returns { validRows: [{name, phone, tags?}], errors: [{row, reason}] } -
 // every row is accounted for in exactly one of the two arrays, never
 // silently dropped. `row` in an error is the 1-indexed line number as it
 // appears in the uploaded file (including the header line, matching what a
@@ -114,7 +114,7 @@ function parseContactsCsv(text, { includeTags = false } = {}) {
   // Report, never silently ignore, any column this parser doesn't read.
   // This is a header-level (not per-row) problem, reported once at row 1
   // alongside the "no phone column" case above, and does NOT block the
-  // import — name/phone (and tags, when included) still proceed. Tagged
+  // import - name/phone (and tags, when included) still proceed. Tagged
   // with type: 'unrecognized_column' (unlike every other entry this
   // function pushes) so callers can keep it out of their numeric
   // failed/rejected row counts while still surfacing it in the errors array
@@ -122,7 +122,7 @@ function parseContactsCsv(text, { includeTags = false } = {}) {
   for (const col of new Set(header.filter((h) => h && !knownColumns.has(h)))) {
     errors.push({
       row: 1,
-      reason: `Column "${col}" is not imported yet — only "name"${includeTags ? ', "phone", and "tags"' : ' and "phone"'} are read. Contacts were still imported from those columns; "${col}" was ignored for every row.`,
+      reason: `Column "${col}" is not imported yet - only "name"${includeTags ? ', "phone", and "tags"' : ' and "phone"'} are read. Contacts were still imported from those columns; "${col}" was ignored for every row.`,
       type: 'unrecognized_column',
     });
   }
@@ -146,7 +146,7 @@ function parseContactsCsv(text, { includeTags = false } = {}) {
       continue;
     }
     if (seenInFile.has(phone)) {
-      errors.push({ row: rowNum, reason: `Duplicate phone number "${phoneRaw}" — already seen earlier in this file.` });
+      errors.push({ row: rowNum, reason: `Duplicate phone number "${phoneRaw}" - already seen earlier in this file.` });
       continue;
     }
     seenInFile.add(phone);

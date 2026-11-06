@@ -1,5 +1,5 @@
 // 'default' edges always sort last regardless of stored priority, so a
-// priority mistake at flow-authoring time can never shadow a real branch —
+// priority mistake at flow-authoring time can never shadow a real branch -
 // this is the runtime half of that guarantee; the editor (Stage 6) is the
 // write-time half (rejecting a save that would make a default edge
 // unreachable isn't needed since this ordering makes it moot).
@@ -13,7 +13,7 @@ async function listForNode(db, clientId, nodeId) {
   return rows;
 }
 
-// Whole-flow listing for the editor (server/src/routes/automationFlows.js) —
+// Whole-flow listing for the editor (server/src/routes/automationFlows.js) -
 // same default-last ordering as listForNode, just not scoped to one node.
 async function listByFlowId(db, clientId, flowId) {
   const { rows } = await db.query(
@@ -27,7 +27,7 @@ async function listByFlowId(db, clientId, flowId) {
 
 // When priority isn't explicitly given, this appends the new edge after
 // every existing sibling from the same node (max existing priority + 1)
-// rather than defaulting to 0 — the editor never used to send priority at
+// rather than defaulting to 0 - the editor never used to send priority at
 // all, which meant every edge tied at 0 and the real order was silently
 // whatever created_at happened to be. Explicit priority is now the actual
 // source of truth from the moment an edge is created, not an accident of
@@ -44,7 +44,7 @@ async function create(db, clientId, flowId, { from_node_id, to_node_id, conditio
   return rows[0];
 }
 
-// Reordering sibling branches — the step editor's move-up/move-down
+// Reordering sibling branches - the step editor's move-up/move-down
 // controls swap two edges' priority via two calls to this. Only priority is
 // updatable here; changing condition_type/condition_value/target is a
 // delete-and-recreate, same as today (this doesn't change that).

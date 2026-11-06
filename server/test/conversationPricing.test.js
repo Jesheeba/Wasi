@@ -1,7 +1,7 @@
-// PLAN.md item 15 — Meta conversation pricing / cost calculator. Covers:
+// PLAN.md item 15 - Meta conversation pricing / cost calculator. Covers:
 // admin CRUD on conversation_pricing (create/upsert-by-conflict, list,
 // delete, auth gating), and the client-facing GET /api/analytics/
-// cost-estimate — an explicit what-if calculator (see analytics.js's own
+// cost-estimate - an explicit what-if calculator (see analytics.js's own
 // comment: usage_logs.conversations_billed has no category/country
 // dimension, so category/countryCode are required query params, and there
 // is deliberately no byCategory breakdown in the response).
@@ -10,7 +10,7 @@
 // adminSecretMasking.test.js. Deletes every row this file inserts into
 // conversation_pricing (a real shared, non-tenant-scoped table) in after(),
 // per CLAUDE.md's "a test can delete/leave behind real shared-table
-// content" convention — nothing here touches any OTHER row.
+// content" convention - nothing here touches any OTHER row.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
@@ -66,7 +66,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
@@ -138,7 +138,7 @@ test('admin CRUD: rejects an unrecognized category, and requires auth', async ()
   });
   assert.equal(unauthedRes.status, 401);
 
-  // A client (owner) token must not reach an admin-only route either —
+  // A client (owner) token must not reach an admin-only route either -
   // requireAdminAuth() rejects a wrong-token-type JWT with 403, reserving
   // 401 for genuinely missing/invalid credentials (matches this codebase's
   // established convention, e.g. teamMemberAuth.test.js's own 403 case).
@@ -167,9 +167,9 @@ test('GET /api/analytics/cost-estimate: with a rate configured, the estimate mat
   assert.equal(body.rateConfigured, true);
   assert.equal(body.rateInr, 0.4);
   assert.equal(body.estimatedInr, 10, '25 conversations * 0.4 INR = 10, matching a manual calculation');
-  // The response is deliberately total-only — no per-category split is
+  // The response is deliberately total-only - no per-category split is
   // fabricated from data usage_logs doesn't actually carry.
-  assert.equal(body.byCategory, undefined, 'byCategory must not appear — see analytics.js\'s own comment on why');
+  assert.equal(body.byCategory, undefined, 'byCategory must not appear - see analytics.js\'s own comment on why');
 });
 
 test('GET /api/analytics/cost-estimate: with no rate configured, reports that clearly rather than a silent 0', async () => {
@@ -191,7 +191,7 @@ test('GET /api/analytics/cost-estimate: with no rate configured, reports that cl
   assert.equal(body.conversationsBilled, 7, 'the real billed count is still reported even with no rate configured');
   assert.equal(body.rateConfigured, false);
   assert.equal(body.rateInr, null);
-  assert.equal(body.estimatedInr, null, 'must not silently report 0 — that would be indistinguishable from a real zero-cost month');
+  assert.equal(body.estimatedInr, null, 'must not silently report 0 - that would be indistinguishable from a real zero-cost month');
 });
 
 test('GET /api/analytics/cost-estimate: requires month/category/countryCode; rejects an unrecognized category', async () => {
@@ -211,7 +211,7 @@ test('GET /api/analytics/cost-estimate: requires month/category/countryCode; rej
   assert.equal(badMonth.status, 400);
 });
 
-test('GET /api/analytics/cost-estimate: tenant-scoped — another client\'s usage never leaks into this estimate', async () => {
+test('GET /api/analytics/cost-estimate: tenant-scoped - another client\'s usage never leaks into this estimate', async () => {
   await upsertRate('UTILITY', TEST_COUNTRY, 1);
 
   const otherClient = await fetch(`${baseUrl}/api/auth/register`, {
@@ -235,7 +235,7 @@ test('GET /api/analytics/cost-estimate: tenant-scoped — another client\'s usag
     `${baseUrl}/api/analytics/cost-estimate?month=${month}&category=UTILITY&countryCode=${TEST_COUNTRY}`,
     { headers: authed(clientToken) }
   ).then((r) => r.json());
-  assert.equal(res.conversationsBilled, 0, 'the calling client has no usage this month — the other client\'s 999 must not appear');
+  assert.equal(res.conversationsBilled, 0, 'the calling client has no usage this month - the other client\'s 999 must not appear');
 
   await pool.query('delete from clients where id = $1', [otherClientId]);
 });

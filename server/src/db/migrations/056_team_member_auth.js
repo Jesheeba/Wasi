@@ -1,4 +1,4 @@
-// Plan item 1 (PLAN.md) — turns team_members from a roster stub (no
+// Plan item 1 (PLAN.md) - turns team_members from a roster stub (no
 // password, no login path, migration 011_workspace_features.js) into real,
 // separately-authenticating accounts, and widens auth_tokens to carry a
 // team-member's invite token the same way it already carries a client's
@@ -8,7 +8,7 @@
 // defaults role to 'Agent', and every team_member created since then went
 // through teamMemberCreateSchema (utils/validate.js), which only ever
 // leaves role unset (-> 'Agent' default) or accepts a free-text string
-// nothing has ever set to anything outside Admin/Manager/Agent in practice —
+// nothing has ever set to anything outside Admin/Manager/Agent in practice -
 // confirmed by reading every existing call site before adding this
 // constraint, not assumed.
 exports.up = (pgm) => {
@@ -40,7 +40,7 @@ exports.down = async (pgm) => {
   if (count > 0) {
     throw new Error(
       `Cannot roll back 056_team_member_auth: ${count} team_member(s) have a real ` +
-      `password_hash set. A rollback would silently delete their login credential — ` +
+      `password_hash set. A rollback would silently delete their login credential - ` +
       `if that's genuinely intended, clear password_hash for those rows first, then retry.`
     );
   }

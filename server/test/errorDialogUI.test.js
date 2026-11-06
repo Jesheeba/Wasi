@@ -1,13 +1,13 @@
-// Long/actionable-error dialog — showToast is a small auto-dismissing
+// Long/actionable-error dialog - showToast is a small auto-dismissing
 // bubble, the wrong shape for a real Meta rejection, a multi-reason
 // template-validation `details` array, or embedded-signup guidance text
-// (all real, currently-produced error shapes — see CLAUDE.md's Known Gaps
+// (all real, currently-produced error shapes - see CLAUDE.md's Known Gaps
 // for examples of each). reportError() (app.js), the new single entry
 // point for every authFetch catch site that used to call
 // showToast(err.message) directly, routes a caught error to the themed
 // #modal-error-dialog (built on the same .modal-overlay/.modal-box shell
 // as the Group 2/3 confirm dialog, 9873868) when it's long or carries a
-// structured `details` array, and to the plain toast otherwise — so a
+// structured `details` array, and to the plain toast otherwise - so a
 // short error ("Invalid email or password") keeps behaving exactly as
 // before.
 //
@@ -16,21 +16,21 @@
 //  1. A genuinely short, single-string server error (a real login
 //     rejection) still surfaces as a toast, not a dialog.
 //  2. A genuine multi-reason `details` array (two malformed {{...}}
-//     placeholders in one template body — templateParams.js's
+//     placeholders in one template body - templateParams.js's
 //     malformedPlaceholderErrors, one entry per placeholder) opens the
 //     dialog, renders as a real <ul>/<li> list (not extractApiErrorDetail's
 //     join(' '), which was losing structure), and its Copy button copies
 //     the same text a support case would need.
 //
 // The malformed-placeholder body is set via page.evaluate directly on the
-// textarea's `.value`, bypassing the 'input' event on purpose — the
+// textarea's `.value`, bypassing the 'input' event on purpose - the
 // Create Template modal's own live "flag while typing" validation
 // (templateParams.js, loaded client-side) would otherwise disable Submit
 // before this rule ever reaches the server, which is correct product
 // behavior but would make the server's `details`-array response
 // unreachable through a normal fill(). This deliberately exercises what a
 // user hitting Submit on stale/cached form state (or a future validation
-// gap) would see — the server-truth path this dialog exists for.
+// gap) would see - the server-truth path this dialog exists for.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 process.env.ALLOWED_ORIGINS = 'http://localhost:4000';
 
@@ -95,7 +95,7 @@ test('a short, real server error (wrong password) stays a toast, not the error d
   assert.equal(await toast.locator('.toast-msg').textContent(), 'Invalid email or password');
 
   // .modal-overlay only ever toggles opacity/pointer-events via .open
-  // (index.css), never display:none — confirm the dialog's .open class was
+  // (index.css), never display:none - confirm the dialog's .open class was
   // never added, not just that it "looks" hidden.
   const dialogOpened = await page.evaluate(() => document.getElementById('modal-error-dialog').classList.contains('open'));
   assert.equal(dialogOpened, false, 'a short, unstructured error must not open the error dialog');
@@ -115,7 +115,7 @@ test('a real multi-reason `details` array (2 malformed template placeholders) op
   await page.waitForSelector('#modal-create-template.open', { timeout: 3000 });
 
   await page.fill('#new-template-name', `${SUITE_PREFIX}tpl`);
-  // A valid, param-free body first — real behavior, needed so the live
+  // A valid, param-free body first - real behavior, needed so the live
   // "flag while typing" validation actually enables Submit before it gets
   // overwritten below.
   await page.fill('#new-template-body', 'Thank you for choosing us for your recent purchase, we appreciate your business.');
@@ -123,10 +123,10 @@ test('a real multi-reason `details` array (2 malformed template placeholders) op
   const submitBtn = page.locator('#create-template-form button[type="submit"]');
   assert.equal(await submitBtn.isDisabled(), false, 'a valid body must leave Submit enabled before the bypass below');
 
-  // Two distinct malformed placeholders — findMalformedPlaceholders
+  // Two distinct malformed placeholders - findMalformedPlaceholders
   // (templateParams.js) flags each one separately, so this produces a real
   // 2-entry details array in one request. Set directly on .value, no
-  // 'input' dispatch — see the file header comment for why.
+  // 'input' dispatch - see the file header comment for why.
   await page.evaluate(() => {
     document.getElementById('new-template-body').value =
       'Hi {{Customer}}, your order {{Order ID}} has shipped and is on its way to you right now.';
@@ -144,8 +144,8 @@ test('a real multi-reason `details` array (2 malformed template placeholders) op
 
   await page.click('#modal-error-dialog-copy-btn');
   await page.waitForFunction(() => document.getElementById('modal-error-dialog-copy-btn').textContent === 'Copied!', { timeout: 3000 });
-  // Windows' clipboard normalizes bare \n to \r\n on write — an OS/platform
-  // quirk of this test environment, not app behavior — so compare with
+  // Windows' clipboard normalizes bare \n to \r\n on write - an OS/platform
+  // quirk of this test environment, not app behavior - so compare with
   // line endings normalized rather than asserting exact bytes.
   const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
   assert.equal(clipboardText.replace(/\r\n/g, '\n'), itemTexts.join('\n'), 'Copy must place the exact same reasons on the clipboard as are shown in the list');

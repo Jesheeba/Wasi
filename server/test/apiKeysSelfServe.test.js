@@ -1,4 +1,4 @@
-// Client self-serve API key management (routes/apiKeys.js) — reverses
+// Client self-serve API key management (routes/apiKeys.js) - reverses
 // admin.js's original "consuming apps don't self-serve keys" comment, first
 // for revoke/delete, then (build plan Phase 4) for creation too: a client
 // can now generate their own named key (e.g. "Zapier") via POST / without
@@ -67,7 +67,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
@@ -104,7 +104,7 @@ test('a client cannot revoke or delete another client\'s key', async () => {
 
 test('revoking/deleting the client\'s ONLY active key is blocked with 409 and an explanatory message', async () => {
   // testClientId already has an active key from the "lists only" test above
-  // (single-key state at this point in the suite) — revoke it via admin
+  // (single-key state at this point in the suite) - revoke it via admin
   // first isn't needed; just fetch current keys and confirm exactly one is active.
   const keys = await fetch(`${baseUrl}/api/api-keys`, { headers: authed(clientToken) }).then((r) => r.json());
   const active = keys.filter((k) => !k.revoked_at);
@@ -146,7 +146,7 @@ test('with a second key issued, the client can now revoke the first without bein
 test('deleting an already-revoked key is allowed even if it\'s the client\'s last row (no active-key impact)', async () => {
   // At this point testClientId has: firstActive (revoked above) and `second` (active).
   // Revoking `second` too would hit the last-active-key guard, so instead
-  // delete the already-revoked firstActive — that should succeed freely.
+  // delete the already-revoked firstActive - that should succeed freely.
   const keys = await fetch(`${baseUrl}/api/api-keys`, { headers: authed(clientToken) }).then((r) => r.json());
   const revokedOne = keys.find((k) => k.revoked_at);
   assert.ok(revokedOne, 'expected a previously-revoked key from the prior test');

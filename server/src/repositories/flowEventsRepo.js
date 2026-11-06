@@ -1,4 +1,4 @@
-// Append-only, mirrors consentRepo's consent_events pattern — the audit
+// Append-only, mirrors consentRepo's consent_events pattern - the audit
 // trail for "what did this contact's flow do," read by the contact/chat
 // detail view (stall visibility) and Stage 5's super-admin failures view.
 async function record(db, { clientId, contactId, flowId, nodeId, eventType, detail }) {

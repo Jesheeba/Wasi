@@ -1,5 +1,5 @@
 // Pure-function tests for the production-database guard (src/utils/
-// dbSafety.js) — deliberately does NOT require src/db/pool.js or src/app.js,
+// dbSafety.js) - deliberately does NOT require src/db/pool.js or src/app.js,
 // since importing either triggers the real guard against this machine's
 // actual DATABASE_URL at module-load time (see pool.js). Testing the guard
 // itself must not depend on what database happens to be configured right
@@ -25,10 +25,10 @@ function withNodeEnv(value, fn) {
   withEnv('NODE_ENV', value, fn);
 }
 
-// These tests assert the blocking behavior specifically — must run with
+// These tests assert the blocking behavior specifically - must run with
 // ALLOW_SHARED_PRODUCTION_DB unset regardless of what the invoking shell
 // happens to have set (e.g. a real local test run using the override to
-// reach the actual shared DB — see the last test below for that path).
+// reach the actual shared DB - see the last test below for that path).
 function withBlockingConditions(nodeEnvValue, fn) {
   withEnv('ALLOW_SHARED_PRODUCTION_DB', undefined, () => withNodeEnv(nodeEnvValue, fn));
 }
@@ -70,7 +70,7 @@ test('assertNotProductionDatabase: allows any URL not in the known-production li
 
 test('assertNotProductionDatabase: ALLOW_SHARED_PRODUCTION_DB bypasses the block only with the exact token', () => {
   withNodeEnv(undefined, () => {
-    withEnv('ALLOW_SHARED_PRODUCTION_DB', 'true', () => { // wrong value — must not bypass
+    withEnv('ALLOW_SHARED_PRODUCTION_DB', 'true', () => { // wrong value - must not bypass
       assert.throws(() => assertNotProductionDatabase(PROD_URL), /KNOWN PRODUCTION database/);
     });
     withEnv('ALLOW_SHARED_PRODUCTION_DB', 'yes-i-understand-the-risk', () => {

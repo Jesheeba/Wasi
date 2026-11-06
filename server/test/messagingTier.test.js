@@ -4,7 +4,7 @@
 // 'unknown') tier, the admin manual-refresh route, metaWebhook.js's
 // handleAccountUpdate picking up messaging_limit_tier when Meta sends it,
 // and routes/broadcasts.js's tier-status/preflight-warning logic. Only
-// graph.facebook.com is faked (this codebase's established convention) —
+// graph.facebook.com is faked (this codebase's established convention) -
 // everything else runs against the real (shared dev/prod) database via a
 // dedicated disposable test client + WABA, deleted in after().
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -37,7 +37,7 @@ function authed(token) {
 // `response` is either a plain phone-number-details object (success) or
 // `{ fail: true }` to simulate a Meta-side failure (e.g. an expired token).
 // Always forwards the full (url, options) pair to the real fetch for
-// anything not graph.facebook.com — dropping `options` here previously broke
+// anything not graph.facebook.com - dropping `options` here previously broke
 // the OUTER test's own call to this app's local test server (method/headers
 // silently stripped), a real bug this comment exists to flag for anyone
 // touching this helper again.
@@ -94,7 +94,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
@@ -141,10 +141,10 @@ test('messagingTierRefreshRunner.refreshOne stores "unknown" (not null, not a cr
 
   const updated = await wabasRepo.findByClientId(testClientId);
   assert.equal(updated.messaging_tier, 'unknown');
-  assert.ok(updated.messaging_tier_checked_at, 'checked_at is still set even when the field came back absent — it WAS checked');
+  assert.ok(updated.messaging_tier_checked_at, 'checked_at is still set even when the field came back absent - it WAS checked');
 });
 
-test('messagingTierRefreshRunner.refreshOne never throws on a Meta failure — returns ok:false instead', async () => {
+test('messagingTierRefreshRunner.refreshOne never throws on a Meta failure - returns ok:false instead', async () => {
   await withFakeGraphFetch({ fail: true }, async () => {
     const waba = await wabasRepo.findByClientId(testClientId);
     const result = await messagingTierRefreshRunner.refreshOne(waba);
@@ -260,10 +260,10 @@ test('GET /api/broadcasts/tier-status: a known tier reports a real capNumber and
   assert.equal(typeof body.remaining, 'number');
 });
 
-// Broadcast preflight tierWarning — exercised against a real tag audience,
+// Broadcast preflight tierWarning - exercised against a real tag audience,
 // using this suite's own dedicated client/contacts so it can't be affected
 // by any other test file's send history. TIER_50 (the smallest real tier)
-// is used deliberately so the burn loop below stays small — a tag with 3
+// is used deliberately so the burn loop below stays small - a tag with 3
 // contacts against a cap that's already "used" 48 of 50 (via 48 real
 // outbound messages sent in the last 24h to distinct contacts) must warn;
 // the same audience against an unknown tier must not.

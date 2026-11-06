@@ -2,14 +2,14 @@ const { verifyToken } = require('../utils/auth');
 const { pool } = require('../db/pool');
 
 // Deliberately a SEPARATE middleware from requireClientAuth, not an
-// extension of it — see PLAN.md item 1. requireClientAuth keeps accepting
+// extension of it - see PLAN.md item 1. requireClientAuth keeps accepting
 // only `type: 'client'` and is left untouched on every router that should
 // stay owner-only (onboarding, billing, wallet, client-webhook, api-keys,
 // payment-links): a team_member token is rejected there at the JWT-type
 // check itself, before any role logic ever runs. Only routers that should
 // be reachable by SOME team-member role are switched to this middleware in
 // app.js, each paired with requireRole(...) at the individual route level.
-// Session invalidation (password reset item 3) — see requireAdminAuth.js's
+// Session invalidation (password reset item 3) - see requireAdminAuth.js's
 // identical comment for the full reasoning. Checked against clients.
 // token_version for an owner token, team_members.token_version (scoped to
 // the token's own claimed client_id, so a team member can't be confused

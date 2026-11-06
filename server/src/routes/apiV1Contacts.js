@@ -1,4 +1,4 @@
-// Hub API read endpoint (build plan Phase 5's MCP tool inventory) —
+// Hub API read endpoint (build plan Phase 5's MCP tool inventory) -
 // search_contacts. Same requireApiKey + privileged `pool` shape as the rest
 // of the Hub API (see apiV1Messages.js's module comment).
 //

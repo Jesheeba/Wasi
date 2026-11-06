@@ -1,4 +1,4 @@
-// PLAN.md item 11 — broadcast pause/resume. Verifies:
+// PLAN.md item 11 - broadcast pause/resume. Verifies:
 // 1. Launch a broadcast against a stubbed global.fetch (never real Meta),
 //    pause mid-send, confirm no further batches are claimed after the
 //    in-flight one completes.
@@ -11,7 +11,7 @@
 // Same dedicated-disposable-test-client + Meta-boundary-only fetch-faking
 // pattern as broadcastPacing.test.js, and its same "give a test row a
 // status/timing a live poller's own query genuinely excludes" discipline
-// (CLAUDE.md Conventions) — this file calls broadcastRunner.processBroadcast
+// (CLAUDE.md Conventions) - this file calls broadcastRunner.processBroadcast
 // directly, never .tick(), so it can't touch any other client's real
 // active work on this shared DB.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -85,7 +85,7 @@ afterEach(() => {
   global.fetch = originalFetch;
 });
 
-// Same Meta-boundary-only stub as broadcastPacing.test.js — only
+// Same Meta-boundary-only stub as broadcastPacing.test.js - only
 // graph.facebook.com is faked, everything else is the app's own real
 // local-server fetch, unaffected by this override. Distinguishes a
 // template-creation call from a message-send call by URL shape, same as
@@ -107,13 +107,13 @@ async function createContact(name, phone) {
   }).then((r) => r.json());
 }
 
-test('1-2. pause removes the broadcast from listActive (the runner\'s real gate — confirmed by reading broadcastRunner.js that processBroadcast itself has no status check at all, only tick()\'s listActive() call does); resume restores it and sending actually continues', async () => {
+test('1-2. pause removes the broadcast from listActive (the runner\'s real gate - confirmed by reading broadcastRunner.js that processBroadcast itself has no status check at all, only tick()\'s listActive() call does); resume restores it and sending actually continues', async () => {
   stubMetaFetch();
   const ts = String(Date.now()).slice(-9);
   for (let i = 0; i < 4; i++) await createContact(`${SUITE_PREFIX}C${i}`, `919${ts}${i}`);
 
   // A real Utility-category template sidesteps the consent gate (already
-  // covered elsewhere, e.g. apiV1.test.js) — this test's job is proving
+  // covered elsewhere, e.g. apiV1.test.js) - this test's job is proving
   // pause/resume's real mechanism, not re-proving consent gating, same
   // reasoning broadcastPacing.test.js's own setup already documents.
   const templateName = `${SUITE_PREFIX}tpl_${Date.now()}`;
@@ -145,7 +145,7 @@ test('1-2. pause removes the broadcast from listActive (the runner\'s real gate 
   assert.equal((await pause.json()).status, 'Paused');
 
   // This is the actual mechanism tick() relies on to stop claiming new
-  // batches — listActive() only ever matches status = 'Sending'.
+  // batches - listActive() only ever matches status = 'Sending'.
   active = await broadcastsRepo.listActive(pool);
   assert.ok(!active.some((b) => b.id === broadcast.id), 'a paused broadcast must not be picked up by the runner\'s next tick');
 
@@ -153,7 +153,7 @@ test('1-2. pause removes the broadcast from listActive (the runner\'s real gate 
     `select count(*)::int as n from broadcast_recipients where broadcast_id = $1 and status = 'pending'`,
     [broadcast.id]
   );
-  assert.equal(stillPending.rows[0].n, 4, 'nothing claimed while paused — no tick would have called processBroadcast for this broadcast');
+  assert.equal(stillPending.rows[0].n, 4, 'nothing claimed while paused - no tick would have called processBroadcast for this broadcast');
 
   const resume = await fetch(`${baseUrl}/api/broadcasts/${broadcast.id}/resume`, { method: 'POST', headers: authed(clientToken) });
   assert.equal(resume.status, 200);

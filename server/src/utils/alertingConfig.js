@@ -1,4 +1,4 @@
-// Single source of truth for "is alerting/email configured" — read by
+// Single source of truth for "is alerting/email configured" - read by
 // index.js's startup warning and the admin Health Monitor's "Alerts are not
 // configured" banner (GET /api/admin/alerting-status, admin/app.js), so the
 // two can never disagree about what counts as configured. Pure

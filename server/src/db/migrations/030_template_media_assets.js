@@ -1,5 +1,5 @@
 // Generalizes template_media_cache from "one cached sample per template" into
-// "a library of uploaded media assets per template" — the media-header
+// "a library of uploaded media assets per template" - the media-header
 // investigation (see migration 028's comment) found that the approval-time
 // sample was the ONLY media ever sendable for a media-header template: every
 // send path forcibly reused it, with no way to send a different file. This
@@ -15,7 +15,7 @@ exports.up = (pgm) => {
   pgm.addColumns('template_media_cache', {
     is_default: { type: 'boolean', notNull: true, default: false },
   });
-  // Every existing row was seeded as the approval sample — backfill before
+  // Every existing row was seeded as the approval sample - backfill before
   // the default-only paths (findByTemplateId) start filtering on this.
   pgm.sql('update template_media_cache set is_default = true');
 

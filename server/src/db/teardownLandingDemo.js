@@ -2,12 +2,12 @@
 // clients` cascades every child table (subscriptions, tags, contacts ->
 // contact_tags, chats -> messages, broadcasts -> broadcast_recipients,
 // team_members, automation_flows -> flow_nodes/flow_edges, message_templates,
-// contact_lists -> contact_list_members) — see migration
+// contact_lists -> contact_list_members) - see migration
 // 002/003/007/011/012/013/023/061's onDelete: 'CASCADE' on every one of
 // these FKs back to clients.id.
 //
 // Guarded by matching BOTH the fixed id and the exact demo email, not just
-// the id — belt and suspenders against this constant ever being reused for
+// the id - belt and suspenders against this constant ever being reused for
 // something else by mistake.
 //
 // Run (from server/):
@@ -32,7 +32,7 @@ async function teardown() {
       [DEMO_CLIENT_ID, DEMO_CLIENT_EMAIL]
     );
     if (rowCount === 0) {
-      console.log('Nothing to remove — demo client not found (already torn down, or never seeded).');
+      console.log('Nothing to remove - demo client not found (already torn down, or never seeded).');
     } else {
       console.log(`Removed demo client ${DEMO_CLIENT_ID} (${DEMO_CLIENT_EMAIL}) and all its rows (${before.templates} templates, ${before.lists} contact lists).`);
     }

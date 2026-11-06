@@ -1,19 +1,19 @@
-// PLAN.md item 12 — Smart Sending, anti-duplicate broadcast spacing.
+// PLAN.md item 12 - Smart Sending, anti-duplicate broadcast spacing.
 // Verifies:
 // 1. Two broadcasts with smartSendingHours set, same target contact,
-//    launched within the window — the second send is skipped with
+//    launched within the window - the second send is skipped with
 //    error_reason: 'smart_sending_window', never reaching the Cloud API
 //    (proven by the fetch stub never being called for that recipient's
 //    send, not just by the final DB status).
 // 2. Without smartSendingHours set, both broadcasts send normally to the
-//    same contact — the feature is genuinely opt-in, not a silent default.
+//    same contact - the feature is genuinely opt-in, not a silent default.
 // 3. hasRecentSend only counts a REAL 'sent' row (a skipped/failed prior
 //    attempt must not itself count as "recently received").
 // 4. Smart Sending checks client-wide (any other campaign), not just
-//    "this same broadcast twice" (which can't happen anyway — one
+//    "this same broadcast twice" (which can't happen anyway - one
 //    campaign never targets one contact twice).
 // Same dedicated-disposable-test-client + Meta-boundary-only fetch-faking
-// pattern as broadcastPacing.test.js/broadcastPauseResume.test.js — a real
+// pattern as broadcastPacing.test.js/broadcastPauseResume.test.js - a real
 // Utility-category template sidesteps the consent gate, which is already
 // covered elsewhere.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -101,7 +101,7 @@ async function createRealTemplate() {
 }
 
 // tagId here sets contacts.tag_id (the single primary tag) directly at
-// creation — createFromAudience (used for a tag_id-based broadcast) filters
+// creation - createFromAudience (used for a tag_id-based broadcast) filters
 // on that column specifically, NOT item 8's additive contact_tags table
 // (a real mistake this test's first draft made, caught by 0 recipients
 // ever being claimed to send at all).
@@ -168,7 +168,7 @@ test('2. without smartSendingHours set, both broadcasts send normally to the sam
   assert.ok(statuses.rows.every((r) => r.status === 'sent'));
 });
 
-test('3. hasRecentSend only counts a real \'sent\' row — a skipped/failed prior attempt does not itself count', async () => {
+test('3. hasRecentSend only counts a real \'sent\' row - a skipped/failed prior attempt does not itself count', async () => {
   const ts = String(Date.now()).slice(-9);
   const contact = await createContact(`${SUITE_PREFIX}Contact3`, `919${ts}3`);
 
@@ -193,7 +193,7 @@ test('4. checks client-wide across ANY broadcast, not just the same one', async 
   const broadcastA = await pool.query(`insert into broadcasts (client_id, title, template_name, status, param_mappings) values ($1, 'campaign A', 't', 'Sending', '{}') returning id`, [testClientId]).then((r) => r.rows[0]);
   await pool.query(`insert into broadcast_recipients (broadcast_id, client_id, contact_id, message_id, status) values ($1, $2, $3, $4, 'sent')`, [broadcastA.id, testClientId, contact.id, message.id]);
 
-  // Asking about a DIFFERENT (as yet nonexistent) broadcast B — the recent
+  // Asking about a DIFFERENT (as yet nonexistent) broadcast B - the recent
   // send came from campaign A entirely, proving the check is client-wide.
   const recent = await broadcastRecipientsRepo.hasRecentSend(pool, testClientId, contact.id, 24);
   assert.equal(recent, true, 'a recent send from a different campaign must still count');

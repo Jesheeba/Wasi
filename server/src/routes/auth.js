@@ -72,7 +72,7 @@ router.get('/me', sessionCheckLimiter, requireClientAuth, withTenantContext, asy
   res.json(client);
 }));
 
-// Always 200 regardless of whether the email exists — a differing response
+// Always 200 regardless of whether the email exists - a differing response
 // would let an attacker enumerate registered accounts.
 router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
   const { email } = forgotPasswordSchema.parse(req.body);
@@ -97,7 +97,7 @@ router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   const password_hash = await hashPassword(password);
   await clientsRepo.update(pool, consumed.subject_id, { password_hash });
   await clientsRepo.bumpTokenVersion(pool, consumed.subject_id);
-  res.json({ message: 'Password updated — you can log in now.' });
+  res.json({ message: 'Password updated - you can log in now.' });
 }));
 
 router.post('/verify-email/request', sessionCheckLimiter, requireClientAuth, withTenantContext, asyncHandler(async (req, res) => {

@@ -5,16 +5,16 @@
 // The chain: routes/chats.js releases the tenant connection before the Meta
 // call (messagingService.sendChatMessage's connectionHooks), reacquires a
 // FRESH transaction to write chatsRepo.markFailed on Meta rejection, then
-// throws — the route responds 502. tenantContext.js's res.json wrapper calls
+// throws - the route responds 502. tenantContext.js's res.json wrapper calls
 // finalize(res.statusCode < 500), i.e. finalize(false), which ROLLS BACK
-// whatever transaction is current at that point — the fresh one holding the
+// whatever transaction is current at that point - the fresh one holding the
 // markFailed write, since nothing had committed it yet. The row was left
 // 'pending' forever with meta_error_code/error_reason null, invisible to
 // every healthy client because only a client whose sends are actually
 // failing ever reaches this branch.
 //
 // The fix (messagingService.js's sendChatMessage/retryMessage catch blocks)
-// calls connectionHooks.release() — which commits — right after markFailed,
+// calls connectionHooks.release() - which commits - right after markFailed,
 // before throwing. This test proves the fix, not just the absence of an
 // exception: it reads the message row back through `pool`, a BRAND NEW
 // connection distinct from the one the request used, so a regression back to
@@ -130,11 +130,11 @@ test('a Meta-rejected send commits status=failed + meta_error_code + meta_error_
     unstubMetaFetch();
   }
 
-  assert.equal(res.status, 502, 'the route must still answer 502 — this bug was never about hiding the failure from the caller');
+  assert.equal(res.status, 502, 'the route must still answer 502 - this bug was never about hiding the failure from the caller');
   const body = await res.json();
   assert.equal(body.code, 'send_failed');
 
-  // A NEW connection, deliberately not the request's own — reading inside
+  // A NEW connection, deliberately not the request's own - reading inside
   // the same transaction the bug rolled back would pass even with the bug
   // present, since the write is visible to itself before rollback.
   const { rows } = await pool.query(

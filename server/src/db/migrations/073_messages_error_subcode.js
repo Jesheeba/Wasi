@@ -5,10 +5,10 @@
 // route. Fixing that (messagingService.js's sendChatMessage/retryMessage
 // catch blocks now commit the failure write before throwing) makes
 // meta_error_code reliable again, but meta_error_code alone isn't enough to
-// diagnose a rejection — Meta's #200 alone covers several distinct causes
+// diagnose a rejection - Meta's #200 alone covers several distinct causes
 // separated only by error_subcode (see metaClient.js's graphFetch comment).
 // This column stores that subcode alongside the code, same nullable/no-default
-// shape as meta_error_code itself (018_super_admin_view_support.js) — not
+// shape as meta_error_code itself (018_super_admin_view_support.js) - not
 // every failure reaches Meta at all, so not every failed row will have one.
 exports.up = (pgm) => {
   pgm.addColumn('messages', {

@@ -1,9 +1,9 @@
-// DELETE /api/templates/:id (server/src/routes/templates.js) — deletes a
+// DELETE /api/templates/:id (server/src/routes/templates.js) - deletes a
 // template on Meta (when it was ever submitted there) before removing the
 // local row, so the two never diverge. Real DB writes through a disposable
 // test client (same pattern as templateSync.test.js); Meta calls faked by
 // stubbing global.fetch for graph.facebook.com only, never the app's own
-// local-server fetches — see CLAUDE.md's testing conventions.
+// local-server fetches - see CLAUDE.md's testing conventions.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test } = require('node:test');

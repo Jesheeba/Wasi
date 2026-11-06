@@ -1,36 +1,36 @@
-// Flow-based automation engine — replaces automation_rules' single-step
+// Flow-based automation engine - replaces automation_rules' single-step
 // keyword->reply matching with multi-step, branching, stateful flows (build
 // plan: flow engine). automation_rules itself is NOT replaced; it gains a
 // nullable flow_id so a matched rule can either send free text (today's
-// behavior, flow_id null) or start a flow (flow_id set) — see the CHECK
+// behavior, flow_id null) or start a flow (flow_id set) - see the CHECK
 // constraint below. automationEngine.evaluate()'s existing first-match-wins
 // semantics are unchanged; flowEngine.js is what interprets flow_id.
 //
 // Five new tenant tables, all given the same treatment as every tenant
 // table since migration 013_tenant_isolation.js (RLS enabled+forced,
-// granted to wasi_app) — same pattern migration 014_hub_capability.js used
+// granted to wasi_app) - same pattern migration 014_hub_capability.js used
 // for api_keys/webhook_deliveries.
 //
 // Branching is modeled as edges (typed transitions), not as a property of
-// nodes — flow_edges.condition_value for a 'button_id' edge is always the
+// nodes - flow_edges.condition_value for a 'button_id' edge is always the
 // button's stable id (from a msg.interactive.button_reply.id webhook
-// payload — see routes/metaWebhook.js), never its display title, since
+// payload - see routes/metaWebhook.js), never its display title, since
 // title is editable copy and using it as a match key would let a copy edit
 // silently break a live flow. A 'keyword' edge matches exact/normalized
 // text (trim+lowercase), NOT the substring match automation_rules'
-// top-level triggers use — inside a priority-ordered branch set, substring
+// top-level triggers use - inside a priority-ordered branch set, substring
 // overlap ("cancel" vs "can") produces a silent wrong-branch, which is a
 // worse failure mode than a loud no-match falling through to 'default'.
 //
 // contact_flow_state.version is the optimistic-concurrency token for
 // flowEngine's advance (compare-and-swap UPDATE ... WHERE version = $n),
-// not current_node_id — a self-loop edge (node A -> A, e.g. "didn't
+// not current_node_id - a self-loop edge (node A -> A, e.g. "didn't
 // understand, repeat") leaves current_node_id unchanged across a
 // legitimate advance, so id-equality alone can't detect a concurrent
 // advance already happened. The partial unique index enforces one active
-// flow per contact (status 'active' or 'processing' — 'processing' is
+// flow per contact (status 'active' or 'processing' - 'processing' is
 // flowRunner's claim state, matching broadcast_recipients' 'sending'
-// pattern) — an inbound message can only route to one place; a contact
+// pattern) - an inbound message can only route to one place; a contact
 // can't be mid-flow in two flows at once. due_at + the (status, due_at)
 // index is the same "when is this due" shape webhook_deliveries already
 // uses for forwardRunner's poll, reused here for flowRunner's delay/timeout
@@ -57,7 +57,7 @@ exports.up = (pgm) => {
       check: "type in ('send_text', 'send_interactive_buttons', 'send_template', 'delay', 'action', 'end')",
     },
     config: { type: 'jsonb', notNull: true, default: '{}' },
-    // Unused by the v1 step-list editor — present so a future canvas editor
+    // Unused by the v1 step-list editor - present so a future canvas editor
     // doesn't need a migration to add it.
     position: { type: 'jsonb' },
     created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
@@ -65,7 +65,7 @@ exports.up = (pgm) => {
   pgm.createIndex('flow_nodes', 'flow_id');
   pgm.createIndex('flow_nodes', 'client_id');
 
-  // Added now that flow_nodes exists — automation_flows and flow_nodes
+  // Added now that flow_nodes exists - automation_flows and flow_nodes
   // reference each other (a flow has an entry node; a node belongs to a
   // flow), so this side is added second to avoid a create-order cycle.
   pgm.addColumns('automation_flows', {
@@ -112,7 +112,7 @@ exports.up = (pgm) => {
   pgm.createIndex('contact_flow_state', 'client_id');
   // flowRunner's claim query: due, still-active rows.
   pgm.createIndex('contact_flow_state', ['status', 'due_at']);
-  // One active (or being-claimed) flow per contact — see module comment.
+  // One active (or being-claimed) flow per contact - see module comment.
   pgm.sql(`
     create unique index contact_flow_state_one_active_per_contact
       on contact_flow_state (client_id, contact_id)
@@ -139,7 +139,7 @@ exports.up = (pgm) => {
 
   // automation_rules gains an opt-in path to start a flow instead of
   // sending free text. A row means exactly one of those two things, never
-  // both/neither — enforced in Postgres rather than app-code discipline,
+  // both/neither - enforced in Postgres rather than app-code discipline,
   // matching this codebase's existing habit (opt_in_status CHECK,
   // broadcast_recipients.status CHECK, RLS itself).
   pgm.addColumns('automation_rules', {

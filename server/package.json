@@ -1,7 +1,7 @@
 {
   "name": "wasi-crm-server",
   "version": "0.1.0",
-  "description": "Backend for the Wasi CRM tech-provider platform — auth, tenant data, Meta Embedded Signup + WhatsApp Cloud API messaging, Razorpay billing, admin panel API.",
+  "description": "Backend for the Wasi CRM tech-provider platform - auth, tenant data, Meta Embedded Signup + WhatsApp Cloud API messaging, Razorpay billing, admin panel API.",
   "private": true,
   "main": "src/index.js",
   "type": "commonjs",

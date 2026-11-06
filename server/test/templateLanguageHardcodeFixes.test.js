@@ -4,10 +4,10 @@
 // executeSendTemplate both hardcoded templateLanguage: 'en_US' (flowEngine
 // via a node.config.templateLanguage fallback no flow-builder UI has ever
 // actually populated, confirmed by reading both editors' Send Template node
-// config builders — so the fallback fired unconditionally in every real
+// config builders - so the fallback fired unconditionally in every real
 // flow). A read-only production check (during this same fix) found the
-// exact resulting failure — Meta error 132001, "Template name does not
-// exist in the translation" — already recorded against a real client
+// exact resulting failure - Meta error 132001, "Template name does not
+// exist in the translation" - already recorded against a real client
 // (Wasi Demo Client, 13 occurrences, not broadcast-attributed).
 //
 // broadcastRunner.js: real DB + real HTTP server + stubbed Meta fetch,
@@ -158,7 +158,7 @@ test('broadcastRunner.js: a recipient whose template has no local record fails c
 });
 
 // flowEngine.js: pure-stub style, same pattern as flowEngineRunToRest.test.js
-// (repos fully stubbed, no real DB) — startFlow with a send_template entry
+// (repos fully stubbed, no real DB) - startFlow with a send_template entry
 // node is the thinnest real path into executeSendTemplate, which isn't
 // exported directly.
 test('flowEngine.js: executeSendTemplate (via startFlow) sends with the template\'s REAL language, ignoring node.config.templateLanguage entirely', async () => {
@@ -177,7 +177,7 @@ test('flowEngine.js: executeSendTemplate (via startFlow) sends with the template
       templateName: 'a_template',
       paramMappings: {},
       // Deliberately wrong/stale, proving the fix no longer trusts this
-      // field at all — it's set here to something that would fail loudly
+      // field at all - it's set here to something that would fail loudly
       // if it were ever actually used.
       templateLanguage: 'fr',
     },

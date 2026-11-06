@@ -54,14 +54,14 @@ router.post('/', asyncHandler(async (req, res) => {
 
   res.json({
     // Matches this router's own /status/:code route below (mounted at
-    // /webhooks/meta/data-deletion) — must be an exact match or the link we
+    // /webhooks/meta/data-deletion) - must be an exact match or the link we
     // hand back to Meta/the user 404s.
     url: `${req.protocol}://${req.get('host')}/webhooks/meta/data-deletion/status/${confirmationCode}`,
     confirmation_code: confirmationCode,
   });
 }));
 
-// The URL above must actually resolve — this is what a user (or Meta,
+// The URL above must actually resolve - this is what a user (or Meta,
 // checking on the user's behalf) lands on to see whether their deletion
 // request was handled. Public by design, same as the callback itself.
 router.get('/status/:code', asyncHandler(async (req, res) => {

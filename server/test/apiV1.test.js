@@ -1,10 +1,10 @@
 // Hub API (build plan Phase 5): API key auth, and proof that the send
 // endpoint enforces the same guards as the internal chat-send path by
 // reusing messagingService.sendChatMessage rather than a second copy of
-// them. Dedicated, disposable test client, never the demo client — see
+// them. Dedicated, disposable test client, never the demo client - see
 // api.test.js's before() comment for why. This client never gets a real
 // WABA, so every send below eventually reaches 'waba_not_connected' unless
-// an earlier guard blocks it first — that's the whole point: which guard
+// an earlier guard blocks it first - that's the whole point: which guard
 // fires (or doesn't) first is exactly what's under test.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -49,7 +49,7 @@ async function createTemplate(category, name = `${SUITE_PREFIX}template_${Date.n
     body: JSON.stringify({
       name,
       category,
-      body: 'Hello {{customer_name}}, thank you so much for reaching out to us today — we truly appreciate it!',
+      body: 'Hello {{customer_name}}, thank you so much for reaching out to us today - we truly appreciate it!',
       bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
@@ -80,7 +80,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const created = await fetch(`${baseUrl}/api/admin/api-keys`, {
     method: 'POST',
@@ -119,7 +119,7 @@ test('3. a revoked API key is rejected', async () => {
   const res = await fetch(`${baseUrl}/api/v1/templates`, { headers: apiAuthed(apiKey) });
   assert.equal(res.status, 401);
 
-  // Re-issue for the remaining tests in this file — this key is dead now.
+  // Re-issue for the remaining tests in this file - this key is dead now.
   const reissued = await fetch(`${baseUrl}/api/admin/api-keys`, {
     method: 'POST',
     headers: authed(adminToken),
@@ -167,7 +167,7 @@ test('6. send reuses the Phase 4 opt-in consent guard for marketing templates', 
 });
 
 test('7. with no guard blocking it, send reaches (and is stopped only by) the real send attempt', async () => {
-  // Must run before test 8 below — that test leaves this client's
+  // Must run before test 8 below - that test leaves this client's
   // subscription/usage in an over-limit state for the rest of the file, so
   // this baseline needs to run while there's still no active subscription
   // at all, or it would hit plan_limit_reached instead of the WABA check.
@@ -178,7 +178,7 @@ test('7. with no guard blocking it, send reaches (and is stopped only by) the re
     headers: apiAuthed(apiKey),
     body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name }),
   });
-  // 409 with code waba_not_connected — same status chats.js's internal send
+  // 409 with code waba_not_connected - same status chats.js's internal send
   // route uses for every MessagingError except 'send_failed' (502 is
   // reserved for an attempt that actually reached Meta and failed there;
   // this test client was never connected, so nothing ever tried). The
@@ -205,9 +205,9 @@ test('7b. interactive send: schema rejects more than 3 buttons with a clear erro
   assert.match(JSON.stringify(data), /at most 3 reply buttons/i);
 });
 
-// Must run before test 8 below, same reason test 7's own comment gives —
+// Must run before test 8 below, same reason test 7's own comment gives -
 // test 8 pushes this client's usage over its plan limit for the rest of the
-// file. Needs a connected WABA (fake token, never actually reaches Meta —
+// file. Needs a connected WABA (fake token, never actually reaches Meta -
 // metaClient.sendInteractiveMessage is stubbed below) and a contact with a
 // recent inbound message, since the 24h session-window guard applies to
 // 'interactive' sends exactly like 'text' (messagingService.js).
@@ -228,12 +228,12 @@ test('7c. interactive send reaches the real send function with the correctly-sha
   // Stubs one level deeper than metaClient.sendInteractiveMessage itself
   // (global.fetch, same pattern templateSync.test.js's pagination test
   // uses) so the real, unmodified interactive-object-building logic in
-  // metaClient.js actually runs — this captures the exact Graph API request
+  // metaClient.js actually runs - this captures the exact Graph API request
   // body that function constructs, not a hand-written approximation of it.
   const originalFetch = global.fetch;
   let capturedRequest = null;
   global.fetch = async (url, options) => {
-    // Only Meta's Graph API is faked — the test's own call to this app's
+    // Only Meta's Graph API is faked - the test's own call to this app's
     // local server (below) must still go through the real fetch, or it
     // would just hit this stub instead of ever reaching the route.
     if (!String(url).includes('graph.facebook.com')) return originalFetch(url, options);
@@ -259,7 +259,7 @@ test('7c. interactive send reaches the real send function with the correctly-sha
     data = await res.json();
   } finally {
     global.fetch = originalFetch;
-    // Undo the "connected" status set above — later tests in this file
+    // Undo the "connected" status set above - later tests in this file
     // (8's createTemplate call) rely on this shared client having NO
     // connected WABA; routes/templates.js submits to a real Meta call once
     // one exists, which fails against this test's fake token and broke
@@ -289,7 +289,7 @@ test('7c. interactive send reaches the real send function with the correctly-sha
     },
   });
 
-  // Real captured evidence for the client's sample — logged, not asserted,
+  // Real captured evidence for the client's sample - logged, not asserted,
   // so it shows up in test output verbatim for handing off.
   console.log('REAL CAPTURED Graph API request body (Item 3 verification):', JSON.stringify(capturedRequest.body, null, 2));
   console.log('REAL CAPTURED Hub API response:', JSON.stringify(data, null, 2));
@@ -385,7 +385,7 @@ test('7f. list send reaches the real send function with the correctly-shaped Met
     data = await res.json();
   } finally {
     global.fetch = originalFetch;
-    // Same reset as 7c — later tests in this file rely on this shared
+    // Same reset as 7c - later tests in this file rely on this shared
     // client having no connected WABA.
     await wabasRepo.upsertForClient(testClientId, { status: 'disconnected' });
   }
@@ -435,7 +435,7 @@ test('8. send reuses the plan-limit guard', async () => {
     `insert into subscriptions (client_id, plan, status) values ($1, 'Starter', 'active')`,
     [testClientId]
   );
-  // Starter's conversation_limit is 500 (server/src/db/migrations/008_billing.js) — push usage past it directly.
+  // Starter's conversation_limit is 500 (server/src/db/migrations/008_billing.js) - push usage past it directly.
   await pool.query(
     `insert into usage_logs (client_id, date, messages_sent) values ($1, current_date, 501)
      on conflict (client_id, date) do update set messages_sent = 501`,

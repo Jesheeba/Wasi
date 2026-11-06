@@ -1,9 +1,9 @@
-// PLAN.md item 5 — SLA / First Response Time tracking. Verifies the 4
+// PLAN.md item 5 - SLA / First Response Time tracking. Verifies the 4
 // cases the plan's own "Verify" text calls for, plus resolution tracking:
 // 1. inbound -> team-member reply (real route): recorded against that
 //    inbound's id.
 // 2. inbound -> automated reply (messagingService called directly, the
-//    same way flowEngine/broadcastRunner/apiV1Messages do — bypassing
+//    same way flowEngine/broadcastRunner/apiV1Messages do - bypassing
 //    routes/chats.js entirely): NOTHING recorded, since recording lives
 //    only at that one route, guarded by actorType.
 // 3. inbound -> automated reply -> team-member reply: first_response_seconds
@@ -15,7 +15,7 @@
 //    reattributing team_member_id to whoever resolved it.
 // 7. GET /api/analytics/sla aggregates correctly, Agent gets 403.
 // 8. A chat resolved, reopened by a new inbound, then resolved again gets a
-//    SECOND distinct chat_sla_logs row — the partial unique index is keyed
+//    SECOND distinct chat_sla_logs row - the partial unique index is keyed
 //    on (chat_id, inbound_message_id), and item 2's reopen-on-inbound gives
 //    each round its own new inbound message id, so it doesn't collide.
 // 9/10. alertOnWriteFailure opens a real alert_events row + calls
@@ -69,7 +69,7 @@ before(async () => {
   assert.ok(clientToken && testClientId, 'dedicated test client registration must succeed');
 
   // A connected WABA + stubbed global.fetch (never real Meta) is needed for
-  // both the real send route and the direct messagingService call below —
+  // both the real send route and the direct messagingService call below -
   // same setup pattern as apiV1.test.js's interactive/list send tests.
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: `${SUITE_PREFIX}waba`,
@@ -115,7 +115,7 @@ async function createTeamMemberJwt(role) {
 // "measured from the inbound" from "measured from a reply sent seconds later".
 //
 // No length cap on this phone string (contacts.phone is plain text, no
-// constraint) — an earlier version sliced this to 12 chars, which truncated
+// constraint) - an earlier version sliced this to 12 chars, which truncated
 // off the uniqueness-bearing suffix and made every call in this file
 // collide on the same contact/chat, corrupting every count-based
 // assertion below. Found live by the tests themselves failing with
@@ -161,12 +161,12 @@ test('2. inbound then an AUTOMATED reply (messagingService called directly, bypa
   } finally { unstubMetaFetch(); }
 
   const { rows } = await pool.query('select * from chat_sla_logs where chat_id = $1', [chat.id]);
-  assert.equal(rows.length, 0, 'no chat_sla_logs row must exist — recording only happens at the routes/chats.js route');
+  assert.equal(rows.length, 0, 'no chat_sla_logs row must exist - recording only happens at the routes/chats.js route');
 });
 
 test('3. inbound -> automated reply -> team-member reply: measured from the INBOUND, not the automated reply', async () => {
   const agent = await createTeamMemberJwt('Agent');
-  // Inbound 100 seconds in the past — the automated reply and the
+  // Inbound 100 seconds in the past - the automated reply and the
   // team-member reply both happen "now", so if the clock were (wrongly)
   // measured from the automated reply, first_response_seconds would read
   // near 0, not near 100.
@@ -276,7 +276,7 @@ test('8. resolve -> reopen (new inbound) -> resolve again creates a SECOND disti
   assert.equal(rows.length, 1);
   const firstInboundMessageId = rows[0].inbound_message_id;
 
-  // Reopen via a NEW inbound message — item 2's insertInbound flips status
+  // Reopen via a NEW inbound message - item 2's insertInbound flips status
   // back to 'open' and this is a genuinely new messages row, with its own id.
   await chatsRepo.insertInbound(pool, testClientId, chat.id, {
     metaMessageId: `wamid.${SUITE_PREFIX}case8_round2_${Date.now()}`,
@@ -302,10 +302,10 @@ test('9. a genuine chat_sla_logs write failure (real FK violation, not simulated
   if (preExisting) await alertEventsRepo.resolveNow(preExisting.id);
 
   const chat = await createChatWithInbound('case9', new Date().toISOString());
-  // A non-existent inbound message id — chat_sla_logs.inbound_message_id
+  // A non-existent inbound message id - chat_sla_logs.inbound_message_id
   // has a real FK to messages(id), so this INSERT genuinely violates it,
   // the same class of failure the non-fatal catch blocks in routes/chats.js
-  // are guarding against — not a mocked/simulated error.
+  // are guarding against - not a mocked/simulated error.
   const fakeInbound = { id: '00000000-0000-0000-0000-000000000099', sent_at: new Date().toISOString() };
   let realError = null;
   try {
@@ -313,17 +313,17 @@ test('9. a genuine chat_sla_logs write failure (real FK violation, not simulated
   } catch (err) {
     realError = err;
   }
-  assert.ok(realError, 'the write must genuinely fail, not silently no-op — otherwise this test proves nothing');
+  assert.ok(realError, 'the write must genuinely fail, not silently no-op - otherwise this test proves nothing');
   assert.match(realError.message, /violates foreign key constraint/);
 
   // Pass the REAL caught error through, exactly as routes/chats.js's catch
-  // blocks do — not a fabricated one.
+  // blocks do - not a fabricated one.
   await chatSlaLogsRepo.alertOnWriteFailure(realError);
 
   const opened = await alertEventsRepo.findOpen('chat_sla_write_failed', 'global');
   assert.ok(opened, 'a real alert_events row must now be open');
   assert.equal(opened.severity, 'warning');
-  assert.ok(opened.notified_at, 'markNotified must have been called — alertNotifier.notify was actually invoked, not skipped');
+  assert.ok(opened.notified_at, 'markNotified must have been called - alertNotifier.notify was actually invoked, not skipped');
 });
 
 test('10. a second failure dedupes into the SAME open alert instead of creating a new one (no spam)', async () => {
@@ -341,7 +341,7 @@ test('10. a second failure dedupes into the SAME open alert instead of creating 
   assert.equal(openRows[0].id, before.id);
   assert.ok(new Date(openRows[0].last_seen_at) > new Date(beforeLastSeen), 'last_seen_at must have been touched');
 
-  // Clean up — leave this global (not tenant-scoped, not cascade-deleted by
+  // Clean up - leave this global (not tenant-scoped, not cascade-deleted by
   // this file's after()) alert resolved so it doesn't linger for other
   // suites/runs.
   await alertEventsRepo.resolveNow(before.id);

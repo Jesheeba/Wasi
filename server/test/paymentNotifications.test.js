@@ -1,5 +1,5 @@
 // paymentNotificationService: every billing-message attempt is logged,
-// success or failure. Stubs only — this repo's DB guard (see dbSafety.js)
+// success or failure. Stubs only - this repo's DB guard (see dbSafety.js)
 // refuses any test that reaches the shared database, so the repo's SQL is
 // not exercised here (it was checked once in a rolled-back transaction, see
 // CLAUDE.md's Payment reminder audit entry). Nothing is ever sent to Meta.
@@ -83,7 +83,7 @@ test('sendTemplateToClient sends from the Wasi Demo Client WABA when PAYMENT_REM
     return id === '00000000-0000-0000-0000-000000000001'
       ? { client_id: '00000000-0000-0000-0000-000000000001', phone_number_id: 'PN1', status: 'connected', access_token_encrypted: encrypt('tok') } : null;
   };
-  // The real approved language, not the old hardcoded/defaulted 'en_US' —
+  // The real approved language, not the old hardcoded/defaulted 'en_US' -
   // this is the fix under test here.
   messageTemplatesRepo.findByNameAndClient = async (db, clientId, name) => {
     return clientId === '00000000-0000-0000-0000-000000000001' && name === 'wasi_payment_reminder'

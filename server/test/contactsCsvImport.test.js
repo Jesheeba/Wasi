@@ -1,8 +1,8 @@
-// PLAN.md item 6 — general contacts CSV import. Verifies:
+// PLAN.md item 6 - general contacts CSV import. Verifies:
 // 1. 3 valid rows + 1 duplicate-phone-within-file row: correct
 //    importedCount/failedCount/errors, real contacts created.
-// 2. Re-uploading the same file is safe — no duplicate contacts.
-// 3. Tenant isolation — imported contacts only ever land under the
+// 2. Re-uploading the same file is safe - no duplicate contacts.
+// 3. Tenant isolation - imported contacts only ever land under the
 //    uploading client, never leak into another client's list.
 // 4. Role gating (Agent allowed, matching item 1's Contacts row) and
 //    unauthenticated rejection.
@@ -10,7 +10,7 @@
 // 6. A file over the 5MB cap is a clean 400, not multer's unhandled 500.
 // 7/7b/7c. PLAN.md item 8 fold-in: a "tags" column is now wired through
 //    (real tags created/attached additively, never touching contacts.tag_id,
-//    safe to re-import) — a genuinely unrecognized column (e.g. "notes")
+//    safe to re-import) - a genuinely unrecognized column (e.g. "notes")
 //    still gets the "unrecognized column" notice item 6 originally added.
 // Same dedicated-disposable-test-client convention as every other file in
 // this directory.
@@ -78,13 +78,13 @@ function csvFile(content) {
 }
 
 test('1. 3 valid rows + 1 duplicate-phone-within-file row: correct counts, real contacts created', async () => {
-  // parseContactsCsv's isValidPhone caps at 15 digits — a plain
+  // parseContactsCsv's isValidPhone caps at 15 digits - a plain
   // '9173' + Date.now() (13 digits) + a distinguishing suffix digit
   // overflows that (18 digits), which would make these rows fail CSV
   // validation instead of just failing to be distinct (a subtler version
   // of the same truncated-uniqueness mistake already found once this
   // session in chatSlaLogs.test.js). Using only the last 9 digits of
-  // Date.now() keeps the total at 12 digits — valid, and still unique
+  // Date.now() keeps the total at 12 digits - valid, and still unique
   // enough for three calls a few milliseconds apart within one test.
   const ts = String(Date.now()).slice(-9);
   const p1 = `91${ts}1`;
@@ -108,7 +108,7 @@ test('1. 3 valid rows + 1 duplicate-phone-within-file row: correct counts, real 
   assert.ok(contacts.some((c) => c.phone === p3 && c.name === `${SUITE_PREFIX}C`));
 });
 
-test('2. re-uploading the exact same file is safe — no duplicate contacts created', async () => {
+test('2. re-uploading the exact same file is safe - no duplicate contacts created', async () => {
   const p = `9174${Date.now()}`.slice(0, 12);
   const csv = `name,phone\n${SUITE_PREFIX}Reimport,${p}\n`;
 
@@ -161,7 +161,7 @@ test('5. no file uploaded is a clean 400, not a 500', async () => {
 
 test('6. a file over the 5MB cap is a clean 400, not a 500', async () => {
   // 6MB of padding is enough to trip multer's fileSize limit before the
-  // request body is ever fully read — the padding content itself doesn't
+  // request body is ever fully read - the padding content itself doesn't
   // need to be valid CSV, since multer rejects on size alone.
   const oversized = 'name,phone\n' + 'x'.repeat(6 * 1024 * 1024);
   const res = await fetch(`${baseUrl}/api/contacts/import`, { method: 'POST', headers: authed(clientToken), body: csvFile(oversized) });
@@ -170,7 +170,7 @@ test('6. a file over the 5MB cap is a clean 400, not a 500', async () => {
   assert.match(data.error, /too large/i);
 });
 
-test('7. PLAN.md item 8 fold-in: a "tags" column is now wired through — real tags created/attached, no longer "unrecognized"', async () => {
+test('7. PLAN.md item 8 fold-in: a "tags" column is now wired through - real tags created/attached, no longer "unrecognized"', async () => {
   const ts = String(Date.now()).slice(-9);
   const p = `93${ts}1`;
   const csv = `name,phone,tags\n${SUITE_PREFIX}Tagged,${p},${SUITE_PREFIX}VIP;${SUITE_PREFIX}Repeat\n`;
@@ -180,7 +180,7 @@ test('7. PLAN.md item 8 fold-in: a "tags" column is now wired through — real t
   const data = await res.json();
   assert.equal(data.importedCount, 1, 'the name/phone row still imports');
   assert.equal(data.failedCount, 0);
-  assert.equal(data.errors.length, 0, '"tags" is a known column now — no "unrecognized column" notice');
+  assert.equal(data.errors.length, 0, '"tags" is a known column now - no "unrecognized column" notice');
 
   const contacts = await fetch(`${baseUrl}/api/contacts`, { headers: authed(clientToken) }).then((r) => r.json());
   const imported = contacts.find((c) => c.phone === p && c.name === `${SUITE_PREFIX}Tagged`);
@@ -192,7 +192,7 @@ test('7. PLAN.md item 8 fold-in: a "tags" column is now wired through — real t
   assert.deepEqual(names, [`${SUITE_PREFIX}Repeat`, `${SUITE_PREFIX}VIP`].sort());
 });
 
-test('7b. re-importing the same row (same tags) is safe — no duplicate tag or duplicate attachment', async () => {
+test('7b. re-importing the same row (same tags) is safe - no duplicate tag or duplicate attachment', async () => {
   const ts = String(Date.now()).slice(-9);
   const p = `93${ts}2`;
   const csv = `name,phone,tags\n${SUITE_PREFIX}Reimport,${p},${SUITE_PREFIX}Loyal\n`;

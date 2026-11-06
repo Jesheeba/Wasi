@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="../index.css" />
   <link rel="stylesheet" href="admin.css" />
   <link rel="stylesheet" href="/design-system.css" />
-  <!-- Pinned (was lucide@latest — an unpinned CDN script silently changes the
+  <!-- Pinned (was lucide@latest - an unpinned CDN script silently changes the
        icon set and API under a live admin console). 1.49.0 is what @latest
        resolved to when this was pinned. -->
   <script src="https://unpkg.com/lucide@1.49.0/dist/umd/lucide.min.js"></script>
@@ -56,7 +56,7 @@
 
   <!-- ===================== APP SHELL ===================== -->
   <div id="app-shell" style="display:none;">
-    <!-- Mobile-only sidebar drawer controls — same pattern as the root app's
+    <!-- Mobile-only sidebar drawer controls - same pattern as the root app's
          index.html, see ../index.css for the shared media-query rules. -->
     <button type="button" id="mobile-sidebar-toggle-btn" class="mobile-sidebar-toggle" aria-label="Open menu">
       <i data-lucide="menu"></i>
@@ -97,8 +97,8 @@
         <div class="sidebar-profile">
           <div class="avatar sidebar-avatar" id="admin-avatar" aria-hidden="true">A</div>
           <div class="sidebar-profile-text">
-            <div class="sidebar-profile-name" id="admin-name">—</div>
-            <div class="sidebar-profile-role" id="admin-role">—</div>
+            <div class="sidebar-profile-name" id="admin-name">-</div>
+            <div class="sidebar-profile-role" id="admin-role">-</div>
           </div>
         </div>
         <a class="nav-item" id="logout-btn" role="button" tabindex="0" aria-label="Log out"><i data-lucide="log-out"></i><span class="nav-text">Log Out</span></a>
@@ -171,7 +171,7 @@
                 <div class="empty-state" id="chart-client-growth-empty" style="display:none;">No new clients in this range.</div>
               </div>
               <div class="detail-card">
-                <div class="detail-card-title">Webhook Delivery Rate <span class="detail-card-aside">— <a href="#health/failures" id="statistics-webhook-failures-link">view failures</a></span></div>
+                <div class="detail-card-title">Webhook Delivery Rate <span class="detail-card-aside">- <a href="#health/failures" id="statistics-webhook-failures-link">view failures</a></span></div>
                 <div class="chart-box"><canvas id="chart-webhook-deliveries" role="img" aria-label="Stacked bar chart of delivered and failed webhooks per day"></canvas></div>
                 <div class="empty-state" id="chart-webhook-deliveries-empty" style="display:none;">No webhook deliveries in this range.</div>
               </div>
@@ -181,7 +181,7 @@
                 <div class="empty-state" id="chart-api-keys-empty" style="display:none;">No keys issued in this range.</div>
               </div>
               <div class="detail-card detail-card-full">
-                <div class="detail-card-title">Most Recently Active API Keys <span class="detail-card-aside">— select a client to view details</span></div>
+                <div class="detail-card-title">Most Recently Active API Keys <span class="detail-card-aside">- select a client to view details</span></div>
                 <div id="statistics-api-activity-list"></div>
               </div>
             </div>
@@ -190,7 +190,7 @@
           <div class="tab-panel" role="tabpanel" id="panel-statistics-volume" aria-labelledby="tab-statistics-volume" data-panel="volume" hidden>
             <div class="table-card">
               <div class="table-toolbar">
-                <p class="toolbar-note grow">Messages sent and received per client, per day — uses the date range above.</p>
+                <p class="toolbar-note grow">Messages sent and received per client, per day - uses the date range above.</p>
                 <button class="btn-secondary btn-sm" id="refresh-volume-btn"><i data-lucide="rotate-cw" class="icon-14"></i> Refresh</button>
               </div>
               <div class="table-scroll">
@@ -235,13 +235,13 @@
                  in the admin panel. GET /api/admin/alerting-status drives this
                  banner so that can't happen invisibly again. -->
             <div id="alerting-status-banner" class="alert alert-warning" role="status" style="display:none;"></div>
-            <!-- Result of send-test-alert-btn — per-channel attempted/sent/error,
+            <!-- Result of send-test-alert-btn - per-channel attempted/sent/error,
                  including Resend's or Meta's exact wording. -->
             <div id="test-alert-result" class="test-alert-result" role="status" aria-live="polite" style="display:none;"></div>
             <div id="health-monitor-error" class="inline-error" role="alert" style="display:none;"></div>
             <div class="table-card">
               <div class="table-toolbar">
-                <p class="toolbar-note grow">Quality rating, restriction status, and webhook staleness — the daily check.</p>
+                <p class="toolbar-note grow">Quality rating, restriction status, and webhook staleness - the daily check.</p>
                 <button class="btn-secondary btn-sm" id="send-test-alert-btn"><i data-lucide="bell-ring" class="icon-14"></i> Send test alert</button>
                 <button class="btn-secondary btn-sm" id="refresh-health-monitor-btn"><i data-lucide="rotate-cw" class="icon-14"></i> Refresh</button>
               </div>
@@ -619,12 +619,12 @@
           <div class="detail-grid detail-grid-single">
             <div class="detail-card">
               <h2 class="detail-card-title">1. Get an API Key</h2>
-              <p>Every client created from the <a href="#clients" class="api-guide-inline-link">Clients</a> page is auto-issued a Hub API key at creation time — it's shown once in the "Client created" confirmation screen. Lost it, or need a key for a second integration (e.g. Zapier)? Issue one from <a href="#api-keys" class="api-guide-inline-link">API Keys</a>, or point the client to Settings → Developer in their own account — clients can self-serve create, revoke, and delete their own keys there.</p>
+              <p>Every client created from the <a href="#clients" class="api-guide-inline-link">Clients</a> page is auto-issued a Hub API key at creation time - it's shown once in the "Client created" confirmation screen. Lost it, or need a key for a second integration (e.g. Zapier)? Issue one from <a href="#api-keys" class="api-guide-inline-link">API Keys</a>, or point the client to Settings → Developer in their own account - clients can self-serve create, revoke, and delete their own keys there.</p>
             </div>
 
             <div class="detail-card">
               <h2 class="detail-card-title">2. Authentication</h2>
-              <p>Every request needs <code>Authorization: Bearer &lt;api_key&gt;</code>. Keys look like <code>wasi_&lt;48 hex chars&gt;</code>. There is no separate API secret or OAuth flow — the bearer key is the credential.</p>
+              <p>Every request needs <code>Authorization: Bearer &lt;api_key&gt;</code>. Keys look like <code>wasi_&lt;48 hex chars&gt;</code>. There is no separate API secret or OAuth flow - the bearer key is the credential.</p>
             </div>
 
             <div class="detail-card">
@@ -633,7 +633,7 @@
             </div>
 
             <div class="detail-card">
-              <h2 class="detail-card-title">4. Send a Message — <code>POST /api/v1/messages</code></h2>
+              <h2 class="detail-card-title">4. Send a Message - <code>POST /api/v1/messages</code></h2>
               <pre class="api-guide-code">curl -X POST https://&lt;wasi-host&gt;/api/v1/messages \
   -H "Authorization: Bearer wasi_..." \
   -H "Content-Type: application/json" \
@@ -644,27 +644,27 @@
     "template": "order_shipped",
     "params": { "1": "Priya", "2": "#4821" }
   }'</pre>
-              <p><code>type: "template"</code> is required outside the 24-hour customer-service window and needs a Meta-approved template. <code>type: "text"</code> with a <code>"body"</code> field only works inside that 24-hour window. <code>client_id</code> in the body must match the key's own client — a defense-in-depth check, not decoration.</p>
+              <p><code>type: "template"</code> is required outside the 24-hour customer-service window and needs a Meta-approved template. <code>type: "text"</code> with a <code>"body"</code> field only works inside that 24-hour window. <code>client_id</code> in the body must match the key's own client - a defense-in-depth check, not decoration.</p>
             </div>
 
             <div class="detail-card">
-              <h2 class="detail-card-title">5. Manage Templates — <code>GET/POST /api/v1/templates</code></h2>
+              <h2 class="detail-card-title">5. Manage Templates - <code>GET/POST /api/v1/templates</code></h2>
               <p>Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send.</p>
             </div>
 
             <div class="detail-card">
-              <h2 class="detail-card-title">5b. Read Endpoints — Conversations, Contacts, Account, Message Status</h2>
-              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id — not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
+              <h2 class="detail-card-title">5b. Read Endpoints - Conversations, Contacts, Account, Message Status</h2>
+              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id - not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
             </div>
 
             <div class="detail-card">
               <h2 class="detail-card-title">6. Error Handling</h2>
-              <p>Errors come back in one consistent shape across every endpoint: <code>{ "error": { "code": "...", "message": "...", ... } }</code> — a stable, machine-readable <code>code</code> to branch on, a human-readable <code>message</code>, and endpoint-specific extra fields nested alongside them (e.g. <code>metaError</code>, Meta's real error body, attached when the rejection happened at Meta, not swallowed; <code>details</code> for validation failures). Check <code>error.code</code> before parsing <code>error.metaError</code>, since not every error originates from Meta (e.g. consent-opt-out rejections, validation errors).</p>
+              <p>Errors come back in one consistent shape across every endpoint: <code>{ "error": { "code": "...", "message": "...", ... } }</code> - a stable, machine-readable <code>code</code> to branch on, a human-readable <code>message</code>, and endpoint-specific extra fields nested alongside them (e.g. <code>metaError</code>, Meta's real error body, attached when the rejection happened at Meta, not swallowed; <code>details</code> for validation failures). Check <code>error.code</code> before parsing <code>error.metaError</code>, since not every error originates from Meta (e.g. consent-opt-out rejections, validation errors).</p>
             </div>
 
             <div class="detail-card">
-              <h2 class="detail-card-title">7. Webhooks — Inbound Forwarding</h2>
-              <p>Configure a forwarding URL on the client's <a href="#clients" class="api-guide-inline-link">Client Detail</a> page (WhatsApp tab → CRM Inbound Forwarding) once their WABA is connected. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> — HMAC-SHA256 of the raw JSON body, keyed by a per-client secret. <strong>Verify this signature before trusting a delivery.</strong> The secret itself is never shown in plaintext after generation — copy it once right after generating/regenerating it on the Client Detail page. Deliveries are queued and retried with backoff, not fire-and-forget.</p>
+              <h2 class="detail-card-title">7. Webhooks - Inbound Forwarding</h2>
+              <p>Configure a forwarding URL on the client's <a href="#clients" class="api-guide-inline-link">Client Detail</a> page (WhatsApp tab → CRM Inbound Forwarding) once their WABA is connected. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> - HMAC-SHA256 of the raw JSON body, keyed by a per-client secret. <strong>Verify this signature before trusting a delivery.</strong> The secret itself is never shown in plaintext after generation - copy it once right after generating/regenerating it on the Client Detail page. Deliveries are queued and retried with backoff, not fire-and-forget.</p>
               <p>Event types available: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
             </div>
 
@@ -676,8 +676,8 @@
             <div class="detail-card">
               <h2 class="detail-card-title">9. Security Recommendations</h2>
               <ul class="guide-list">
-                <li>Never commit the API key or webhook secret to source control — load them from environment variables.</li>
-                <li>If a key is compromised, delete it from <a href="#api-keys" class="api-guide-inline-link">API Keys</a> and issue a new one — deletion takes effect immediately.</li>
+                <li>Never commit the API key or webhook secret to source control - load them from environment variables.</li>
+                <li>If a key is compromised, delete it from <a href="#api-keys" class="api-guide-inline-link">API Keys</a> and issue a new one - deletion takes effect immediately.</li>
                 <li>Always verify the <code>x-wasi-signature-256</code> header before acting on a forwarded webhook payload.</li>
                 <li>Treat <code>client_id</code> as non-secret (it's a UUID, not a credential) but still avoid logging the API key or webhook secret in application logs.</li>
               </ul>
@@ -685,7 +685,7 @@
 
             <div class="detail-card">
               <h2 class="detail-card-title">10. Testing Workflow</h2>
-              <p>Import the Postman collection (link below) with a real key in a local, gitignored Postman environment — never the shared/committed one. Start with <code>GET /api/v1/templates</code> to confirm auth works before attempting a send. Send a <code>type: "text"</code> message to your own test number inside an active 24-hour window before wiring up template sends.</p>
+              <p>Import the Postman collection (link below) with a real key in a local, gitignored Postman environment - never the shared/committed one. Start with <code>GET /api/v1/templates</code> to confirm auth works before attempting a send. Send a <code>type: "text"</code> message to your own test number inside an active 24-hour window before wiring up template sends.</p>
             </div>
 
             <div class="detail-card">
@@ -699,8 +699,8 @@
             </div>
 
             <div class="detail-card detail-card-accent">
-              <h2 class="detail-card-title">Connect via MCP / Claude — No Integration Code Needed</h2>
-              <p>For a faster path than building a custom integration: Wasi ships an <a href="https://modelcontextprotocol.io" class="api-guide-inline-link" target="_blank" rel="noopener">MCP (Model Context Protocol)</a> server that gives Claude (Desktop, Code, or any other MCP-compatible client) direct tool access to send messages, check delivery status, and read templates/conversations — using an existing Hub API key, with zero custom code. This is the same Hub API documented above, wrapped as MCP tools rather than raw REST endpoints.</p>
+              <h2 class="detail-card-title">Connect via MCP / Claude - No Integration Code Needed</h2>
+              <p>For a faster path than building a custom integration: Wasi ships an <a href="https://modelcontextprotocol.io" class="api-guide-inline-link" target="_blank" rel="noopener">MCP (Model Context Protocol)</a> server that gives Claude (Desktop, Code, or any other MCP-compatible client) direct tool access to send messages, check delivery status, and read templates/conversations - using an existing Hub API key, with zero custom code. This is the same Hub API documented above, wrapped as MCP tools rather than raw REST endpoints.</p>
               <p>Hand the client's developer (or a non-technical client who just wants Claude connected) this config, filled in with their own key and this deployment's URL:</p>
               <div class="code-block-wrapper">
                 <pre class="api-guide-code" id="mcp-config-prompt-text">{
@@ -724,21 +724,21 @@
               <h2 class="detail-card-title">Using Claude Code to Build the Integration</h2>
               <p>If the client's developer uses <a href="https://claude.com/product/claude-code" class="api-guide-inline-link" target="_blank" rel="noopener">Claude Code</a>, they can hand it this prompt to scaffold the integration. It's written so Claude implements auth, sends, and webhook verification without ever seeing the raw key.</p>
               <div class="alert alert-warning alert-spaced">
-                <span><strong>Before you start:</strong> put the API key in an environment variable you set yourself (e.g. <code>WASI_API_KEY</code> in a local <code>.env</code> file, gitignored). Do <strong>not</strong> paste the raw key into the Claude Code conversation or prompt — Claude only needs the variable's <em>name</em>, never its value.</span>
+                <span><strong>Before you start:</strong> put the API key in an environment variable you set yourself (e.g. <code>WASI_API_KEY</code> in a local <code>.env</code> file, gitignored). Do <strong>not</strong> paste the raw key into the Claude Code conversation or prompt - Claude only needs the variable's <em>name</em>, never its value.</span>
               </div>
               <div class="code-block-wrapper">
                 <pre class="api-guide-code" id="claude-code-prompt-text">I'm integrating my CRM with the Wasi WhatsApp Hub API. Base URL and auth:
 
 - Base URL: &lt;fill in this Wasi deployment's URL&gt;
-- Auth: Authorization: Bearer $WASI_API_KEY — read this from an environment
+- Auth: Authorization: Bearer $WASI_API_KEY - read this from an environment
   variable named WASI_API_KEY that I've already set. Never ask me to paste
   the raw key, never print it, never write it to a log or commit it.
-- Endpoints: POST /api/v1/messages (send a WhatsApp message — supports
+- Endpoints: POST /api/v1/messages (send a WhatsApp message - supports
   "template" and "text" types), GET/POST /api/v1/templates (list/submit
   templates).
 - Every request needs client_id (my Wasi client UUID, not secret) matching
   the key's own client.
-- Errors come back as { error, code, metaError? } — handle both a plain
+- Errors come back as { error, code, metaError? } - handle both a plain
   `error` and a Meta-originated `metaError` distinctly.
 - I also receive inbound webhooks signed with header
   x-wasi-signature-256: sha256=<hmac-sha256 of the raw body, keyed by a
@@ -837,7 +837,7 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
           <div class="page-header">
             <div class="page-header-text">
               <h1 class="page-title" id="title-payment-reminders">Payment Reminders</h1>
-              <p class="page-subtitle">Every billing message Wasi sent to a client — who got it, and whether it was delivered or read. Refreshes automatically.</p>
+              <p class="page-subtitle">Every billing message Wasi sent to a client - who got it, and whether it was delivered or read. Refreshes automatically.</p>
             </div>
             <div class="page-actions">
               <button class="btn-secondary" id="pr-export-btn"><i data-lucide="download" class="icon-14"></i> Export CSV</button>
@@ -961,7 +961,7 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
           <div class="page-header">
             <div class="page-header-text">
               <h1 class="page-title" id="title-settings">Settings</h1>
-              <p class="page-subtitle">Platform configuration status — read-only. Real values are managed on the server, not here.</p>
+              <p class="page-subtitle">Platform configuration status - read-only. Real values are managed on the server, not here.</p>
             </div>
             <div class="page-actions">
               <button class="btn-secondary" id="refresh-settings-btn"><i data-lucide="rotate-cw" class="icon-14"></i> Refresh</button>
@@ -970,7 +970,7 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
           <div id="settings-error" class="inline-error" role="alert" style="display:none;"></div>
           <div id="settings-content"></div>
 
-          <!-- Meta Official Template Library (wasi-master-plan.md §2b) — server-wide
+          <!-- Meta Official Template Library (wasi-master-plan.md §2b) - server-wide
                cache, admin-triggered + periodic (weekly) refresh, per Phase 0 decision.
                Not per-client: this is Meta's own catalog, identical for every client. -->
           <div class="table-card section-gap">
@@ -1164,7 +1164,7 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
   <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Same served-raw plain-English sendability wording the root CRM app's
-       client-facing banner uses (server/src/utils/sendabilityMessages.js) —
+       client-facing banner uses (server/src/utils/sendabilityMessages.js) -
        so admin's client-detail view shows exactly what the client sees, not
        a hand-duplicated copy. Must load before app.js. -->
   <script src="/sendabilityMessages.js"></script>

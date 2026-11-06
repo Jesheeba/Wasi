@@ -1,5 +1,5 @@
 // Expands client onboarding capture beyond name/email/password. All new
-// columns are nullable — the admin panel's Create Client form still works
+// columns are nullable - the admin panel's Create Client form still works
 // with just the three original required fields; these are additional
 // context a Sirah team member can fill in when known (business contact,
 // the client's own developer for CRM/webhook integration work, and

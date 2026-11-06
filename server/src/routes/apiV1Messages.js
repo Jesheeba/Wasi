@@ -1,9 +1,9 @@
-// Hub send API (build plan Phase 5) — lets other Sirah applications send
+// Hub send API (build plan Phase 5) - lets other Sirah applications send
 // through Wasi's Meta connection without holding a Meta token themselves.
 // Runs entirely on the privileged `pool` connection (see
 // middleware/requireApiKey.js's module comment) and reuses
 // messagingService.sendChatMessage exactly as chats.js's internal send
-// route does — the plan-limit, 24-hour-window, and Phase 4 opt-in checks
+// route does - the plan-limit, 24-hour-window, and Phase 4 opt-in checks
 // all live inside that one function, so calling it here is what makes this
 // endpoint subject to the same guards as the CRM UI, not a second copy of
 // them that could drift out of sync.
@@ -22,7 +22,7 @@ const { sendApiError } = require('../utils/apiError');
 const router = Router();
 router.use(requireApiKey);
 
-// get_message_status (MCP tool inventory) — id is this app's own message
+// get_message_status (MCP tool inventory) - id is this app's own message
 // row id, returned as `id` in the POST / response below, not Meta's
 // message id. Scoped to the caller's own client_id via
 // chatsRepo.findMessageByIdForClient regardless of which chat it landed in.
@@ -53,16 +53,16 @@ router.post('/', asyncHandler(async (req, res) => {
   const chat = await chatsRepo.findOrCreateByContact(pool, req.clientId, contact);
 
   // Real bug, fixed: this used to hardcode 'en_US' for every template send
-  // regardless of what language the template was actually approved under —
+  // regardless of what language the template was actually approved under -
   // Meta rejects a send whose language doesn't match the approved
   // (name, language) pair, so any client with a non-en_US template (e.g.
   // plain 'en', or any other locale) had every Hub API template send
   // silently fail. The real approved language lives on the local
-  // message_templates row (synced from Meta) — same lookup
+  // message_templates row (synced from Meta) - same lookup
   // routes/broadcasts.js already uses for this exact purpose. If no local
   // row exists, this fails clearly (400) rather than guessing a language
   // and risking the identical class of silent Meta rejection this fix is
-  // closing — a client with a missing/unsynced template should sync it
+  // closing - a client with a missing/unsynced template should sync it
   // first (POST /api/templates/sync), not have this endpoint guess for them.
   let templateLanguage;
   let templateComponents = [];
@@ -70,7 +70,7 @@ router.post('/', asyncHandler(async (req, res) => {
     const template = await messageTemplatesRepo.findByNameAndClient(pool, req.clientId, data.template);
     if (!template) {
       return sendApiError(res, 404, 'template_not_found',
-        `No local record of template "${data.template}" — sync templates (POST /api/templates/sync) so its real approved language can be resolved, then retry.`);
+        `No local record of template "${data.template}" - sync templates (POST /api/templates/sync) so its real approved language can be resolved, then retry.`);
     }
     templateLanguage = template.language;
 
@@ -96,7 +96,7 @@ router.post('/', asyncHandler(async (req, res) => {
       templateLanguage,
       templateComponents,
       headerMediaUrl: data.headerMediaUrl,
-      // interactive (type: 'interactive') only — buttons routes through
+      // interactive (type: 'interactive') only - buttons routes through
       // sendChatMessage -> metaClient.sendInteractiveMessage, the same path
       // the flow engine's "Send Interactive Buttons" node already uses
       // (flowEngine.js's executeNode); sections routes to the new
@@ -114,7 +114,7 @@ router.post('/', asyncHandler(async (req, res) => {
     if (err instanceof messagingService.MessagingError) {
       const status = err.code === 'send_failed' ? 502 : 409;
       // metaError (see metaClient.js/messagingService.js) is Meta's actual
-      // error body, not just the message string — omitted when there isn't
+      // error body, not just the message string - omitted when there isn't
       // one (e.g. a plan-limit or consent rejection never reached Meta).
       return sendApiError(res, status, err.code, err.message, { metaError: err.metaError || undefined });
     }

@@ -3,7 +3,7 @@
 // (GV Mart 109558648723856, Brainlit 918537580543018, RD Interlock Bricks
 // 463815720015046) came back sendable:true from the probe alone while
 // Meta's health_status reported them BLOCKED with 141006 (a payment-method
-// error) — the probe tests PERMISSION, not overall sendability, and a green
+// error) - the probe tests PERMISSION, not overall sendability, and a green
 // "sendable" badge on those three would have been actively misleading (they
 // cannot run a campaign today).
 //
@@ -12,7 +12,7 @@
 // genuinely combined verdict: sendable only if the probe passes AND no
 // health_status entity is BLOCKED. The short, obvious name stays reserved
 // for the signal people should actually trust without reading the fine
-// print — see sendabilityMonitorRunner.js's computeSendableVerdict for the
+// print - see sendabilityMonitorRunner.js's computeSendableVerdict for the
 // exact logic.
 exports.up = (pgm) => {
   pgm.renameColumn('wabas', 'sendable', 'probe_sendable');

@@ -9,7 +9,7 @@ const router = Router();
 
 router.use(requireRole('Admin', 'Manager'));
 
-// Real message counts for the last 7 days — replaces the hardcoded numbers
+// Real message counts for the last 7 days - replaces the hardcoded numbers
 // that used to live directly in index.html's Reports > Message view.
 router.get('/messages', asyncHandler(async (req, res) => {
   const { rows } = await req.db.query(
@@ -33,11 +33,11 @@ router.get('/messages', asyncHandler(async (req, res) => {
 //
 // Real bug, fixed (same OR EXISTS shape as broadcastRecipientsRepo.js's
 // createFromAudience, per explicit review): this used to join on
-// contacts.tag_id only — a contact tagged via item 8/8.5's additive
+// contacts.tag_id only - a contact tagged via item 8/8.5's additive
 // contact_tags picker never counted toward its tag's contact_count or
 // conversion_rate here, silently understating both. Fixed the same way,
-// not by replacing tag_id (which still has one real, live write path —
-// the Automation Flow Builder's Assign Tag node — this must not regress).
+// not by replacing tag_id (which still has one real, live write path -
+// the Automation Flow Builder's Assign Tag node - this must not regress).
 // The OR in the join condition can't double-count a contact matching both
 // mechanisms (e.g. via migration 050's backfill): it's one row per
 // (tag, contact) pair where EITHER condition holds, not one per condition.
@@ -66,7 +66,7 @@ router.get('/tags', asyncHandler(async (req, res) => {
 }));
 
 // PLAN.md item 5. Admin/Manager only, inherited from the router.use above
-// — Agent is deliberately excluded, matching the spec's own matrix.
+// - Agent is deliberately excluded, matching the spec's own matrix.
 // ?since is optional (all-time if omitted); team_member_id: null rows
 // (owner replies) come back as their own "Owner" bucket, never merged into
 // a named agent's average.
@@ -76,10 +76,10 @@ router.get('/sla', asyncHandler(async (req, res) => {
   res.json({ byTeamMember });
 }));
 
-// PLAN.md item 14 — CTWA referral attribution. Admin/Manager only,
+// PLAN.md item 14 - CTWA referral attribution. Admin/Manager only,
 // inherited from the router.use above. ?since is optional (all-time if
 // omitted), same convention as /sla above. Grouped by (source_id,
-// headline) rather than source_id alone — a real ad account can run more
+// headline) rather than source_id alone - a real ad account can run more
 // than one headline against the same underlying ad/source, and this
 // shouldn't silently merge them into one count.
 router.get('/ctwa', asyncHandler(async (req, res) => {
@@ -98,24 +98,24 @@ router.get('/ctwa', asyncHandler(async (req, res) => {
   });
 }));
 
-// PLAN.md item 15 — Meta conversation pricing / cost calculator.
+// PLAN.md item 15 - Meta conversation pricing / cost calculator.
 // Admin/Manager only, inherited from the router.use above.
 //
 // Deliberately an explicit what-if calculator, not a real per-category
 // cost breakdown: usage_logs.conversations_billed is a single integer per
-// (client_id, date) with no category or country dimension at all — nothing
+// (client_id, date) with no category or country dimension at all - nothing
 // in this codebase records which category/country a billed conversation
 // belonged to, so a true byCategory split cannot be computed from real
 // data. category/countryCode are REQUIRED query params for that reason:
 // the caller states which single rate to apply against the month's total
 // billed count ("if every one of this month's billed conversations were
 // priced at this rate, it would cost ~X"), rather than this endpoint
-// fabricating a per-category split it has no data to support — same
+// fabricating a per-category split it has no data to support - same
 // discipline as the Meta Official Template Library and Broadcast Engine's
 // real-time tier detection (both documented in CLAUDE.md's Known Gaps as
 // deliberately not fabricating numbers the app can't actually back).
 // byCategory is deliberately NOT part of this response for the same
-// reason — see CLAUDE.md's Known Gaps: adding a real category/country
+// reason - see CLAUDE.md's Known Gaps: adding a real category/country
 // dimension to usage_logs (and writing it at every real send site) is its
 // own future item, not something to fake here.
 router.get('/cost-estimate', asyncHandler(async (req, res) => {

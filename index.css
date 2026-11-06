@@ -28,7 +28,7 @@
   --sidebar-collapsed-width: 72px;
   --header-height: 64px;
   /* Set from JS (app.js's updateSendabilityBannerLayout) to the persistent
-     sendability banner's real rendered height, or 0px when it's hidden —
+     sendability banner's real rendered height, or 0px when it's hidden -
      never hardcoded, since wrapped banner text at narrow widths changes it.
      #app-shell reserves this much space via padding-top so the banner never
      overlaps app content; the mobile hamburger toggle shifts down by the
@@ -221,15 +221,15 @@ body {
   overflow: hidden;
   /* Reserves space for #sendability-banner (border-box, via the global
      `* { box-sizing: border-box }` rule) instead of the banner overlapping
-     content — see .main-wrapper/.main-content below, which switch from a
+     content - see .main-wrapper/.main-content below, which switch from a
      hardcoded 100vh to 100% specifically so they shrink to fit this. */
   padding-top: var(--sendability-banner-h);
 }
 
-/* Persistent sendability banner (root CRM app only — admin renders the same
+/* Persistent sendability banner (root CRM app only - admin renders the same
    wording inline on its Client Detail page instead of a sticky top bar).
    Three severities, deliberately distinct: 'blocked' (broken, red),
-   'limited' (degraded, amber), 'capped' (soft informational notice, blue —
+   'limited' (degraded, amber), 'capped' (soft informational notice, blue -
    the TIER_250 case). Dismissible (by direct request): a close button
    per banner, remembered for the session - see app.js's renderSendabilityBanner. */
 .sendability-banner {
@@ -288,7 +288,7 @@ body {
 @media (max-width: 640px) {
   .sendability-banner {
     /* Clears the mobile hamburger toggle's own footprint (top:12px..56px,
-       shifted further by --sendability-banner-h above) — same reasoning as
+       shifted further by --sendability-banner-h above) - same reasoning as
        .chat-list-header's fix for the identical class of overlap. */
     padding-left: 3.25rem;
   }
@@ -385,19 +385,19 @@ body {
   padding: 12px;
 }
 
-/* Mobile sidebar drawer (below the 900px tablet breakpoint — see
+/* Mobile sidebar drawer (below the 900px tablet breakpoint - see
    breakpoints.css for the canonical value). Distinct from .sidebar.collapsed
-   above, which is an unrelated, never-wired-up desktop icon-rail state —
+   above, which is an unrelated, never-wired-up desktop icon-rail state -
    this is a full off-canvas overlay, shown/hidden via the .mobile-open class
    toggled by #mobile-sidebar-toggle-btn (app.js / admin/app.js). Shared here
    in index.css rather than duplicated in admin.css because both index.html
    and admin/index.html use the exact same #sidebar/.sidebar markup and link
-   this file directly — admin.css needs no changes for this to apply to it. */
+   this file directly - admin.css needs no changes for this to apply to it. */
 .mobile-sidebar-toggle {
   display: none;
   position: fixed;
   /* Shifts down by the sendability banner's height (0px when it's hidden)
-     so the two never overlap — this button is position:fixed relative to
+     so the two never overlap - this button is position:fixed relative to
      the viewport, unaffected by #app-shell's own padding-top. */
   top: calc(12px + var(--sendability-banner-h));
   left: 12px;
@@ -458,7 +458,7 @@ body {
   display: flex;
   flex-direction: column;
   /* 100% of #app-shell's own (possibly banner-shrunk) height, not a
-     viewport-relative 100vh — a vh unit ignores #app-shell's padding-top
+     viewport-relative 100vh - a vh unit ignores #app-shell's padding-top
      entirely and would push this box's bottom off-screen by exactly the
      banner's height. Identical to 100vh when the banner is hidden (the
      default), since #app-shell is 100vh with zero padding-top then. */
@@ -668,13 +668,13 @@ body {
   justify-content: center;
 }
 
-/* Inner Profile Form + Preview Grid — renderBusinessProfileForm (app.js)
+/* Inner Profile Form + Preview Grid - renderBusinessProfileForm (app.js)
    renders exactly 2 children (.profile-form-card, .whatsapp-preview-card).
    Previously a stale 3-column 160px/1fr/340px template: with only 2 grid
    items, the form card landed in the 160px track (crushing every field/
    textarea/input down to ~150px wide, forcing single-word line wraps) and
    the preview card landed alone in the 1fr track (floating with a huge
-   gap before it), leaving the real 340px track empty at the far right —
+   gap before it), leaving the real 340px track empty at the far right -
    confirmed live via a real screenshot, not just read from the CSS. The
    160px width belongs to nothing here: .inner-tabs-list (the Profile/
    Automation/Catalog/... tab bar, index.html) is a separate sibling
@@ -836,7 +836,7 @@ body {
   margin-bottom: 0.5rem;
 }
 
-/* Templates grid cards (UI redesign Stage 7) — status colour now comes from the
+/* Templates grid cards (UI redesign Stage 7) - status colour now comes from the
    shared .badge-* classes; .template-badge is only a layout hook. */
 .template-card {
   background: var(--bg-card);
@@ -861,7 +861,7 @@ body {
   margin-top: 0.5rem;
 }
 
-/* Template Library (wasi-master-plan.md §2) — cards | preview, two columns
+/* Template Library (wasi-master-plan.md §2) - cards | preview, two columns
    on desktop. Collapses to one column at the project's existing tablet
    breakpoint (900px, see breakpoints.css) rather than inventing a new one,
    same convention as every other responsive rule in this file. */
@@ -1171,7 +1171,7 @@ body {
 }
 
 /* Coexistence echo (a reply sent from the WhatsApp Business app on the
-   client's own phone, not through Wasi) — same bubble side/shape as any
+   client's own phone, not through Wasi) - same bubble side/shape as any
    other outbound message, but visually distinct so it isn't mistaken for
    something Wasi sent: a dashed left accent instead of msg-out's solid
    fill, plus the small "Sent from phone" label rendered inline in msg-time. */
@@ -1195,7 +1195,7 @@ body {
   color: #34b7f1;
 }
 
-/* item 5 — message grouping: consecutive same-direction messages within
+/* item 5 - message grouping: consecutive same-direction messages within
    MESSAGE_GROUP_WINDOW_MS render as one visual cluster. The group itself
    is the flex item (so the outer .chat-messages `gap` still separates
    distinct groups); bubbles inside share a tighter gap and lose their
@@ -1214,19 +1214,19 @@ body {
 .msg-group-out .msg-bubble:not(:first-child) { border-top-right-radius: 12px; }
 .msg-group-out .msg-bubble:not(:last-child) { border-bottom-right-radius: 2px; }
 
-/* item 1 — centred date-separator pill, sticky to the top of the scrolling
+/* item 1 - centred date-separator pill, sticky to the top of the scrolling
    .chat-messages container while its day's messages are in view (the
    standard "stack of sticky headers" trick: every pill is sticky at
    top:0, so the next one to scroll up simply displaces the previous one).
    Found live (a landing-page screenshot capture, not a report): a plain
    MARGIN here let the sticky-pinned pill visually overlap the very next
    bubble's first line at any scroll offset smaller than the pill's own
-   height — margin is outside the box, so the pill's opaque background
+   height - margin is outside the box, so the pill's opaque background
    never covered that gap once the container scrolled just enough to pin
    it. Switched top/bottom spacing to PADDING (background now extends
    through it) plus an explicit background matching the chat window's own
    (#FAFDFB, set inline on chat-active-workspace's first child in
-   index.html) — the reserved zone is now actually opaque at every scroll
+   index.html) - the reserved zone is now actually opaque at every scroll
    position, not just visually close. */
 .chat-date-separator {
   position: sticky;
@@ -1248,7 +1248,7 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* item 6 — where the unread run starts, computed once per chat-open. */
+/* item 6 - where the unread run starts, computed once per chat-open. */
 .chat-unread-divider {
   display: flex;
   align-items: center;
@@ -1269,7 +1269,7 @@ body {
   white-space: nowrap;
 }
 
-/* item 3/4 — hover/tap tooltip. Bubbles carry their full timestamp in
+/* item 3/4 - hover/tap tooltip. Bubbles carry their full timestamp in
    data-full-time (rendered via attr(), no extra markup needed); the
    status-tick cluster instead gets a real .msg-tooltip child since its
    content is multi-line (sent/delivered/read stacked). Both open on
@@ -1357,7 +1357,7 @@ body {
   font-size: 0.875rem;
 }
 
-/* Root app Chat view (#view-chat, index.html) — left chat-list column.
+/* Root app Chat view (#view-chat, index.html) - left chat-list column.
    Pulled out of an inline style specifically so the max-width:640px rule
    below can override its width without an !important fight (an external
    class beats an inline style only via !important; two rules on the same
@@ -1370,7 +1370,7 @@ body {
   flex-direction: column;
 }
 
-/* Pulled out of an inline style, same reasoning as .chat-list-panel above —
+/* Pulled out of an inline style, same reasoning as .chat-list-panel above -
    the mobile fix below needs to override padding-left without an
    !important fight against an inline padding shorthand. */
 .chat-list-header {
@@ -1382,16 +1382,16 @@ body {
 }
 
 /* .mobile-sidebar-toggle (see above) is fixed at top:12px/left:12px, a
-   44x44 box with no reserved layout space of its own — any view whose
+   44x44 box with no reserved layout space of its own - any view whose
    top-left content starts flush at (0,0) sits directly under it. Cosmetic
    for most views (page-title-bar's own padding already clears it, just
-   clips legibility — see CLAUDE.md's Known Gaps), but #start-new-chat-btn
+   clips legibility - see CLAUDE.md's Known Gaps), but #start-new-chat-btn
    here is a real click target in that exact footprint and was being
    intercepted, not just visually clipped. Pushing this row's content past
    the toggle's right edge (44px + 12px left offset + a small gap) is the
    minimal fix; a shared fix for every view is a separate, larger cleanup.
    Placed here (after the base rule above, not inside the earlier
-   max-width:900px block near the top of this file) deliberately — a
+   max-width:900px block near the top of this file) deliberately - a
    same-specificity override needs to come later in source order to win. */
 @media (max-width: 900px) {
   .chat-list-header {
@@ -1399,7 +1399,7 @@ body {
   }
 }
 
-/* Mobile-only "back to chat list" button in the chat header — hidden at
+/* Mobile-only "back to chat list" button in the chat header - hidden at
    desktop widths, shown (and floored to a 44px touch target) below 640px
    alongside the rest of the Chat view's mobile collapse, further down. */
 .chat-back-btn {
@@ -1420,7 +1420,7 @@ body {
   border: 1px solid var(--border-light);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-  /* .view-container.active is a fixed-height flex column — without this,
+  /* .view-container.active is a fixed-height flex column - without this,
      flexbox's default shrink-to-fit squashes this card down to whatever
      fits the viewport (its automatic min-height is 0 because of the
      overflow:hidden above), clipping content instead of letting the page
@@ -1489,10 +1489,10 @@ body {
      itself rather than relying on each call site remembering its own
      overflow-x:auto wrapper div (most already have one, e.g. the admin
      Failures/API Keys views, but this is the guaranteed fallback for any
-     that don't — nesting with an existing wrapper is harmless). Native
+     that don't - nesting with an existing wrapper is harmless). Native
      scrollbars are invisible-until-hover on most desktop OSes, which
      defeats the point of a visible scroll affordance on a touch device
-     that has no hover state at all — the ::-webkit-scrollbar/
+     that has no hover state at all - the ::-webkit-scrollbar/
      scrollbar-width rules below force a persistent, visible one instead of
      leaving horizontal scroll undiscoverable. */
   .data-table {
@@ -1520,11 +1520,11 @@ body {
   }
 
   /* .modal-box's own max-height/overflow-y (moved to the base rule, no
-     longer mobile-only — see that rule's comment) already covers this
+     longer mobile-only - see that rule's comment) already covers this
      width too; nothing mobile-specific left to add here. */
 }
 
-/* Base height for the Bot Flow Editor's embedded Visual Editor iframe —
+/* Base height for the Bot Flow Editor's embedded Visual Editor iframe -
    moved out of an inline style on #bot-flow-editor-iframe in index.html so
    the 640px mobile override below (which shrinks it to 320px) can actually
    take effect; an inline style attribute always outranks a stylesheet
@@ -1536,7 +1536,7 @@ body {
 }
 
 /* Base position for the Developer settings "Connect to Claude" copy
-   button — moved out of an inline style on #copy-mcp-config-btn in
+   button - moved out of an inline style on #copy-mcp-config-btn in
    index.html (same reason as #bot-flow-editor-iframe above, and placed
    before the Pass B block for the same source-order reason). */
 #copy-mcp-config-btn {
@@ -1546,21 +1546,21 @@ body {
 }
 
 /* ===================================================================
-   Root CRM app (Pass B) mobile fixes — scoped to classes/ids that exist
+   Root CRM app (Pass B) mobile fixes - scoped to classes/ids that exist
    only in index.html's DOM, verified against admin/index.html, EXCEPT
    .search-box and .btn-primary/.btn-secondary/.close-modal-btn/
    .password-toggle-btn, which are intentionally shared: the admin panel
    uses the exact same markup for these and benefits from the same fix,
    the same way the .data-table rule above already applies to both
    surfaces. See index.css's top-of-file comment / CLAUDE.md for why a
-   bare "#view-*" rule would be unsafe here — nothing below is that.
+   bare "#view-*" rule would be unsafe here - nothing below is that.
    =================================================================== */
 @media (max-width: 640px) {
   /* Chat view (#view-chat) mobile collapse now lives in the Stage 4 chat
      block at the end of this file (breakpoint 900px, with the contact drawer
      as a sheet). */
 
-  /* Contacts view's table toolbar — a fixed 280px .search-box next to the
+  /* Contacts view's table toolbar - a fixed 280px .search-box next to the
      Import/Export buttons didn't fit a 375px screen. */
   .search-box {
     width: 100%;
@@ -1574,7 +1574,7 @@ body {
 
   /* Page header row (title + primary action button), reused across every
      top-level view and (via the class swap in index.html) 3 Settings
-     sub-views — wrap instead of squeezing the button against a shrinking
+     sub-views - wrap instead of squeezing the button against a shrinking
      title. */
   .page-title-bar {
     flex-wrap: wrap;
@@ -1585,16 +1585,16 @@ body {
     padding: 1.25rem 1rem;
   }
 
-  /* WhatsApp Settings > Profile tab (renderBusinessProfileForm, app.js) —
+  /* WhatsApp Settings > Profile tab (renderBusinessProfileForm, app.js) -
      stacks the form card and the fixed-width preview card into one column. */
   .profile-workspace-grid {
     grid-template-columns: 1fr;
   }
 
-  /* Login screen — the decorative left banner contains an inline SVG with
+  /* Login screen - the decorative left banner contains an inline SVG with
      a hard 280px width that overflows a 375px viewport on its own, well
      before .auth-banner's own 50% width is the limiting factor. Hiding
-     the banner (shared class — admin/index.html's login view gets the
+     the banner (shared class - admin/index.html's login view gets the
      same treatment for free) leaves the actual login form as the sole,
      full-width focus, which is the only actionable content anyway. */
   .auth-banner {
@@ -1610,7 +1610,7 @@ body {
      / min-width only raise the floor, so anything already >=44px (e.g.
      .chat-item rows, already ~66px tall) is unaffected, and an inline
      pixel width/height override on a specific button (e.g. #send-msg-btn's
-     width:40px) still gets floored up — min-* always wins over a smaller
+     width:40px) still gets floored up - min-* always wins over a smaller
      width/height on the same box, regardless of selector specificity. */
   .btn-secondary,
   .btn-primary,
@@ -1639,7 +1639,7 @@ body {
     transform: translateY(-50%);
   }
 
-  /* Analytics > Message sub-tab .metrics-cards-grid (~line 698) — hard
+  /* Analytics > Message sub-tab .metrics-cards-grid (~line 698) - hard
      3-column grid holding ~6 stat cards has no mobile override anywhere
      else in this file. 2-up reads better than 1-per-row (less vertical
      scroll) and the cards' content (a label + a number) isn't dense
@@ -1648,7 +1648,7 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  /* Settings > Wallet .wallet-card (~line 840) — no-wrap flex row squeezes
+  /* Settings > Wallet .wallet-card (~line 840) - no-wrap flex row squeezes
      a 2.25rem balance figure against a "+ Recharge Balance" button. Stack
      instead, same pattern as other row-squeeze fixes in this block. */
   .wallet-card {
@@ -1657,7 +1657,7 @@ body {
     gap: 1rem;
   }
 
-  /* .channel-status-card (~line 549) — shared by #view-instagram, Settings
+  /* .channel-status-card (~line 549) - shared by #view-instagram, Settings
      > Instagram, and Settings > WhatsApp's channel header. No-wrap flex
      row squeezes channel info against action buttons; let it wrap. */
   .channel-status-card {
@@ -1666,7 +1666,7 @@ body {
   }
 
   /* Bot Flow Editor modal (#modal-bot-flow-editor) embedded Visual Editor
-     iframe — base height is set in the #bot-flow-editor-iframe rule above,
+     iframe - base height is set in the #bot-flow-editor-iframe rule above,
      before this media block (moved out of an inline style so this
      override can actually win); shrinking it here keeps the modal's
      header + toolbar + iframe + footer within .modal-box-wide's existing
@@ -1678,7 +1678,7 @@ body {
   }
 
   /* Developer settings > Connect to Claude code block (#sec-view-developer)
-     — .copy-mcp-config-btn overlaid via position:absolute on top of the
+     - .copy-mcp-config-btn overlaid via position:absolute on top of the
      <pre> would sit on top of wrapped code at narrow widths. Move it above
      the block instead. */
   .code-block-wrapper {
@@ -1739,13 +1739,13 @@ body {
   pointer-events: auto;
 }
 
-/* UI/UX pass, Group 4 — a bounded-height scrollable region NESTED inside an
+/* UI/UX pass, Group 4 - a bounded-height scrollable region NESTED inside an
    already-scrolling .modal-box (a contact search results list, a template
    picker list, an activity timeline). Previously 3 modals each hardcoded
-   their own literal inline max-height (220px/260px/280px) — same
+   their own literal inline max-height (220px/260px/280px) - same
    mechanism, three one-off copies with no shared class. One class, one
    default height, with a CSS custom property escape hatch for the call
-   sites that genuinely want a different height than the default — set
+   sites that genuinely want a different height than the default - set
    --modal-inner-scroll-height inline instead of repeating the whole rule. */
 .modal-inner-scroll {
   max-height: var(--modal-inner-scroll-height, 260px);
@@ -1754,11 +1754,11 @@ body {
 
 /* max-height/overflow-y used to live ONLY inside the @media(max-width:640px)
    block below, so any modal taller than the viewport had no scroll
-   mechanism at all above 640px — including 900px tablet and 1366x768
+   mechanism at all above 640px - including 900px tablet and 1366x768
    desktop, the two widths this was actually most likely to matter at
    (New Campaign's audience/segment/pacing/Smart-Sending content, in
    particular). Moved here so every modal scrolls internally at every
-   width, not just the narrow ones — confirmed via a real screenshot this
+   width, not just the narrow ones - confirmed via a real screenshot this
    was backwards: broken on desktop, fine on mobile, not the reverse. */
 .modal-box {
   background: white;
@@ -1774,7 +1774,7 @@ body {
 }
 
 /* Category-driven template form: much richer than the other modals, needs
-   more width than plain .modal-box — max-height/overflow-y are inherited
+   more width than plain .modal-box - max-height/overflow-y are inherited
    from .modal-box above now (both always used together, confirmed: every
    .modal-box-wide usage in index.html pairs it with .modal-box, never
    alone), so this only needs to add the width override. */
@@ -1782,7 +1782,7 @@ body {
   max-width: 640px;
 }
 
-/* PLAN.md item 28 — the broadcast detail view has real width pressure
+/* PLAN.md item 28 - the broadcast detail view has real width pressure
    .modal-box-wide's 640px doesn't have: a 5-column recipient table, a
    metadata grid, and a row of stat blocks all need more room than a form
    modal does. 900px matches this app's own existing tablet breakpoint value
@@ -1794,10 +1794,10 @@ body {
 /* --- Broadcast detail view (PLAN.md item 28) ---
    Visual-only components: a metadata card (label-above-value, like a real
    summary panel instead of a dense middot-separated line), a horizontal row
-   of stat blocks (large percentage, count beneath — same shape as the
+   of stat blocks (large percentage, count beneath - same shape as the
    Dashboard's .stat-card, without the icon), and a properly spaced
    recipient table. Colors stay this app's own palette (--color-heading/
-   --text-muted/--border-light/--shadow-sm) rather than any per-bucket tint —
+   --text-muted/--border-light/--shadow-sm) rather than any per-bucket tint -
    only the layout/spacing follows the reference. */
 .broadcast-meta-grid {
   display: grid;
@@ -2159,7 +2159,7 @@ body {
 }
 
 /* ===================================================================
-   Chat view — UI redesign Stage 4
+   Chat view - UI redesign Stage 4
    3 columns on desktop (conversations | conversation | contact drawer).
    Below 1280px the contact drawer becomes a slide-over sheet toggled by
    #chat-info-toggle-btn; at <=900px the list and conversation become a
@@ -2376,7 +2376,7 @@ body {
 #chat-drawer-close-btn svg { width: 18px; height: 18px; color: var(--text); }
 
 /* ===================================================================
-   Contacts view — UI redesign Stage 5
+   Contacts view - UI redesign Stage 5
    Table + toolbar + bulk bar + pagination, and the contact detail panel
    restyled (CSS only) as a right-hand slide-over. #modal-contact-detail
    keeps its ids and its .modal-overlay.open contract.
@@ -2490,7 +2490,7 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 }
 
 /* ===================================================================
-   Campaigns view + New Campaign wizard — UI redesign Stage 6
+   Campaigns view + New Campaign wizard - UI redesign Stage 6
    List/summary/toolbar/table mirror the Contacts view's patterns; the
    wizard is hide/show panels inside the existing #create-campaign-form.
    =================================================================== */
@@ -2624,7 +2624,7 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 }
 
 /* ===================================================================
-   Templates + Template Library + Automation — UI redesign Stages 7-8
+   Templates + Template Library + Automation - UI redesign Stages 7-8
    =================================================================== */
 .page-title-bar .page-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
 .page-title-bar .page-actions [hidden],
@@ -2758,7 +2758,7 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 }
 
 /* ===================================================================
-   Analytics + Settings — UI redesign Stages 9-10
+   Analytics + Settings - UI redesign Stages 9-10
    =================================================================== */
 #view-analytics [hidden], .settings-main-area [hidden] { display: none !important; }
 

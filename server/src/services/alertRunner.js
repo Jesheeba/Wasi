@@ -1,7 +1,7 @@
 // Phase 6 Part C. Same shape as broadcastRunner.js/forwardRunner.js
 // (idempotent start()/stop() over setInterval, one try/catch around the
 // whole tick so a single check's failure can't take the others down or
-// crash the process) — see those files for the reasoning behind that
+// crash the process) - see those files for the reasoning behind that
 // scaffold, unchanged here.
 //
 // Each check function returns candidate alerts for conditions true RIGHT
@@ -9,7 +9,7 @@
 // per alert_type: newly-true conditions get inserted and notified; already-
 // open ones just get last_seen_at touched (no repeat notification); open
 // alerts whose condition no longer reproduces get resolved. This is what
-// makes the runner idempotent across ticks without spamming — see
+// makes the runner idempotent across ticks without spamming - see
 // migration 019_alerting.js's module comment for the DB-level half of this
 // (the partial unique index).
 const { pool } = require('../db/pool');
@@ -35,7 +35,7 @@ async function reconcile(alertType, candidates) {
     try {
       await alertNotifier.notify(created);
     } finally {
-      // Marked notified even if the send itself failed — notify() already
+      // Marked notified even if the send itself failed - notify() already
       // swallows send errors per-channel (email/WhatsApp independently);
       // the alert_events row shouldn't be retried into an infinite
       // notify-loop just because a transient send failed once.
@@ -45,7 +45,7 @@ async function reconcile(alertType, candidates) {
   await alertEventsRepo.resolveStale(alertType, dedupKeys);
 }
 
-// 1. No successful webhook for a WABA in 24h that normally receives them —
+// 1. No successful webhook for a WABA in 24h that normally receives them -
 // "normally receives" = has had at least one successful webhook ever, so a
 // freshly connected number with zero history yet doesn't false-positive.
 async function checkWebhookSilence() {
@@ -70,7 +70,7 @@ async function checkWebhookSilence() {
   }));
 }
 
-// 2. Sustained non-200 responses to Meta — before Meta disables the
+// 2. Sustained non-200 responses to Meta - before Meta disables the
 // subscription entirely. Global (about our endpoint's own health), not
 // per-tenant: the last 5 requests overall, all failed.
 async function checkSustainedFailures() {
@@ -101,7 +101,7 @@ async function checkWabaRestrictions() {
   }));
 }
 
-// 4. Quality rating below green. Case-normalized — Meta's exact casing for
+// 4. Quality rating below green. Case-normalized - Meta's exact casing for
 // this field was never confirmed against a live payload this session.
 async function checkQualityRating() {
   const { rows } = await pool.query(`
@@ -112,16 +112,16 @@ async function checkQualityRating() {
   return rows.map((r) => ({
     dedupKey: r.waba_row_id,
     severity: 'warning',
-    message: `${r.client_name}'s WABA (${r.waba_id}) quality rating is ${r.quality_rating}, not green. Quality is portfolio-level — this can affect every other client's messaging tier.`,
+    message: `${r.client_name}'s WABA (${r.waba_id}) quality rating is ${r.quality_rating}, not green. Quality is portfolio-level - this can affect every other client's messaging tier.`,
     details: r,
   }));
 }
 
 // 4b. Messaging tier near capacity. The fetch/populate work this file's own
 // TODO used to point to now lives in services/messagingTierRefreshRunner.js
-// (a fetch+persist job doesn't fit this file's pure check-then-alert shape —
+// (a fetch+persist job doesn't fit this file's pure check-then-alert shape -
 // see that file's header comment for the reasoning). This check only reads
-// what that runner has already written to wabas.messaging_tier — skips any
+// what that runner has already written to wabas.messaging_tier - skips any
 // waba with an unknown tier ('unknown'/null, never checked or Meta didn't
 // return it) or TIER_UNLIMITED entirely, never fabricating urgency against a
 // limit this app doesn't actually know.
@@ -142,7 +142,7 @@ async function checkTierNearCapacity() {
       alerts.push({
         dedupKey: r.waba_row_id,
         severity: 'warning',
-        message: `${r.client_name}'s WABA (${r.waba_id}) has used ~${r.used_today} of its ${r.messaging_tier} tier's ${cap} conversations/24h — nearing capacity.`,
+        message: `${r.client_name}'s WABA (${r.waba_id}) has used ~${r.used_today} of its ${r.messaging_tier} tier's ${cap} conversations/24h - nearing capacity.`,
         details: r,
       });
     }
@@ -165,7 +165,7 @@ async function checkTemplatesPausedOrDisabled() {
   }));
 }
 
-// 6. webhook_deliveries reaching terminal failed state — batched one alert
+// 6. webhook_deliveries reaching terminal failed state - batched one alert
 // per client per day, not one per row, so a fully-dead consuming-app
 // endpoint doesn't flood.
 async function checkWebhookDeliveryFailures() {
@@ -199,7 +199,7 @@ async function checkFailedSendSpike() {
   }];
 }
 
-// 7b. Any auth-class error (190, 10) — not threshold-based, fires on first
+// 7b. Any auth-class error (190, 10) - not threshold-based, fires on first
 // occurrence per client per day (auth errors are rare and urgent; batched
 // by day only so a fully-broken client's token doesn't send one email per
 // message).
@@ -215,21 +215,21 @@ async function checkAuthClassErrors() {
   return rows.map((r) => ({
     dedupKey: `${r.client_id}:${r.meta_error_code}:${today}`,
     severity: 'critical',
-    message: `${r.client_name} has ${r.occurrence_count} auth-class send failure(s) (Meta error ${r.meta_error_code}) today — likely an expired/invalid token.`,
+    message: `${r.client_name} has ${r.occurrence_count} auth-class send failure(s) (Meta error ${r.meta_error_code}) today - likely an expired/invalid token.`,
     details: r,
   }));
 }
 
-// 8. Consent hardening Phase 1 follow-up — replays failed_consent_writes.
+// 8. Consent hardening Phase 1 follow-up - replays failed_consent_writes.
 // consentRepo.recordOptOutDurable falls back to writing here when even a
 // retry fails; a row sitting here unresolved means a real customer said
 // STOP and it's still not reflected in contacts.opt_in_status, so they
 // could keep receiving marketing they opted out of. This is a mutation, not
-// a pure condition check like the numbered checks above — it runs once per
+// a pure condition check like the numbered checks above - it runs once per
 // tick, BEFORE checkPendingFailedConsentWrites below, so a row fixed by
 // this replay is already gone by the time that check builds its alert
 // candidate list, and the alert can auto-resolve within the same tick a
-// transient outage clears. Every row is independent (own try/catch) — one
+// transient outage clears. Every row is independent (own try/catch) - one
 // still-failing row must never block the rest of the batch from being
 // retried.
 async function replayFailedConsentWrites() {
@@ -241,23 +241,23 @@ async function replayFailedConsentWrites() {
       });
       // Either the write now succeeded, or the contact no longer exists
       // (recordEvent's own not-found case resolves to null without
-      // throwing) — both mean there is nothing further this row can
+      // throwing) - both mean there is nothing further this row can
       // accomplish, so it's resolved either way.
       await failedConsentWritesRepo.resolve(row.id);
     } catch (err) {
       if (err instanceof consentRepo.ConsentBlockedError) {
-        // Only reachable if this row's event were ever 'opted_in' — today
+        // Only reachable if this row's event were ever 'opted_in' - today
         // recordOptOutDurable only ever writes 'opted_out' rows here, so
         // this is defensive, not the expected path. It means the contact
         // has genuinely opted out since this row was written, by some
-        // other route — a stronger, more current signal than this stale
+        // other route - a stronger, more current signal than this stale
         // pending write, so it's resolved as moot rather than retried
         // forever against a target state that would just get re-blocked.
-        console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} blocked — contact has opted out since; resolving as moot, not retrying:`, err.message);
+        console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} blocked - contact has opted out since; resolving as moot, not retrying:`, err.message);
         await failedConsentWritesRepo.resolve(row.id);
         continue;
       }
-      // Still failing for the same (or a new) reason — leave it pending,
+      // Still failing for the same (or a new) reason - leave it pending,
       // it gets another attempt next tick.
       console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} still failing, left pending:`, err.message);
     }
@@ -265,17 +265,17 @@ async function replayFailedConsentWrites() {
 }
 
 // 9. Any failed_consent_writes row still unresolved after the replay above
-// — a real customer opt-out that is STILL not reflected in
+// - a real customer opt-out that is STILL not reflected in
 // contacts.opt_in_status. Unlike chatSlaLogsRepo's own alertOnWriteFailure
 // (left purely for a human to resolve, since nothing re-checks it), this
 // alert auto-resolves via reconcile()'s existing resolveStale the moment
-// replayFailedConsentWrites clears the last pending row — there IS now a
+// replayFailedConsentWrites clears the last pending row - there IS now a
 // real periodic re-check that can tell "is this still happening," so it
 // should behave like every other condition-based check in this file, not
 // like a one-off write failure. Deliberately a SEPARATE alert_type from
 // consentRepo's own immediate 'consent_opt_out_write_failed' (raised the
-// instant a write first fails, stays open until a human closes it — fast
-// awareness of a fresh failure) — this one instead reflects ongoing
+// instant a write first fails, stays open until a human closes it - fast
+// awareness of a fresh failure) - this one instead reflects ongoing
 // backlog and clears itself; conflating the two would mean either losing
 // the immediate ping or losing the auto-resolve.
 async function checkPendingFailedConsentWrites() {
@@ -284,12 +284,12 @@ async function checkPendingFailedConsentWrites() {
   return [{
     dedupKey: 'global',
     severity: 'critical',
-    message: `${count} inbound WhatsApp opt-out(s) are still not recorded after retrying (failed_consent_writes) — the affected contact(s) may still receive marketing they opted out of. This is a compliance risk.`,
+    message: `${count} inbound WhatsApp opt-out(s) are still not recorded after retrying (failed_consent_writes) - the affected contact(s) may still receive marketing they opted out of. This is a compliance risk.`,
     details: { pendingCount: count },
   }];
 }
 
-// 10. Dormant client — connected, receiving real inbound WhatsApp traffic,
+// 10. Dormant client - connected, receiving real inbound WhatsApp traffic,
 // but zero outbound replies in 7 days. This is the exact gap that let a
 // client with 1,342 unanswered messages go unnoticed for 20 days: nothing
 // before this ever checked "is anyone on the other end actually
@@ -307,13 +307,13 @@ async function checkDormantNoOutbound() {
     .map((r) => ({
       dedupKey: r.client_id,
       severity: 'critical',
-      message: `${r.client_name} has received ${r.inbound_7d} inbound WhatsApp message(s) in the last 7 days but sent zero outbound replies — nobody appears to be responding.`,
+      message: `${r.client_name} has received ${r.inbound_7d} inbound WhatsApp message(s) in the last 7 days but sent zero outbound replies - nobody appears to be responding.`,
       details: r,
     }));
 }
 
 // 11. A client's WhatsApp has been connected for more than 3 days but
-// clients.last_login_at is still null — plausibly nobody at that business
+// clients.last_login_at is still null - plausibly nobody at that business
 // has ever actually opened the CRM, distinct from checkDormantNoOutbound
 // above (which needs real inbound traffic first; this catches an account
 // that's been silent from day one, before any traffic exists to judge).
@@ -346,7 +346,7 @@ async function maybeSendDailyDigest() {
 
   const message = realOpen.length === 0
     ? `Daily digest: all clear. No open alerts. ${realResolved.length} resolved in the last 24h.`
-    : `Daily digest: ${realOpen.length} open alert(s) — ${realOpen.map((a) => a.alert_type).join(', ')}. ${realResolved.length} resolved in the last 24h.`;
+    : `Daily digest: ${realOpen.length} open alert(s) - ${realOpen.map((a) => a.alert_type).join(', ')}. ${realResolved.length} resolved in the last 24h.`;
 
   const created = await alertEventsRepo.open({
     alertType: 'daily_digest',
@@ -359,7 +359,7 @@ async function maybeSendDailyDigest() {
     await alertNotifier.notify(created);
   } finally {
     await alertEventsRepo.markNotified(created.id);
-    // Not an ongoing condition — resolved immediately, existsAny() (not
+    // Not an ongoing condition - resolved immediately, existsAny() (not
     // findOpen()) is what makes this stay a once-a-day sent-marker.
     await alertEventsRepo.resolveNow(created.id);
   }

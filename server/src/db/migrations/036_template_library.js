@@ -1,12 +1,12 @@
-// WhatsApp Template Message Library (wasi-master-plan.md §2) — a curated,
+// WhatsApp Template Message Library (wasi-master-plan.md §2) - a curated,
 // admin-owned, read-only-to-clients set of pre-built template content a
 // client can browse and one-click-prefill into the EXISTING template
 // creation flow (routes/templates.js's POST /, messageTemplateCreateSchema)
-// — this migration adds no new submission path, only reference content and
+// - this migration adds no new submission path, only reference content and
 // a lightweight usage log.
 //
 // template_library is NOT a tenant table: it has no client_id and is not
-// RLS-scoped — it's global content owned by Sirah's own admins (matching
+// RLS-scoped - it's global content owned by Sirah's own admins (matching
 // the "no full admin CMS in v1, seed via migration/script" scope from
 // wasi-master-plan.md §2.6: this table is populated by
 // server/src/db/seedTemplateLibrary.js, not through any admin UI yet), read
@@ -18,7 +18,7 @@
 // message_templates.header_type (migration 020's comment): NONE/TEXT only
 // are populated by the v1 seed content (a media header needs an uploaded
 // file at submission time, which prefilling into the creation form can't
-// supply without also building a media-hosting mechanism — out of scope
+// supply without also building a media-hosting mechanism - out of scope
 // here), enforced at the seed-script/route layer, not the DB, so adding
 // media-header library entries later is a content/route change, not
 // another migration.
@@ -26,9 +26,9 @@
 // sample_values_json is keyed by param NAME (`{customer_name: "Priya"}`),
 // matching message_templates.body_param_examples' shape exactly and this
 // codebase's named-params-only convention (templateParams.js hard-rejects
-// numbered {{1}}-style params) — never index-keyed.
+// numbered {{1}}-style params) - never index-keyed.
 //
-// created_by_admin_id references admin_users(id) — NOT a table called
+// created_by_admin_id references admin_users(id) - NOT a table called
 // "admins" (that name doesn't exist in this schema; admin_users is the
 // live admin identity table, migration 002_platform_tables.js).
 exports.up = (pgm) => {
@@ -44,7 +44,7 @@ exports.up = (pgm) => {
     footer: { type: 'text' },
     buttons_json: { type: 'jsonb' },
     sample_values_json: { type: 'jsonb', notNull: true, default: pgm.func("'{}'::jsonb") },
-    // 'en_US', not the wasi-master-plan.md draft's 'en' — matches
+    // 'en_US', not the wasi-master-plan.md draft's 'en' - matches
     // message_templates.language's real default and what Meta submission
     // actually requires (see server/src/utils/validate.js's
     // messageTemplateCreateSchema); the creation form's own language
@@ -84,9 +84,9 @@ exports.down = async (pgm) => {
   // is a real (shared dev/prod) database, so a rollback run any time after
   // real clients have actually clicked "Use this Template" would silently
   // destroy that usage history with a bare DROP TABLE. template_library
-  // itself is safe to drop unconditionally — it's 100% reproducible from
+  // itself is safe to drop unconditionally - it's 100% reproducible from
   // seedTemplateLibrary.js (no admin-edit UI exists yet to lose, per
-  // wasi-master-plan.md §2.6) — but template_library_usage is real
+  // wasi-master-plan.md §2.6) - but template_library_usage is real
   // client-generated data. Check first and fail loudly with the count,
   // rather than either silently dropping it or a bare Postgres error.
   const [{ count }] = await pgm.db.select('select count(*)::int as count from template_library_usage');

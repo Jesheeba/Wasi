@@ -1,11 +1,11 @@
-// UI/UX consistency pass, Group 5 — marketing/reset-password.html and
+// UI/UX consistency pass, Group 5 - marketing/reset-password.html and
 // marketing/accept-team-invite.html both used class="banner", a class never
-// defined anywhere in marketing.css — 100% of their visual styling came
+// defined anywhere in marketing.css - 100% of their visual styling came
 // from hand-duplicated inline styles that only approximately matched the
 // signup wizard's real, already-themed .form-error-banner. Swapped both to
 // the real class (and to the wizard's established classList.add/remove
 // ('visible') toggle, instead of manipulating style.display directly).
-// marketing/verify-email.html had NO banner styling at all — success and
+// marketing/verify-email.html had NO banner styling at all - success and
 // failure looked visually identical (plain black text either way). Now
 // routes both through the same real .form-info-banner/.form-error-banner
 // classes via a small showOutcome() helper.
@@ -55,7 +55,7 @@ after(async () => {
 });
 
 // A visible .form-error-banner/.form-info-banner must have a real,
-// non-transparent background-color — this is what actually distinguishes
+// non-transparent background-color - this is what actually distinguishes
 // "real theming" from the old class="banner" (which rendered with zero
 // class-driven styling at all once its hand-duplicated inline styles were
 // the only thing carrying it).
@@ -101,7 +101,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
     await page.close();
   });
 
-  test(`${label}: verify-email.html — failure and success are now genuinely visually distinct, not identical plain text`, async () => {
+  test(`${label}: verify-email.html - failure and success are now genuinely visually distinct, not identical plain text`, async () => {
     const failPage = await browser.newPage({ viewport });
     await failPage.goto(`${baseUrl}/marketing/verify-email.html?token=invalid-test-token`);
     const failMsg = failPage.locator('#verify-message');

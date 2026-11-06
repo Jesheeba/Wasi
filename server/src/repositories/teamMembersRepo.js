@@ -21,7 +21,7 @@ async function findById(db, clientId, id) {
   return rows[0] || null;
 }
 
-// Runs on the privileged pool, not req.db — called from routes/authTeam.js's
+// Runs on the privileged pool, not req.db - called from routes/authTeam.js's
 // login handler, before any tenant context exists (there's no client_id to
 // scope a tenant-restricted connection to until this resolves one). Joins
 // through clients.tenant_slug since team_members.email is only unique per
@@ -36,7 +36,7 @@ async function findForLogin(pool, tenantSlug, email) {
   return rows[0] || null;
 }
 
-// Also privileged-pool-only, for the same reason as findForLogin — accepting
+// Also privileged-pool-only, for the same reason as findForLogin - accepting
 // an invite happens before any tenant context exists.
 async function findByIdAcrossClients(pool, id) {
   const { rows } = await pool.query('select * from team_members where id = $1', [id]);

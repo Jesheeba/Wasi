@@ -2,25 +2,25 @@
 // mapping for Meta's numeric message-delivery error codes. Distinct from
 // routes/templates.js's describeMetaError, which only handles TEMPLATE
 // SUBMISSION rejections (error_user_title/error_user_msg on a create/edit/
-// delete call) — a different Meta error shape, not reusable here. No
+// delete call) - a different Meta error shape, not reusable here. No
 // mapping for message-send/delivery failures existed anywhere in this
 // codebase before this.
 //
 // Codes confirmed against Meta's official Cloud API error code reference
 // (developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes),
-// not guessed. Deliberately not exhaustive — Meta documents dozens of
+// not guessed. Deliberately not exhaustive - Meta documents dozens of
 // codes, most of them (OAuth/permission/business-verification) can't occur
 // on a per-recipient broadcast send at all. Extend this list in place when
-// a real, recurring code turns up that isn't here yet — same discipline
+// a real, recurring code turns up that isn't here yet - same discipline
 // CLAUDE.md's template-category-mismatch entry already established for
 // content-pattern lists: never build a second, parallel mapping.
 const MESSAGE_ERROR_MESSAGES = {
-  4: 'Meta rate-limited this send — it was retried automatically.',
-  130429: 'Meta rate-limited this send — it was retried automatically.',
+  4: 'Meta rate-limited this send - it was retried automatically.',
+  130429: 'Meta rate-limited this send - it was retried automatically.',
   131026: "This number can't receive WhatsApp messages (not on WhatsApp, or has an outdated app).",
-  131047: "More than 24 hours passed since this contact last messaged you — a session message can't be sent outside that window.",
+  131047: "More than 24 hours passed since this contact last messaged you - a session message can't be sent outside that window.",
   131048: "Blocked due to your account's current quality rating.",
-  131049: "Not delivered — Meta's own spam-prevention system held this back to protect delivery for everyone.",
+  131049: "Not delivered - Meta's own spam-prevention system held this back to protect delivery for everyone.",
   131050: 'This contact has opted out of marketing messages.',
   131051: 'Unsupported message type for this recipient.',
   131052: "Meta couldn't download media this recipient sent.",
@@ -39,7 +39,7 @@ const MESSAGE_ERROR_MESSAGES = {
 
 // metaErrorCode: the numeric code from messages.meta_error_code (a real
 // delivery failure reported via the status webhook). errorReason: the raw
-// text already stored — messages.error_reason (Meta's error.title) for a
+// text already stored - messages.error_reason (Meta's error.title) for a
 // post-send failure, or broadcast_recipients.error_reason (a JS err.message,
 // no Meta code at all) for a pre-send failure/skip. A known code always
 // wins over the raw text (plain language beats Meta's own often-terse

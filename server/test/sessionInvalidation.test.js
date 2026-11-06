@@ -1,9 +1,9 @@
-// Password reset item 3 — session invalidation. Stubs only, per explicit
+// Password reset item 3 - session invalidation. Stubs only, per explicit
 // instruction for this task: nothing is written to the shared database (this
-// project has no separate dev DB — see CLAUDE.md/dbSafety.js). `pool.query`
+// project has no separate dev DB - see CLAUDE.md/dbSafety.js). `pool.query`
 // is monkey-patched to return canned rows; no HTTP server, no createApp(),
 // no real registration/login round trip. Requiring '../src/db/pool' only
-// constructs a `pg.Pool` object (lazy-connect) — no network I/O happens
+// constructs a `pg.Pool` object (lazy-connect) - no network I/O happens
 // unless something actually calls .query(), which this file never lets
 // reach the real driver.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -58,7 +58,7 @@ function runMiddleware(middleware, req, res) {
     Promise.resolve(middleware(req, res, next)).then((maybeResult) => {
       // If the middleware itself already resolved res (rejected the
       // request) without ever calling next(), resolve with false instead of
-      // hanging — no error was thrown, there's just nothing left to await.
+      // hanging - no error was thrown, there's just nothing left to await.
       if (!nextCalled) resolve(false);
     }).catch(reject);
   });
@@ -82,11 +82,11 @@ test('client: signClientToken embeds token_version; a matching version passes re
   }
 });
 
-test('client: a token issued before a password reset (old tokenVersion) is rejected after the bump — same shape as an expired token', async () => {
+test('client: a token issued before a password reset (old tokenVersion) is rejected after the bump - same shape as an expired token', async () => {
   // Token minted while token_version was 0 (before the reset).
   const oldToken = signClientToken({ id: 'client-1', token_version: 0 });
 
-  // The reset already ran server-side — clients.token_version is now 1.
+  // The reset already ran server-side - clients.token_version is now 1.
   const stub = stubTokenVersion('clients', 1);
   try {
     const { req, res } = fakeReqRes(oldToken);
@@ -113,7 +113,7 @@ test('client: a token issued after the reset (fresh login, new tokenVersion) is 
   }
 });
 
-test('client: a token predating this feature (no tokenVersion claim at all) is treated as version 0 — existing tokens survive the deploy', async () => {
+test('client: a token predating this feature (no tokenVersion claim at all) is treated as version 0 - existing tokens survive the deploy', async () => {
   const legacyToken = jwt.sign({ type: 'client', sub: 'client-1' }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
   const stub = stubTokenVersion('clients', 0);

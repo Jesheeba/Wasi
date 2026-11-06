@@ -1,7 +1,7 @@
 const { verifyToken } = require('../utils/auth');
 const { pool } = require('../db/pool');
 
-// Session invalidation (password reset item 3) — see requireAdminAuth.js's
+// Session invalidation (password reset item 3) - see requireAdminAuth.js's
 // identical comment for the full reasoning; this is the same check against
 // clients.token_version instead of admin_users'.
 async function requireClientAuth(req, res, next) {

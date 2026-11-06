@@ -1,4 +1,4 @@
-// Backs the idempotency guard in metaWebhook.js's handleStatuses — see
+// Backs the idempotency guard in metaWebhook.js's handleStatuses - see
 // migration 033_message_status_forwards.js for why this is a separate
 // (meta_message_id, status) ledger rather than reusing messages' own
 // meta_message_id uniqueness.

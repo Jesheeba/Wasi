@@ -1,4 +1,4 @@
-// Seeds one demo client — "Vetri Academy (Demo)" — with enough realistic
+// Seeds one demo client - "Vetri Academy (Demo)" - with enough realistic
 // data for the marketing landing page's Playwright screenshots (chat inbox,
 // campaign detail, flow builder), and doubles as the browser-verification
 // fixture for the chat date/time UI work: Rahul Menon's chat (suffix '02')
@@ -6,7 +6,7 @@
 // Yesterday pills both appear, divider lands before the run), and Divya
 // Krishnan's chat (suffix '09') plus 3 other campaign recipients get a real
 // failed outbound message with an error reason (see CAMPAIGN_FAIL_REASON).
-// Also seeds: 6 message_templates (approved/pending/rejected, plain rows — no Meta
+// Also seeds: 6 message_templates (approved/pending/rejected, plain rows - no Meta
 // call, nothing submits or syncs them), one small manual contact list (so the
 // campaign wizard's Review step shows a real audience count), and a recent
 // inbound message on Deepa R.'s chat (so her 24h session window is open).
@@ -14,11 +14,11 @@
 // own rows first, keyed by a fixed id, and never touches any other
 // client's data.
 //
-// Makes NO Meta API call of any kind. Every row is a plain INSERT — no
+// Makes NO Meta API call of any kind. Every row is a plain INSERT - no
 // wabas row is created (the CRM UI doesn't require one to show the Chat/
 // Campaigns/Flow Builder views), no broadcast is left in a 'Sending' or
 // 'Scheduled' status (the ones broadcastRunner.js's live tick() actually
-// polls — see CLAUDE.md's "REAL, LIVE background workers" convention),
+// polls - see CLAUDE.md's "REAL, LIVE background workers" convention),
 // and no flow is wired to an automation_rules trigger, so nothing here can
 // ever be picked up by broadcastRunner/flowRunner/forwardRunner/alertRunner,
 // which really do poll this same shared database continuously.
@@ -62,14 +62,14 @@ const TAGS = [
   { key: 'payment', name: 'Payment Pending', bg: '#FEE2E2', color: '#B91C1C' },
 ];
 
-// --- Deepa R. — the approved story, told in full -----------------------
+// --- Deepa R. - the approved story, told in full -----------------------
 // Beat timestamps are relative to whenever this script actually runs (see
 // daysAgoAt), never hardcoded calendar dates, so the demo never drifts into
 // the future or looks stale no matter when it's (re-)run.
-const DEEPA_BEAT1 = daysAgoAt(26, 22, 47, 0); // Sat 10:47pm — her question
+const DEEPA_BEAT1 = daysAgoAt(26, 22, 47, 0); // Sat 10:47pm - her question
 const DEEPA_BEAT2 = plus(DEEPA_BEAT1, 5); // instant bot reply
 const DEEPA_BEAT2B = plus(DEEPA_BEAT1, 65); // she taps "Fee details"
-const DEEPA_BEAT3 = daysAgoAt(25, 9, 12, 0); // Sun 9:12am — Priya
+const DEEPA_BEAT3 = daysAgoAt(25, 9, 12, 0); // Sun 9:12am - Priya
 const DEEPA_BEAT3B = plus(DEEPA_BEAT3, 140); // "Yes please"
 const DEEPA_BEAT4 = plus(DEEPA_BEAT3, 240); // confirmation template
 const DEEPA_BEAT4_READ = plus(DEEPA_BEAT4, 600); // ticks turn blue ~10min later
@@ -78,7 +78,7 @@ const CAMPAIGN_AT = daysAgoAt(4, 11, 0, 0); // "three weeks later" from beat 3/4
 // customer-service window is open (no "session window closed" banner).
 const DEEPA_REPLY_AT = plus(NOW, -3 * 3600);
 
-// Any computed timestamp is clamped to at most 30s before script start —
+// Any computed timestamp is clamped to at most 30s before script start -
 // belt-and-suspenders against a fixed early-morning clock time (e.g.
 // Rahul Menon's 00:05 "today" message below) landing in the future on the
 // rare run that happens to start before that clock time. A day-scale
@@ -88,7 +88,7 @@ function clampPast(date) {
   return date < safeNow ? date : safeNow;
 }
 
-// --- Filler contacts — enough for a lived-in inbox + campaign recipients.
+// --- Filler contacts - enough for a lived-in inbox + campaign recipients.
 // Each has a real, plausible coaching-institute exchange. `campaign` marks
 // which effective_status bucket (see broadcastRecipientsRepo.listByBroadcast)
 // this contact lands in for the seeded campaign below.
@@ -97,7 +97,7 @@ const HAND_FILLER = [
     // Also the date/time UI's midnight + unread-divider test case: the last
     // two messages straddle local midnight (23:50 the day before "today" ->
     // 00:05 "today"), and all 3 messages here are the trailing unread run
-    // unread_count below is set to match — both Today and Yesterday date
+    // unread_count below is set to match - both Today and Yesterday date
     // pills must appear in this one chat, with the divider landing right
     // before the first of the three.
     suffix: '02', name: 'Rahul Menon', tag: 'lead', campaign: 'sent',
@@ -141,7 +141,7 @@ const HAND_FILLER = [
     suffix: '07', name: 'Ananya Pillai', tag: 'enrolled', campaign: 'delivered',
     messages: [
       { dir: 'in', daysAgo: 14, hour: 9, minute: 0, body: 'Can I switch from the online batch to the weekend offline one?' },
-      { dir: 'out', daysAgo: 14, hour: 11, minute: 0, body: "Yes, we can move you — I'll update your batch by tomorrow.", status: 'delivered' },
+      { dir: 'out', daysAgo: 14, hour: 11, minute: 0, body: "Yes, we can move you - I'll update your batch by tomorrow.", status: 'delivered' },
     ],
     unread: 0, status: 'open',
   },
@@ -149,7 +149,7 @@ const HAND_FILLER = [
     suffix: '08', name: 'Vishnu Prasad', tag: 'batch', campaign: 'read',
     messages: [
       { dir: 'in', daysAgo: 11, hour: 17, minute: 0, body: 'Do you provide printed study material or only PDFs?' },
-      { dir: 'out', daysAgo: 11, hour: 17, minute: 40, body: 'We provide both — printed material at the centre and PDFs on request.', status: 'read' },
+      { dir: 'out', daysAgo: 11, hour: 17, minute: 40, body: 'We provide both - printed material at the centre and PDFs on request.', status: 'read' },
     ],
     unread: 0, status: 'open',
   },
@@ -170,7 +170,7 @@ const HAND_FILLER = [
     suffix: '11', name: 'Meera Pillai', tag: 'batch', campaign: 'read',
     messages: [
       { dir: 'in', daysAgo: 13, hour: 8, minute: 30, body: 'Can my brother also join the same batch?' },
-      { dir: 'out', daysAgo: 13, hour: 8, minute: 55, body: "Of course — just share his details and we'll enrol him too.", status: 'read' },
+      { dir: 'out', daysAgo: 13, hour: 8, minute: 55, body: "Of course - just share his details and we'll enrol him too.", status: 'read' },
     ],
     unread: 0, status: 'open',
   },
@@ -190,11 +190,11 @@ const HAND_FILLER = [
 ];
 
 // --- Extra lightweight recipients, so the campaign has ~50 recipients
-// total instead of 13 (real recipient rows, computed stats — see
-// broadcastsRepo.findByIdWithStats — not fabricated numbers; still small,
+// total instead of 13 (real recipient rows, computed stats - see
+// broadcastsRepo.findByIdWithStats - not fabricated numbers; still small,
 // demo-scale volume on purpose, never thousands). Each gets one short
 // inbound message rather than a full hand-written exchange like
-// HAND_FILLER above — plenty for a lived-in-looking inbox row and a valid
+// HAND_FILLER above - plenty for a lived-in-looking inbox row and a valid
 // campaign recipient, without hand-authoring 37 more conversations.
 const EXTRA_NAMES = [
   'Harini Ramesh', 'Suresh Babu', 'Lakshmi Narayanan', 'Vignesh Raja', 'Pooja Varma',
@@ -220,7 +220,7 @@ const EXTRA_MESSAGE_POOL = [
 ];
 const EXTRA_TAG_KEYS = ['batch', 'lead', 'enrolled', 'payment'];
 
-// Round-robin, not blocks — so the resulting recipient list isn't visibly
+// Round-robin, not blocks - so the resulting recipient list isn't visibly
 // grouped by outcome when someone scrolls the campaign detail table.
 function buildBucketSequence(counts) {
   const pools = Object.entries(counts).map(([bucket, remaining]) => ({ bucket, remaining }));
@@ -267,7 +267,7 @@ const FLOW_NODES = [
   {
     key: 'ask', type: 'send_interactive_buttons', position: { x: 80, y: 180 },
     config: {
-      body: 'Hi! Yes — the weekend NEET batch starts 6 October, 9am–1pm. Would you like the fee details or a call back?',
+      body: 'Hi! Yes - the weekend NEET batch starts 6 October, 9am–1pm. Would you like the fee details or a call back?',
       buttons: [{ id: 'fee_details', title: 'Fee details' }, { id: 'call_me', title: 'Call me' }],
     },
   },
@@ -276,7 +276,7 @@ const FLOW_NODES = [
     config: { body: 'Here are the fee details: ₹18,000 for the full course, payable in two instalments. Reply YES to hold your seat.' },
   },
   {
-    // y:320 originally — found live (flow builder screenshot capture) to
+    // y:320 originally - found live (flow builder screenshot capture) to
     // render visually underneath the entry node's own card, which is
     // considerably taller than its own y-span once its body text + 2
     // buttons + timeout fields are all shown; 560 clears it.
@@ -299,7 +299,7 @@ const TEMPLATE_SAMPLES = {
 };
 const TEMPLATES = [
   { name: 'crash_course_promo', category: 'MARKETING', status: 'approved', body: 'Crash course for the January attempt opens Monday. Existing students get 20% off.' },
-  { name: 'seat_confirmation', category: 'UTILITY', status: 'approved', body: 'Your seat is confirmed. Vetri Academy — {{batch_name}}, starts {{start_date}}, {{start_time}}.' },
+  { name: 'seat_confirmation', category: 'UTILITY', status: 'approved', body: 'Your seat is confirmed. Vetri Academy - {{batch_name}}, starts {{start_date}}, {{start_time}}.' },
   { name: 'fee_reminder', category: 'UTILITY', status: 'approved', body: 'Hi {{student_name}}, your second instalment of {{amount}} is due on {{due_date}}.' },
   { name: 'exam_result_ready', category: 'UTILITY', status: 'approved', body: 'Hi {{student_name}}, your mock test result is ready. Your score: {{score}}.' },
   { name: 'demo_class_invite', category: 'MARKETING', status: 'pending', body: 'Join our free demo class this Saturday at 10am. Reply YES to reserve your slot.' },
@@ -327,7 +327,7 @@ async function seed() {
       [DEMO_CLIENT_ID, DEMO_CLIENT_EMAIL, passwordHash]
     );
 
-    // Wipe this client's own rows before reinserting — cascades handle every
+    // Wipe this client's own rows before reinserting - cascades handle every
     // child table (broadcasts -> broadcast_recipients, chats -> messages,
     // contacts -> contact_tags, automation_flows -> flow_nodes/flow_edges).
     await client.query('delete from subscriptions where client_id = $1', [DEMO_CLIENT_ID]);
@@ -342,7 +342,7 @@ async function seed() {
 
     // No subscriptions row, deliberately: admin's real /api/admin/billing/
     // overview sums the price of every 'active' subscription across ALL
-    // clients into estimatedMrr, unfiltered — an 'active' Starter row here
+    // clients into estimatedMrr, unfiltered - an 'active' Starter row here
     // would inflate that real figure. Nothing in the Chat/Campaigns/Flow
     // Builder screenshots this seed exists for needs one; the only place a
     // missing subscription is even visible is Settings > Subscription (a
@@ -391,7 +391,7 @@ async function seed() {
     await insertMessage(deepaChat.id, { dir: 'in', body: 'Hi, is the weekend NEET batch still open?', sentAt: DEEPA_BEAT1 });
     await insertMessage(deepaChat.id, {
       dir: 'out',
-      body: 'Hi! Yes — the weekend NEET batch starts 6 October, Saturday and Sunday, 9am to 1pm. Would you like the fee details or a call back?',
+      body: 'Hi! Yes - the weekend NEET batch starts 6 October, Saturday and Sunday, 9am to 1pm. Would you like the fee details or a call back?',
       sentAt: DEEPA_BEAT2, status: 'read', deliveredAt: plus(DEEPA_BEAT2, 3), readAt: plus(DEEPA_BEAT2B, 5),
     });
     await insertMessage(deepaChat.id, { dir: 'in', body: 'Fee details', sentAt: DEEPA_BEAT2B });
@@ -403,7 +403,7 @@ async function seed() {
     await insertMessage(deepaChat.id, { dir: 'in', body: 'Yes please', sentAt: DEEPA_BEAT3B });
     await insertMessage(deepaChat.id, {
       dir: 'out',
-      body: 'Your seat is confirmed. Vetri Academy — Weekend NEET batch, starts 6 October, 9:00am.',
+      body: 'Your seat is confirmed. Vetri Academy - Weekend NEET batch, starts 6 October, 9:00am.',
       sentAt: DEEPA_BEAT4, status: 'read', deliveredAt: plus(DEEPA_BEAT4, 4), readAt: DEEPA_BEAT4_READ,
     });
 
@@ -435,7 +435,7 @@ async function seed() {
     // --- Campaign / broadcast ---------------------------------------------
     const { rows: [broadcast] } = await client.query(
       `insert into broadcasts (client_id, title, tag_id, status, template_name, scheduled_date, created_at)
-       values ($1, 'January Crash Course — Early Bird', $2, 'Completed', 'crash_course_promo', $3, $4) returning id`,
+       values ($1, 'January Crash Course - Early Bird', $2, 'Completed', 'crash_course_promo', $3, $4) returning id`,
       [DEMO_CLIENT_ID, tagId.batch, CAMPAIGN_AT.toISOString().slice(0, 10), daysAgoAt(4, 10, 30, 0)]
     );
 
@@ -492,7 +492,7 @@ async function seed() {
 
     // --- Manual contact list (every 'Weekend NEET Batch'-tagged contact) ---
     const { rows: [list] } = await client.query(
-      `insert into contact_lists (client_id, name, source) values ($1, 'Weekend NEET Batch — Enquiries', 'manual') returning id`,
+      `insert into contact_lists (client_id, name, source) values ($1, 'Weekend NEET Batch - Enquiries', 'manual') returning id`,
       [DEMO_CLIENT_ID]
     );
     const listMemberIds = [deepaContact.id, ...FILLER.filter((f) => f.tag === 'batch').map((f) => contactByKey[f.suffix].id)];
@@ -517,7 +517,7 @@ async function seed() {
       );
     }
 
-    // --- Flow (draft, unattached to any automation_rules trigger — inert) -
+    // --- Flow (draft, unattached to any automation_rules trigger - inert) -
     const { rows: [flow] } = await client.query(
       `insert into automation_flows (client_id, name, status) values ($1, 'New Enquiry -> Fee or Callback', 'draft') returning id`,
       [DEMO_CLIENT_ID]
@@ -541,9 +541,9 @@ async function seed() {
 
     await client.query('COMMIT');
     console.log(`Seed complete for client ${DEMO_CLIENT_ID}`);
-    // Never echo a password that came from LANDING_DEMO_PASSWORD — only the
+    // Never echo a password that came from LANDING_DEMO_PASSWORD - only the
     // committed fallback (already public) is printed.
-    console.log(`Demo client login: ${DEMO_CLIENT_EMAIL} / ${process.env.LANDING_DEMO_PASSWORD ? '(LANDING_DEMO_PASSWORD)' : DEMO_CLIENT_PASSWORD + ' (committed fallback — set LANDING_DEMO_PASSWORD)'}`);
+    console.log(`Demo client login: ${DEMO_CLIENT_EMAIL} / ${process.env.LANDING_DEMO_PASSWORD ? '(LANDING_DEMO_PASSWORD)' : DEMO_CLIENT_PASSWORD + ' (committed fallback - set LANDING_DEMO_PASSWORD)'}`);
     console.log(`${1 + FILLER.length} contacts, 1 campaign (${recipients.length} recipients: 15 read / 15 delivered / 12 sent / 4 failed / 4 pending), 1 draft flow with a 2-way branch, ${TEMPLATES.length} templates, 1 contact list (${listMemberIds.length} members).`);
   } catch (err) {
     await client.query('ROLLBACK');

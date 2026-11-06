@@ -1,13 +1,13 @@
-// PLAN.md item 1 — team member authentication & roles. Verifies:
+// PLAN.md item 1 - team member authentication & roles. Verifies:
 // 1. invite -> accept-invite -> login issues a working team_member JWT.
 // 2. requireClientOrTeamAuth resolves the SAME tenant isolation as the
 //    owner (req.clientId set correctly, RLS behaves identically).
 // 3. requireRole's route-by-route matrix: an Agent-role token is denied on
 //    Admin/Manager-only routes (403) and allowed on Agent-reachable ones.
 // 4. The structural fix itself: a team_member token is REJECTED (401, wrong
-//    token type — not merely 403) on every router deliberately left on the
+//    token type - not merely 403) on every router deliberately left on the
 //    unchanged requireClientAuth (onboarding, billing, wallet,
-//    client-webhook, api-keys, payment-links) — proving those routers are
+//    client-webhook, api-keys, payment-links) - proving those routers are
 //    unreachable by construction, not by an easy-to-forget role check.
 // Same dedicated-disposable-test-client convention as every other file in
 // this directory: a real client via /api/auth/register, deleted in after().
@@ -34,7 +34,7 @@ function authed(token) {
 
 // Mirrors routes/teamMembers.js's /:id/invite handler's own token-issuance
 // path exactly (authTokensRepo.create with purpose 'team_invite') rather
-// than re-deriving it — this is the same function the real invite endpoint
+// than re-deriving it - this is the same function the real invite endpoint
 // calls, just invoked directly so the test doesn't depend on emailService's
 // console-log fallback to recover the raw token.
 const authTokensRepo = require('../src/repositories/authTokensRepo');
@@ -131,7 +131,7 @@ test('1b. the real POST /:id/invite endpoint sends an email carrying tenantSlug,
   // Without this, a recipient who sets a password via accept-invite (which
   // auto-logs them in for that one session) has no way to fill in the
   // tenantSlug field POST /api/auth/team/login requires for every login
-  // after that — found via direct code review, verified here against the
+  // after that - found via direct code review, verified here against the
   // REAL route (not the authTokensRepo shortcut acceptInviteAndLogin uses
   // elsewhere in this file, which never exercises this endpoint at all).
   const created = await createTeamMember('Agent');
@@ -226,12 +226,12 @@ test('6. the SAME Agent-role token is allowed on Agent-reachable routes (GET tem
   assert.equal(contactsListRes.status, 200);
 });
 
-test('7. an Admin-role team_member token is REJECTED on every owner-only router by requireClientAuth\'s own unchanged wrong-token-type check (403) — the structural fix, not a role check', async () => {
+test('7. an Admin-role team_member token is REJECTED on every owner-only router by requireClientAuth\'s own unchanged wrong-token-type check (403) - the structural fix, not a role check', async () => {
   const created = await createTeamMember('Admin');
   const jwt = await acceptInviteAndLogin(created);
 
   // requireClientAuth.js (untouched by this item) returns 403 "Wrong token
-  // type" for any payload.type !== 'client' — a team_member token hits this
+  // type" for any payload.type !== 'client' - a team_member token hits this
   // exact same pre-existing branch a garbage/malformed type would, on every
   // router still mounted behind requireClientAuth. The point being verified
   // is that it's rejected there at all, structurally, not via a role list

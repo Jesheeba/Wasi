@@ -1,13 +1,13 @@
 // Seeds the WhatsApp Template Message Library (wasi-master-plan.md §2.6:
-// "no full admin CMS for editing content in v1 — seed via migration/script
-// first"). Idempotent — safe to re-run any time content in
+// "no full admin CMS for editing content in v1 - seed via migration/script
+// first"). Idempotent - safe to re-run any time content in
 // templateLibraryContent.js changes: upserts by the (industry, use_case)
 // natural key (migration 037), so a re-run updates existing rows' content
 // in place rather than duplicating or orphaning any real client's already-
 // recorded template_library_usage row for that same conceptual template.
 //
 // Aborts entirely (no partial insert) if ANY entry fails
-// validateLibraryContent — this is the actual enforcement of "every
+// validateLibraryContent - this is the actual enforcement of "every
 // template manually checked against Meta's rejection reasons" before it
 // ever reaches a client's browse view, not a comment promising it was
 // checked once by hand.
@@ -27,9 +27,9 @@ async function seedTemplateLibrary() {
     process.exitCode = 1;
     return;
   }
-  console.log(`Validated ${TEMPLATE_LIBRARY_CONTENT.length} template_library entries — 0 errors.`);
+  console.log(`Validated ${TEMPLATE_LIBRARY_CONTENT.length} template_library entries - 0 errors.`);
 
-  // Best-effort attribution only — created_by_admin_id is nullable
+  // Best-effort attribution only - created_by_admin_id is nullable
   // (ON DELETE SET NULL) specifically so a missing/renamed demo admin never
   // blocks seeding real content.
   const demoAdmin = await adminUsersRepo.findByEmail(DEMO_ADMIN_EMAIL).catch(() => null);

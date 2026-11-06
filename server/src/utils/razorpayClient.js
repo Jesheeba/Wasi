@@ -1,5 +1,5 @@
 // Thin wrapper around the Razorpay Orders API. Requires a real Razorpay account
-// (RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET) — calls fail with a clear error otherwise.
+// (RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET) - calls fail with a clear error otherwise.
 const RAZORPAY_BASE = 'https://api.razorpay.com/v1';
 
 function assertConfigured() {
@@ -28,7 +28,7 @@ async function createOrder({ amountInPaise, currency = 'INR', receipt, notes }) 
   return data;
 }
 
-// Razorpay's Payment Links product — a shareable checkout URL, distinct from
+// Razorpay's Payment Links product - a shareable checkout URL, distinct from
 // the Orders API used for subscription checkout (billing.js). This is the
 // right primitive for "send a customer a link to pay ₹X" (Payments view /
 // wallet recharge), where Orders would need a client-side checkout widget.

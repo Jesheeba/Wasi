@@ -17,27 +17,27 @@ const router = Router();
 // Meta's raw error object (metaClient.js's graphFetch attaches it to a
 // thrown error as err.metaError) often carries a more specific,
 // human-readable explanation in error_user_title/error_user_msg than the
-// flat err.message alone — e.g. a words-ratio rejection's flat message can
+// flat err.message alone - e.g. a words-ratio rejection's flat message can
 // be as terse as "Invalid parameter", while error_user_msg spells out the
 // actual reason ("Params Words Ratio Exceeds Limit..."). Every route below
 // that surfaces a real Meta rejection uses this instead of err.message
 // directly, so app.js's toast (extractApiErrorDetail) shows the most
-// specific reason Meta actually gave, not a generic one — found live when
+// specific reason Meta actually gave, not a generic one - found live when
 // a client submitting a real template only saw a content-free rejection
 // popup because this route was passing along the terse message alone.
 function describeMetaError(err) {
   const meta = err.metaError;
   if (meta && (meta.error_user_title || meta.error_user_msg)) {
-    return [meta.error_user_title, meta.error_user_msg].filter(Boolean).join(' — ');
+    return [meta.error_user_title, meta.error_user_msg].filter(Boolean).join(' - ');
   }
   return err.message;
 }
 
-// Meta's own documented limits per header media type — now lives in
+// Meta's own documented limits per header media type - now lives in
 // mediaHeaderService.js (resolveMediaIdFromUrl needs the same limits to
 // validate a CRM-supplied URL), imported here rather than duplicated.
 const { MEDIA_HEADER_LIMITS } = mediaHeaderService;
-// Multer's own limit is set to the largest of the three (DOCUMENT) — the
+// Multer's own limit is set to the largest of the three (DOCUMENT) - the
 // per-type check above is what actually enforces the tighter IMAGE/VIDEO
 // caps with a specific error message; this is just a hard backstop.
 const uploadHeaderMedia = multer({
@@ -49,7 +49,7 @@ router.get('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (re
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
 }));
 
-// Shared between POST / (create) and PUT /:id (edit) — the same body/
+// Shared between POST / (create) and PUT /:id (edit) - the same body/
 // sample-value/header-text rules apply to a brand-new template and an
 // edited one. Media-header file checks stay in POST only: PUT's own schema
 // (messageTemplateUpdateSchema) restricts header.type to NONE/TEXT, so a
@@ -61,7 +61,7 @@ function validateStandardTemplateFields(data) {
     return { status: 400, body: { error: 'Invalid template body', details: bodyValidation.errors } };
   }
 
-  // Sample-value coverage is checked here, not in either schema — by this
+  // Sample-value coverage is checked here, not in either schema - by this
   // point bodyValidation.params is confirmed to be well-formed named
   // parameters (not numbered, not mixed), so "missing" can only mean an
   // actually-missing sample, not a numbered-param body producing a
@@ -72,7 +72,7 @@ function validateStandardTemplateFields(data) {
   if (missingSamples.length > 0) {
     return {
       status: 400,
-      body: { error: 'Missing sample values', details: [`Sample value required for: ${missingSamples.join(', ')} — Meta rejects templates without one.`] },
+      body: { error: 'Missing sample values', details: [`Sample value required for: ${missingSamples.join(', ')} - Meta rejects templates without one.`] },
     };
   }
 
@@ -86,7 +86,7 @@ function validateStandardTemplateFields(data) {
   return null;
 }
 
-// Manual "Sync" button on the templates page — reconciles against Meta's
+// Manual "Sync" button on the templates page - reconciles against Meta's
 // real template list on demand, not just automatically once after
 // Embedded Signup (onboarding.js). Returns counts rather than the app
 // silently re-fetching, so the UI can show what actually changed.
@@ -102,27 +102,27 @@ router.post('/sync', requireRole('Admin', 'Manager'), asyncHandler(async (req, r
   }
 }));
 
-// Submits to Meta for real approval when a WABA is connected — approval
+// Submits to Meta for real approval when a WABA is connected - approval
 // status then arrives asynchronously via the message_template_status_update
 // webhook (server/src/routes/metaWebhook.js), same as it does for templates
 // created directly in Meta Business Manager. Without a connected WABA yet,
 // still saves locally as 'pending' so template drafting isn't blocked on
 // onboarding order (spec allows connecting WhatsApp after initial signup)
-// — EXCEPT for a media header (IMAGE/VIDEO/DOCUMENT), which requires a
+// - EXCEPT for a media header (IMAGE/VIDEO/DOCUMENT), which requires a
 // connected WABA up front: the header's file has to be uploaded to Meta
 // immediately (both for the template's creation-time example handle and
-// for this app's own send-time media-id cache — see mediaHeaderService.js),
+// for this app's own send-time media-id cache - see mediaHeaderService.js),
 // and there's nowhere to hold the file for later since this isn't a media
 // library (see migration 028_template_media_cache.js's comment). A media
 // template just can't be meaningfully drafted before WhatsApp is connected.
 //
 // multer.single('headerFile') is a no-op for a plain JSON request (no
-// multipart body) — req.file stays undefined and req.body is whatever
+// multipart body) - req.file stays undefined and req.body is whatever
 // express.json() already parsed, so the TEXT/NONE-header path below is
 // completely unchanged. A media-header request instead sends the JSON
 // payload as a 'data' form field (JSON.stringify'd, since a template's
 // buttons/bodyParamExamples don't fit as flat multipart fields) alongside
-// the file — see app.js's createTemplate submit handler.
+// the file - see app.js's createTemplate submit handler.
 router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('headerFile'), asyncHandler(async (req, res) => {
   let rawBody = req.body;
   if (req.file) {
@@ -170,20 +170,20 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
   if (isMediaHeader && (!waba || waba.status !== 'connected' || !waba.access_token_encrypted)) {
     return res.status(400).json({
       error: 'Connect WhatsApp first',
-      detail: 'An image, video, or document header needs to be uploaded to your connected WhatsApp number — connect WhatsApp before creating this template.',
+      detail: 'An image, video, or document header needs to be uploaded to your connected WhatsApp number - connect WhatsApp before creating this template.',
     });
   }
 
   let metaTemplateId = null;
-  let seededMedia = null; // { mediaId, filename } — set once the standard Media API upload succeeds
+  let seededMedia = null; // { mediaId, filename } - set once the standard Media API upload succeeds
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
-    // Checked first, before touching the access token at all — a pure
+    // Checked first, before touching the access token at all - a pure
     // local-DB read, no Meta call needed (see messageTemplatesRepo.
     // findActiveByNameAndLanguage's comment). Meta scopes template
     // uniqueness to (name, language) per WABA, not name alone; a second
     // submission under a combination Meta already has something for
-    // doesn't get cleanly rejected there — it queues for review and can
+    // doesn't get cleanly rejected there - it queues for review and can
     // sit unresolved far longer than normal (confirmed live: 20+ hours
     // pending against an already-approved same-name-and-language
     // template). Caught here instead of discovered a day later.
@@ -191,37 +191,37 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
     if (collisions.length > 0) {
       const existing = collisions[0];
       return res.status(409).json({
-        error: `A template named "${data.name}" in ${data.language} already exists on this WhatsApp number (currently ${existing.status}) — WhatsApp treats name+language as one slot, so a second submission under the same combination won't be cleanly rejected, it'll sit in review indefinitely instead. Use a different name, or remove the existing one first.`,
+        error: `A template named "${data.name}" in ${data.language} already exists on this WhatsApp number (currently ${existing.status}) - WhatsApp treats name+language as one slot, so a second submission under the same combination won't be cleanly rejected, it'll sit in review indefinitely instead. Use a different name, or remove the existing one first.`,
       });
     }
 
     // Decryption failure is a distinct error class from Meta rejecting the
-    // template — it means the request never reached Meta at all (wrong
+    // template - it means the request never reached Meta at all (wrong
     // SERVER_SECRET for this row's ciphertext, or a corrupted value).
     // Lumping it into "Meta rejected this template" is actively
-    // misleading — it sends someone hunting for a content problem that
+    // misleading - it sends someone hunting for a content problem that
     // doesn't exist, when the real fix is a key/env mismatch.
     let accessToken;
     try {
       accessToken = decrypt(waba.access_token_encrypted);
     } catch (err) {
       return res.status(500).json({
-        error: 'Could not decrypt this WABA\'s access token — the request never reached Meta',
+        error: 'Could not decrypt this WABA\'s access token - the request never reached Meta',
         detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token (a secret rotation, or a mismatch between local and production config).',
       });
     }
 
     // Releases the tenant DB connection before the first Meta call and
-    // reacquires one only once every Meta round trip below is done — up to
+    // reacquires one only once every Meta round trip below is done - up to
     // 4 sequential Graph API calls for a media header (createUploadSession/
     // uploadFileBytes/uploadMedia/createMessageTemplate), each of which can
     // take seconds. Without this, this one request pins one of the pool's
-    // few connections idle-in-transaction for that whole time — the same
+    // few connections idle-in-transaction for that whole time - the same
     // reasoning routes/chats.js's send already documented and fixed
     // (messagingService.sendChatMessage's connectionHooks), never applied
     // here even though this route makes more Meta calls per request than
     // any other tenant route. A failure path below returns straight from
-    // here with no further req.db use, so it needs no reacquire — only the
+    // here with no further req.db use, so it needs no reacquire - only the
     // success path (past both try blocks) does, right before the local
     // writes.
     await req.commitAndRelease();
@@ -233,10 +233,10 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
       const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[req.file.mimetype];
       try {
         // Two separate Meta uploads from the same bytes, both required, both
-        // done now — never deferred (handle lifetime is undocumented, see
+        // done now - never deferred (handle lifetime is undocumented, see
         // the media-header investigation). 1) the Resumable Upload API
         // handle Meta requires as the template's creation-time example.
-        // 2) the standard Media API id this app will actually send with —
+        // 2) the standard Media API id this app will actually send with -
         // resolved and cached now so day-one sending works without a second
         // round of uploads.
         const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
@@ -256,7 +256,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
     }
 
     try {
-      // { id, status, category } — capture the id now (templateSyncService.js's
+      // { id, status, category } - capture the id now (templateSyncService.js's
       // reconcile matches by it going forward) rather than leaving it to the
       // next sync to backfill by name.
       const metaResponse = await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
@@ -269,11 +269,11 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
     }
   }
 
-  // Only reached once every Meta call above has already returned — a fresh
+  // Only reached once every Meta call above has already returned - a fresh
   // connection is acquired here rather than reusing one held open through
   // those calls (see the commitAndRelease comment above). No-op (keeps the
   // original still-open connection) when the waba-connected branch above
-  // was never entered at all — a draft with no WABA connected made no Meta
+  // was never entered at all - a draft with no WABA connected made no Meta
   // calls and never released anything.
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
     req.db = await req.reacquireDb();
@@ -290,11 +290,11 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
     await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, seededMedia);
   }
 
-  // Non-blocking — the CRM's own Create/Edit modal already shows this live
+  // Non-blocking - the CRM's own Create/Edit modal already shows this live
   // as the client types (see app.js's updateTemplateBodyValidation); this
   // covers every OTHER caller (Hub API, a script, anything that bypasses
   // that UI) with the same signal, on the same real-rejection evidence
-  // (templateParams.js's own comment). Never withholds the 201 — the
+  // (templateParams.js's own comment). Never withholds the 201 - the
   // template was already genuinely submitted to Meta by this point.
   const categoryCheck = checkCategoryContentMismatch(data.body, data.category);
   res.status(201).json(categoryCheck.mismatch ? { ...template, warnings: [categoryCheck.warning] } : template);
@@ -304,7 +304,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
 // point at instead of the template's approval-time default sample (see
 // templateMediaCacheRepo.insertAsset / migration 030_template_media_assets.js).
 // Reused by the chat send-template modal, the broadcast-creation modal, and
-// the flow editor's Send Template node — all three just need { id, filename }
+// the flow editor's Send Template node - all three just need { id, filename }
 // back to attach to their own send/create call as headerMediaAssetId.
 router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('file'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
@@ -312,7 +312,7 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
   if (!template) return res.status(404).json({ error: 'Not found' });
   if (!mediaHeaderService.isMediaHeaderType(template.header_type)) {
     return res.status(400).json({
-      error: `"${template.name}" does not have a media header — only IMAGE/VIDEO/DOCUMENT header templates accept uploaded media.`,
+      error: `"${template.name}" does not have a media header - only IMAGE/VIDEO/DOCUMENT header templates accept uploaded media.`,
     });
   }
 
@@ -352,7 +352,7 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
     });
   }
 
-  // Same reasoning as POST /'s commitAndRelease — don't pin a tenant
+  // Same reasoning as POST /'s commitAndRelease - don't pin a tenant
   // connection idle-in-transaction for this Meta upload call.
   await req.commitAndRelease();
 
@@ -366,13 +366,13 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
   req.db = await req.reacquireDb();
 
   // Recommended (not required) by Meta for a document header send, same as
-  // the approval-time seed in the POST / handler above — null for IMAGE/VIDEO.
+  // the approval-time seed in the POST / handler above - null for IMAGE/VIDEO.
   const filename = template.header_type === 'DOCUMENT' ? (req.file.originalname || null) : null;
   const asset = await templateMediaCacheRepo.insertAsset(req.db, req.clientId, template.id, { mediaId: uploaded.id, filename });
   res.status(201).json({ id: asset.id, filename: asset.filename });
 }));
 
-// Lists every media row for a template, default first — the New Campaign
+// Lists every media row for a template, default first - the New Campaign
 // modal's existing-asset picker (and any future caller) uses this instead
 // of only ever being able to upload a brand new file, which was the only
 // option before: a template synced in from Meta, or one with successfully
@@ -387,10 +387,10 @@ router.get('/:id/header-media', requireRole('Admin', 'Manager', 'Agent'), asyncH
 }));
 
 // Promotes an existing, already-uploaded asset to be this template's
-// default — the fallback a plain send/broadcast resolves when no specific
+// default - the fallback a plain send/broadcast resolves when no specific
 // headerMediaAssetId is given (mediaHeaderService.resolveMediaId). Needed
 // because POST /:id/header-media above always inserts a new NON-default
-// asset (insertAsset) — there was previously no path at all to promote one.
+// asset (insertAsset) - there was previously no path at all to promote one.
 router.post('/:id/header-media/:assetId/default', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   uuid.parse(req.params.assetId);
@@ -401,24 +401,24 @@ router.post('/:id/header-media/:assetId/default', requireRole('Admin', 'Manager'
   res.json({ id: updated.id, filename: updated.filename, isDefault: updated.is_default });
 }));
 
-// Edits an existing template's content — body/header[NONE|TEXT only]/
+// Edits an existing template's content - body/header[NONE|TEXT only]/
 // footer/buttons/samples, or auth_options for Authentication. name/
 // category/language are fixed once a template exists (Meta's own edit
-// endpoint doesn't accept them either — they're what identifies the
+// endpoint doesn't accept them either - they're what identifies the
 // template in the first place). Two real states this acts on:
-//  - meta_template_id set, not orphaned: the template is live on Meta —
+//  - meta_template_id set, not orphaned: the template is live on Meta -
 //    this calls Meta's real "edit message template" endpoint, which
 //    re-reviews the NEW content while the OLD approved content keeps
-//    sending in the meantime (Meta's own documented behavior) — unlike
+//    sending in the meantime (Meta's own documented behavior) - unlike
 //    delete + recreate, there's no gap where the template is unsendable.
 //  - no meta_template_id at all (a draft never submitted): pure local
-//    edit, no Meta call — same as editing any other not-yet-submitted
+//    edit, no Meta call - same as editing any other not-yet-submitted
 //    draft would be.
-// An orphaned row (was live, Meta no longer has it — see markOrphaned's
+// An orphaned row (was live, Meta no longer has it - see markOrphaned's
 // comment) is rejected: there's nothing left on Meta to edit, and quietly
 // re-creating it here would blur this route with POST /'s own job.
 // Delete + recreate (DELETE /:id, then POST /) is still the path for that
-// case, and for changing a template's media header — both explicitly out
+// case, and for changing a template's media header - both explicitly out
 // of scope for this route for now.
 router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
@@ -427,8 +427,8 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
 
   if (template.orphaned_at) {
     return res.status(400).json({
-      error: 'Cannot edit — no longer on Meta',
-      detail: 'This template is no longer live on Meta (see the "not found on Meta" note on its card) — there\'s nothing there to edit. Delete it and create a fresh one instead.',
+      error: 'Cannot edit - no longer on Meta',
+      detail: 'This template is no longer live on Meta (see the "not found on Meta" note on its card) - there\'s nothing there to edit. Delete it and create a fresh one instead.',
     });
   }
 
@@ -437,7 +437,7 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
   if (template.category === 'Authentication') {
     if (data.body || data.header || data.footer || data.buttons) {
       return res.status(400).json({
-        error: 'Authentication templates cannot have a custom body, header, footer, or buttons — Meta generates that text automatically.',
+        error: 'Authentication templates cannot have a custom body, header, footer, or buttons - Meta generates that text automatically.',
       });
     }
   } else {
@@ -449,7 +449,7 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
   }
 
   // buildTemplateCreatePayload (used by metaClient.updateMessageTemplate)
-  // needs the full shape it already validates for create — name/category/
+  // needs the full shape it already validates for create - name/category/
   // language come from the existing row since the edit schema doesn't
   // carry them at all.
   const templateData = { ...data, name: template.name, category: template.category, language: template.language };
@@ -459,7 +459,7 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
     if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
       return res.status(400).json({
         error: 'Cannot edit on Meta',
-        detail: 'This template is live on Meta, but WhatsApp isn\'t connected right now — reconnect before editing.',
+        detail: 'This template is live on Meta, but WhatsApp isn\'t connected right now - reconnect before editing.',
       });
     }
 
@@ -473,7 +473,7 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
       });
     }
 
-    // Same reasoning as POST /'s commitAndRelease — this Meta edit call can
+    // Same reasoning as POST /'s commitAndRelease - this Meta edit call can
     // take seconds; don't pin a tenant connection idle-in-transaction for
     // it. A rejection below returns straight away with no further req.db
     // use, so only the success path needs to reacquire before updateContent.
@@ -492,18 +492,18 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
   }
 
   const updated = await messageTemplatesRepo.updateContent(req.db, req.clientId, template.id, templateData);
-  // Same non-blocking signal as POST /'s — see that route's comment.
+  // Same non-blocking signal as POST /'s - see that route's comment.
   const categoryCheck = checkCategoryContentMismatch(templateData.body, templateData.category);
   res.json(categoryCheck.mismatch ? { ...updated, warnings: [categoryCheck.warning] } : updated);
 }));
 
-// Deletes a template — on Meta first (when it was ever submitted there),
+// Deletes a template - on Meta first (when it was ever submitted there),
 // then the local row, so the two never diverge (a client-visible "deleted"
 // template still sitting live on Meta, sendable from Business Manager).
 // meta_template_id is only null for a local draft never submitted (no WABA
-// connected yet at creation) — nothing to delete on Meta's side for that
+// connected yet at creation) - nothing to delete on Meta's side for that
 // case. orphaned_at means Meta already doesn't have it (confirmed by a
-// prior sync — see templateSyncService.js), so the Meta call is skipped
+// prior sync - see templateSyncService.js), so the Meta call is skipped
 // there too rather than erroring on a template that's already gone.
 router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
@@ -515,7 +515,7 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
     if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) {
       return res.status(400).json({
         error: 'Cannot delete on Meta',
-        detail: 'This template was submitted to Meta, but WhatsApp isn\'t connected right now — reconnect before deleting so it isn\'t left behind live on Meta.',
+        detail: 'This template was submitted to Meta, but WhatsApp isn\'t connected right now - reconnect before deleting so it isn\'t left behind live on Meta.',
       });
     }
 
@@ -531,7 +531,7 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
 
     // Same reasoning as POST /'s commitAndRelease. Reacquire happens once,
     // after the try/catch, regardless of whether the Meta call succeeded or
-    // was the "already gone" caught-and-ignored case — both fall through to
+    // was the "already gone" caught-and-ignored case - both fall through to
     // the same local delete below and need a live connection for it; only
     // the real-rejection path returns early with no further req.db use.
     await req.commitAndRelease();
@@ -540,7 +540,7 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
       await metaClient.deleteMessageTemplate(waba.waba_id, accessToken, template.name, template.meta_template_id);
     } catch (err) {
       // Meta errors out if the template is already gone there (deleted
-      // directly in Business Manager since the last sync) — treated as
+      // directly in Business Manager since the last sync) - treated as
       // success rather than blocking the local delete on a template that
       // no longer exists to delete.
       const alreadyGone = /does not exist|cannot be found|no longer exists/i.test(err.message || '');

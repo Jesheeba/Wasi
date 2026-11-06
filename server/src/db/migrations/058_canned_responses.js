@@ -1,6 +1,6 @@
-// PLAN.md item 4 — canned responses (`/slash` commands). Reusable
+// PLAN.md item 4 - canned responses (`/slash` commands). Reusable
 // shortcut -> message-body snippets, autocompleted in the chat input.
-// Independent of items 2/3 structurally (no FK to chats/team_members) —
+// Independent of items 2/3 structurally (no FK to chats/team_members) -
 // only depends on item 1 for role gating at the route layer. Same
 // tenant-table treatment as every other client-scoped table (migration
 // 013's pattern): RLS enabled+forced, full CRUD granted to wasi_app.
@@ -30,7 +30,7 @@ exports.up = (pgm) => {
 };
 
 exports.down = async (pgm) => {
-  // Same discipline as migrations 032/036/039/040/046's down()s — a real
+  // Same discipline as migrations 032/036/039/040/046's down()s - a real
   // client's saved shortcuts could exist by the time a rollback runs on
   // this shared database.
   const [{ count }] = await pgm.db.select('select count(*)::int as count from canned_responses');

@@ -1,6 +1,6 @@
 // Real production bug, fixed: server/src/routes/apiV1Messages.js used to
 // hardcode templateLanguage: 'en_US' for every Hub API template send,
-// regardless of what language the template was actually approved under —
+// regardless of what language the template was actually approved under -
 // Meta rejects a send whose language doesn't match the real approved
 // (name, language) pair, so any client with a non-en_US template (found via
 // a real, read-only production check: Sirah Digital and Wasi Demo Client
@@ -11,7 +11,7 @@
 // same lookup routes/broadcasts.js already uses for this purpose) instead
 // of guessing.
 //
-// Own dedicated disposable test client, not reused from apiV1.test.js —
+// Own dedicated disposable test client, not reused from apiV1.test.js -
 // that file's own test ordering is explicitly documented as fragile
 // (later tests depend on this shared client's plan-limit state carrying
 // over from earlier ones), so this stays fully independent rather than
@@ -63,7 +63,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const created = await fetch(`${baseUrl}/api/admin/api-keys`, {
     method: 'POST',
@@ -88,12 +88,12 @@ after(async () => {
 });
 
 test('1. a template approved under a non-en_US language sends to Meta with that REAL language, not a hardcoded en_US', async () => {
-  // Stubbed BEFORE any call that could reach Meta — template CREATION
+  // Stubbed BEFORE any call that could reach Meta - template CREATION
   // (routes/templates.js's POST /) calls Meta's real create-template
   // endpoint too, not just the message send below. An earlier draft of
   // this test set the stub up after that call and a real unstubbed POST
   // reached graph.facebook.com for real (confirmed by a real Meta-shaped
-  // OAuth rejection, with a real fbtrace_id, coming back) — a genuine
+  // OAuth rejection, with a real fbtrace_id, coming back) - a genuine
   // violation of "never call a Meta write endpoint," caught and fixed
   // immediately, not left in place.
   const originalFetch = global.fetch;
@@ -104,7 +104,7 @@ test('1. a template approved under a non-en_US language sends to Meta with that 
       capturedSendRequest = { url: String(url), body: JSON.parse(options.body) };
       return { ok: true, status: 200, json: async () => ({ messages: [{ id: `wamid.${SUITE_PREFIX}sent` }] }) };
     }
-    // Template-creation call (.../message_templates) — real shape per
+    // Template-creation call (.../message_templates) - real shape per
     // metaClient.js's createMessageTemplate, not asserted on here.
     return { ok: true, status: 200, json: async () => ({ id: `${SUITE_PREFIX}meta_template_id`, status: 'APPROVED', category: 'UTILITY' }) };
   };

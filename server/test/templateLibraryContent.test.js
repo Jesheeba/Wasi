@@ -1,9 +1,9 @@
-// Pure-function content validation — deliberately doesn't import pool.js/
+// Pure-function content validation - deliberately doesn't import pool.js/
 // app.js (same reasoning as dbSafety.test.js and apiV1ErrorHandler.test.js:
 // no DB/server needed), so it runs with no DATABASE_URL guard involved and
 // gives fast, unambiguous feedback the moment content.js changes. This is
 // the actual enforcement of wasi-master-plan.md §2.3's "every template
-// manually checked against Meta's real rejection reasons" — running the
+// manually checked against Meta's real rejection reasons" - running the
 // same validateTemplateText/validateHeaderText functions the real
 // submission flow uses, not a hand-eyeballed claim.
 const { test } = require('node:test');
@@ -24,7 +24,7 @@ test('this content batch covers exactly the 3 planned industries with 12 templat
   assert.equal(TEMPLATE_LIBRARY_CONTENT.length, 36);
 });
 
-test('every entry has a unique (industry, use_case) pair — matches the DB unique constraint (migration 037)', () => {
+test('every entry has a unique (industry, use_case) pair - matches the DB unique constraint (migration 037)', () => {
   const keys = TEMPLATE_LIBRARY_CONTENT.map((t) => `${t.industry}::${t.use_case}`);
   assert.equal(new Set(keys).size, keys.length);
 });
@@ -35,7 +35,7 @@ test('every entry spans a real Meta category and none silently defaults to an un
     assert.ok(['Marketing', 'Utility', 'Authentication'].includes(c), `unexpected category: ${c}`);
   }
   // Every industry must span more than one category (per §2.3's "spanning
-  // all relevant Meta categories") — not just a pile of Utility templates.
+  // all relevant Meta categories") - not just a pile of Utility templates.
   for (const industry of ['E-commerce', 'Healthcare', 'General/Other']) {
     const industryCategories = new Set(TEMPLATE_LIBRARY_CONTENT.filter((t) => t.industry === industry).map((t) => t.category));
     assert.ok(industryCategories.size >= 2, `${industry} should span more than one Meta category, got: ${[...industryCategories]}`);
@@ -62,7 +62,7 @@ test('every named param in every body has a real (non-empty, non-placeholder-loo
   }
 });
 
-test('no template body overclaims Meta approval ("guaranteed approved" language) — §2.6', () => {
+test('no template body overclaims Meta approval ("guaranteed approved" language) - §2.6', () => {
   const overclaimPattern = /guaranteed\s*(to\s*be\s*)?approv|100%\s*approv|always\s*approv/i;
   for (const entry of TEMPLATE_LIBRARY_CONTENT) {
     assert.doesNotMatch(entry.body || '', overclaimPattern, `${entry.industry}/${entry.use_case} body overclaims approval`);

@@ -1,4 +1,4 @@
-// UI/UX consistency pass, Group 4 — 3 modals each hardcoded their own
+// UI/UX consistency pass, Group 4 - 3 modals each hardcoded their own
 // literal inline max-height for a bounded-height region NESTED inside an
 // already-scrolling .modal-box (a contact search results list, a template
 // picker list, an activity timeline): 220px, 260px, 280px, three one-off
@@ -107,7 +107,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
     // Opened directly rather than via the real trigger button: at mobile
     // widths the fixed-position hamburger toggle overlaps both
     // #new-conversation-trigger and #start-new-chat-btn (a real, separate,
-    // pre-existing layout bug in the Chat view — same class as CLAUDE.md's
+    // pre-existing layout bug in the Chat view - same class as CLAUDE.md's
     // documented .page-title-bar overlap, not something Group 4 is scoped
     // to fix). What this test actually checks is the inner-scroll CSS
     // resolution once the modal is open, not the click-to-open interaction
@@ -118,7 +118,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
     await page.waitForTimeout(300);
 
     // Both elements exist in the DOM once the modal opens, regardless of
-    // which step is currently visible — checking computed style doesn't
+    // which step is currently visible - checking computed style doesn't
     // require them to be shown, only that the CSS variable resolved.
     await assertInnerScroll(page.locator('#new-conversation-contact-results'), 220);
     await assertInnerScroll(page.locator('#new-conversation-template-list'), 280);

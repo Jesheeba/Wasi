@@ -1,13 +1,13 @@
 // Hub API v1's unified error-response shape ({ error: { code, message } },
 // wasi-master-plan.md §8.6) and rate-limit visibility headers
 // (middleware/rateLimit.js's apiLimiter). Same dedicated-disposable-test-
-// client pattern as apiV1.test.js/apiV1Reads.test.js — see those files'
+// client pattern as apiV1.test.js/apiV1Reads.test.js - see those files'
 // before()/after() comments for why a throwaway client (never the demo
 // one) is used and deleted after.
 //
 // Every individual error branch this file checks (404s, the auth failures,
 // the client_id mismatch, an unmatched /api/v1/* path) was already covered
-// for status code by apiV1.test.js/apiV1Reads.test.js before this change —
+// for status code by apiV1.test.js/apiV1Reads.test.js before this change -
 // this file adds the one thing those didn't check: that the *shape* wrapping
 // each of those statuses is now consistently { error: { code, message } }
 // rather than the five different ad-hoc shapes routes/apiV1*.js used to
@@ -77,7 +77,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const created = await fetch(`${baseUrl}/api/admin/api-keys`, {
     method: 'POST',
@@ -207,10 +207,10 @@ test('GET /api/v1/conversations/:id/messages for a real chat still 200s with the
 test('exceeding the 300/min ceiling returns a real 429 in the same { error: { code: rate_limited, message } } shape', async () => {
   // apiLimiter's in-memory store is created fresh per createApp() call
   // (rateLimit.js is required once per test-runner process, and node --test
-  // runs each file in its own process) — this file's own earlier requests
+  // runs each file in its own process) - this file's own earlier requests
   // already count against the 300 budget, so top up to comfortably past it
   // rather than assuming a full fresh bucket. Sent in modest concurrent
-  // batches, not all 320+ at once — firing them all simultaneously
+  // batches, not all 320+ at once - firing them all simultaneously
   // overwhelms the local test server's own connection backlog (ECONNREFUSED)
   // well before the rate limiter itself ever gets a chance to reject one.
   const results = [];

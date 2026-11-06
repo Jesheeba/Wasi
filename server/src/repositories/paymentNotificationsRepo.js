@@ -21,7 +21,7 @@ async function record(row) {
 }
 
 // Called from metaWebhook.js's handleStatuses for every status Meta sends.
-// A no-op (null) for any message id that isn't one of ours — the common case.
+// A no-op (null) for any message id that isn't one of ours - the common case.
 async function updateStatusByMetaId(metaMessageId, status, errorMessage) {
   if (status !== 'failed' && !RANK[status]) return null;
   const { rows: existing } = await pool.query(

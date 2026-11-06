@@ -1,8 +1,8 @@
-// PLAN.md item 5.5 — real-browser coverage for the combined UI pass across
+// PLAN.md item 5.5 - real-browser coverage for the combined UI pass across
 // items 1-5 (team login/invite, chat assign/resolve/reopen, internal
 // notes, canned responses, SLA tab visibility), matching this repo's
 // established Playwright pattern (templateLibraryUI.test.js is the
-// original precedent — same fixed :4000 port + ALLOWED_ORIGINS override,
+// original precedent - same fixed :4000 port + ALLOWED_ORIGINS override,
 // same dedicated-disposable-test-client convention, same explicit
 // waitForTimeout after a login submit rather than trusting element-visible
 // auto-wait). This is the first Playwright file to drive TWO simultaneous
@@ -95,7 +95,7 @@ test('2. accept-team-invite.html sets a password, auto-logs in, and lands on the
   await agentPage.fill('#new-password', PASSWORD);
   await agentPage.click('#invite-submit');
   // Real redirect (setTimeout(...,1200) in the page's own script), not an
-  // instant navigation — wait for it rather than racing it.
+  // instant navigation - wait for it rather than racing it.
   await agentPage.waitForURL(/index\.html/, { timeout: 5000 });
   await agentPage.waitForTimeout(1500);
 
@@ -135,7 +135,7 @@ test('4. queue tabs + resolve/reopen: a chat can be resolved and reopened from t
   badgeText = await ownerPage.$eval('#chat-status-badge', (el) => el.textContent);
   assert.equal(badgeText, 'Open');
 
-  // Real server state, not just optimistic UI — confirms the click really
+  // Real server state, not just optimistic UI - confirms the click really
   // reached POST /:id/resolve and /:id/reopen.
   const serverChat = await fetch(`${baseUrl}/api/chats/${chat.id}`, { headers: authed(ownerToken) }).then((r) => r.json());
   assert.equal(serverChat.status, 'open');
@@ -149,7 +149,7 @@ test('5. assigning a chat to the team member makes it appear in THEIR "Mine" que
   await ownerPage.click(`[data-chat-id="${chat.id}"]`);
   await ownerPage.waitForTimeout(300);
 
-  // No test hook exists for reading state.actorId from outside the page —
+  // No test hook exists for reading state.actorId from outside the page -
   // fetch the real id the same way the assign <select> itself was
   // populated from (the team roster), matching by the known unique name.
   const roster = await fetch(`${baseUrl}/api/team-members`, { headers: authed(ownerToken) }).then((r) => r.json());
@@ -232,11 +232,11 @@ test('8. SLA tab: visible for the owner, hidden for the Agent-role team member e
 
   // The Analytics nav item itself is now hidden for an Agent (this
   // follow-up's own change), so it can't be reached by clicking it the way
-  // the owner's check above does — reaching it via a direct hash
+  // the owner's check above does - reaching it via a direct hash
   // navigation instead proves the SLA sub-tab's OWN gate still holds as a
   // real defense-in-depth layer, not just "the nav item happens to be
   // hidden" (switchView restores whatever view a hash names, unconditionally
-  // of nav visibility — see enterApp's own hash-restore logic).
+  // of nav visibility - see enterApp's own hash-restore logic).
   await agentPage.evaluate(() => { location.hash = '#analytics'; });
   await agentPage.reload();
   await agentPage.waitForTimeout(1200);
@@ -260,11 +260,11 @@ test('9. top-level nav: Campaigns/Template Library/Automation/Analytics are hidd
       const el = document.querySelector(`.nav-item[data-view="${v}"]`);
       return el && getComputedStyle(el).display !== 'none';
     }, view);
-    assert.ok(!visibleForAgent, `Agent must not see the ${view} nav item — its API is Admin/Manager only`);
+    assert.ok(!visibleForAgent, `Agent must not see the ${view} nav item - its API is Admin/Manager only`);
   }
 
   // Template itself (as opposed to Template Library) stays visible for an
-  // Agent — GET /api/templates is Agent-reachable, only create/edit/delete
+  // Agent - GET /api/templates is Agent-reachable, only create/edit/delete
   // are restricted, and those controls live inside the view, not the nav.
   const templateVisibleForAgent = await agentPage.evaluate(() => {
     const el = document.querySelector('.nav-item[data-view="template"]');
@@ -273,7 +273,7 @@ test('9. top-level nav: Campaigns/Template Library/Automation/Analytics are hidd
   assert.ok(templateVisibleForAgent, 'Template (not Template Library) must stay visible for an Agent');
 });
 
-// PLAN.md item 6 — contacts CSV import, frontend built alongside the
+// PLAN.md item 6 - contacts CSV import, frontend built alongside the
 // backend (not deferred to a later combined pass, unlike items 1-5).
 test('10. contacts CSV import: uploading a real file via the Contacts view creates real contacts and reports the count', async () => {
   await ownerPage.click('.nav-item[data-view="contacts"]');
@@ -298,7 +298,7 @@ test('10. contacts CSV import: uploading a real file via the Contacts view creat
   assert.ok(rowVisible, 'an imported contact must actually render in the Contacts table, not just report a count');
 });
 
-// PLAN.md item 7 — per-contact custom attribute values, frontend built
+// PLAN.md item 7 - per-contact custom attribute values, frontend built
 // alongside the backend. Real chat drawer, real save round-trip.
 test('11. contact attributes: the Chat drawer\'s Attributes section saves a real value and reloads it', async () => {
   const attr = await fetch(`${baseUrl}/api/contact-attributes`, {
@@ -321,7 +321,7 @@ test('11. contact attributes: the Chat drawer\'s Attributes section saves a real
   assert.ok(chat.id, 'chat creation via contact_id must succeed');
 
   // state.contactAttributes (definitions) is loaded once at session start
-  // (loadInitialData) — the attribute just created above via a direct API
+  // (loadInitialData) - the attribute just created above via a direct API
   // call wouldn't be in the already-running owner session's state without
   // this reload, same reasoning as any other test here that mutates data
   // out-of-band before checking the UI reflects it.
@@ -354,13 +354,13 @@ test('11. contact attributes: the Chat drawer\'s Attributes section saves a real
   assert.equal(reloadedValue, 'Mumbai');
 });
 
-// Follow-up fix (2026-09-03) — teamMembers/cannedResponses/contactAttributes
+// Follow-up fix (2026-09-03) - teamMembers/cannedResponses/contactAttributes
 // used to only ever load once at session start, so an agent's tab left
 // open on Chat all day would never see something another admin added
 // elsewhere without a full page reload (every other test in this file that
 // exercises one of these three does an explicit ownerPage.reload() to work
 // around exactly this, e.g. test 7 above). This test deliberately does NOT
-// reload — it proves switchView('chat') itself now refetches all three, by
+// reload - it proves switchView('chat') itself now refetches all three, by
 // creating a brand-new attribute out-of-band (a direct API call, standing
 // in for a different admin/tab) while the owner's page is sitting on a
 // different view, then switching into Chat and checking the drawer without
@@ -385,7 +385,7 @@ test('12. teamMembers/cannedResponses/contactAttributes refresh on switching int
   }).then((r) => r.json());
   assert.ok(chat.id);
 
-  // No ownerPage.reload() here — this is the point of the test.
+  // No ownerPage.reload() here - this is the point of the test.
   await ownerPage.click('.nav-item[data-view="chat"]');
   await ownerPage.waitForTimeout(700);
   await ownerPage.click(`[data-chat-id="${chat.id}"]`);
@@ -395,7 +395,7 @@ test('12. teamMembers/cannedResponses/contactAttributes refresh on switching int
   assert.match(label, new RegExp(`${SUITE_PREFIX}NoReloadAttr`), 'an attribute defined elsewhere must appear after switching into Chat, with no reload');
 });
 
-// PLAN.md item 8 — multi-tag contacts, frontend built alongside the
+// PLAN.md item 8 - multi-tag contacts, frontend built alongside the
 // backend. Real chat drawer, additive to the existing single primary tag.
 test('13. contact tags: the Chat drawer\'s additive multi-tag picker attaches and detaches a real tag', async () => {
   const tag = await fetch(`${baseUrl}/api/tags`, {
@@ -422,7 +422,7 @@ test('13. contact tags: the Chat drawer\'s additive multi-tag picker attaches an
 
   // CLAUDE.md's own documented convention: selectOption()'s actionability
   // polling has proven unreliable against this app under real backend
-  // latency — set the <select> value directly and dispatch a real change
+  // latency - set the <select> value directly and dispatch a real change
   // event instead (templateLibraryUI.test.js's setFilter() precedent).
   await ownerPage.evaluate((tagId) => {
     const select = document.getElementById('drawer-add-tag-select');
@@ -447,12 +447,12 @@ test('13. contact tags: the Chat drawer\'s additive multi-tag picker attaches an
   assert.equal(contactAfter.tag_id, null, 'the additive picker must never set the primary tag_id');
 });
 
-// PLAN.md item 8.5 — Contacts-view contact detail panel, the second caller
+// PLAN.md item 8.5 - Contacts-view contact detail panel, the second caller
 // of the generalized renderContactAttributesInto/renderContactTagsInto
 // (app.js). Proves real reuse, not a parallel re-implementation: edits made
 // from the Contacts-view panel persist server-side via the exact same
-// endpoints items 7/8's drawer tests (11, 13) already cover, and — the
-// point of this test — the SAME edit is then visible from the Chat drawer
+// endpoints items 7/8's drawer tests (11, 13) already cover, and - the
+// point of this test - the SAME edit is then visible from the Chat drawer
 // too, confirming both surfaces read/write the identical data, not two
 // diverging copies.
 test('14. Contacts-view detail panel: clicking a row opens it, edits to tags and attributes persist, and the Chat drawer shows the same data', async () => {
@@ -494,7 +494,7 @@ test('14. Contacts-view detail panel: clicking a row opens it, edits to tags and
   await ownerPage.dispatchEvent(`#contact-detail-attributes .contact-attr-input[data-attribute-id="${attr.id}"]`, 'change');
   await ownerPage.waitForTimeout(500);
 
-  // Add a tag from the panel — same setValue+dispatch pattern as test 13,
+  // Add a tag from the panel - same setValue+dispatch pattern as test 13,
   // scoped to the panel's own select this time (both share the
   // .contact-tags-select class, so scoping matters here).
   await ownerPage.evaluate((tagId) => {
@@ -509,7 +509,7 @@ test('14. Contacts-view detail panel: clicking a row opens it, edits to tags and
   const savedTags = await fetch(`${baseUrl}/api/contacts/${contact.id}/tags`, { headers: authed(ownerToken) }).then((r) => r.json());
   assert.ok(savedTags.tags.some((t) => t.id === tag.id), 'the tag added from the panel must persist server-side');
 
-  // Close the panel, open the SAME contact via the Chat drawer instead —
+  // Close the panel, open the SAME contact via the Chat drawer instead -
   // it must show the identical data just entered through the panel, not a
   // stale or diverging copy.
   await ownerPage.click('#modal-contact-detail [data-close-modal]');
@@ -525,9 +525,9 @@ test('14. Contacts-view detail panel: clicking a row opens it, edits to tags and
   assert.match(drawerTagsText, new RegExp(`${SUITE_PREFIX}PanelTag`), 'the Chat drawer must show the same tag the panel just attached');
 });
 
-// PLAN.md item 10 — Contact 360 activity timeline. Backend correctness
+// PLAN.md item 10 - Contact 360 activity timeline. Backend correctness
 // (interleaving, exclusions) is contactTimeline.test.js's job; this is the
-// one thing only a real browser can show — that the Contacts-view detail
+// one thing only a real browser can show - that the Contacts-view detail
 // panel (item 8.5) actually renders the real endpoint's events.
 test('15. Contact 360 timeline: the detail panel\'s Activity section renders real events, newest first', async () => {
   const phone = `9175${Date.now()}`.slice(0, 12);

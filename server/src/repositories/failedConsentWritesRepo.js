@@ -1,7 +1,7 @@
 const { pool } = require('../db/pool');
 
 // The durable landing place consentRepo.recordOptOutDurable falls back to
-// when even a retried consent write fails — see migration
+// when even a retried consent write fails - see migration
 // 078_failed_consent_writes.js's module comment. Always on the privileged
 // pool: this exists specifically for the case where the ordinary write path
 // is in trouble, so it must not depend on the same tenant connection that
@@ -24,7 +24,7 @@ async function listPending() {
   return rows;
 }
 
-// Used by alertRunner.js's checkPendingFailedConsentWrites — the count
+// Used by alertRunner.js's checkPendingFailedConsentWrites - the count
 // alone (not the rows) is enough to decide whether the ongoing alert should
 // still be open.
 async function countPending() {

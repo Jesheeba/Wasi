@@ -1,4 +1,4 @@
-// Real bug, fixed (sixth instance of the same class — see
+// Real bug, fixed (sixth instance of the same class - see
 // templateLanguageHardcodeFixes.test.js's header comment for the first two,
 // apiV1MessageLanguage.test.js for the original, and CLAUDE.md for the
 // clientNotifier.js/alertNotifier.js instances): messagingService.js's
@@ -7,12 +7,12 @@
 // with the caller-supplied `templateLanguage` outright, never checking it
 // against `template.language`. Every caller that happened to go through one
 // of the other fixed call sites passed the real language itself, but this
-// is the shared choke point — routes/chats.js's inbox manual-reply send and
+// is the shared choke point - routes/chats.js's inbox manual-reply send and
 // retry routes forward whatever `templateLanguage` the request body
 // supplied, with nothing here to catch a stale or wrong value before it
 // reached Meta.
 //
-// Stub-only, no real DB or HTTP server — every dependency sendChatMessage
+// Stub-only, no real DB or HTTP server - every dependency sendChatMessage
 // calls is monkey-patched on its own required module object (this
 // codebase's established mockable-module convention; see alertNotifier.js's
 // own module comment on why a destructured require can't be stubbed this
@@ -81,7 +81,7 @@ test('sendChatMessage: the template\'s REAL local language wins over a stale/wro
   await messagingService.sendChatMessage('db', 'client1', { id: 'chat1', phone: '919999900001' }, {
     type: 'template',
     templateName: 'wasi_payment_reminder',
-    templateLanguage: 'en_US', // deliberately wrong/stale — the real row says 'ta'
+    templateLanguage: 'en_US', // deliberately wrong/stale - the real row says 'ta'
     templateComponents: [],
   });
 
@@ -92,7 +92,7 @@ test('sendChatMessage: falls back to the caller-supplied templateLanguage only w
   setUpCommonStubs();
   messageTemplatesRepo.findByNameAndClient = async () => null;
   // No local template row means assertConsentForTemplate's requiresConsent
-  // check (!template) fires — stub an opted-in contact so this test reaches
+  // check (!template) fires - stub an opted-in contact so this test reaches
   // the actual send, which is what's under test here, not the consent gate.
   contactsRepo.findById = async () => ({ opt_in_status: 'opted_in' });
   let capturedArgs = null;
@@ -108,5 +108,5 @@ test('sendChatMessage: falls back to the caller-supplied templateLanguage only w
     templateComponents: [],
   });
 
-  assert.equal(capturedArgs.language, 'en', 'with no local row to trust, the caller-supplied language is the only fallback — unchanged behavior');
+  assert.equal(capturedArgs.language, 'en', 'with no local row to trust, the caller-supplied language is the only fallback - unchanged behavior');
 });

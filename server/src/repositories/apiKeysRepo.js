@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-// SHA-256, not bcrypt — see migration 014_hub_capability.js's module comment
+// SHA-256, not bcrypt - see migration 014_hub_capability.js's module comment
 // for why: a generated key is already high-entropy, and this needs to
 // support an indexed `where key_hash = $1` lookup, which bcrypt's salted
 // hash can't do.
@@ -8,7 +8,7 @@ function hashKey(rawKey) {
   return crypto.createHash('sha256').update(rawKey).digest('hex');
 }
 
-// Returns the raw key (shown once, never stored) alongside the created row —
+// Returns the raw key (shown once, never stored) alongside the created row -
 // same "generate, hash, persist only the hash" shape as authTokensRepo.
 async function create(db, clientId, appName) {
   const rawKey = `wasi_${crypto.randomBytes(24).toString('hex')}`;
@@ -29,7 +29,7 @@ async function findActiveByHash(db, rawKey) {
   return rows[0] || null;
 }
 
-// Fire-and-forget from the caller's point of view — see
+// Fire-and-forget from the caller's point of view - see
 // middleware/requireApiKey.js. Not security-relevant, so a failure here
 // shouldn't fail the request it's attached to.
 async function touchLastUsed(db, id) {
@@ -53,12 +53,12 @@ async function revoke(db, id, clientId) {
   return rows[0] || null;
 }
 
-// Delete works on a key in any state (active or revoked) — one confirmed
+// Delete works on a key in any state (active or revoked) - one confirmed
 // destructive action from the admin panel. Sets revoked_at too (if not
 // already set) so a key that was never explicitly revoked doesn't end up
 // deleted-but-still-technically-active in the one instant between the two
 // writes; both happen in the same statement. This is a soft tombstone, not
-// a row delete — see migration 034_api_key_soft_delete.js — so it stays
+// a row delete - see migration 034_api_key_soft_delete.js - so it stays
 // excluded from listByClientId/admin.js's list query but audit_log entries
 // referencing this id keep resolving to a real row.
 async function softDelete(db, id, clientId) {

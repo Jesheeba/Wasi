@@ -1,9 +1,9 @@
-// PUT /api/templates/:id (server/src/routes/templates.js) — edits an
+// PUT /api/templates/:id (server/src/routes/templates.js) - edits an
 // existing template's content (body/header[NONE|TEXT]/footer/buttons/
 // samples) in place. Real DB writes through a disposable test client (same
 // pattern as templateDelete.test.js/templateSync.test.js); Meta calls faked
 // by stubbing global.fetch for graph.facebook.com only, never the app's own
-// local-server fetches — see CLAUDE.md's testing conventions.
+// local-server fetches - see CLAUDE.md's testing conventions.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test } = require('node:test');
@@ -86,7 +86,7 @@ test('PUT /api/templates/:id: a template live on Meta is edited there (name+lang
     const updated = await res.json();
 
     assert.ok(editCall, 'must call Meta to edit the template');
-    // No name/language in the edit payload — the template id already
+    // No name/language in the edit payload - the template id already
     // identifies both, and Meta's edit endpoint doesn't accept them.
     assert.equal(editCall.body.name, undefined);
     assert.equal(editCall.body.language, undefined);
@@ -218,7 +218,7 @@ test('PUT /api/templates/:id: a real Meta rejection (edit call fails) returns 50
       if (urlStr.includes('graph.facebook.com') && urlStr.includes('meta_blocked_1')) {
         // Shaped like a real Meta rejection: a terse top-level message plus
         // the fuller, human-readable error_user_title/error_user_msg Meta
-        // often includes alongside it — routes/templates.js's
+        // often includes alongside it - routes/templates.js's
         // describeMetaError() must prefer the fuller pair over the terse
         // message when building the response's `detail`.
         return {

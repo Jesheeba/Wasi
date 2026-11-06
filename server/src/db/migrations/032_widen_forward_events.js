@@ -1,9 +1,9 @@
 // webhookEvents.js's WEBHOOK_EVENT_TYPES gained 'message.status' (metaWebhook.js's
 // handleStatuses now forwards the sent/delivered/read/failed lifecycle, which it
-// never did before — see that file's module comment). The CHECK constraints added
+// never did before - see that file's module comment). The CHECK constraints added
 // in migration 015_explicit_forward_events.js were built from the array as it
 // stood then, so they don't retroactively pick up a new element just because the
-// JS source did — same fix shape as migration 024_widen_flow_event_types.js.
+// JS source did - same fix shape as migration 024_widen_flow_event_types.js.
 const { WEBHOOK_EVENT_TYPES } = require('../../utils/webhookEvents');
 
 const EVENT_TYPES_ARRAY_LITERAL = `array[${WEBHOOK_EVENT_TYPES.map((e) => `'${e}'`).join(', ')}]::text[]`;
@@ -23,7 +23,7 @@ exports.up = (pgm) => {
 
 exports.down = async (pgm) => {
   // Re-adding the narrower CHECK below validates it against every existing
-  // row immediately (no NOT VALID escape hatch — deliberately: a silently
+  // row immediately (no NOT VALID escape hatch - deliberately: a silently
   // NOT VALID constraint would let already-invalid rows sit unnoticed,
   // which is worse than a loud failure here). So any waba or client_webhook
   // still subscribed to 'message.status' would make that ADD CONSTRAINT

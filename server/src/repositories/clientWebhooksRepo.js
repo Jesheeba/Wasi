@@ -14,7 +14,7 @@ async function upsert(db, clientId, callbackUrl, secret, events) {
   return rows[0];
 }
 
-// Force-generates a new secret regardless of whether one already exists —
+// Force-generates a new secret regardless of whether one already exists -
 // unlike upsert() above, which only ever sets a secret the first time. The
 // caller (routes/clientWebhook.js) is responsible for warning that the old
 // secret stops verifying immediately; this just does the write.

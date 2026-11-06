@@ -66,7 +66,7 @@
         </form>
       </div>
 
-      <!-- Team-member login (PLAN.md item 1 / item 5.5) — POST /api/auth/team/login,
+      <!-- Team-member login (PLAN.md item 1 / item 5.5) - POST /api/auth/team/login,
            needs a tenantSlug alongside email+password since a team member's
            email is only unique per client, not globally. -->
       <div class="auth-card" id="team-login-card" style="display: none;">
@@ -95,10 +95,10 @@
 
 
   <!-- Persistent "why can't I send" banner (app.js's renderSendabilityBanner)
-       — shown whenever the connected WABA's sendable/health_status/
+       - shown whenever the connected WABA's sendable/health_status/
        messaging_tier data (GET /api/onboarding/whatsapp/status, already
        fetched, no new Meta call needed) says sending is blocked, limited, or
-       capped. Not dismissible while the condition holds — this is a state,
+       capped. Not dismissible while the condition holds - this is a state,
        not a notification. Sits above #app-shell in normal document flow;
        #app-shell reserves space for it via padding-top (see index.css) so
        it never overlaps the app's own content. -->
@@ -182,7 +182,7 @@
           <i data-lucide="settings"></i>
           <span class="nav-text">Settings</span>
         </a>
-        <div class="nav-item" id="user-profile-item" style="cursor: pointer;" role="button" tabindex="0" aria-label="Account menu — log out">
+        <div class="nav-item" id="user-profile-item" style="cursor: pointer;" role="button" tabindex="0" aria-label="Account menu - log out">
           <div class="avatar" style="width: 26px; height: 26px; font-size: 0.75rem; background: #4AC959; color: #0E2916;">M</div>
           <span class="nav-text" style="font-weight: 600; color: #FFFFFF;">Mohamed</span>
         </div>
@@ -223,7 +223,7 @@
                 <input type="search" id="chat-search-input" class="chat-search-input" placeholder="Search by name or number" aria-label="Search conversations" autocomplete="off" />
               </div>
 
-              <!-- item 2/5.5 — queue tabs, independent of the tag filter
+              <!-- item 2/5.5 - queue tabs, independent of the tag filter
                    above (both apply together in renderChatList). Default
                    'All' keeps existing single-owner behavior unchanged for
                    an account with no team members yet. -->
@@ -268,7 +268,7 @@
               <div class="chat-conversation">
                 <div class="chat-header">
                   <div class="chat-header-who">
-                    <!-- Mobile-only (<=900px, index.css) — returns to the
+                    <!-- Mobile-only (<=900px, index.css) - returns to the
                          chat list without touching the desktop 3-column
                          layout or openActiveChat's own state. -->
                     <button type="button" id="chat-back-to-list-btn" class="chat-back-btn" aria-label="Back to chat list"><i data-lucide="arrow-left"></i></button>
@@ -282,7 +282,7 @@
                     </div>
                   </div>
 
-                  <!-- item 2/5.5 — status + assignment controls. ONE primary
+                  <!-- item 2/5.5 - status + assignment controls. ONE primary
                        action (Resolve when open / Reopen when resolved) stays
                        visible; everything else lives in the overflow menu.
                        select#chat-assign-select lists the client's real team
@@ -322,7 +322,7 @@
 
                 <div class="chat-messages" id="chat-messages-container"></div>
 
-                <!-- Session-window state — the 24h WhatsApp customer-service window
+                <!-- Session-window state - the 24h WhatsApp customer-service window
                      that decides whether free-form text can send at all. Nothing
                      surfaced this before; a plain-text send outside the window
                      used to just fail with a toast easy to miss (see
@@ -332,11 +332,11 @@
                 <div class="chat-composer">
                   <div id="template-slash-picker" class="chat-popover" style="display: none;"></div>
                   <div class="chat-input-bar">
-                    <!-- Disabled, not removed — used to insert a fake sent-message
+                    <!-- Disabled, not removed - used to insert a fake sent-message
                          bubble for whatever file was picked, with no upload and
                          no backend support at all (no media message type exists
                          server-side). Re-enable once real media send is built. -->
-                    <button type="button" class="btn-secondary chat-attach-btn" id="chat-attachment-btn" disabled title="Media messages — coming soon" aria-label="Attach media (coming soon)"><i data-lucide="paperclip"></i></button>
+                    <button type="button" class="btn-secondary chat-attach-btn" id="chat-attachment-btn" disabled title="Media messages - coming soon" aria-label="Attach media (coming soon)"><i data-lucide="paperclip"></i></button>
                     <input type="text" id="chat-message-input" class="chat-input" placeholder="Type a message or '/' for templates..." aria-label="Message" autocomplete="off" />
                     <button type="button" class="btn-primary chat-send-btn" id="send-msg-btn" aria-label="Send message"><i data-lucide="send"></i></button>
                   </div>
@@ -345,7 +345,7 @@
 
               <div class="chat-drawer-backdrop" id="chat-drawer-backdrop"></div>
 
-              <!-- Right Contact Details Drawer — avatar initials, tag, and
+              <!-- Right Contact Details Drawer - avatar initials, tag, and
                    header pill are set from the real contact (see
                    openActiveChat, app.js). A contact has exactly one primary
                    tag (contacts.tag_id) plus additive multi-tags below. Inline
@@ -364,13 +364,13 @@
                 <div class="contact-drawer-section">
                   <div class="details-section-title">Tags</div>
                   <div class="chat-chip-row" id="drawer-contact-tags"></div>
-                  <!-- PLAN.md item 8 — additive multi-tags (contact_tags),
+                  <!-- PLAN.md item 8 - additive multi-tags (contact_tags),
                        separate from the single primary tag above
                        (contacts.tag_id, untouched by this section). Item
                        8.5 generalized the render/event logic behind this
                        markup (renderContactTagsInto, app.js) so the exact
                        same wrapper shape also drives the Contacts-view
-                       detail panel below — data-contact-id is set on the
+                       detail panel below - data-contact-id is set on the
                        wrapper at render time, read by one shared delegated
                        listener instead of a per-surface one. -->
                   <div class="contact-tags-wrapper" id="drawer-contact-tags-wrapper">
@@ -381,7 +381,7 @@
                   </div>
                 </div>
 
-                <!-- PLAN.md item 7 — real per-contact custom attribute
+                <!-- PLAN.md item 7 - real per-contact custom attribute
                      values (contact_attribute_values). Item 8.5 generalized
                      this container's render logic (renderContactAttributesInto,
                      app.js) to also drive the Contacts-view detail panel. -->
@@ -390,7 +390,7 @@
                   <div id="drawer-contact-attributes" class="contact-drawer-muted">Per-contact attributes aren't tracked yet.</div>
                 </div>
 
-                <!-- item 3/5.5 — internal notes, toggled by #chat-notes-toggle-btn
+                <!-- item 3/5.5 - internal notes, toggled by #chat-notes-toggle-btn
                      (in the header overflow menu). Collapsed by default so it
                      doesn't clutter the drawer for every chat open. -->
                 <div id="chat-notes-section" class="contact-drawer-section" style="display: none;">
@@ -398,7 +398,7 @@
                   <div id="chat-notes-list" class="chat-notes-list"></div>
                   <div class="chat-note-compose">
                     <div id="note-mention-picker" class="chat-popover chat-popover-sm" style="display: none;"></div>
-                    <textarea id="chat-note-input" class="form-input chat-note-input" placeholder="Add an internal note — type @ to mention a teammate" aria-label="Internal note"></textarea>
+                    <textarea id="chat-note-input" class="form-input chat-note-input" placeholder="Add an internal note - type @ to mention a teammate" aria-label="Internal note"></textarea>
                   </div>
                   <button type="button" id="chat-note-submit-btn" class="btn-primary chat-note-submit">Add Note</button>
                 </div>
@@ -441,9 +441,9 @@
                 <option value="unknown">Unknown</option>
               </select>
             </div>
-            <!-- Consent hardening Phase 2 — bulk opt-in. Shown by app.js's
+            <!-- Consent hardening Phase 2 - bulk opt-in. Shown by app.js's
                  updateContactsBulkToolbar once at least one row is checked.
-                 Owner/Admin/Manager only — app.js hides the button for an
+                 Owner/Admin/Manager only - app.js hides the button for an
                  Agent, matching the server's own requireRole gate on
                  POST /api/contacts/bulk-consent (a hidden button is a UX
                  nicety, not the real gate). -->
@@ -495,7 +495,7 @@
             </button>
           </div>
 
-          <!-- Summary tiles — computed client-side from the already-loaded
+          <!-- Summary tiles - computed client-side from the already-loaded
                broadcast list only (see app.js updateCampaignSummary); no
                extra request, nothing the list itself doesn't already say. -->
           <div class="campaign-summary" id="campaign-summary" aria-label="Campaign summary">
@@ -530,7 +530,7 @@
                   <th>Read rate</th>
                   <th>Skipped</th>
                   <th>Date</th>
-                  <!-- PLAN.md item 11 — pause/resume. PLAN.md item 28 — the per-recipient detail view. -->
+                  <!-- PLAN.md item 11 - pause/resume. PLAN.md item 28 - the per-recipient detail view. -->
                   <th class="campaigns-col-actions"><span class="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -597,14 +597,14 @@
           <div class="page-title-bar">
             <div>
               <h1 class="page-title">Template Library</h1>
-              <p class="page-subtitle" id="library-source-subtitle">Pre-vetted, ready-to-customize WhatsApp templates by industry — checked against Meta's real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.</p>
+              <p class="page-subtitle" id="library-source-subtitle">Pre-vetted, ready-to-customize WhatsApp templates by industry - checked against Meta's real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.</p>
             </div>
           </div>
           <!-- Two clearly separate, clearly labeled sources (wasi-master-plan.md
-               §2b.2) — Wasi's own curated library (customizable, needs the normal
+               §2b.2) - Wasi's own curated library (customizable, needs the normal
                submission wait) vs Meta's official one (fixed content, Utility
                category only, skips the review wait entirely). Never merged into
-               one filterable list — conflating them would mislead a client about
+               one filterable list - conflating them would mislead a client about
                which templates still need to wait for approval. -->
           <div class="tabs library-tabs" role="tablist" aria-label="Template library source">
             <button type="button" class="tab library-source-tab active" role="tab" id="library-tab-wasi" aria-selected="true" aria-controls="library-source-wasi" data-library-source="wasi">Wasi Curated</button>
@@ -627,7 +627,7 @@
             </div>
             <div class="library-layout">
               <div class="table-card library-list-card">
-                <!-- Grouped into one section per industry (not a filter — every
+                <!-- Grouped into one section per industry (not a filter - every
                      industry's templates are always visible, sectioned with its
                      own heading), same layout for every industry. Category/use-
                      case dropdowns above still narrow within/across sections. -->
@@ -641,11 +641,11 @@
             </div>
           </div>
 
-          <!-- Meta Official Template Library (wasi-master-plan.md §2b) — content
+          <!-- Meta Official Template Library (wasi-master-plan.md §2b) - content
                is Meta's own, fixed, never editable here. v1 only shows entries
                with no {{n}} variables (Phase 0 decision: the API returns
                positional {{1}}/{{2}} params, incompatible with this app's
-               named-parameters-only template pipeline) — see CLAUDE.md Known Gaps. -->
+               named-parameters-only template pipeline) - see CLAUDE.md Known Gaps. -->
           <div id="library-source-meta" role="tabpanel" aria-labelledby="library-tab-meta" style="display:none;">
             <div class="table-card library-filters">
               <div class="table-toolbar">
@@ -698,7 +698,7 @@
           </div>
 
           <div class="table-card" id="automation-panel-flows" role="tabpanel" aria-labelledby="automation-tab-flows" hidden>
-            <p class="automation-panel-intro">Multi-step flows with branching, buttons, delays, and actions — a rule can start one instead of sending a single reply.</p>
+            <p class="automation-panel-intro">Multi-step flows with branching, buttons, delays, and actions - a rule can start one instead of sending a single reply.</p>
             <table class="data-table stack-mobile automation-table">
               <thead>
                 <tr><th>Flow</th><th>Trigger</th><th>Status</th><th>Updated</th><th class="automation-col-actions"><span class="sr-only">Actions</span></th></tr>
@@ -798,7 +798,7 @@
           </div>
 
           <!-- No Instagram integration exists anywhere in this codebase
-               (no OAuth flow, no API routes, no repo) — this used to claim
+               (no OAuth flow, no API routes, no repo) - this used to claim
                "@wasi_official ... Connected" plus two fake "Active"
                automation rules regardless. Left honest until the feature is
                actually built: not connected, no rules possible yet. -->
@@ -861,7 +861,7 @@
               <p class="page-subtitle">Connect Shopify, CRM, Webhooks, and Zapier</p>
             </div>
           </div>
-          <!-- None of these 5 cards check any real connection state — no
+          <!-- None of these 5 cards check any real connection state - no
                OAuth flow or API integration exists for any of them in this
                codebase (Razorpay is genuinely used elsewhere, for Wallet
                top-ups and Billing checkout, but that's a platform-level
@@ -902,7 +902,7 @@
           <div class="page-title-bar">
             <div>
               <h1 class="page-title">Payments & UPI</h1>
-              <!-- "WhatsApp Pay" dropped — only Razorpay is actually
+              <!-- "WhatsApp Pay" dropped - only Razorpay is actually
                    integrated (razorpayClient.js); the Gateway column below
                    never showed anything but "Razorpay" for real. -->
               <p class="page-subtitle">Razorpay in-chat payment links</p>
@@ -922,7 +922,7 @@
                 </tr>
               </thead>
               <!-- renderPaymentsTable() (app.js) already fetches real data
-                   from GET /api/payment-links (real Razorpay-backed) — this
+                   from GET /api/payment-links (real Razorpay-backed) - this
                    was a fake "loading" state, not a missing feature: two
                    hardcoded fake "Paid" transactions shown until that async
                    fetch resolved and overwrote them, same bug class as the
@@ -935,7 +935,7 @@
           </div>
         </div>
 
-        <!-- 12. ANALYTICS VIEW — real numbers only. /api/analytics/messages
+        <!-- 12. ANALYTICS VIEW - real numbers only. /api/analytics/messages
              returns 7-day totals (no per-day series), so there is no chart:
              an honest "daily trend isn't available yet" panel instead of the
              hard-coded made-up curve that used to live here. -->
@@ -954,7 +954,7 @@
             <button type="button" class="tab active" role="tab" id="rep-tab-message" data-rep-view="message" aria-selected="true" aria-controls="rep-view-message">Message</button>
             <button type="button" class="tab" role="tab" id="rep-tab-tags" data-rep-view="tags" aria-selected="false" aria-controls="rep-view-tags" tabindex="-1">Tags</button>
             <button type="button" class="tab" role="tab" id="rep-tab-campaign" data-rep-view="campaign" aria-selected="false" aria-controls="rep-view-campaign" tabindex="-1">Campaign</button>
-            <!-- item 5/5.5 — Admin/Manager only (hidden for Agent by
+            <!-- item 5/5.5 - Admin/Manager only (hidden for Agent by
                  applyRoleGating, app.js), matching GET /api/analytics/sla's
                  own server-side role gate. -->
             <button type="button" class="tab" role="tab" id="rep-tab-sla" data-rep-view="sla" aria-selected="false" aria-controls="rep-view-sla" tabindex="-1">Team / SLA</button>
@@ -1120,7 +1120,7 @@
 
                 <!-- Real content (connected channel card, or the Connect
                      WhatsApp button) is rendered by renderWhatsAppSettings()
-                     (app.js) — on Settings view open, not only on a sub-nav
+                     (app.js) - on Settings view open, not only on a sub-nav
                      click. This is only a loading state; never a fake
                      connected channel. -->
                 <div class="channel-status-card">
@@ -1225,7 +1225,7 @@
                   </p>
                   <div id="api-keys-error" class="alert alert-danger" role="alert" hidden></div>
                   <!-- New key's raw value is shown here exactly once, right after
-                       creation — never re-fetchable afterward (only key_hash is
+                       creation - never re-fetchable afterward (only key_hash is
                        stored server-side, see apiKeysRepo.js). -->
                   <div id="new-api-key-reveal" class="alert alert-success api-key-reveal" hidden>
                     <div class="api-key-reveal-body">
@@ -1277,7 +1277,7 @@
                   <ul class="settings-list">
                     <li><code>type: "template"</code> requires an approved template; use <code>type: "text"</code> with a <code>"body"</code> field instead of <code>template</code>/<code>params</code> only within 24h of the contact's last inbound message.</li>
                     <li><code>params</code> maps a template's named placeholders (e.g. <code>{{1}}</code>) to values.</li>
-                    <li>Optional <code>headerMediaUrl</code> — a public HTTPS URL to your own file, for a template with an IMAGE/VIDEO/DOCUMENT header.</li>
+                    <li>Optional <code>headerMediaUrl</code> - a public HTTPS URL to your own file, for a template with an IMAGE/VIDEO/DOCUMENT header.</li>
                     <li><code>client_id</code> must match the account the API key belongs to.</li>
                   </ul>
                 </div>
@@ -1286,7 +1286,7 @@
                   <h3 class="settings-card-title"><i data-lucide="book-open" class="icon-16"></i> Full API integration guide</h3>
                   <div class="settings-guide">
                     <div class="settings-guide-item">
-                      <strong>Templates — <code>GET/POST /api/v1/templates</code></strong>
+                      <strong>Templates - <code>GET/POST /api/v1/templates</code></strong>
                       <p>Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send. <code>GET /api/v1/templates/:id</code> returns the full definition of one template.</p>
                     </div>
                     <div class="settings-guide-item">
@@ -1295,11 +1295,11 @@
                     </div>
                     <div class="settings-guide-item">
                       <strong>Error handling</strong>
-                      <p>Every error comes back in one shape: <code>{ "error": { "code": "...", "message": "...", ... } }</code> — a stable <code>code</code> to branch on, plus endpoint-specific extra fields (e.g. <code>metaError</code> when Meta itself rejected something, <code>details</code> for validation failures). Check <code>error.code</code> before assuming <code>error.metaError</code> is present.</p>
+                      <p>Every error comes back in one shape: <code>{ "error": { "code": "...", "message": "...", ... } }</code> - a stable <code>code</code> to branch on, plus endpoint-specific extra fields (e.g. <code>metaError</code> when Meta itself rejected something, <code>details</code> for validation failures). Check <code>error.code</code> before assuming <code>error.metaError</code> is present.</p>
                     </div>
                     <div class="settings-guide-item">
-                      <strong>Webhooks — inbound forwarding</strong>
-                      <p>Once your WhatsApp account is connected, Wasi can forward inbound events to a URL of your choosing — contact support to have it set up. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> (HMAC-SHA256 of the raw JSON body, keyed by a per-client secret) — verify this before trusting a delivery. Event types: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
+                      <strong>Webhooks - inbound forwarding</strong>
+                      <p>Once your WhatsApp account is connected, Wasi can forward inbound events to a URL of your choosing - contact support to have it set up. Deliveries are signed <code>x-wasi-signature-256: sha256=&lt;hmac&gt;</code> (HMAC-SHA256 of the raw JSON body, keyed by a per-client secret) - verify this before trusting a delivery. Event types: <code>message.received</code>, <code>message_template_status_update</code>, <code>account_update</code>.</p>
                     </div>
                     <div class="settings-guide-item">
                       <strong>Rate limits</strong>
@@ -1308,10 +1308,10 @@
                     <div class="settings-guide-item">
                       <strong>Security recommendations</strong>
                       <ul class="settings-list">
-                        <li>Never commit an API key or webhook secret to source control — load them from environment variables.</li>
-                        <li>If a key is compromised, delete it above and issue a new one — deletion takes effect immediately.</li>
+                        <li>Never commit an API key or webhook secret to source control - load them from environment variables.</li>
+                        <li>If a key is compromised, delete it above and issue a new one - deletion takes effect immediately.</li>
                         <li>Always verify the <code>x-wasi-signature-256</code> header before acting on a forwarded webhook payload.</li>
-                        <li><code>client_id</code> is a UUID, not a secret — but still avoid logging your API key or webhook secret.</li>
+                        <li><code>client_id</code> is a UUID, not a secret - but still avoid logging your API key or webhook secret.</li>
                       </ul>
                     </div>
                     <div class="settings-guide-item">
@@ -1463,13 +1463,13 @@
     </div>
   </div>
 
-  <!-- PLAN.md item 8.5 — Contacts-view contact detail panel. Reuses the
+  <!-- PLAN.md item 8.5 - Contacts-view contact detail panel. Reuses the
        exact same tags/attributes markup shape (and JS render functions,
        renderContactTagsInto/renderContactAttributesInto in app.js) as the
        Chat view's contact-details drawer above, so a contact's tags and
        attribute values can be seen/edited from either surface without a
        second implementation. contacts.tag_id (the primary tag) has no UI
-       here either, by explicit decision — this panel only ever shows what
+       here either, by explicit decision - this panel only ever shows what
        items 7/8 already built. -->
   <div id="modal-contact-detail" class="modal-overlay contact-drawer-overlay">
     <div class="modal-box contact-drawer" role="dialog" aria-modal="true" aria-labelledby="contact-detail-name">
@@ -1485,10 +1485,10 @@
 
       <dl class="contact-kv" id="contact-detail-summary" aria-label="Contact summary"></dl>
 
-      <!-- Consent hardening Phase 2 — per-contact opt-in/opt-out control.
+      <!-- Consent hardening Phase 2 - per-contact opt-in/opt-out control.
            Rendered by app.js's renderContactOptInInto; "Mark opted in"
            reuses the exact same confirmation modal (#modal-bulk-opt-in)
-           bulk opt-in uses, just with a single-id array — one flow, not
+           bulk opt-in uses, just with a single-id array - one flow, not
            two parallel implementations. -->
       <details class="contact-drawer-section" open>
         <summary class="details-section-title">Opt-In Status</summary>
@@ -1510,7 +1510,7 @@
         <div id="contact-detail-attributes" style="font-size: 0.825rem; color: #9CA3AF;"></div>
       </details>
 
-      <!-- PLAN.md item 10 — Contact 360 activity timeline. Read-only,
+      <!-- PLAN.md item 10 - Contact 360 activity timeline. Read-only,
            merges messages/broadcast sends/flow entries/consent events. -->
       <details class="contact-drawer-section" open>
         <summary class="details-section-title">Activity</summary>
@@ -1550,7 +1550,7 @@
         <button type="button" class="close-modal-btn" data-close-modal="modal-create-campaign" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
 
-      <!-- Stage 6 — guided 5-step flow. Every field below keeps its original id;
+      <!-- Stage 6 - guided 5-step flow. Every field below keeps its original id;
            steps are plain hide/show panels inside the ONE form, so a step's
            inputs stay in the DOM (and keep their values) while hidden. -->
       <ol class="wizard-stepper" id="campaign-wizard-stepper" aria-label="Campaign steps">
@@ -1562,7 +1562,7 @@
       </ol>
 
       <form id="create-campaign-form" novalidate>
-        <!-- STEP 1 — Audience -->
+        <!-- STEP 1 - Audience -->
         <section class="wizard-panel" data-step="1" aria-labelledby="campaign-step1-title">
           <h4 class="wizard-panel-title" id="campaign-step1-title">Who should receive it?</h4>
           <div class="form-group">
@@ -1575,7 +1575,7 @@
             <div class="campaign-audience-modes" role="radiogroup" aria-label="Audience type">
               <label class="campaign-radio"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-tag" value="tag" checked /> By Tag</label>
               <label class="campaign-radio"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-list" value="list" /> By Contact List</label>
-              <!-- PLAN.md item 9 — AND/OR audience segment builder. -->
+              <!-- PLAN.md item 9 - AND/OR audience segment builder. -->
               <label class="campaign-radio"><input type="radio" name="campaign-audience-mode" id="campaign-audience-mode-segment" value="segment" /> By Segment</label>
             </div>
             <select id="new-campaign-tag" class="form-input" aria-label="Audience tag"></select>
@@ -1590,7 +1590,7 @@
               <div id="campaign-list-import-status" class="form-hint" role="status" aria-live="polite"></div>
             </div>
 
-            <!-- PLAN.md item 9 — segment audience section. Pick an existing
+            <!-- PLAN.md item 9 - segment audience section. Pick an existing
                  segment, or build+save a new one inline (flat AND/OR
                  conditions on tag/attribute/opt-in status), with a live,
                  debounced match-count preview against POST
@@ -1616,7 +1616,7 @@
           </div>
         </section>
 
-        <!-- STEP 2 — Template -->
+        <!-- STEP 2 - Template -->
         <section class="wizard-panel" data-step="2" aria-labelledby="campaign-step2-title" hidden>
           <h4 class="wizard-panel-title" id="campaign-step2-title">Which template?</h4>
           <!-- Shown up front (not at submit) when the account has no approved template. -->
@@ -1636,14 +1636,14 @@
           <div id="campaign-template-preview" class="campaign-template-preview" hidden></div>
         </section>
 
-        <!-- STEP 3 — Content -->
+        <!-- STEP 3 - Content -->
         <section class="wizard-panel" data-step="3" aria-labelledby="campaign-step3-title" hidden>
           <h4 class="wizard-panel-title" id="campaign-step3-title">Fill in the content</h4>
-          <div id="campaign-content-empty" class="form-hint" hidden>This template has no header file or variables to configure — continue to the next step.</div>
+          <div id="campaign-content-empty" class="form-hint" hidden>This template has no header file or variables to configure - continue to the next step.</div>
           <div id="new-campaign-media" style="display: none;" class="form-group">
             <label class="form-label" for="new-campaign-media-asset">Header file</label>
             <!-- Existing media the template already has uploaded (default or
-                 not) — a synced-from-Meta template, or one whose uploads
+                 not) - a synced-from-Meta template, or one whose uploads
                  never got promoted to default, previously had no way to be
                  picked here at all; only "upload a new file" existed. -->
             <select class="form-input campaign-gap-bottom-sm" id="new-campaign-media-asset">
@@ -1656,39 +1656,39 @@
             <input type="file" class="form-input" id="new-campaign-media-file" aria-label="Upload header file" />
             <div id="new-campaign-media-status" class="form-hint campaign-gap-top-sm" role="status" aria-live="polite"></div>
           </div>
-          <!-- Per-{{variable}} value source, one row per template parameter —
+          <!-- Per-{{variable}} value source, one row per template parameter -
                see app.js's renderNewCampaignParamMappings/collectNewCampaignParamMappings. -->
           <div id="new-campaign-param-mappings" class="form-group"></div>
         </section>
 
-        <!-- STEP 4 — Schedule / pacing -->
+        <!-- STEP 4 - Schedule / pacing -->
         <section class="wizard-panel" data-step="4" aria-labelledby="campaign-step4-title" hidden>
           <h4 class="wizard-panel-title" id="campaign-step4-title">Sending pace &amp; safeguards</h4>
           <div class="form-group">
             <label class="form-label" for="new-campaign-pace">Sending Pace</label>
             <select id="new-campaign-pace" class="form-input">
               <option value="">Normal (runner default)</option>
-              <option value="30">Slow — 30 messages/min</option>
-              <option value="60">Standard — 60 messages/min</option>
-              <option value="120">Fast — 120 messages/min</option>
+              <option value="30">Slow - 30 messages/min</option>
+              <option value="60">Standard - 60 messages/min</option>
+              <option value="120">Fast - 120 messages/min</option>
             </select>
-            <div class="form-hint">Slows this campaign's own send rate — useful for protecting a fresh or lower-tier number's quality rating. Well under WhatsApp's real throughput limits either way.</div>
+            <div class="form-hint">Slows this campaign's own send rate - useful for protecting a fresh or lower-tier number's quality rating. Well under WhatsApp's real throughput limits either way.</div>
           </div>
-          <!-- PLAN.md item 12 — Smart Sending. -->
+          <!-- PLAN.md item 12 - Smart Sending. -->
           <div class="form-group">
             <label class="form-label" for="new-campaign-smart-sending">Smart Sending</label>
             <select id="new-campaign-smart-sending" class="form-input">
-              <option value="">Off — always send to everyone in the audience</option>
+              <option value="">Off - always send to everyone in the audience</option>
               <option value="24">Skip contacts messaged by another campaign in the last 24 hours</option>
               <option value="72">Skip contacts messaged by another campaign in the last 3 days</option>
               <option value="168">Skip contacts messaged by another campaign in the last 7 days</option>
             </select>
-            <div class="form-hint">Avoids messaging the same contact twice in a short window across DIFFERENT campaigns — the contact's real primary tag/opt-in status are unaffected either way.</div>
+            <div class="form-hint">Avoids messaging the same contact twice in a short window across DIFFERENT campaigns - the contact's real primary tag/opt-in status are unaffected either way.</div>
           </div>
-          <div class="form-hint">Campaigns start sending as soon as you launch — scheduling for a later date isn't available yet.</div>
+          <div class="form-hint">Campaigns start sending as soon as you launch - scheduling for a later date isn't available yet.</div>
         </section>
 
-        <!-- STEP 5 — Review & Launch -->
+        <!-- STEP 5 - Review & Launch -->
         <section class="wizard-panel" data-step="5" aria-labelledby="campaign-step5-title" hidden>
           <h4 class="wizard-panel-title" id="campaign-step5-title">Review &amp; launch</h4>
           <dl class="campaign-review" id="campaign-review"></dl>
@@ -1706,12 +1706,12 @@
     </div>
   </div>
 
-  <!-- PLAN.md item 28 — per-recipient broadcast detail view. Fetches
+  <!-- PLAN.md item 28 - per-recipient broadcast detail view. Fetches
        GET /api/broadcasts/:id (metadata + header-strip counts) and
        GET /api/broadcasts/:id/recipients (the full per-recipient list) once
        on open; status filter/search are applied client-side over the
        already-fetched list, matching this app's existing no-pagination
-       convention (contacts/chats lists work the same way) — only the CSV
+       convention (contacts/chats lists work the same way) - only the CSV
        export hits the server-side status filter, since that one genuinely
        needs a server round trip regardless. -->
   <div id="modal-broadcast-detail" class="modal-overlay">
@@ -1810,7 +1810,7 @@
           </div>
 
           <div id="template-sample-values" class="form-group" style="display:none;">
-            <label class="form-label">Sample values <span class="form-hint-inline">(required — Meta rejects templates without one per parameter)</span></label>
+            <label class="form-label">Sample values <span class="form-hint-inline">(required - Meta rejects templates without one per parameter)</span></label>
             <div id="template-sample-values-list"></div>
           </div>
 
@@ -1840,7 +1840,7 @@
             <label class="form-label" for="new-template-auth-disclaimer">Add security disclaimer ("For your security, do not share this code")</label>
           </div>
           <div class="form-group form-hint">
-            A single "Copy Code" button is included automatically — Meta requires exactly one. The message body is generated by Meta and can't be edited here.
+            A single "Copy Code" button is included automatically - Meta requires exactly one. The message body is generated by Meta and can't be edited here.
           </div>
         </div>
 
@@ -1860,7 +1860,7 @@
   </div>
 
   <!-- ===================== TEMPLATE CHAT PREVIEW MODAL ===================== -->
-  <!-- Read-only — shows a saved/approved template exactly as it'll render in
+  <!-- Read-only - shows a saved/approved template exactly as it'll render in
        a WhatsApp chat, using its own saved sample values, without going
        through the Create/Edit form or the send-to-a-contact flow. Opened
        from the Templates view's per-card preview button. -->
@@ -1881,7 +1881,7 @@
   </div>
 
   <!-- ===================== USE META OFFICIAL TEMPLATE MODAL ===================== -->
-  <!-- Narrow, read-only-content flow (wasi-master-plan.md §2b, Phase 0 decision) —
+  <!-- Narrow, read-only-content flow (wasi-master-plan.md §2b, Phase 0 decision) -
        unlike the Create/Edit Template modal, this never lets a client retype
        Meta's fixed body/header/footer text; only the template's own registered
        name and (if the entry has buttons) their destinations are editable. -->
@@ -1891,7 +1891,7 @@
         <h3 class="modal-title">Use Meta Official Template</h3>
         <button class="close-modal-btn" data-close-modal="modal-use-meta-library-template"><i data-lucide="x"></i></button>
       </div>
-      <p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 0.75rem;">This content is written and pre-approved by Meta — it can't be edited. Skips the normal review wait entirely.</p>
+      <p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 0.75rem;">This content is written and pre-approved by Meta - it can't be edited. Skips the normal review wait entirely.</p>
       <div class="template-preview-frame">
         <div class="msg-bubble msg-out template-preview-bubble" id="meta-use-preview-bubble"></div>
       </div>
@@ -2110,7 +2110,7 @@
 
   <!-- ===================== CREATE BOT FLOW MODAL =====================
        "bot-flow" naming throughout this section and the next three modals
-       is deliberate, not decorative — this codebase already has an
+       is deliberate, not decorative - this codebase already has an
        unrelated pre-existing "WhatsApp Flows" feature (Meta's native-form
        product, view-whatsapp-flows below) using the plain "flow"/"flows"
        id vocabulary (flows-grid).
@@ -2163,7 +2163,7 @@
         <div id="bot-flow-editor-issues-banner"></div>
         <div id="bot-flow-editor-nodes"></div>
         <div id="bot-flow-editor-canvas-wrap" style="display: none;">
-          <p class="flow-editor-hint">Drag nodes, draw connections between them, and edit fields directly on the canvas — changes here save immediately and appear in the List view too.</p>
+          <p class="flow-editor-hint">Drag nodes, draw connections between them, and edit fields directly on the canvas - changes here save immediately and appear in the List view too.</p>
           <iframe id="bot-flow-editor-iframe" title="Visual flow editor"></iframe>
         </div>
         <div class="flow-editor-footer">
@@ -2232,7 +2232,7 @@
 
   <!-- ===================== NEW CONVERSATION MODAL ===================== -->
   <!-- The only way to originate a chat with a contact who's never messaged
-       in — picking a contact or entering a new number, then (if the 24h
+       in - picking a contact or entering a new number, then (if the 24h
        session window isn't already open) an approved template, handed off
        to the existing Send Chat Template modal below for the actual
        params/preview/send. -->
@@ -2305,12 +2305,12 @@
     </div>
   </div>
 
-  <!-- Group 2/3 (UI/UX consistency pass) — generic confirm/prompt dialog,
+  <!-- Group 2/3 (UI/UX consistency pass) - generic confirm/prompt dialog,
        ported from admin's showConfirm (admin/app.js) so this app's native
        confirm()/prompt() calls get the same themed modal every other
        action already uses, instead of an unstyled browser dialog.
        showPrompt() (app.js) reuses this exact markup by injecting an
-       <input> into #modal-confirm-body — no separate prompt markup. -->
+       <input> into #modal-confirm-body - no separate prompt markup. -->
   <div id="modal-confirm" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
@@ -2325,14 +2325,14 @@
     </div>
   </div>
 
-  <!-- Consent hardening Phase 2 — the one bulk/per-contact opt-in
+  <!-- Consent hardening Phase 2 - the one bulk/per-contact opt-in
        confirmation modal, opened via app.js's openOptInConfirmModal(ids,
        {contactName}) for both the Contacts-view bulk toolbar and the
-       contact detail panel's single "Mark opted in" button — one flow, not
+       contact detail panel's single "Mark opted in" button - one flow, not
        two. The statement text is loaded from window.consentStatement
        (served raw, see consentStatement.js's own module comment) so it's
        never hand-duplicated here. Confirm stays disabled until both the
-       checkbox is ticked and a method is chosen — enforced in app.js, not
+       checkbox is ticked and a method is chosen - enforced in app.js, not
        just visually implied. -->
   <div id="modal-bulk-opt-in" class="modal-overlay">
     <div class="modal-box">
@@ -2363,7 +2363,7 @@
     </div>
   </div>
 
-  <!-- Error dialog — the themed-modal shell from the Group 2/3 dialog above,
+  <!-- Error dialog - the themed-modal shell from the Group 2/3 dialog above,
        for a caught error that's too long or too structured (a Meta
        rejection's real wording, embedded-signup guidance, a multi-reason
        template-validation `details` array) to read in an auto-dismissing
@@ -2385,25 +2385,25 @@
 
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
-  <!-- Same file server/src/utils/templateParams.js requires() server-side —
+  <!-- Same file server/src/utils/templateParams.js requires() server-side -
        served raw so the Create/Edit Template modal's live validation
        (app.js) can call the exact same functions the server checks at
        submit time, not a hand-duplicated copy. Must load before app.js. -->
   <script src="/templateParams.js"></script>
-  <!-- Consent hardening Phase 2 — same served-raw pattern as
+  <!-- Consent hardening Phase 2 - same served-raw pattern as
        templateParams.js immediately above, so the opt-in confirmation
        modal's statement text (app.js) is the exact same string
        routes/contacts.js stores in consent_events.evidence, never a
        hand-duplicated copy. Must load before app.js. -->
   <script src="/consentStatement.js"></script>
-  <!-- Same served-raw pattern again — the persistent "why can't I send"
+  <!-- Same served-raw pattern again - the persistent "why can't I send"
        banner and the chat-send error surface both call
        window.sendabilityMessages.describeSendability/describeErrorCode, the
        exact same functions admin's client-detail view uses server-side-free
        (this file is served static, no server dependency either way). Must
        load before app.js. -->
   <script src="/sendabilityMessages.js"></script>
-  <!-- Cache-busting query string, added 2026-09-05 — embeddedSignup.js had
+  <!-- Cache-busting query string, added 2026-09-05 - embeddedSignup.js had
        NONE at all until a real deploy served stale (pre-fix) code to a real
        client despite a plain refresh: it's served via a bare res.sendFile()
        (server/src/app.js) with no maxAge, so caching behavior anywhere
@@ -2412,9 +2412,9 @@
        changes. A query-string bump is the only cache-busting mechanism that
        works regardless of what's caching it, since it's a categorically
        different URL, not a conditional-request negotiation. Bump the value
-       whenever embeddedSignup.js changes — same discipline as app.js below. -->
+       whenever embeddedSignup.js changes - same discipline as app.js below. -->
   <script src="/embeddedSignup.js?v=20261104a"></script>
-  <!-- Cache-busting query string — this file has been edited many times in a
+  <!-- Cache-busting query string - this file has been edited many times in a
        single session recently; without this, a browser can serve a stale
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->

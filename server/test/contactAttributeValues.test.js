@@ -1,4 +1,4 @@
-// PLAN.md item 7 — per-contact custom attribute values. Verifies:
+// PLAN.md item 7 - per-contact custom attribute values. Verifies:
 // 1. GET /:id/attributes on a contact with no values yet returns an empty list.
 // 2. PUT upserts a text value; GET reflects it.
 // 3. number type: "abc" -> 400, "42" -> 200.
@@ -9,7 +9,7 @@
 //    unique-constraint conflict surfacing as an error).
 // 7. Deleting the attribute definition cascades the value row away (real DB
 //    check, not just a 404 on next read).
-// 8. Tenant isolation — a value never shows up under another client.
+// 8. Tenant isolation - a value never shows up under another client.
 // 9. Role gating (Agent allowed, matching item 1's Contacts row) and
 //    unauthenticated rejection.
 // 10. 404s: unknown contact id, unknown/foreign attribute id.
@@ -152,7 +152,7 @@ test('5. boolean type: "yes" -> 400, "true" -> 200', async () => {
   assert.equal((await good.json()).value, 'true');
 });
 
-test('6. PUT again on the same attribute updates in place — still exactly one row', async () => {
+test('6. PUT again on the same attribute updates in place - still exactly one row', async () => {
   const attr = await createAttribute(clientToken, `${SUITE_PREFIX}nickname`, 'text');
   await fetch(`${baseUrl}/api/contacts/${contactId}/attributes/${attr.id}`, {
     method: 'PUT', headers: authed(clientToken), body: JSON.stringify({ value: 'First' }),

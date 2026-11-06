@@ -1,9 +1,9 @@
-// Coexistence echo ingestion, Phase 1 — stubs only, per explicit instruction
+// Coexistence echo ingestion, Phase 1 - stubs only, per explicit instruction
 // for this task: nothing written to the shared database (this project has
 // no separate dev DB). Repo functions are monkey-patched on their required
 // singleton module objects and restored after each test, same pattern as
 // sessionInvalidation.test.js. Requiring '../src/routes/metaWebhook' (and
-// its own '../src/db/pool' import) only constructs objects — no query is
+// its own '../src/db/pool' import) only constructs objects - no query is
 // ever allowed to reach the real driver in this file.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -78,7 +78,7 @@ test('handleMessageEchoes: an echo to a contact with no prior chat still resolve
     await handleMessageEchoes(WABA, {
       message_echoes: [{ id: 'wamid.ECHO2', from: '911234500000', to: '919000000001', timestamp: '1758700100', type: 'text', text: { body: 'Hi, new here' } }],
     });
-    assert.equal(stub.calls.findOrCreateByContact.length, 1, 'must call findOrCreateByContact — the function that creates a chat when none exists yet');
+    assert.equal(stub.calls.findOrCreateByContact.length, 1, 'must call findOrCreateByContact - the function that creates a chat when none exists yet');
     assert.equal(stub.calls.insertEcho[0].chatId, 'chat-new');
   } finally {
     stub.restore();
@@ -155,14 +155,14 @@ test('chatsRepo.insertEcho: inserts direction=out/status=delivered, and clears u
 
   const updateSql = queries.find((q) => /^update chats/.test(q.sql))?.sql;
   assert.ok(updateSql, 'must still update chats.last_message_at, the way inbound does');
-  assert.match(updateSql, /unread_count\s*=\s*0/, 'a successful echo insert must zero unread_count on the chat — the business already answered from their phone');
+  assert.match(updateSql, /unread_count\s*=\s*0/, 'a successful echo insert must zero unread_count on the chat - the business already answered from their phone');
 });
 
 test('chatsRepo.insertEcho: does NOT clear unread_count when the insert is a no-op (a redelivered webhook for an already-seen echo)', async () => {
   const queries = [];
   const db = fakeDb(async (sql, params) => {
     queries.push({ sql, params });
-    if (/^insert into messages/.test(sql)) return { rows: [] }; // ON CONFLICT DO NOTHING — already ingested
+    if (/^insert into messages/.test(sql)) return { rows: [] }; // ON CONFLICT DO NOTHING - already ingested
     return { rows: [] };
   });
 
@@ -172,7 +172,7 @@ test('chatsRepo.insertEcho: does NOT clear unread_count when the insert is a no-
   assert.equal(queries.some((q) => /^update chats/.test(q.sql)), false, 'a no-op insert must not re-zero unread_count for an unrelated new unread message that may have arrived in between');
 });
 
-test('chatsRepo.insertEcho: is idempotent on the echo\'s own meta message id — the same payload twice inserts exactly one row', async () => {
+test('chatsRepo.insertEcho: is idempotent on the echo\'s own meta message id - the same payload twice inserts exactly one row', async () => {
   let insertCount = 0;
   const db = fakeDb(async (sql) => {
     if (/^insert into messages/.test(sql)) {
@@ -190,7 +190,7 @@ test('chatsRepo.insertEcho: is idempotent on the echo\'s own meta message id —
 
   assert.ok(first, 'first delivery inserts a row');
   assert.equal(second, null, 'a redelivered webhook for the same echo must not insert a second row');
-  assert.equal(insertCount, 2, 'both delivery attempts DO run the insert statement — ON CONFLICT DO NOTHING at the DB level is what prevents the duplicate, not app-level skipping');
+  assert.equal(insertCount, 2, 'both delivery attempts DO run the insert statement - ON CONFLICT DO NOTHING at the DB level is what prevents the duplicate, not app-level skipping');
 });
 
 test('chatsRepo.insertEcho: defaults source to whatsapp_app', async () => {

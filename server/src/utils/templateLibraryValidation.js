@@ -1,6 +1,6 @@
 // Validates one template_library content entry (server/src/db/
 // templateLibraryContent.js) against the SAME real rules Meta submission
-// itself enforces — reusing templateParams.js's actual validateTemplateText/
+// itself enforces - reusing templateParams.js's actual validateTemplateText/
 // validateHeaderText (the reverse-engineered words-ratio and start/end-
 // variable rules included) rather than re-implementing or eyeballing them.
 // This is what "every template manually checked against Meta's real
@@ -14,11 +14,11 @@ const VALID_CATEGORIES = ['Marketing', 'Utility', 'Authentication'];
 const VALID_HEADER_TYPES = ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'];
 const VALID_BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER'];
 
-// Returns an array of human-readable error strings — empty means valid.
+// Returns an array of human-readable error strings - empty means valid.
 // Mirrors messageTemplateCreateSchema's own rules (validate.js) for the
 // fields that schema itself checks (button counts, text-length limits),
 // plus the templateParams.js checks that schema deliberately leaves to the
-// route layer (sample-value coverage — see routes/templates.js's comment).
+// route layer (sample-value coverage - see routes/templates.js's comment).
 function validateLibraryEntry(entry, index) {
   const errors = [];
   const label = `[${index}] ${entry.industry || '?'} / ${entry.use_case || '?'}`;
@@ -33,7 +33,7 @@ function validateLibraryEntry(entry, index) {
   if (entry.category === 'Authentication') {
     // Authentication templates have no author-written body/header/footer/
     // buttons on Meta's side (messageTemplateCreateSchema's superRefine
-    // rejects them entirely for this category) — this entry's `body` is a
+    // rejects them entirely for this category) - this entry's `body` is a
     // preview-only string for the library's own browse UI, not something
     // that gets submitted. Still require it non-empty (a library card with
     // no preview text is a broken UI, not a valid content gap) and require
@@ -70,7 +70,7 @@ function validateLibraryEntry(entry, index) {
     if (!bodyResult.valid) {
       errors.push(...bodyResult.errors.map((e) => `${label}: ${e}`));
     } else {
-      // Sample-value coverage — Meta requires an example per named param
+      // Sample-value coverage - Meta requires an example per named param
       // (routes/templates.js's own pre-submit check, mirrored here since
       // this is exactly the same requirement library content must meet).
       const sampleValues = entry.sample_values || {};
@@ -119,7 +119,7 @@ function validateLibraryEntry(entry, index) {
       errors.push(`${label}: footer is ${entry.footer.length} chars, Meta's limit is 60`);
     }
     if (entry.footer.includes('{{')) {
-      errors.push(`${label}: footer contains "{{" — Meta does not support variables in the footer`);
+      errors.push(`${label}: footer contains "{{" - Meta does not support variables in the footer`);
     }
   }
 

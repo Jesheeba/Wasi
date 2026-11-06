@@ -1,6 +1,6 @@
-// PLAN.md item 8 — multi-tag contacts, additive to contacts.tag_id, which
+// PLAN.md item 8 - multi-tag contacts, additive to contacts.tag_id, which
 // stays the permanent "primary tag" (every existing tag-based
-// broadcast/chat targeting keys off it directly — untouched by this
+// broadcast/chat targeting keys off it directly - untouched by this
 // migration, no breaking replace).
 //
 // The backfill is insert-only: it copies every existing contacts.tag_id
@@ -16,7 +16,7 @@ exports.up = (pgm) => {
     client_id: { type: 'uuid', notNull: true, references: 'clients', onDelete: 'CASCADE' },
     created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
   });
-  // Composite PK via a separate addConstraint call — matches this repo's
+  // Composite PK via a separate addConstraint call - matches this repo's
   // own precedent (migration 033_message_status_forwards.js) rather than
   // createTable's inline options-object form.
   pgm.addConstraint('contact_tags', 'contact_tags_pkey', {
@@ -48,10 +48,10 @@ exports.down = async (pgm) => {
   // contacts.tag_id) was unsound: adding one new multi-tag assignment and
   // removing one backfilled one leaves the counts matching while real data
   // is silently dropped on rollback. This is a real set-membership check
-  // instead — every row the backfill itself inserted is, by construction,
+  // instead - every row the backfill itself inserted is, by construction,
   // always a (contact_id, tag_id) pair that also exists as contacts.tag_id;
   // any row that ISN'T is necessarily something added after this migration
-  // ran (a new second/third tag, or contacts.tag_id having since changed) —
+  // ran (a new second/third tag, or contacts.tag_id having since changed) -
   // real data this rollback would otherwise destroy with no warning.
   const [{ count }] = await pgm.db.select(`
     select count(*)::int as count from contact_tags ct

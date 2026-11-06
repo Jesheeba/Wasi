@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Accept Team Invite — Wasi CRM</title>
+  <title>Accept Team Invite - Wasi CRM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
@@ -38,14 +38,14 @@
       </form>
 
       <div id="invite-success" class="simple-card text-center" style="display:none;">
-        <p class="page-lede">Your account is active — taking you in now.</p>
+        <p class="page-lede">Your account is active - taking you in now.</p>
       </div>
     </div>
   </section>
 
   <script>
     (() => {
-      // Same API_BASE snippet as reset-password.html/index.html — not
+      // Same API_BASE snippet as reset-password.html/index.html - not
       // shared via a common file, matching this repo's existing convention
       // of each static page carrying its own copy (no build step to share it).
       const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '4000')
@@ -57,7 +57,7 @@
       const errorEl = document.getElementById('invite-error');
 
       if (!token) {
-        document.getElementById('invite-intro').textContent = 'This invite link is missing a token — ask whoever invited you to resend it.';
+        document.getElementById('invite-intro').textContent = 'This invite link is missing a token - ask whoever invited you to resend it.';
         form.style.display = 'none';
         return;
       }
@@ -78,7 +78,7 @@
           if (!res.ok) throw new Error(data.error || 'Could not activate this account');
 
           // Unlike reset-password, this endpoint returns a working JWT
-          // directly — auto-login straight into the real app rather than
+          // directly - auto-login straight into the real app rather than
           // making someone who just set a password type it again immediately.
           localStorage.setItem('client_token', data.token);
           localStorage.setItem('actor_type', 'team_member');

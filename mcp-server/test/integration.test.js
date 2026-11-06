@@ -1,15 +1,15 @@
 // Real end-to-end integration: an actual McpServer (this package's real
 // tool set) driving actual HTTP calls into the REAL Wasi backend
 // (server/src/app.js's createApp(), the same Express app production runs),
-// backed by the real (shared dev/prod) Postgres database — same pattern and
+// backed by the real (shared dev/prod) Postgres database - same pattern and
 // same safety rail as server/test/apiV1.test.js: a dedicated, disposable
 // test client (never the demo one), deleted in after(). ONLY the outbound
-// call to graph.facebook.com is faked (global.fetch stub) — every other hop
+// call to graph.facebook.com is faked (global.fetch stub) - every other hop
 // (MCP protocol -> hubClient fetch -> Express route -> repo -> Postgres) is
 // the real, unmodified code path. No real WhatsApp message is ever sent.
 //
 // Requires ALLOW_SHARED_PRODUCTION_DB=yes-i-understand-the-risk for this one
-// invocation (see server/src/utils/dbSafety.js) — there is no separate dev
+// invocation (see server/src/utils/dbSafety.js) - there is no separate dev
 // database for this project. Run explicitly, not part of the default `npm
 // test` in this package (see package.json) so a plain `npm test` here never
 // touches the shared database by accident.
@@ -72,7 +72,7 @@ before(async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'admin@wasi.local', password: (process.env.TEST_ADMIN_PASSWORD || 'dev-only-admin-password') }),
   }).then((r) => r.json());
-  assert.ok(adminLogin.token, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminLogin.token, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const issued = await fetch(`${backendBaseUrl}/api/admin/api-keys`, {
     method: 'POST',
@@ -163,7 +163,7 @@ test('list_conversations, get_conversation_history, search_contacts: real round 
 // The deep proof: a real MCP tool call flows through hubClient's fetch,
 // into the real Express route, through the real messagingService and
 // metaClient.sendInteractiveMessage, and produces the exact Graph API
-// request body Meta would receive — with ONLY graph.facebook.com faked.
+// request body Meta would receive - with ONLY graph.facebook.com faked.
 test('send_button_message: real round trip captures the exact Graph API payload metaClient builds', async () => {
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: `${SUITE_PREFIX}waba`, phone_number_id: `${SUITE_PREFIX}phone`,

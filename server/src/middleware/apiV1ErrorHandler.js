@@ -1,12 +1,12 @@
 // Hub API v1's own 404 + error-handling pair, mounted in app.js right after
 // the five /api/v1/* routers and before the app-wide notFoundHandler/
-// errorHandler (middleware/errorHandler.js) — those stay untouched and keep
+// errorHandler (middleware/errorHandler.js) - those stay untouched and keep
 // serving admin/marketing/the client CRM app's existing {error: 'string'}
 // shape. This pair is what makes {error: {code, message}} (wasi-master-plan.md
 // §8.6) the one consistent shape across every Hub API v1 endpoint, including
 // requests that never reach a route handler (unmatched path) or that throw
 // (Zod validation, Postgres constraint violations, an uncaught error) rather
-// than returning a hand-written response — the five apiV1*.js route files
+// than returning a hand-written response - the five apiV1*.js route files
 // only need sendApiError() (utils/apiError.js) for their own known failure
 // cases; everything else funnels through here.
 const { ZodError } = require('zod');

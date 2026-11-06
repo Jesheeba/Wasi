@@ -11,7 +11,7 @@ async function findActive(db, clientId, contactId) {
 // (contact_flow_state_one_active_per_contact, migration 023) is the real
 // concurrency guard: if two inbound events for the same contact both try to
 // start a flow at nearly the same moment, the second INSERT throws a
-// unique_violation (Postgres code 23505) — flowEngine.js treats that as
+// unique_violation (Postgres code 23505) - flowEngine.js treats that as
 // "someone else already won," not an error.
 async function create(db, { clientId, contactId, flowId, currentNodeId }) {
   const { rows } = await db.query(
@@ -23,12 +23,12 @@ async function create(db, { clientId, contactId, flowId, currentNodeId }) {
   return rows[0];
 }
 
-// Compare-and-swap advance — an atomic UPDATE...RETURNING, not a held row
+// Compare-and-swap advance - an atomic UPDATE...RETURNING, not a held row
 // lock (see migration 023's module comment for why: holding a Postgres lock
 // across the Meta API call flowEngine.js makes between reading and writing
 // state would repeat the exact anti-pattern forwardRunner.js exists to
 // avoid). Returns null, not a throw, if expectedNodeId/expectedVersion no
-// longer match current — a concurrent webhook delivery or flowRunner
+// longer match current - a concurrent webhook delivery or flowRunner
 // (Stage 4) already moved this contact past the state this call was
 // computed against. The caller logs that as 'superseded' and does nothing
 // further; it must never retry blindly, since re-running the node's send
@@ -46,12 +46,12 @@ async function advance(db, { clientId, contactId, expectedNodeId, expectedVersio
   return rows[0] || null;
 }
 
-// flowRunner.js's claim — same atomic UPDATE...WHERE...SKIP LOCKED...RETURNING
+// flowRunner.js's claim - same atomic UPDATE...WHERE...SKIP LOCKED...RETURNING
 // shape as broadcastRecipientsRepo.claimBatch, flipping 'active' -> 'processing'
 // in the same statement so the claim and the visibility change are atomic.
 // This is also what makes the webhook path's CAS advance() race-safe for
 // free (advance() requires status = 'active'; once a row is 'processing'
-// here, that WHERE clause simply won't match, 0 rows, safe no-op) — see
+// here, that WHERE clause simply won't match, 0 rows, safe no-op) - see
 // flowEngine.js's module comment. Also reclaims rows stuck in 'processing'
 // for >5 minutes (a crash between claim and finalizeProcessing), same
 // pattern broadcastRecipientsRepo.claimBatch uses for 'sending'.
@@ -73,11 +73,11 @@ async function claimDueBatch(db, limit) {
   return rows;
 }
 
-// flowRunner.js's finalize — unlike advance(), this doesn't need a version
+// flowRunner.js's finalize - unlike advance(), this doesn't need a version
 // check: a 'processing' row was exclusively claimed by exactly one
 // claimDueBatch call (SKIP LOCKED), so nothing else can be concurrently
 // finalizing the same row. status = 'processing' in the WHERE clause is
-// still required, though — it's what stops this from ever finalizing a row
+// still required, though - it's what stops this from ever finalizing a row
 // the webhook path has since raced ahead of (impossible while 'processing',
 // but this must never silently overwrite an unrelated state).
 async function finalizeProcessing(db, { clientId, contactId, expectedNodeId, nodeId, status, dueAt, waitingSince }) {

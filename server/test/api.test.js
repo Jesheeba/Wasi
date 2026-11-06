@@ -2,7 +2,7 @@
 // database (same one `npm run dev` uses) and drives it over HTTP, the way a
 // client actually would. Requires Postgres reachable via DATABASE_URL and
 // the seeded demo admin (`npm run db:seed`) to already exist for admin-role
-// tests — client-scoped tests use their own dedicated, disposable client
+// tests - client-scoped tests use their own dedicated, disposable client
 // (see below), not the demo client.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -18,7 +18,7 @@ let testClientId;
 let adminToken;
 
 // Every row this suite creates is tagged with this prefix for readability in
-// assertions/logs — cleanup no longer depends on it (see after()), since
+// assertions/logs - cleanup no longer depends on it (see after()), since
 // everything now hangs off a dedicated client_id that gets cascade-deleted.
 const SUITE_PREFIX = '__test_suite__';
 
@@ -28,9 +28,9 @@ before(async () => {
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://localhost:${server.address().port}`;
 
-  // A brand-new, disposable client via the real registration endpoint —
+  // A brand-new, disposable client via the real registration endpoint -
   // not the demo client. The demo client is what Phase 2 live verification
-  // uses (a genuinely connected real WABA, real seeded contacts) — a test
+  // uses (a genuinely connected real WABA, real seeded contacts) - a test
   // run that reuses it can corrupt that state (confirmed: this exact test
   // file used to overwrite the demo client's WABA row with fake values,
   // see git history) or, worse, cause a real send: broadcasts.create() with
@@ -59,13 +59,13 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
   // Cascade-deletes every row this suite created in one shot (contacts,
   // chats, messages, tags, broadcasts, automation_rules, message_templates,
-  // support_tickets, wabas — all FK'd to clients with ON DELETE CASCADE).
+  // support_tickets, wabas - all FK'd to clients with ON DELETE CASCADE).
   // No Meta-side cleanup needed: this client never had a WABA, so template
   // creation never left the local DB.
   if (testClientId) await pool.query('delete from clients where id = $1', [testClientId]);
@@ -144,10 +144,10 @@ test('broadcasts, automation rules, templates: create + list round trip', async 
   }).then((r) => r.json());
   assert.equal(rule.title, `${SUITE_PREFIX}Rule`);
 
-  // Named parameters, not numbered — Meta rejects {{1}}-style now (see
+  // Named parameters, not numbered - Meta rejects {{1}}-style now (see
   // server/test/templateParams.test.js for the dedicated coverage of that).
   // This test client has no WABA, so template creation only exercises local
-  // validation + storage, never a real Meta call — but the body still needs
+  // validation + storage, never a real Meta call - but the body still needs
   // enough words per parameter to satisfy templateParams.js's local
   // words-ratio check (added after this exact body tripped real error
   // 2388293 when this suite briefly ran against a connected WABA).
@@ -157,7 +157,7 @@ test('broadcasts, automation rules, templates: create + list round trip', async 
     body: JSON.stringify({
       name: `${SUITE_PREFIX}template_${Date.now()}`,
       category: 'Utility',
-      body: 'Hello {{customer_name}}, thank you so much for reaching out to us today — we truly appreciate your business and support!',
+      body: 'Hello {{customer_name}}, thank you so much for reaching out to us today - we truly appreciate your business and support!',
       bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
@@ -206,7 +206,7 @@ test('admin: overview, billing overview, and settings status all respond', async
 });
 
 test('admin: template status can be flipped and reverted', async () => {
-  // Its own template, not templates[0] from the global admin list — flipping
+  // Its own template, not templates[0] from the global admin list - flipping
   // an arbitrary existing template (previously: whichever the demo client
   // happened to have first) is exactly the kind of shared-state coupling
   // this suite is moving away from.
@@ -244,7 +244,7 @@ test('onboarding: whatsapp connect fails cleanly with a bogus code', async () =>
   // that's harmless; no snapshot/restore needed the way it was when this
   // ran against the demo client (see git history for that incident).
   // META_APP_ID/SECRET are real now (Phase 2), so this reaches real Meta and
-  // fails because 'fake' isn't a real authorization code — same 502 either
+  // fails because 'fake' isn't a real authorization code - same 502 either
   // way, just for a live-API reason now instead of a local not-configured one.
   const res = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
     method: 'POST',

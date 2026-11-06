@@ -1,10 +1,10 @@
-// Flow engine (server/src/services/flowEngine.js) — pure-function testing
+// Flow engine (server/src/services/flowEngine.js) - pure-function testing
 // for normalizeInboundEvent/resolveInboundEdge, same reasoning
 // templateSyncService.test.js documents for reconcileTemplates: no DB, no
 // network, no real Meta App needed to prove the branching logic is correct.
 // The DB-touching half (runToRest, startFlow, continueFlow, the CAS
 // advance) is covered by Stage 7's live verification against the real WABA,
-// not here — mirroring templateSync.test.js's split between pure-function
+// not here - mirroring templateSync.test.js's split between pure-function
 // tests and one live-DB end-to-end test.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,7 +36,7 @@ test('normalizeInboundEvent: no interactive.button_reply falls back to text even
 
 // --- resolveInboundEdge ---
 // Edges are passed in flowEdgesRepo.listForNode's real order (default
-// last) — these tests construct that order explicitly rather than relying
+// last) - these tests construct that order explicitly rather than relying
 // on the repo, since resolveInboundEdge itself doesn't sort.
 
 test('resolveInboundEdge: a button_id edge matches on id, ignoring title entirely', () => {
@@ -55,7 +55,7 @@ test('resolveInboundEdge: a button_click event never matches a keyword edge, eve
   assert.equal(resolveInboundEdge(edges, event), null);
 });
 
-test('resolveInboundEdge: keyword matching is exact/normalized, not substring — "cancel" does not match "can"', () => {
+test('resolveInboundEdge: keyword matching is exact/normalized, not substring - "cancel" does not match "can"', () => {
   const edges = [{ id: 'e1', condition_type: 'keyword', condition_value: 'can', to_node_id: 'n1' }];
   const event = { kind: 'text', text: 'cancel my order' };
   assert.equal(resolveInboundEdge(edges, event), null);
@@ -101,7 +101,7 @@ test('resolveInboundEdge: priority order is respected among non-default edges', 
     { id: 'e_high', condition_type: 'keyword', condition_value: 'x', priority: 1, to_node_id: 'n2' },
   ];
   // First edge in the passed-in (already-sorted) order wins, regardless of
-  // which has the numerically higher priority field — sorting is
+  // which has the numerically higher priority field - sorting is
   // flowEdgesRepo.listForNode's job, resolveInboundEdge just walks in order.
   const matched = resolveInboundEdge(edges, { kind: 'text', text: 'x' });
   assert.equal(matched.id, 'e_low');

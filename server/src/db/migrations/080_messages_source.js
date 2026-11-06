@@ -1,16 +1,16 @@
-// Coexistence echo ingestion, Phase 1 — a `messages` row can now originate
+// Coexistence echo ingestion, Phase 1 - a `messages` row can now originate
 // from two structurally different places: this app's own send pipeline
-// (chat send, broadcast, flow engine, Hub API — all of which already write
+// (chat send, broadcast, flow engine, Hub API - all of which already write
 // via insertOutboundPending) or a business's own phone via the WhatsApp
 // Business app, arriving as a smb_message_echoes webhook event
-// (chatsRepo.insertEcho). Nothing before this could tell the two apart —
+// (chatsRepo.insertEcho). Nothing before this could tell the two apart -
 // this column is purely additive so the chat UI can visually distinguish
 // them (see app.js's chat bubble rendering).
 //
 // Deliberately not backfilled and not applied retroactively to existing
-// rows — by direct instruction, this phase only covers echoes from the
+// rows - by direct instruction, this phase only covers echoes from the
 // moment smb_message_echoes is actually turned on in the App Dashboard
-// (which hasn't happened yet — see this migration's own module comment in
+// (which hasn't happened yet - see this migration's own module comment in
 // metaWebhook.js). Every existing row keeps reading as 'api', which is
 // correct: every message in this table today really was sent through this
 // app's own pipeline, since echo ingestion didn't exist yet to write

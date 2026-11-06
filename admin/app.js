@@ -1,9 +1,9 @@
 /* ============================================================
-   Wasi Admin Panel — vanilla JS, no build step, no framework.
+   Wasi Admin Panel - vanilla JS, no build step, no framework.
    Talks to the live backend at API_BASE using fetch + JWT bearer auth.
 
    UI redesign Stage 11: this file has its OWN helpers (typed toast,
-   escapeHtml, showConfirm, modal a11y) — it does not share app.js's.
+   escapeHtml, showConfirm, modal a11y) - it does not share app.js's.
    Rules every render function here follows:
    - every dynamic value that reaches innerHTML goes through esc()/escapeHtml()
    - statuses render through badge()/statusBadge() (one component, no inline hex)
@@ -11,7 +11,7 @@
      and an error state with a retry when the request fails
    ============================================================ */
 
-// See app.js for why this is conditional — same-origin in production
+// See app.js for why this is conditional - same-origin in production
 // (served by the same Express process), cross-port only in local dev.
 const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '4000')
   ? 'http://localhost:4000'
@@ -59,7 +59,7 @@ async function apiFetch(path, options = {}) {
   try {
     res = await fetch(`${API_BASE}${path}`, Object.assign({}, options, { headers }));
   } catch (networkErr) {
-    throw new ApiError('Network error — is the backend running at ' + API_BASE + '?', 0, null);
+    throw new ApiError('Network error - is the backend running at ' + API_BASE + '?', 0, null);
   }
 
   let data = null;
@@ -69,7 +69,7 @@ async function apiFetch(path, options = {}) {
   }
 
   if (res.status === 401) {
-    // Invalid/missing/expired token — bounce back to login.
+    // Invalid/missing/expired token - bounce back to login.
     handleUnauthorized();
     throw new ApiError((data && data.error) || 'Session expired. Please sign in again.', 401, data);
   }
@@ -99,7 +99,7 @@ function handleUnauthorized() {
 }
 
 /* ---------------------------------------------------------------
-   Toast — typed (success / error / info), screen-reader announced.
+   Toast - typed (success / error / info), screen-reader announced.
    textContent only, so a message can never inject markup.
    --------------------------------------------------------------- */
 function showToast(message, variant = 'default') {
@@ -161,16 +161,16 @@ function setInlineError(elId, message, retryFn) {
    Formatting helpers
    --------------------------------------------------------------- */
 function formatDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
+  if (isNaN(d.getTime())) return '-';
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function formatDateTime(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
+  if (isNaN(d.getTime())) return '-';
   return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
@@ -190,7 +190,7 @@ function titleCase(str) {
 }
 
 /* ---------------------------------------------------------------
-   Badges — ONE component (.badge .badge-<tone>). Status -> tone is an
+   Badges - ONE component (.badge .badge-<tone>). Status -> tone is an
    honest mapping: green only for a genuinely good/complete state, amber for
    waiting-on-someone, red for failed/blocked/revoked, blue for in-progress,
    grey for neutral/unknown.
@@ -318,7 +318,7 @@ function refreshIcons() {
   if (window.lucide) lucide.createIcons();
 }
 
-/* Tabs — a .tabs[role=tablist] of .tab[role=tab][data-tab] buttons controlling
+/* Tabs - a .tabs[role=tablist] of .tab[role=tab][data-tab] buttons controlling
    .tab-panel[role=tabpanel][data-panel] siblings inside `root`. */
 function showTab(root, tabName) {
   root.querySelectorAll('[role="tab"]').forEach((t) => {
@@ -349,7 +349,7 @@ function initTablist(tablist, onSelect) {
   });
 }
 
-/* Clipboard — one delegated handler for every [data-copy-value] and
+/* Clipboard - one delegated handler for every [data-copy-value] and
    [data-copy-value-target] button, including ones rendered later. */
 async function copyText(text, okMessage = 'Copied to clipboard.') {
   try {
@@ -357,7 +357,7 @@ async function copyText(text, okMessage = 'Copied to clipboard.') {
     showToast(okMessage, 'success');
     return true;
   } catch (_e) {
-    showToast('Could not copy automatically — select the text and copy it manually.', 'error');
+    showToast('Could not copy automatically - select the text and copy it manually.', 'error');
     return false;
   }
 }
@@ -375,7 +375,7 @@ document.addEventListener('click', (e) => {
 });
 
 /* ---------------------------------------------------------------
-   Modal accessibility — applied to every .modal-overlay without touching any
+   Modal accessibility - applied to every .modal-overlay without touching any
    modal's own open/close code: dialog semantics, focus moved in on open and
    restored on close, a Tab focus trap, and Escape-to-close (via the modal's
    own close button, so any guard it wires there still runs).
@@ -441,7 +441,7 @@ function setupModalAccessibility() {
    Contract:
    - `body` is HTML: the CALLER must escape every interpolated value with esc().
    - `onConfirm` should THROW on failure. The dialog then stays open and shows
-     the error inline (role=alert) so the admin can retry or cancel — it never
+     the error inline (role=alert) so the admin can retry or cancel - it never
      closes/swallows a failure. (A 401 closes it, since login takes over.)
    - `requireText` makes the action button stay disabled until the admin types
      that exact text (e.g. the client's name for a permanent delete).
@@ -621,7 +621,7 @@ const TAB_VIEWS = {
 };
 
 // KPI-card navigation and the sidebar both call plain switchView(viewName)
-// with no extra params — client-detail's id/tab and the clients status filter
+// with no extra params - client-detail's id/tab and the clients status filter
 // travel via `state` (set by their callers) rather than through switchView's
 // signature, so every existing call site keeps working unchanged.
 function hashForView(viewName) {
@@ -721,7 +721,7 @@ function applyLocationHash(historyMode) {
   switchView(viewName || 'dashboard', { history: historyMode, tab: tv ? (id || tv.def) : undefined });
 }
 
-// Only meaningful once state.token exists (i.e. after showAppShell has run) —
+// Only meaningful once state.token exists (i.e. after showAppShell has run) -
 // a back/forward navigation while still on the login screen has nothing to
 // restore into. Also fires for in-page #hash links (API Guide <-> API Keys).
 window.addEventListener('popstate', () => {
@@ -809,7 +809,7 @@ function renderDashboard(overview) {
 }
 
 /* ---------------------------------------------------------------
-   Statistics (Trends + Usage & Volume) — read-only trend charts over
+   Statistics (Trends + Usage & Volume) - read-only trend charts over
    GET /api/admin/stats. Chart.js instances are tracked and destroyed before
    every re-render so repeated visits don't leak canvases/memory.
    --------------------------------------------------------------- */
@@ -867,7 +867,7 @@ function renderStatChart(key, canvasId, emptyId, rows, config) {
 
 function renderStatistics(stats) {
   // Chart.js loads from a CDN (no bundler in this admin panel, same
-  // approach as Lucide) — if that's blocked/offline, skip charts rather
+  // approach as Lucide) - if that's blocked/offline, skip charts rather
   // than throw; the rest of the page (activity list, filters) still works.
   if (window.Chart) {
     Chart.defaults.font.family = "'Poppins', 'Inter', sans-serif";
@@ -875,7 +875,7 @@ function renderStatistics(stats) {
     renderStatisticsCharts(stats);
   }
 
-  // Recently active API keys — each row links into that client's detail
+  // Recently active API keys - each row links into that client's detail
   // page, per the "API usage stats connect to relevant client details"
   // requirement.
   const activity = (stats.apiKeys && stats.apiKeys.recentActivity) || [];
@@ -985,7 +985,7 @@ async function loadClients() {
     const clients = await apiFetch('/api/clients');
     state.clients = clients;
     // A KPI card (e.g. "Active Clients") may have set this before navigating
-    // here — reflect it in the dropdown and apply it to this fresh fetch.
+    // here - reflect it in the dropdown and apply it to this fresh fetch.
     const statusSelect = document.getElementById('clients-status-filter');
     if (statusSelect) statusSelect.value = state.clientsStatusFilter || '';
     filterClientsTable();
@@ -995,12 +995,12 @@ async function loadClients() {
   }
 }
 
-// Payment reminder / auto-suspend feature — mirrors
+// Payment reminder / auto-suspend feature - mirrors
 // paymentReminderRunner.js's own WARNING_AFTER_DAYS/SUSPEND_AFTER_DAYS
 // (3/5) so the countdown shown here matches what the runner will actually
 // do; no endpoint exposes those constants, so this is a by-comment sync,
 // not a shared import. Shown in BOTH the list (so a pending suspension is
-// visible without opening each client — the explicit requirement this
+// visible without opening each client - the explicit requirement this
 // feature was built for) and the detail page's billing card below.
 const PAYMENT_WARNING_AFTER_DAYS = 3;
 const PAYMENT_SUSPEND_AFTER_DAYS = 5;
@@ -1017,7 +1017,7 @@ function billingBadgeHtml(client) {
   if (client.status === 'suspended' && client.auto_suspended_for_nonpayment) {
     return badge('Auto-suspended', 'danger');
   }
-  return badge(`Unpaid — ${daysLeft}d left`, 'danger', `Will auto-suspend in ${daysLeft} day${daysLeft === 1 ? '' : 's'} unless marked paid`);
+  return badge(`Unpaid - ${daysLeft}d left`, 'danger', `Will auto-suspend in ${daysLeft} day${daysLeft === 1 ? '' : 's'} unless marked paid`);
 }
 
 function renderClientsTable() {
@@ -1089,7 +1089,7 @@ function guardAllowsClose(key) {
   const ack = document.getElementById(`${key}-ack`);
   if (ack && ack.checked) return true;
   document.getElementById(`${key}-ack-row`)?.classList.add('attention');
-  showToast("Copy these credentials first — they won't be shown again. Tick the box once you have.", 'error');
+  showToast("Copy these credentials first - they won't be shown again. Tick the box once you have.", 'error');
   ack?.focus();
   return false;
 }
@@ -1131,7 +1131,7 @@ function bindSecretsAck(key, closeFn) {
 function openCreateClientModal() {
   pendingSecrets['create-client'] = false;
   document.getElementById('create-client-form').reset();
-  // form.reset() only resets form controls — the progressive-disclosure
+  // form.reset() only resets form controls - the progressive-disclosure
   // <details> sections don't participate in that, so collapse them by hand
   // for a clean reopen.
   document.querySelectorAll('#create-client-form details.form-section-details').forEach((d) => { d.open = false; });
@@ -1150,7 +1150,7 @@ function closeCreateClientModal() {
 }
 
 // Pre-fills the password field so the admin can see/edit it before
-// submitting — leaving it blank still works, the server generates its own
+// submitting - leaving it blank still works, the server generates its own
 // if none is sent (routes/clients.js).
 function generateClientPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
@@ -1171,7 +1171,7 @@ async function handleCreateClientSubmit(e) {
     const body = { name, email };
     if (password) body.password = password;
     // Every field below is optional (see migration 035_client_onboarding_fields.js)
-    // — only send the ones the admin actually filled in, so an empty string
+    // - only send the ones the admin actually filled in, so an empty string
     // never reaches z.string().email().optional() and trips validation.
     const optionalFields = {
       contact_person_name: 'create-client-contact-name',
@@ -1193,7 +1193,7 @@ async function handleCreateClientSubmit(e) {
     const resultEl = document.getElementById('create-client-result');
     resultEl.style.display = 'block';
     resultEl.innerHTML = `
-      <div class="inline-success">Client created — this password and API key are shown once. Copy each one now.</div>
+      <div class="inline-success">Client created - this password and API key are shown once. Copy each one now.</div>
       ${secretRowsHtml([
         ['Login URL', created.loginUrl],
         ['Email', created.email],
@@ -1206,7 +1206,7 @@ async function handleCreateClientSubmit(e) {
           <li>Send them the login URL, email, and password above.</li>
           <li>They log in and connect WhatsApp (Embedded Signup) themselves.</li>
           <li>Any existing approved templates on their WABA sync in automatically once connected.</li>
-          <li>Hand the Hub API Key to their CRM/developer to call <code>POST /api/v1/messages</code> and <code>/api/v1/templates</code> (Authorization: Bearer). If lost, issue a new one from the API Keys page — this one still works until revoked.</li>
+          <li>Hand the Hub API Key to their CRM/developer to call <code>POST /api/v1/messages</code> and <code>/api/v1/templates</code> (Authorization: Bearer). If lost, issue a new one from the API Keys page - this one still works until revoked.</li>
         </ol>
       </div>
       ${secretsAckHtml('create-client')}
@@ -1224,7 +1224,7 @@ async function handleCreateClientSubmit(e) {
 }
 
 /* ---------------------------------------------------------------
-   Client Detail — tabbed: Overview | Billing & Service | WhatsApp |
+   Client Detail - tabbed: Overview | Billing & Service | WhatsApp |
    Templates | Activity. The active tab lives in state.clientDetailTab (and the
    URL's ?tab=), so a refresh or a re-render after an action keeps your place.
    --------------------------------------------------------------- */
@@ -1283,12 +1283,12 @@ function selectClientDetailTab(tab) {
 
 const CLIENT_STATUS_OPTIONS = ['pending_setup', 'payment_confirmed', 'active', 'suspended'];
 
-// Mirrors server/src/utils/webhookEvents.js's WEBHOOK_EVENT_TYPES — no
+// Mirrors server/src/utils/webhookEvents.js's WEBHOOK_EVENT_TYPES - no
 // endpoint exposes this list, so it's kept in sync by hand; the server's
 // zod schema is the actual source of truth and will reject anything else.
 const HUB_FORWARD_EVENTS = ['message.received', 'message.status', 'message_template_status_update', 'account_update'];
 
-// PLAN.md item 25, Part A — renders the needs_manual_resolution state with
+// PLAN.md item 25, Part A - renders the needs_manual_resolution state with
 // a REAL picker, not just a status badge. Two sub-states share this one
 // function since they're the same underlying problem (Meta returned more
 // than one of something, discovery can't guess which) at two different
@@ -1301,7 +1301,7 @@ function renderWabaResolutionHtml(waba) {
       .join('');
     return `
       <div class="alert alert-warning">
-        <span><strong>This Meta Business account has more than one WhatsApp Business Account.</strong> Server-side discovery couldn't tell which one the client meant to connect — pick one below.</span>
+        <span><strong>This Meta Business account has more than one WhatsApp Business Account.</strong> Server-side discovery couldn't tell which one the client meant to connect - pick one below.</span>
       </div>
       <label class="sr-only" for="resolve-waba-select">WhatsApp Business Account</label>
       <select id="resolve-waba-select" class="form-input">
@@ -1333,7 +1333,7 @@ function renderWabaResolutionHtml(waba) {
       </button>
     `;
   }
-  // Fallback — should never happen (these two reasons are the only ones
+  // Fallback - should never happen (these two reasons are the only ones
   // this app produces), but don't render a broken/blank panel if it does.
   return `<div class="empty-state">This WhatsApp connection needs manual resolution, but the specific reason wasn't recorded. Check connect_diagnostics directly: <code>${esc(JSON.stringify(diag))}</code></div>`;
 }
@@ -1358,12 +1358,12 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   ).join('');
 
   // Payment reminder / auto-suspend feature. "Service" maps directly onto
-  // status active<->suspended — there's no separate boolean for it, this is
+  // status active<->suspended - there's no separate boolean for it, this is
   // just a clearer binary control for the one common transition, alongside
   // (not replacing) the full status dropdown for the onboarding-only
   // states. Disabled while the client hasn't reached 'active' yet at all,
   // since "off" would be meaningless (there's no service running yet to
-  // turn off) — the status dropdown is still how a pending_setup/
+  // turn off) - the status dropdown is still how a pending_setup/
   // payment_confirmed client gets activated the first time.
   const serviceTogglable = client.status === 'active' || client.status === 'suspended';
   const serviceOn = client.status === 'active';
@@ -1387,7 +1387,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
     : (client.status === 'suspended' && client.auto_suspended_for_nonpayment)
     ? `
       <div class="alert alert-danger">
-        <span><strong>Auto-suspended for nonpayment</strong> — mark this client Paid to restore Service automatically.</span>
+        <span><strong>Auto-suspended for nonpayment</strong> - mark this client Paid to restore Service automatically.</span>
       </div>
     `
     : '';
@@ -1415,20 +1415,20 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
         </span>
       </div>
       <div id="service-billing-result"></div>
-      ${detailRow('Activated', client.activated_at ? formatDate(client.activated_at) : '—')}
+      ${detailRow('Activated', client.activated_at ? formatDate(client.activated_at) : '-')}
       ${detailRow('Last Reminder Sent', client.last_reminder_sent_on ? formatDate(client.last_reminder_sent_on) : 'Never')}
     </div>
   `;
 
   const subscriptionHtml = subscription
     ? `
-      ${detailRow('Plan', esc(subscription.plan || '—'))}
+      ${detailRow('Plan', esc(subscription.plan || '-'))}
       ${detailRow('Status', statusBadge(subscription.status))}
       ${detailRow('Renews At', formatDate(subscription.renews_at))}
     `
     : `<div class="empty-state"><i data-lucide="credit-card" class="empty-icon"></i><div class="empty-title">No subscription</div><div>No subscription on record for this client.</div></div>`;
 
-  // PLAN.md item 25 — two states distinct from both "connected" and "no
+  // PLAN.md item 25 - two states distinct from both "connected" and "no
   // WABA at all," each needing its own visible treatment, not lumped into
   // the generic empty-state. A recorded ambiguity nobody in the admin UI
   // can see is the same invisible-failure pattern already hit 4 times.
@@ -1446,7 +1446,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
         <h2 class="detail-card-title">WhatsApp Business Account</h2>
         <div class="alert alert-warning">
           <span><strong>Meta linked this account, but the authorization code never reached us.</strong><br>
-          WABA ID on file: <code>${esc(waba.waba_id || 'unknown')}</code>. There is nothing to retry from admin — the client needs to reconnect via Settings &gt; WhatsApp in the CRM. If it keeps happening for the same client, that's worth escalating.</span>
+          WABA ID on file: <code>${esc(waba.waba_id || 'unknown')}</code>. There is nothing to retry from admin - the client needs to reconnect via Settings &gt; WhatsApp in the CRM. If it keeps happening for the same client, that's worth escalating.</span>
         </div>
       </div>`;
   } else if (waba?.status === 'needs_manual_resolution') {
@@ -1474,10 +1474,10 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
     wabaCardsHtml = `
       <div class="detail-card">
         <h2 class="detail-card-title">WhatsApp Business Account</h2>
-        ${detailRow('WABA ID', esc(waba.waba_id || '—'))}
-        ${detailRow('Phone Number ID', esc(waba.phone_number_id || '—'))}
-        ${detailRow('Display Name', esc(waba.display_name || '—'))}
-        ${detailRow('Quality Rating', esc(waba.quality_rating || '—'))}
+        ${detailRow('WABA ID', esc(waba.waba_id || '-'))}
+        ${detailRow('Phone Number ID', esc(waba.phone_number_id || '-'))}
+        ${detailRow('Display Name', esc(waba.display_name || '-'))}
+        ${detailRow('Quality Rating', esc(waba.quality_rating || '-'))}
         ${detailRow('Status', statusBadge(waba.status))}
         ${detailRow('Messaging Tier', waba.messaging_tier ? badge(titleCase(String(waba.messaging_tier).toLowerCase()), 'neutral') : notCheckedYet)}
         ${waba.messaging_tier_checked_at ? detailRow('Tier Checked', formatDate(waba.messaging_tier_checked_at)) : ''}
@@ -1496,12 +1496,12 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
         ${waba.sendable !== true && waba.sendable_reason ? `<div class="inline-warning">${esc(waba.sendable_reason)}</div>` : ''}
         ${waba.sendable_checked_at ? detailRow('Sendable Checked', formatDate(waba.sendable_checked_at)) : ''}
         ${detailRow('Probe (permission only)', probeHtml)}
-        <div class="detail-sub-note">Probe tests Meta permission only — a payment/billing block (health_status BLOCKED) can still stop sending even when the probe passes. "Sendable" above is the combined, trustworthy answer.</div>
+        <div class="detail-sub-note">Probe tests Meta permission only - a payment/billing block (health_status BLOCKED) can still stop sending even when the probe passes. "Sendable" above is the combined, trustworthy answer.</div>
         ${detailRow('Registration', registrationBadgeHtml(waba))}
         ${waba.registration_checked_at ? `
-          ${detailRow('On Business App', waba.registration_is_on_biz_app === null ? '—' : (waba.registration_is_on_biz_app ? 'Yes' : 'No'))}
-          ${detailRow('Code Verification', esc(waba.registration_code_verification_status || '—'))}
-          ${detailRow('Platform Type', esc(waba.registration_platform_type || '—'))}
+          ${detailRow('On Business App', waba.registration_is_on_biz_app === null ? '-' : (waba.registration_is_on_biz_app ? 'Yes' : 'No'))}
+          ${detailRow('Code Verification', esc(waba.registration_code_verification_status || '-'))}
+          ${detailRow('Platform Type', esc(waba.registration_platform_type || '-'))}
           ${detailRow('Registration Checked', formatDate(waba.registration_checked_at))}
         ` : ''}
         ${detailRow('Health Status', healthStatusSummaryHtml(waba))}
@@ -1525,7 +1525,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
             <button type="button" class="btn-secondary btn-sm copy-btn-mini" id="regenerate-forward-secret-btn" title="Regenerate secret" aria-label="Regenerate webhook secret"><i data-lucide="refresh-cw" class="icon-14"></i></button>
           </span>
         </div>
-        ${revealedForwardSecret ? `<div class="inline-success">New secret generated — copy it now, it won't be shown again.</div>` : `<div class="detail-sub-note">Only the last 4 characters are ever shown again after generation. Regenerate to get a fresh copyable secret.</div>`}
+        ${revealedForwardSecret ? `<div class="inline-success">New secret generated - copy it now, it won't be shown again.</div>` : `<div class="detail-sub-note">Only the last 4 characters are ever shown again after generation. Regenerate to get a fresh copyable secret.</div>`}
         ` : ''}
         <label class="sr-only" for="hub-forward-url">Webhook URL</label>
         <input type="url" id="hub-forward-url" class="form-input" placeholder="https://client-crm.example.com/webhooks/wasi" value="${esc(waba.forward_to_url || '')}">
@@ -1558,7 +1558,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
             <span class="template-mini-name">${esc(t.name)}</span>
             ${statusBadge(t.status)}
           </div>
-          <div class="template-mini-category">${esc(t.category || '—')}</div>
+          <div class="template-mini-category">${esc(t.category || '-')}</div>
           <div class="template-mini-body">${esc(t.body || '')}</div>
         </div>
       `).join('')
@@ -1631,7 +1631,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
         </div>
         <div class="detail-card detail-card-full danger-zone">
           <div class="danger-zone-title">Danger zone</div>
-          <p>Permanently deleting <strong>${esc(client.name)}</strong> removes every tenant row for this client — contacts, chats, messages, everything. This cannot be undone. You will be asked to type the client's name to confirm.</p>
+          <p>Permanently deleting <strong>${esc(client.name)}</strong> removes every tenant row for this client - contacts, chats, messages, everything. This cannot be undone. You will be asked to type the client's name to confirm.</p>
           <button class="btn-danger" id="delete-client-btn"><i data-lucide="trash-2" class="icon-14"></i> Delete client…</button>
         </div>
       </div>
@@ -1677,7 +1677,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   document.getElementById('service-toggle')?.addEventListener('change', (e) => toggleClientService(client, e.target));
   document.getElementById('payment-toggle')?.addEventListener('change', (e) => toggleClientPayment(client, e.target));
   // Not rendered for the two needs_manual_resolution/incomplete_meta_linked
-  // states (see renderWabaResolutionHtml/wabaCardsHtml above) — optional-chained
+  // states (see renderWabaResolutionHtml/wabaCardsHtml above) - optional-chained
   // rather than assumed present, unlike the other buttons on this page.
   document.getElementById('retry-provisioning-btn')?.addEventListener('click', () => retryProvisioning(client.id));
   document.getElementById('refresh-messaging-tier-btn')?.addEventListener('click', () => refreshMessagingTier(client.id));
@@ -1687,8 +1687,8 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   const hubForwardBtn = document.getElementById('hub-forward-save-btn');
   if (hubForwardBtn) hubForwardBtn.addEventListener('click', () => saveHubForward(client.id));
 
-  // PLAN.md item 25, Part A — the resolve-waba picker. Whichever select is
-  // present (WABA or phone number, never both at once — see
+  // PLAN.md item 25, Part A - the resolve-waba picker. Whichever select is
+  // present (WABA or phone number, never both at once - see
   // renderWabaResolutionHtml) enables the button once something is chosen;
   // the button starts disabled so a resolve can't fire against an empty
   // selection.
@@ -1714,7 +1714,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
 function confirmRegenerateForwardSecret(clientId) {
   showConfirm({
     title: 'Regenerate webhook secret?',
-    body: '<p>The current secret will stop working immediately — any signature verification on the client\'s CRM using the old secret will start failing until it\'s updated with the new one.</p>',
+    body: '<p>The current secret will stop working immediately - any signature verification on the client\'s CRM using the old secret will start failing until it\'s updated with the new one.</p>',
     confirmLabel: 'Regenerate',
     danger: true,
     onConfirm: async () => {
@@ -1722,7 +1722,7 @@ function confirmRegenerateForwardSecret(clientId) {
       state.currentClientDetail = { ...state.currentClientDetail, waba: updated };
       showToast('Webhook secret regenerated.', 'success');
       // revealedForwardSecret is only ever held in this closure for the one
-      // render immediately after a generate/regenerate response — never
+      // render immediately after a generate/regenerate response - never
       // written into a DOM attribute, and gone on the next plain GET.
       renderClientDetail(state.currentClientDetail, { revealedForwardSecret: updated.forward_secret });
     },
@@ -1752,7 +1752,7 @@ async function saveHubForward(clientId) {
     });
     showToast('Hub forwarding config saved.', 'success');
     // updated.forward_secret is only present the very first time a secret is
-    // generated for this WABA — reusing it here (instead of a plain reload)
+    // generated for this WABA - reusing it here (instead of a plain reload)
     // is the only way the admin ever sees it, since every GET after this
     // point returns only the masked/last-4 view (see admin.js's maskWaba).
     state.currentClientDetail = { ...state.currentClientDetail, waba: updated };
@@ -1767,7 +1767,7 @@ async function saveHubForward(clientId) {
   }
 }
 
-// Turning Service OFF suspends a live account — the whole reason this
+// Turning Service OFF suspends a live account - the whole reason this
 // feature added a visible warning+countdown for the AUTOMATIC path is that
 // a silent suspension is unacceptable; the same applies to a mis-click on
 // this manual toggle, so turning it off gets a real confirm step. Turning
@@ -1854,10 +1854,10 @@ async function saveClientStatus(clientId) {
   }
 }
 
-// PLAN.md item 25, Part A — completes a needs_manual_resolution WABA using
+// PLAN.md item 25, Part A - completes a needs_manual_resolution WABA using
 // admin's picked candidate(s). A 409 with the "still ambiguous" shape (the
 // multiple_wabas -> multiple_phone_numbers second round-trip) means the
-// backend already persisted the next step's diagnostics — reload picks up
+// backend already persisted the next step's diagnostics - reload picks up
 // renderWabaResolutionHtml's phone-number picker automatically, no manual
 // DOM patching needed.
 async function resolveWaba(clientId) {
@@ -1887,17 +1887,17 @@ async function resolveWaba(clientId) {
     if (err.status === 401) return;
     if (err.status === 409) {
       // Still ambiguous, one level deeper (WABA picked, phone numbers under
-      // it are ambiguous too) — the backend already saved that state.
+      // it are ambiguous too) - the backend already saved that state.
       loadClientDetail(clientId, { quiet: true });
       return;
     }
-    // Fixed 2026-09-08 — a real resolve failure (WABA 998094716164113,
+    // Fixed 2026-09-08 - a real resolve failure (WABA 998094716164113,
     // TNPSC Mentors) was invisible without opening DevTools' Network tab:
     // apiFetch's ApiError.message is only ever the generic top-level
     // `error` string ("Could not look up phone numbers..."), never the
     // specific `detail` field the backend also sends (e.g. Meta's actual
     // rejection reason). retryProvisioning below already does this
-    // preference correctly — matching that precedent here.
+    // preference correctly - matching that precedent here.
     const explanation = (err.data && err.data.detail) ? `${err.message}: ${err.data.detail}` : err.message;
     resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(explanation)}</div>`;
     showToast('Failed to resolve: ' + explanation, 'error');
@@ -1927,13 +1927,13 @@ async function refreshMessagingTier(clientId) {
     if (err.status === 401) return;
     // 400 = no WABA to check, 502 = the call to Meta failed (expected in a
     // dev environment since no real Meta app is configured). Both are normal
-    // UI states, not bugs — same treatment as retryProvisioning below.
+    // UI states, not bugs - same treatment as retryProvisioning below.
     let explanation = err.message;
     if (err.status === 502) {
       explanation = `Tier check failed when calling Meta: ${err.data && err.data.detail ? err.data.detail : err.message}. This is expected on a local/dev setup where no real Meta app is configured.`;
     }
     resultEl.innerHTML = `<div class="inline-warning" role="alert">${esc(explanation)}</div>`;
-    showToast('Messaging tier check did not succeed — see details below.', 'error');
+    showToast('Messaging tier check did not succeed - see details below.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
@@ -1941,7 +1941,7 @@ async function refreshMessagingTier(clientId) {
   }
 }
 
-// Sendability monitoring, all three layers — runs registration/health AND
+// Sendability monitoring, all three layers - runs registration/health AND
 // the send probe together (see sendabilityMonitorRunner.js's refreshOne).
 // The probe is the one that actually sets `sendable`.
 async function checkSendability(clientId) {
@@ -1958,7 +1958,7 @@ async function checkSendability(clientId) {
     const w = res.waba;
     const sendableText = w.sendable === true ? 'Yes' : w.sendable === false ? 'No' : 'Unknown';
     resultEl.innerHTML = `<div class="inline-success">
-      Sendable: ${esc(sendableText)}${w.sendable_reason ? ` (${esc(w.sendable_reason)})` : ''}. Probe (permission only): ${w.probe_sendable === true ? 'Yes' : w.probe_sendable === false ? 'No' : 'Unknown'}. On Business App: ${w.registration_is_on_biz_app === null ? '—' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}.
+      Sendable: ${esc(sendableText)}${w.sendable_reason ? ` (${esc(w.sendable_reason)})` : ''}. Probe (permission only): ${w.probe_sendable === true ? 'Yes' : w.probe_sendable === false ? 'No' : 'Unknown'}. On Business App: ${w.registration_is_on_biz_app === null ? '-' : (w.registration_is_on_biz_app ? 'Yes' : 'No')}.
     </div>`;
     showToast('Sendability checked.', 'success');
     loadClientDetail(clientId, { quiet: true });
@@ -1969,7 +1969,7 @@ async function checkSendability(clientId) {
       explanation = `Check failed when calling Meta: ${err.data && err.data.detail ? err.data.detail : err.message}. This is expected on a local/dev setup where no real Meta app is configured.`;
     }
     resultEl.innerHTML = `<div class="inline-warning" role="alert">${esc(explanation)}</div>`;
-    showToast('Sendability check did not succeed — see details below.', 'error');
+    showToast('Sendability check did not succeed - see details below.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
@@ -1989,7 +1989,7 @@ async function retryProvisioning(clientId) {
   try {
     const res = await apiFetch(`/api/admin/clients/${clientId}/retry-provisioning`, { method: 'POST' });
     resultEl.innerHTML = `<div class="inline-success">
-      Retry succeeded — WABA status is now "${esc(res.waba.status)}".
+      Retry succeeded - WABA status is now "${esc(res.waba.status)}".
     </div>`;
     showToast('Provisioning retry succeeded.', 'success');
     loadClientDetail(clientId, { quiet: true });
@@ -1997,13 +1997,13 @@ async function retryProvisioning(clientId) {
     if (err.status === 401) return;
     // 400 = no WABA to retry, 502 = the call to Meta failed (expected in a dev
     // environment since no real Meta app is configured). Both are normal UI
-    // states, not bugs — surface them clearly instead of hiding them.
+    // states, not bugs - surface them clearly instead of hiding them.
     let explanation = err.message;
     if (err.status === 502) {
       explanation = `Retry failed when calling Meta: ${err.data && err.data.detail ? err.data.detail : err.message}. This is expected on a local/dev setup where no real Meta app is configured.`;
     }
     resultEl.innerHTML = `<div class="inline-warning" role="alert">${esc(explanation)}</div>`;
-    showToast('Retry provisioning did not succeed — see details below.', 'error');
+    showToast('Retry provisioning did not succeed - see details below.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
@@ -2011,14 +2011,14 @@ async function retryProvisioning(clientId) {
   }
 }
 
-// Permanent, cascading delete — the strongest confirm in the console: the
+// Permanent, cascading delete - the strongest confirm in the console: the
 // admin must type the client's exact name before the button enables.
 function confirmDeleteClient(client) {
   showConfirm({
     title: 'Delete this client permanently?',
     body: `
       <p>You are about to permanently delete <strong>${esc(client.name)}</strong> (${esc(client.email)}).</p>
-      <p class="confirm-warning">This cascades and deletes every tenant table row for this client — contacts, chats, messages, everything. This cannot be undone.</p>
+      <p class="confirm-warning">This cascades and deletes every tenant table row for this client - contacts, chats, messages, everything. This cannot be undone.</p>
     `,
     confirmLabel: 'Delete Permanently',
     danger: true,
@@ -2034,7 +2034,7 @@ function confirmDeleteClient(client) {
 
 // Generates a fresh temporary password server-side and immediately
 // invalidates the client's current one (routes/clients.js POST
-// /:id/reset-password) — for a client that's locked out with no working
+// /:id/reset-password) - for a client that's locked out with no working
 // forgot-password email flow available. Same "shown once, never stored or
 // logged" contract as the create-client temporary password above.
 function confirmResetClientPassword(client) {
@@ -2042,7 +2042,7 @@ function confirmResetClientPassword(client) {
     title: "Reset this client's password?",
     body: `
       <p>This immediately invalidates <strong>${esc(client.name)}</strong>'s (${esc(client.email)}) current password and generates a new one.</p>
-      <p>You'll need to send them the new password yourself — there's no notification email for this.</p>
+      <p>You'll need to send them the new password yourself - there's no notification email for this.</p>
     `,
     confirmLabel: 'Reset Password',
     danger: true,
@@ -2054,7 +2054,7 @@ async function resetClientPassword(client) {
   const resultEl = document.getElementById('reset-client-password-result');
   const data = await apiFetch(`/api/clients/${client.id}/reset-password`, { method: 'POST' }); // throws -> dialog shows the error
   resultEl.innerHTML = `
-    <div class="inline-success" style="margin-top:0.75rem;">Password reset — shown once, copy it now.</div>
+    <div class="inline-success" style="margin-top:0.75rem;">Password reset - shown once, copy it now.</div>
     ${secretRowsHtml([
       ['Login URL', data.loginUrl],
       ['Email', data.email],
@@ -2094,7 +2094,7 @@ function renderOnboardingTable(rows) {
       <td data-label="Name">${esc(r.name)}</td>
       <td data-label="Email">${esc(r.email)}</td>
       <td data-label="Client Status">${statusBadge(r.client_status)}</td>
-      <td data-label="Plan">${esc(r.plan || '—')}</td>
+      <td data-label="Plan">${esc(r.plan || '-')}</td>
       <td data-label="Stuck At">${stuckAtBadge(r.stuck_at)}</td>
       <td data-label="Created">${formatDate(r.created_at)}</td>
       <td data-label="Actions"><button class="btn-secondary btn-sm" data-jump-client="${esc(r.id)}" aria-label="View ${esc(r.name)}">View</button></td>
@@ -2108,7 +2108,7 @@ function renderOnboardingTable(rows) {
 }
 
 /* ---------------------------------------------------------------
-   Health — tabs: Monitor | WABA Health | Platform Overview | Failures.
+   Health - tabs: Monitor | WABA Health | Platform Overview | Failures.
    Each tab loads its own data lazily when selected.
    --------------------------------------------------------------- */
 function loadHealthTab(tab) {
@@ -2140,21 +2140,21 @@ async function loadWabas() {
   }
 }
 
-// Sendability monitoring, Layer 1 (registration) — a compact summary for the
+// Sendability monitoring, Layer 1 (registration) - a compact summary for the
 // WABA Health table and the client-detail panel. Deliberately NOT a
 // pass/fail verdict: is_on_biz_app === false && code_verification_status
 // !== 'VERIFIED' is an unconfirmed hypothesis (see migration
-// 074_wabas_sendability.js's header comment — TNPSC registered successfully
+// 074_wabas_sendability.js's header comment - TNPSC registered successfully
 // and code_verification_status stayed EXPIRED regardless of whether it could
 // actually send), so this renders as an informational flag with an explicit
-// "unconfirmed" note, never as a red "cannot send" badge — only the send
+// "unconfirmed" note, never as a red "cannot send" badge - only the send
 // probe (Layer 3) gets to make that claim.
-// "What the client sees" — the exact same plain-English banner
+// "What the client sees" - the exact same plain-English banner
 // (server/src/utils/sendabilityMessages.js) the root CRM app shows above
 // its own app shell, rendered inline here instead of as a sticky top bar
 // (admin manages many clients, not just this one, so a persistent
 // full-width admin banner doesn't make sense the way it does client-side).
-// Renders nothing when the client wouldn't see a banner either — this is
+// Renders nothing when the client wouldn't see a banner either - this is
 // meant to answer "what does this client see," not duplicate every raw
 // field already shown below it.
 function clientSendabilityBannerHtml(waba) {
@@ -2174,18 +2174,18 @@ function registrationBadgeHtml(waba) {
     return '<span class="cell-secondary">Not checked yet</span>';
   }
   if (waba.registration_is_on_biz_app === true) {
-    return badge('On Business App', 'success', 'Coexistence — linked via the WhatsApp Business app');
+    return badge('On Business App', 'success', 'Coexistence - linked via the WhatsApp Business app');
   }
   if (waba.registration_code_verification_status && waba.registration_code_verification_status !== 'VERIFIED') {
-    return badge(`⚠ ${waba.registration_code_verification_status}`, 'warning', `Not on the WhatsApp Business app, and code_verification_status is ${waba.registration_code_verification_status} — unconfirmed whether this blocks sending, see sendable status for the real answer`);
+    return badge(`⚠ ${waba.registration_code_verification_status}`, 'warning', `Not on the WhatsApp Business app, and code_verification_status is ${waba.registration_code_verification_status} - unconfirmed whether this blocks sending, see sendable status for the real answer`);
   }
   return badge('Registered', 'success');
 }
 
-// Sendability monitoring, Layer 2 (health_status) — verified NOT to catch
+// Sendability monitoring, Layer 2 (health_status) - verified NOT to catch
 // the billing-shaped failure that caused the 2026-09-18 outage (returned
 // AVAILABLE for every entity on the known-bad account while sends failed),
-// so this is purely informational, same as the registration badge above —
+// so this is purely informational, same as the registration badge above -
 // never treated as the sendability signal.
 function healthStatusSummaryHtml(waba) {
   if (!waba.health_status_checked_at) {
@@ -2216,9 +2216,9 @@ function renderWabasTable(rows) {
     <tr data-client-id="${esc(r.client_id)}">
       <td data-label="Client">${esc(r.client_name)}</td>
       <td data-label="Tenant Slug">${esc(r.tenant_slug)}</td>
-      <td data-label="WABA ID" class="cell-mono">${esc(r.waba_id || '—')}</td>
-      <td data-label="Phone Number ID" class="cell-mono">${esc(r.phone_number_id || '—')}</td>
-      <td data-label="Quality Rating">${esc(r.quality_rating || '—')}</td>
+      <td data-label="WABA ID" class="cell-mono">${esc(r.waba_id || '-')}</td>
+      <td data-label="Phone Number ID" class="cell-mono">${esc(r.phone_number_id || '-')}</td>
+      <td data-label="Quality Rating">${esc(r.quality_rating || '-')}</td>
       <td data-label="Status">${statusBadge(r.status)}</td>
       <td data-label="Registration">${registrationBadgeHtml(r)}</td>
       <td data-label="Verified At">${formatDate(r.verified_at)}</td>
@@ -2242,11 +2242,11 @@ async function loadPlatformOverview() {
   }
 }
 
-// Task B — dormant-client visibility. Resend isn't configured (see the Health
+// Task B - dormant-client visibility. Resend isn't configured (see the Health
 // Monitor's own "Alerts aren't set up" banner), so an alert that only ever
 // exists as an unsent email is the exact failure mode this closes:
 // dormant_no_outbound_7d/never_logged_in_stale (server/src/routes/admin.js's
-// clients-overview query — the same two conditions alertRunner.js's
+// clients-overview query - the same two conditions alertRunner.js's
 // checkDormantNoOutbound/checkNeverLoggedIn raise as real alerts) are always
 // visible here regardless of whether any notification channel works.
 function attentionBadgesHtml(r) {
@@ -2257,7 +2257,7 @@ function attentionBadgesHtml(r) {
   if (r.never_logged_in_stale) {
     badges.push(badge('Never logged in', 'warning', 'WhatsApp has been connected for more than 3 days and nobody has ever logged into the CRM'));
   }
-  return badges.length ? badges.join(' ') : '—';
+  return badges.length ? badges.join(' ') : '-';
 }
 
 function renderPlatformOverview(rows) {
@@ -2272,10 +2272,10 @@ function renderPlatformOverview(rows) {
       <td data-label="Client">${esc(r.name)}</td>
       <td data-label="Tenant Slug">${esc(r.tenant_slug)}</td>
       <td data-label="Client Status">${statusBadge(r.client_status)}</td>
-      <td data-label="WABA Status">${r.waba_status ? statusBadge(r.waba_status) : '—'}</td>
-      <td data-label="Quality Rating">${esc(r.quality_rating || '—')}</td>
-      <td data-label="Plan">${esc(r.plan || '—')}</td>
-      <td data-label="Subscription Status">${r.subscription_status ? statusBadge(r.subscription_status) : '—'}</td>
+      <td data-label="WABA Status">${r.waba_status ? statusBadge(r.waba_status) : '-'}</td>
+      <td data-label="Quality Rating">${esc(r.quality_rating || '-')}</td>
+      <td data-label="Plan">${esc(r.plan || '-')}</td>
+      <td data-label="Subscription Status">${r.subscription_status ? statusBadge(r.subscription_status) : '-'}</td>
       <td data-label="Connected">${formatDate(r.connected_date)}</td>
       <td data-label="Last Login">${r.last_login_at ? formatDate(r.last_login_at) : '<span class="cell-secondary">Never</span>'}</td>
       <td data-label="Attention">${attentionBadgesHtml(r)}</td>
@@ -2443,7 +2443,7 @@ function renderPaymentReminders() {
   tbody.innerHTML = rows.map((r) => `
     <tr>
       <td data-label="Client">${esc(r.client_name)}</td>
-      <td data-label="Phone">${esc(r.recipient_phone || '—')}</td>
+      <td data-label="Phone">${esc(r.recipient_phone || '-')}</td>
       <td data-label="Message">${esc(PR_KIND_LABELS[r.kind] || r.kind)}</td>
       <td data-label="Trigger">${esc(PR_TRIGGER_LABELS[r.trigger] || r.trigger)}</td>
       <td data-label="Status">${badge(PR_STATUS_LABEL[r.status] || r.status, PR_STATUS_TONE[r.status] || 'neutral')}</td>
@@ -2476,8 +2476,8 @@ function exportPaymentRemindersCsv() {
 
 // Outward-facing and irreversible (a real WhatsApp message to every active
 // client), so the confirm shows exactly WHO will get it. The recipient list is
-// the current GET /api/clients result filtered to status 'active' — the same
-// rule the server applies (clientsRepo.listActive) — fetched fresh here so it
+// the current GET /api/clients result filtered to status 'active' - the same
+// rule the server applies (clientsRepo.listActive) - fetched fresh here so it
 // isn't a stale cache.
 async function confirmSendRemindersToAllActive() {
   let active;
@@ -2555,19 +2555,19 @@ async function loadAlertingStatusBanner() {
     banner.style.display = 'flex';
     banner.innerHTML = `
       <i data-lucide="alert-triangle" class="icon-16"></i>
-      <span class="alert-body"><strong>Ops alerts aren't fully set up.</strong> Missing: ${esc(gaps.join(', '))}. Until this is fixed, alerts are only written to the server log — nobody is actually notified.
+      <span class="alert-body"><strong>Ops alerts aren't fully set up.</strong> Missing: ${esc(gaps.join(', '))}. Until this is fixed, alerts are only written to the server log - nobody is actually notified.
       <span class="tech-detail">Technical detail: set ${esc(envs.join(', '))} on the server (see .env.example).</span></span>`;
     refreshIcons();
   } catch (err) {
     if (err.status === 401) return;
     // A failure to even CHECK the status is itself worth surfacing, not
-    // silently hidden — but distinguishable from "confirmed not configured".
+    // silently hidden - but distinguishable from "confirmed not configured".
     banner.style.display = 'flex';
     banner.textContent = `Could not check alerting configuration: ${err.message}`;
   }
 }
 
-// "Send test alert" — POST /api/admin/alerts/test, then renders the real
+// "Send test alert" - POST /api/admin/alerts/test, then renders the real
 // per-channel result (attempted/sent/error, including Resend's or Meta's
 // exact error text) rather than a bare success/failure toast. Never writes
 // a real alert_events row (see that route's own comment).
@@ -2582,12 +2582,12 @@ async function sendTestAlert() {
     const lines = [];
     for (const [channel, r] of [['Email', result.email], ['WhatsApp', result.whatsapp]]) {
       if (!r.attempted) {
-        lines.push(`${channel}: not attempted — ${r.reason || r.error || 'not configured'}`);
+        lines.push(`${channel}: not attempted - ${r.reason || r.error || 'not configured'}`);
       } else if (r.sent) {
         lines.push(`${channel}: sent successfully.`);
       } else {
         const metaDetail = r.metaError ? ` (Meta: ${JSON.stringify(r.metaError)})` : '';
-        lines.push(`${channel}: FAILED — ${r.error}${metaDetail}`);
+        lines.push(`${channel}: FAILED - ${r.error}${metaDetail}`);
       }
     }
     resultEl.textContent = lines.join('\n');
@@ -2609,10 +2609,10 @@ function renderHealthMonitor(rows) {
     <tr data-client-id="${esc(r.client_id)}">
       <td data-label="Client">${esc(r.client_name)}</td>
       <td data-label="Tenant Slug">${esc(r.tenant_slug)}</td>
-      <td data-label="WABA ID" class="cell-mono">${esc(r.waba_id || '—')}</td>
+      <td data-label="WABA ID" class="cell-mono">${esc(r.waba_id || '-')}</td>
       <td data-label="WABA Status">${statusBadge(r.waba_status)}</td>
-      <td data-label="Quality Rating">${esc(r.quality_rating || '—')}</td>
-      <td data-label="Restriction Status">${esc(r.restriction_status || '—')}</td>
+      <td data-label="Quality Rating">${esc(r.quality_rating || '-')}</td>
+      <td data-label="Restriction Status">${esc(r.restriction_status || '-')}</td>
       <td data-label="Health Status">${healthStatusSummaryHtml(r)}</td>
       <td data-label="Last Successful Webhook">${formatDateTime(r.last_successful_webhook_at)}</td>
       <td data-label="Forwarding Failures">${esc(r.forwarding_failure_count)}</td>
@@ -2665,10 +2665,10 @@ function renderFailedSends() {
   tbody.innerHTML = rows.map((r) => `
     <tr>
       <td data-label="Client">${esc(r.client_name)}</td>
-      <td data-label="Chat" class="cell-mono">${esc(r.chat_id || '—')}</td>
+      <td data-label="Chat" class="cell-mono">${esc(r.chat_id || '-')}</td>
       <td data-label="Body" class="cell-wrap">${esc(r.body || '')}</td>
-      <td data-label="Error Reason" class="cell-wrap">${esc(r.error_reason || '—')}</td>
-      <td data-label="Meta Error Code">${esc(r.meta_error_code ?? '—')}</td>
+      <td data-label="Error Reason" class="cell-wrap">${esc(r.error_reason || '-')}</td>
+      <td data-label="Meta Error Code">${esc(r.meta_error_code ?? '-')}</td>
       <td data-label="Sent At">${formatDateTime(r.sent_at)}</td>
     </tr>
   `).join('');
@@ -2687,10 +2687,10 @@ function renderFailedWebhooks() {
   tbody.innerHTML = rows.map((r) => `
     <tr>
       <td data-label="Client">${esc(r.client_name)}</td>
-      <td data-label="Event">${esc(r.event || '—')}</td>
-      <td data-label="Target URL" class="cell-wrap cell-break">${esc(r.target_url || '—')}</td>
+      <td data-label="Event">${esc(r.event || '-')}</td>
+      <td data-label="Target URL" class="cell-wrap cell-break">${esc(r.target_url || '-')}</td>
       <td data-label="Attempts">${esc(r.attempt_count)}</td>
-      <td data-label="Last Error" class="cell-wrap">${esc(r.last_error || '—')}</td>
+      <td data-label="Last Error" class="cell-wrap">${esc(r.last_error || '-')}</td>
       <td data-label="Created">${formatDateTime(r.created_at)}</td>
     </tr>
   `).join('');
@@ -2709,10 +2709,10 @@ function renderStalledFlows() {
   tbody.innerHTML = rows.map((r) => `
     <tr>
       <td data-label="Client">${esc(r.client_name)}</td>
-      <td data-label="Contact">${esc(r.contact_name || '—')} <span class="cell-secondary">${esc(r.contact_phone || '')}</span></td>
+      <td data-label="Contact">${esc(r.contact_name || '-')} <span class="cell-secondary">${esc(r.contact_phone || '')}</span></td>
       <td data-label="Flow">${esc(r.flow_name)}</td>
-      <td data-label="Stuck At Node">${esc(r.node_type || '—')}</td>
-      <td data-label="Error" class="cell-wrap">${esc((r.stall_detail && r.stall_detail.error) || '—')}</td>
+      <td data-label="Stuck At Node">${esc(r.node_type || '-')}</td>
+      <td data-label="Error" class="cell-wrap">${esc((r.stall_detail && r.stall_detail.error) || '-')}</td>
       <td data-label="Stalled At">${formatDateTime(r.updated_at)}</td>
     </tr>
   `).join('');
@@ -2768,15 +2768,15 @@ function drawBillingTable() {
       <td data-label="Plan">${esc(s.plan)}</td>
       <td data-label="Status">${statusBadge(s.status)}</td>
       <td data-label="Renews At">${formatDate(s.renews_at)}</td>
-      <td data-label="Payment Ref" class="cell-mono">${esc(s.payment_provider_ref || '—')}</td>
+      <td data-label="Payment Ref" class="cell-mono">${esc(s.payment_provider_ref || '-')}</td>
     </tr>
   `).join('');
 }
 
 /* ---------------------------------------------------------------
-   Templates Review — Approve/Reject always go through a confirm that shows
+   Templates Review - Approve/Reject always go through a confirm that shows
    the full template body. NOTE: PATCH /api/admin/templates/:id accepts ONLY
-   { status } (templateStatusUpdateSchema) — there is no rejection-reason
+   { status } (templateStatusUpdateSchema) - there is no rejection-reason
    field in the API, so none is collected here.
    --------------------------------------------------------------- */
 async function loadTemplatesReview() {
@@ -2819,7 +2819,7 @@ function renderTemplatesReview() {
     <tr data-template-id="${esc(t.id)}">
       <td data-label="Client">${esc(t.client_name)}</td>
       <td data-label="Name" class="cell-mono cell-break">${esc(t.name)}</td>
-      <td data-label="Category">${esc(t.category || '—')}</td>
+      <td data-label="Category">${esc(t.category || '-')}</td>
       <td data-label="Body"><div class="cell-clamp" title="${esc(t.body || '')}">${esc(t.body || '')}</div></td>
       <td data-label="Status">${statusBadge(t.status)}</td>
       <td data-label="Actions">
@@ -2850,7 +2850,7 @@ function openTemplateReviewModal(t) {
   document.getElementById('template-review-body').innerHTML = `
     <dl class="meta-grid">
       <div><dt>Client</dt><dd>${esc(t.client_name)}</dd></div>
-      <div><dt>Category</dt><dd>${esc(t.category || '—')}</dd></div>
+      <div><dt>Category</dt><dd>${esc(t.category || '-')}</dd></div>
       <div><dt>Status</dt><dd>${statusBadge(t.status)}</dd></div>
     </dl>
     <div class="form-label">Body</div>
@@ -2880,7 +2880,7 @@ function confirmTemplateDecision(t, status) {
     body: `
       <p>${verb} <strong>${esc(t.name)}</strong> from <strong>${esc(t.client_name)}</strong>${t.category ? ` (${esc(t.category)})` : ''}?</p>
       <div class="template-preview">${esc(t.body || '(empty)')}</div>
-      <p class="muted-text">This changes the template's status in Wasi only — it does not submit anything to Meta, and no rejection reason can be recorded.</p>
+      <p class="muted-text">This changes the template's status in Wasi only - it does not submit anything to Meta, and no rejection reason can be recorded.</p>
     `,
     confirmLabel: verb,
     danger: !approving,
@@ -3070,11 +3070,11 @@ async function handleBackfillApiKeys() {
     const res = await apiFetch('/api/admin/api-keys/backfill', { method: 'POST' });
     resultEl.style.display = 'block';
     if (!res.issued.length) {
-      resultEl.innerHTML = `<div class="inline-success">Every client already has an active key — nothing to issue (${esc(res.alreadyHadKey)} already covered).</div>`;
+      resultEl.innerHTML = `<div class="inline-success">Every client already has an active key - nothing to issue (${esc(res.alreadyHadKey)} already covered).</div>`;
     } else {
       resultEl.innerHTML = `
         <div class="inline-success">
-          Issued ${esc(res.issued.length)} new key(s) — ${esc(res.alreadyHadKey)} client(s) already had one and were skipped. Each key is shown once, copy them now.
+          Issued ${esc(res.issued.length)} new key(s) - ${esc(res.alreadyHadKey)} client(s) already had one and were skipped. Each key is shown once, copy them now.
         </div>
         <div class="table-card"><div class="table-scroll"><table class="data-table stack-mobile"><thead><tr><th>Client</th><th>Key</th><th><span class="sr-only">Copy</span></th></tr></thead><tbody>
           ${res.issued.map((r) => {
@@ -3089,7 +3089,7 @@ async function handleBackfillApiKeys() {
         </tbody></table></div></div>
       `;
     }
-    showToast(`Backfill complete — ${res.issued.length} key(s) issued.`, 'success');
+    showToast(`Backfill complete - ${res.issued.length} key(s) issued.`, 'success');
     loadApiKeys();
   } catch (err) {
     if (err.status === 401) return;
@@ -3146,7 +3146,7 @@ async function handleCreateApiKeySubmit(e) {
     const resultEl = document.getElementById('create-api-key-result');
     resultEl.style.display = 'block';
     resultEl.innerHTML = `
-      <div class="inline-success">Key created — this is shown once. Copy it now.</div>
+      <div class="inline-success">Key created - this is shown once. Copy it now.</div>
       ${secretRowsHtml([['API Key', created.key]])}
       ${secretsAckHtml('create-api-key')}
     `;
@@ -3325,7 +3325,7 @@ async function loadSettings() {
   }
 }
 
-// Meta Official Template Library (wasi-master-plan.md §2b) — server-wide
+// Meta Official Template Library (wasi-master-plan.md §2b) - server-wide
 // cache status, not per-client settings, so it's a separate card/call from
 // loadSettings above rather than folded into GET /api/admin/settings' shape.
 async function loadMetaTemplateLibraryStatus() {
@@ -3358,7 +3358,7 @@ function renderSettings(settings) {
       <div class="detail-card">
         <h2 class="detail-card-title">Meta / WhatsApp Embedded Signup</h2>
         ${detailRow('App configured', configPill(settings.meta.configured, 'Configured', 'Not configured'))}
-        ${detailRow('Graph API version', esc(settings.meta.graphApiVersion || '—'))}
+        ${detailRow('Graph API version', esc(settings.meta.graphApiVersion || '-'))}
         ${detailRow('Webhook verify token', configPill(settings.meta.webhookVerifyTokenSet, 'Set', 'Not set'))}
       </div>
       <div class="detail-card">
@@ -3368,8 +3368,8 @@ function renderSettings(settings) {
       </div>
       <div class="detail-card">
         <h2 class="detail-card-title">Secret Hygiene</h2>
-        ${detailRow('Login token secret <span class="cell-secondary">(JWT_SECRET)</span>', configPill(!settings.secrets.jwtSecretIsDefault, 'Rotated', 'Still default — rotate before real deploy'), true)}
-        ${detailRow('Encryption secret <span class="cell-secondary">(SERVER_SECRET)</span>', configPill(!settings.secrets.serverSecretIsDefault, 'Rotated', 'Still default — rotate before real deploy'), true)}
+        ${detailRow('Login token secret <span class="cell-secondary">(JWT_SECRET)</span>', configPill(!settings.secrets.jwtSecretIsDefault, 'Rotated', 'Still default - rotate before real deploy'), true)}
+        ${detailRow('Encryption secret <span class="cell-secondary">(SERVER_SECRET)</span>', configPill(!settings.secrets.serverSecretIsDefault, 'Rotated', 'Still default - rotate before real deploy'), true)}
       </div>
       <div class="detail-card">
         <h2 class="detail-card-title">Plan Pricing (INR/mo)</h2>
@@ -3377,7 +3377,7 @@ function renderSettings(settings) {
       </div>
     </div>
     <div class="alert alert-info">
-      <span>Real secret values are never sent to this panel — this page only reports whether each is set. Change them in the server's environment configuration (<code>server/.env</code>).</span>
+      <span>Real secret values are never sent to this panel - this page only reports whether each is set. Change them in the server's environment configuration (<code>server/.env</code>).</span>
     </div>
   `;
 }
@@ -3418,10 +3418,10 @@ function renderAuditTable() {
   tbody.innerHTML = rows.map((a) => `
     <tr>
       <td data-label="Actor Type">${esc(a.actor_type)}</td>
-      <td data-label="Actor ID" class="cell-mono cell-break">${esc(a.actor_id || '—')}</td>
+      <td data-label="Actor ID" class="cell-mono cell-break">${esc(a.actor_id || '-')}</td>
       <td data-label="Action">${esc(a.action)}</td>
-      <td data-label="Target" class="cell-wrap cell-break">${esc(a.target || '—')}</td>
-      <td data-label="IP" class="cell-mono">${esc(a.actor_ip || '—')}</td>
+      <td data-label="Target" class="cell-wrap cell-break">${esc(a.target || '-')}</td>
+      <td data-label="IP" class="cell-mono">${esc(a.actor_ip || '-')}</td>
       <td data-label="Timestamp">${formatDateTime(a.created_at)}</td>
     </tr>
   `).join('');
@@ -3461,7 +3461,7 @@ function initEventListeners() {
     });
   });
 
-  // Mobile sidebar drawer (below the 900px tablet breakpoint) — same
+  // Mobile sidebar drawer (below the 900px tablet breakpoint) - same
   // pattern as the root app's app.js; the actual show/hide rules live in
   // ../index.css since admin/index.html links that file directly.
   (function setupMobileSidebar() {

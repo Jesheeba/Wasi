@@ -1,4 +1,4 @@
-# Wasi — Outstanding Work and End-to-End AI Agent Build Plan
+# Wasi - Outstanding Work and End-to-End AI Agent Build Plan
 
 **Owner:** Sirah Digital
 **Date:** 12 October 2026
@@ -10,7 +10,7 @@
 
 This document has two jobs.
 
-1. **Sections 1–4** record the real state of Wasi — what is broken, what is unfinished, what was found and never fixed. This is the backlog. It exists because nine days of work on the AI feature kept surfacing production problems that outranked it, and those problems were triaged in chat rather than written down.
+1. **Sections 1–4** record the real state of Wasi - what is broken, what is unfinished, what was found and never fixed. This is the backlog. It exists because nine days of work on the AI feature kept surfacing production problems that outranked it, and those problems were triaged in chat rather than written down.
 2. **Sections 5–11** are the end-to-end build plan for the AI bot reply feature, from the current zero state to a feature clients can buy. Each phase has a definition of done that can be checked without asking anyone.
 
 **Section 12 is the prompt to paste into a Claude Code planning session.** Paste it before writing any code. It will produce an implementation plan that this document cannot, because it can read the actual files.
@@ -27,13 +27,13 @@ This document has two jobs.
 
 | Thing | State |
 |---|---|
-| `docs/ai-agent/SPEC.md` | **Current version is as amended at `8c1e075`** (decision 14, sections 10.5/13/20); first committed at `7226a637` (full SHA `7226a6370d9f…`). Cite `8c1e075`, not `7226a637`, for the current text. 20 numbered sections (1–20; the file also has a section 0 and a closing sequencing note, 22 `##` headings in all). Verified against the codebase — the `users(id)` error, the migration-number error and the gate-4 logic error were all corrected before commit. **This is the source of truth for the AI feature. Read it, do not re-derive it.** |
+| `docs/ai-agent/SPEC.md` | **Current version is as amended at `8c1e075`** (decision 14, sections 10.5/13/20); first committed at `7226a637` (full SHA `7226a6370d9f…`). Cite `8c1e075`, not `7226a637`, for the current text. 20 numbered sections (1–20; the file also has a section 0 and a closing sequencing note, 22 `##` headings in all). Verified against the codebase - the `users(id)` error, the migration-number error and the gate-4 logic error were all corrected before commit. **This is the source of truth for the AI feature. Read it, do not re-derive it.** |
 | Admin credential rotation | Done twice. `token_version` bumped to 2. No secrets are reachable through admin routes, so client WABA tokens did **not** need rotating. |
 | `server/scripts/set-password.js` | Written. Hidden prompt, 14-character minimum, bumps `token_version`, writes an audit row, never logs the value. **Uncommitted.** |
 | Echo ingestion | **Not fixed; corrected 2026-10-12.** The code path exists (`907b71d`), but the app is still **not subscribed** to `smb_message_echoes`: a live `GET /{app-id}/subscriptions` returned `messages, account_update, message_template_status_update, phone_number_name_update, message_template_quality_update, phone_number_quality_update` and nothing else. No echo has ever been delivered (zero echo rows in `audit_log`, zero `messages.source='whatsapp_app'`). Subscribing is a human dashboard action, and per 3.0 it must not happen before production runs `cb27227`. **VPS note, 2026-10-12:** two numbers checked there (TNPSC and the demo) report `platform_type CLOUD_API` and `is_on_biz_app` false. That does **not** generalise: the stored `wabas.registration_is_on_biz_app` is **true for 7 of the 10 connected WABAs** (false: TNPSC, demo; unknown: Sirah). The echo thread is therefore **not** de-prioritised on current evidence; see Appendix A. *(Verification note 2026-10-12: the dashboard subscription state and the echo payload shape were not re-checked in this pass. `SPEC.md` decision 14 still lists the payload shape as not confirmed against a live capture.)* |
 | `metaWebhook.js` field guard | Fixed. `field !== 'smb_message_echoes'` now prevents echoes being processed as inbound messages. **Verified 2026-10-12:** guard present at `server/src/routes/metaWebhook.js:575`, committed in `cb27227`; the file has no uncommitted changes. **Not in production:** `cb27227` (3 Oct) is after `511ea49` (1 Oct), so the deployed server has no guard; see 3.0. |
 | TNPSC diagnosis | **Corrected 2026-10-12.** The earlier claim (stored WABA `894384560175844` is the wrong one; Meta says `1649658386105751` owns the phone) is **withdrawn**: `diagnostic_scope_check.js` on the VPS reports "stored phone_number_id `1222704867593433` belongs to this WABA" and Meta returns that number as `TNPSC Mentors`, `CLOUD_API`, quality GREEN, status CONNECTED (source: VPS diagnostic session reported by the project owner, 2026-10-12). The stored WABA/phone pairing is right. The real problem is **scope targeting**: the token's `whatsapp_business_management` granular scope now targets only `1649658386105751`, not the stored WABA, so reads succeed and writes fail (`#200`). See Appendix A. **Still open:** what `1649658386105751` is (see 2.1). **TNPSC appears to have several WABAs** (`894384560175844` stored and working; `1649658386105751`; and `998094716164113`, "Tnpsc Mentors" ending 9808, which sits on the `Sirah` client's row, see 3.15). We do not know which they intend to use: a question for the client, not a database fix. |
-| Encryption | `server/src/utils/encryption.js` — AES-256-GCM, key derived from `SERVER_SECRET`. Local development cannot decrypt production tokens. **This is correct behaviour and must not be "fixed".** |
+| Encryption | `server/src/utils/encryption.js` - AES-256-GCM, key derived from `SERVER_SECRET`. Local development cannot decrypt production tokens. **This is correct behaviour and must not be "fixed".** |
 
 ### 1.2 What does not exist
 
@@ -45,13 +45,13 @@ This document has two jobs.
 
 ### 1.3 The thing that keeps happening
 
-Every attempt to start the AI feature has been interrupted by a production problem that was more urgent. That is not bad luck — it is a signal that Wasi has no operational floor. There is no backup, no request log, no failure alerting, and no enforcement on `clients.status`. Until those exist, any feature built on top will keep being interrupted by the floor giving way.
+Every attempt to start the AI feature has been interrupted by a production problem that was more urgent. That is not bad luck - it is a signal that Wasi has no operational floor. There is no backup, no request log, no failure alerting, and no enforcement on `clients.status`. Until those exist, any feature built on top will keep being interrupted by the floor giving way.
 
 Phase 0 of the AI feature happens to build three of the four missing floor pieces. That is the argument for doing it, independent of whether the bot ever ships.
 
 ---
 
-## 2. Blocking work — nothing else starts until this is clear
+## 2. Blocking work - nothing else starts until this is clear
 
 These are live, they affect paying clients, and three of them are getting worse by the day.
 
@@ -82,7 +82,7 @@ One run of `debug_token` prints the granted scopes, the token's owning app and t
 > - All tokens checked are `SYSTEM_USER` tokens under the same app (`Sirah CRM Wp`, app id `27135450269410430`). **The system user is per business portfolio, not per client**: `Sirah` and `Sirah Digital` share user id `122106946323459883` (same business), while demo, TNPSC and GV Mart have different ids. Working hypothesis, not established: the WhatsApp permissions were granted inconsistently at onboarding. GV Mart's `public_profile`-only token matches the `not_authorized` failure already documented for Embedded Signup (the app was never authorised for WhatsApp).
 > - **Open question on `1649658386105751`:** the VPS session guessed it is "probably their business portfolio id". In-repo evidence points the other way: at connect time (17 Sep) our own discovery recorded `wabaTargetIds = [1649658386105751, 894384560175844]` in `wabas.connect_diagnostics`, and `granular_scopes` `target_ids` for `whatsapp_business_management` are WABA ids; and 8 `messages` webhooks keyed by `1649658386105751` arrived 24 Sep to 8 Oct (`audit_log`), and Meta keys a webhook entry by WABA id. The decisive check is one call on the VPS with TNPSC's token: `GET /1649658386105751?fields=name` and `/phone_numbers`.
 
-### 2.2 GV Mart sends — closed; not a Wasi failure (corrected 2026-10-12)
+### 2.2 GV Mart sends - closed; not a Wasi failure (corrected 2026-10-12)
 
 **Status:** closed. No action for Wasi.
 
@@ -100,7 +100,7 @@ Nothing in Wasi notices a client's sends failing unless someone looks. Build the
 
 **Definition of done:** the rule fires on a synthetic test.
 
-### 2.4 GV Mart's deleted client — what is established (closed 2026-10-12)
+### 2.4 GV Mart's deleted client - what is established (closed 2026-10-12)
 
 **Status:** closed. The deletion was intentional, per the project owner (2026-10-12), and the cascade did what it was designed to do. Nothing broke.
 
@@ -121,7 +121,7 @@ Nothing in Wasi notices a client's sends failing unless someone looks. Build the
 
 **Who issued the delete:** not recorded. The route requires an admin token but there is no session store or login audit. The 07:04:47 reset, the delete, and the 07:09:54 re-creation were all the one shared admin identity within about five minutes, which fits a deliberate recreate. Source IP: pending the nginx log review.
 
-### 2.5 Supabase support ticket — moot; autovacuum restored (2026-10-12)
+### 2.5 Supabase support ticket - moot; autovacuum restored (2026-10-12)
 
 **Status:** closed. The ticket is moot (nothing broke; see 2.4) and is to be withdrawn by the project owner.
 
@@ -131,7 +131,7 @@ Nothing in Wasi notices a client's sends failing unless someone looks. Build the
 
 **Status:** needs a message sent.
 
-Ask Evokz to complete business verification and add a payment method. Note that per 2.1 neither of these is the confirmed cause of their template failure — they are prerequisites for sending at scale regardless, and asking for them is useful on its own. The authentication template stays blocked until 2.1 explains the real cause.
+Ask Evokz to complete business verification and add a payment method. Note that per 2.1 neither of these is the confirmed cause of their template failure - they are prerequisites for sending at scale regardless, and asking for them is useful on its own. The authentication template stays blocked until 2.1 explains the real cause.
 
 **Known complication:** `buildAuthenticationPayload` at `server/src/utils/metaClient.js:677` posts to `/{waba}/message_templates` with a singular `language` field. Meta documents authentication templates via `POST /<WABA_ID>/upsert_message_templates` with a `languages` **array**. The comment at line 671 admits the shape is not confirmed against live Meta. **This code has never successfully run against Meta.** Expect it to be wrong, and fix it as part of the Evokz work rather than treating a failure as a permissions problem.
 
@@ -139,9 +139,9 @@ Ask Evokz to complete business verification and add a payment method. Note that 
 
 > **Verified 2026-10-12.** Confirmed in code: `buildAuthenticationPayload` is at `metaClient.js:677` and emits a singular `language` (default `'en_US'`); it only *builds* the payload, which `createMessageTemplate` then posts to `/{wabaId}/message_templates`. The "not doc-confirmed live" comment is at lines 668–676 (the admission is on 671). **Not verified here:** Meta's documentation for `upsert_message_templates` / `languages` was not re-read in this pass. **Evidence for "never run":** production has two approved Authentication templates (`signup_otp2`, TNPSC mentors, 17 Sep; `test_message`, Sirah Digital, 21 Sep), but both have `auth_options` NULL, which this app's create path persists. That is consistent with both having been created outside this code and synced in. It is an inference from the data, not proof (a created-then-deleted template would leave no row).
 
-> **Added 2026-10-12 — where those two templates came from.** `messageTemplatesRepo.create` (`messageTemplatesRepo.js:58-82`) always writes a non-null `auth_options` object for an Authentication template, whichever route called it (`POST /api/templates` or the Hub API). Template sync's insert path (`templateSyncService.js`, the `toInsert` branch) does not write `auth_options`, and its update branch never touches it. A NULL `auth_options` with a `meta_template_id` therefore means the row was **synced in from Meta, i.e. the template was created directly in Meta (WhatsApp Manager or Graph API), not through Wasi's code.** Both also carry language `en`, not Wasi's `en_US` default, which is consistent. **Immediate route for Evokz that does not depend on fixing `buildAuthenticationPayload`:** have the template created in WhatsApp Manager on Evokz's WABA, then run template sync. **Caveat, untested:** Evokz's error is a WABA-level permission refusal; if it is enforced by Meta on the WABA rather than on the API, WhatsApp Manager may refuse too. 2.1's `debug_token` output decides that.
+> **Added 2026-10-12 - where those two templates came from.** `messageTemplatesRepo.create` (`messageTemplatesRepo.js:58-82`) always writes a non-null `auth_options` object for an Authentication template, whichever route called it (`POST /api/templates` or the Hub API). Template sync's insert path (`templateSyncService.js`, the `toInsert` branch) does not write `auth_options`, and its update branch never touches it. A NULL `auth_options` with a `meta_template_id` therefore means the row was **synced in from Meta, i.e. the template was created directly in Meta (WhatsApp Manager or Graph API), not through Wasi's code.** Both also carry language `en`, not Wasi's `en_US` default, which is consistent. **Immediate route for Evokz that does not depend on fixing `buildAuthenticationPayload`:** have the template created in WhatsApp Manager on Evokz's WABA, then run template sync. **Caveat, untested:** Evokz's error is a WABA-level permission refusal; if it is enforced by Meta on the WABA rather than on the API, WhatsApp Manager may refuse too. 2.1's `debug_token` output decides that.
 
-### 2.7 GV Mart Embedded Signup, Meta error 3441047 ("not available for accounts using marketing messages") — MM Lite check (read-only, 2026-10-13)
+### 2.7 GV Mart Embedded Signup, Meta error 3441047 ("not available for accounts using marketing messages") - MM Lite check (read-only, 2026-10-13)
 
 **Status:** investigated; **the app's own config does not enable MM Lite, and the question of when GV Mart's WABA was enrolled cannot be answered from our data.** No writes were made to the database, nothing pushed or deployed. Queries ran in `begin read only` transactions against the shared database.
 
@@ -155,7 +155,7 @@ Ask Evokz to complete business verification and add a payment method. Note that 
 
 **Q2. When was GV Mart's WABA enrolled? Not determinable from our data. Reasons, and what the data does bound.**
 
-1. **We do not store the event type.** `metaWebhook.js:442-443` — `handleAccountUpdate` returns `false` immediately when `value.phone_number` is absent, before the audit write at `:472-477` (the only place the payload is recorded, truncated to 500 chars). An MM Lite onboarding event (`AD_ACCOUNT_LINKED`) has an `event` field and WABA info, not a `phone_number`, so it takes that early-return path. The only trace is the generic per-field row at `:642-647` (`action = 'account_update'`, `target = entry.id`), which has **no payload**. `meta_webhook_log` stores only `success`, `duration_ms`, `entries_processed`, `waba_ids_touched` and `error_summary`, so it carries no payload either.
+1. **We do not store the event type.** `metaWebhook.js:442-443` - `handleAccountUpdate` returns `false` immediately when `value.phone_number` is absent, before the audit write at `:472-477` (the only place the payload is recorded, truncated to 500 chars). An MM Lite onboarding event (`AD_ACCOUNT_LINKED`) has an `event` field and WABA info, not a `phone_number`, so it takes that early-return path. The only trace is the generic per-field row at `:642-647` (`action = 'account_update'`, `target = entry.id`), which has **no payload**. `meta_webhook_log` stores only `success`, `duration_ms`, `entries_processed`, `waba_ids_touched` and `error_summary`, so it carries no payload either.
 2. **Search results (queries 7 Oct; `audit_log`, retained since 2026-08-11):**
    - `audit_log` rows whose `target` mentions `AD_ACCOUNT`, `marketing_messages`, `mm_lite` or `3441047`: **0**.
    - `account_update` rows for WABA `1766605231203643`: **0**. For WABA `109558648723856`: **0**. Their only webhook rows are `messages`: 1,738 for `109558648723856` (26 Aug 11:31:22Z to 4 Oct 17:47:02Z) and **1** for `1766605231203643` (7 Oct 08:22:45.724Z).
@@ -171,7 +171,7 @@ Ask Evokz to complete business verification and add a payment method. Note that 
    | 2026-10-07 07:09:54 | new client `4b09813e` created (same email) | `audit_log` `api_key_created` 07:09:55 |
    | 2026-10-07 07:28:48 to 07:50:18 | 7 `account_update` bare rows under entry `1206549993706435` | `audit_log` |
    | 2026-10-07 07:50:41 | `whatsapp_connected` for `4b09813e` | `audit_log` |
-   | 2026-10-07 08:02:32 | **registration check: `is_on_biz_app=true`, `platform_type=CLOUD_API`**; verdict `sendable=false`, "WABA is BLOCKED (#141006) — error with the payment method" | `audit_log` `sendability_registration_checked`, `sendable_verdict_computed` |
+   | 2026-10-07 08:02:32 | **registration check: `is_on_biz_app=true`, `platform_type=CLOUD_API`**; verdict `sendable=false`, "WABA is BLOCKED (#141006) - error with the payment method" | `audit_log` `sendability_registration_checked`, `sendable_verdict_computed` |
    | 2026-10-07 08:22:45 | the single webhook for WABA `1766605231203643` | `audit_log` |
    | 2026-10-07 08:54:07 | last 2 `account_update` rows (post-connect) | `audit_log` |
    | 2026-10-07 13:02:31 onward, hourly | registration check fails: "Object with ID `1379147205282259` does not exist" (138 times, last 13 Oct 06:02:31) | `audit_log` |
@@ -250,18 +250,18 @@ A deploy turns on essentially the whole redesign (about 6,000 lines of UI change
 - **The host has no `server/node_modules`.** Dependencies exist only inside the image, so any script needing `pg` must run as `docker exec wasi-crm node /app/server/<script>`. This is why nothing could be run from the host.
 - `server/.env.production` exists (657 bytes). It was mode 644 and was set to 600 in that session.
 
-### 3.1 Fabricated Analytics chart — production
+### 3.1 Fabricated Analytics chart - production
 
 There is a hard-coded chart in the Analytics view captioned **"Last 7 days, live from your account."** It is not live and it is not from their account. A client who checks this against their Meta dashboard will find Wasi showing them invented numbers.
 
-> **Verified 2026-10-12 — the situation is more specific than written above:**
+> **Verified 2026-10-12 - the situation is more specific than written above:**
 > - **Where:** the caption is `index.html` (repo root) line 965 at HEAD, and line 912 of the file production serves. The fabricated chart is the inline `<svg>` immediately below it ("Messages (daily)", "Past 7 days").
 > - **Production serves it; `master` no longer contains it.** The live `https://wasi.sirahagents.com/` `index.html` is byte-identical (CR-stripped md5 match) to `index.html` at commit `511ea49` (UI redesign stage 4, 1 Oct 14:27 IST; response `Last-Modified` 1 Oct 09:02 GMT). The chart was removed on `master` in `351d133` ("Analytics (no fake chart)", 1 Oct 15:33 IST), which is not deployed. At HEAD, line 965 is a caption above the real summary tiles, followed by an honest "Daily trend isn't available yet" empty state.
 > - **Which file is served:** the repo-root `index.html`, via `server/src/app.js:220-221` (`sendFile` from `REPO_ROOT`), copied into the image by `Dockerfile:39`. There is no build step and no `client/` directory for it (the only build is the Vite one for `flow-editor/`). So production is simply running an older image.
 > - **Hard-coded, not mislabelled.** The chart is literal SVG: fixed `<path d="M 40,170 Q 300,168 …">` coordinates, fixed y-axis labels 0/200/400/600, and fixed x-axis labels "Sun Jul 26 … Sat Aug 01" (a week in July/August). No script touches it; `app.js` only fills six metric tiles from `GET /api/analytics/messages` (a real 7-day aggregate). So the chart is **delete**, not recaption. The caption is accurate for those tiles, which is what makes the chart beneath it misleading.
 > - **Consequence for the fix:** the code change is already on `master`. What is outstanding is a **deploy** of `master`, which also carries everything since 1 Oct (including the `design-system.css` Dockerfile fix: production currently returns HTTP 500 for `/design-system.css`).
 
-**Fix:** remove the chart, or replace it with real data, or recaption it honestly. Removing it is fastest and is the right default — a missing chart is better than a lying one.
+**Fix:** remove the chart, or replace it with real data, or recaption it honestly. Removing it is fastest and is the right default - a missing chart is better than a lying one.
 
 **Priority:** high, because it is a trust problem, not a bug.
 
@@ -288,7 +288,7 @@ Language is resolved by looking up the template name and taking the newest `crea
 
 **Fix:** accept an optional `language` on the payload. When absent, resolve deterministically (prefer exact `en`, then any `en_*`, then error if ambiguous) rather than by timestamp. Document the field in the API reference.
 
-### 3.3 `onboarding.js:181` — a second connect attempt kills a working number
+### 3.3 `onboarding.js:181` - a second connect attempt kills a working number
 
 The route overwrites the existing `wabas` row and sets `status = 'connecting'` **before Meta is called.** If the Meta call then fails, the client is left with a broken row and a disabled number that was working a moment earlier.
 
@@ -298,11 +298,11 @@ The route overwrites the existing `wabas` row and sets `status = 'connecting'` *
 
 ### 3.4 Instagram migrations 081/082 are stranded
 
-Migrations 079 and 080 are applied (confirmed in `pgmigrations`, 25 September). 081 and 082 are Instagram work and are stranded — they sit below the highest applied number on master (085) and will never run in order.
+Migrations 079 and 080 are applied (confirmed in `pgmigrations`, 25 September). 081 and 082 are Instagram work and are stranded - they sit below the highest applied number on master (085) and will never run in order.
 
 > **Verified 2026-10-12.** `pgmigrations` highest applied is `085_payment_reminder_schedules` (id 76, run 1 Oct); there are no 081/082 rows. The highest file on `master` and `origin/master` is `085_…`. `081_instagram_accounts.js` and `082_instagram_conversations_messages.js` exist **only** on `feature/instagram-phase-1` (local and origin), not on `master`, so they become stranded when that branch lands.
 
-**Fix:** renumber them to the next free numbers at the time of the fix. **Never pre-assign a migration number in a plan or a spec** — take the next free one at implementation time. This document deliberately does not name any migration numbers for that reason.
+**Fix:** renumber them to the next free numbers at the time of the fix. **Never pre-assign a migration number in a plan or a spec** - take the next free one at implementation time. This document deliberately does not name any migration numbers for that reason.
 
 ### 3.5 GV Mart is on the demo client
 
@@ -325,7 +325,7 @@ GV Mart runs entirely on the **demo client**, not on its own Wasi client.
 
 ### 3.6 No API request log
 
-Build one. Minimum: timestamp, client id, route, status code, error code, latency, and a truncated request id — **not** the payload, which contains customer phone numbers and message bodies. Retention 30 days.
+Build one. Minimum: timestamp, client id, route, status code, error code, latency, and a truncated request id - **not** the payload, which contains customer phone numbers and message bodies. Retention 30 days.
 
 This exists so that "did my call arrive?" has an answer. It is also the only way to charge for API usage honestly later.
 
@@ -335,7 +335,7 @@ This exists so that "did my call arrive?" has an answer. It is also the only way
 
 > **Verified 2026-10-12.** Line 14 is the function declaration; the `order by created_at desc limit 1` SQL is line 15. Count of `wabasRepo.findByClientId` call sites in `server/src`: **25 direct calls in 10 files** (`admin.js` 9, `onboarding.js` 4, `templates.js` 4, `clientNotifier.js` 2, and one each in `apiV1Account.js`, `apiV1Templates.js`, `broadcasts.js`, `templateLibrary.js`, `messagingService.js`, `templateSyncService.js`) plus one internal call inside `upsertForClient`, which itself has 8 callers (`admin.js` 4, `onboarding.js` 4). So "roughly 30" holds (25, or 33 counting `upsertForClient`'s callers). A further 28 lines in `server/test` reference it. The shared send choke point is `messagingService.getSendableWaba` (`messagingService.js:35`); `broadcastRunner.js` and the flow runners do not call it directly.
 
-The correct model is **phone numbers as their own table under a WABA** — a WABA can hold several numbers, and the client picks per send. Estimated 1.5–3 weeks.
+The correct model is **phone numbers as their own table under a WABA** - a WABA can hold several numbers, and the client picks per send. Estimated 1.5–3 weeks.
 
 **Do not start this during the AI build.** It touches 30 call sites including every send path, and interleaving it with the AI feature means neither lands. Schedule it after Phase 2.
 
@@ -659,7 +659,7 @@ An unauthenticated `git pull` fails on a private repository. Flipping first brea
 
 Minimum: nightly `pg_dump` to object storage, 14 days retained, **and a restore tested once into a scratch database.** An untested backup is not a backup.
 
-Supabase Pro at $25/month gives 7-day daily backups; PITR is $100/month per 7 days. Note that Supabase backups **exclude Storage API objects**, so media needs its own copy. Decide between paying Supabase and running your own dump — but do one of them this week.
+Supabase Pro at $25/month gives 7-day daily backups; PITR is $100/month per 7 days. Note that Supabase backups **exclude Storage API objects**, so media needs its own copy. Decide between paying Supabase and running your own dump - but do one of them this week.
 
 ### 4.3 Remaining items
 
@@ -670,7 +670,7 @@ Supabase Pro at $25/month gives 7-day daily backups; PITR is $100/month per 7 da
 | `clients.status` enforces nothing | A suspended client can still send. Fixed in Phase 0.5. |
 | **OPEN: Vetri Academy (Demo) owner password is still the published default** | The only live exposure found by the 2026-10-12 audit (`demo+vetri-academy@wasi.local`, `status` active, `token_version` 0; the default has been public since 23 Sep, `9cb7eeb`). **Not yet reset** as of this edit. Agreed route: `POST /api/clients/:id/reset-password` from an admin session, **response discarded** (it returns a random temporary password once; an unknown random password closes the exposure). No deploy needed; the route is in the deployed image (`511ea49`). Do **not** re-run `seedLandingDemo.js` against production: it restores the default. Close this row only when the reset has been done and a login with the old default has been shown to fail. |
 
-### 4.4 Standing constraints — these do not expire
+### 4.4 Standing constraints - these do not expire
 
 These were established during the investigation and remain in force for every future session.
 
@@ -684,9 +684,9 @@ These were established during the investigation and remain in force for every fu
 
 ---
 
-## 5. AI agent — architecture summary
+## 5. AI agent - architecture summary
 
-Full specification: `docs/ai-agent/SPEC.md`, as amended at commit `8c1e075` (first committed `7226a637`). **Read it before building. Do not re-derive the design from this section** — this is a summary for orientation, the spec is normative.
+Full specification: `docs/ai-agent/SPEC.md`, as amended at commit `8c1e075` (first committed `7226a637`). **Read it before building. Do not re-derive the design from this section** - this is a summary for orientation, the spec is normative.
 
 The three decisions worth repeating because they shape everything else:
 
@@ -705,9 +705,9 @@ get_knowledge_for(agent, message) -> string
 
 ### 5.2 Gates, not prompts
 
-The agent's safety comes from **eight gates** evaluated in order before any model call and before any send. They are specified in the spec — read the list there rather than from memory. The one worth calling out here, because the first version of it was wrong:
+The agent's safety comes from **eight gates** evaluated in order before any model call and before any send. They are specified in the spec - read the list there rather than from memory. The one worth calling out here, because the first version of it was wrong:
 
-**Gate 4 — human active.** `chats.last_agent_reply_at` is written from exactly two places:
+**Gate 4 - human active.** `chats.last_agent_reply_at` is written from exactly two places:
 
 1. the human send path in `server/src/routes/chats.js` (send and retry), and
 2. `chatsRepo.insertEcho` (a business replying from its own WhatsApp Business app, which in a Coexistence setup is the main human reply path), **only when the echo is not Wasi's own outbound coming back**: match on the message id and skip the write if an outbound row already exists.
@@ -737,7 +737,7 @@ Claude Haiku 4.5 at $1 / $5 per million tokens (input / output).
 
 **Per-message cost assumptions may move by an order of magnitude, and the Meta fee inside them is unverified (5.6).** Haiku 4.5 is held through Phase 1 on purpose, so the shadow run produces a baseline against a fixed variable. Claude Haiku 5.5 is listed at $0.10 / $0.50 per MTok (prompts up to 100K) against $1 / $5, roughly 10x cheaper, and it rejects non-default sampling parameters, so the spec's `temperature` 0.3 would be a 400. Whether to move is its own evaluation task (E1, section 7), started as soon as Phase 1 shadow provides a quality baseline (raised 2026-10-13), not something to decide mid-build. **The unit economics are unresolved: see 5.5.** Do not publish a per-message price, or size the add-on, on the Haiku 4.5 figures alone.
 
-### 5.5 Unit economics — UNRESOLVED (recorded 2026-10-13, owner)
+### 5.5 Unit economics - UNRESOLVED (recorded 2026-10-13, owner)
 
 > **UNVERIFIED INPUT: every figure below that includes Meta's ₹0.115 fee is unconfirmed until Meta answers (5.6). Whether that fee is Wasi's cost or the client's is itself open.**
 
@@ -775,7 +775,7 @@ Input is about 80% of the model cost (₹0.264 of ₹0.330) and about 59% of the
 
 **Nothing is decided.** Do not publish a price, or size a plan's reply allowance, until Option 4's quality evidence and the Meta fee are both known.
 
-### 5.6 OPEN QUESTION — Meta's service-message fee. BLOCKS THE PRICING DOCUMENT, not only the AI feature (recorded 2026-10-13, owner)
+### 5.6 OPEN QUESTION - Meta's service-message fee. BLOCKS THE PRICING DOCUMENT, not only the AI feature (recorded 2026-10-13, owner)
 
 **Status: UNVERIFIED. The owner is asking Meta directly. Until Meta answers, every per-conversation and per-message figure in this document and in `SPEC.md` §12 is unverified and must be read as an assumption, not a fact.** That includes every figure containing the ₹0.115 Meta fee (the ₹0.445 baseline, the ₹1,780 at 4,000 replies, the add-on price table, the Haiku 5.5 figures) and the "1,000 free per WABA" allowance. On Haiku 5.5 Meta's fee is about 78% of per-reply cost, so it is now the largest single unknown in the model. The reported change date (1 Oct 2026) has already passed.
 
@@ -801,7 +801,7 @@ It blocks more than the AI add-on: any plan, any "cost per conversation" shown t
 
 ---
 
-## 6. Phase 0 — foundations
+## 6. Phase 0 - foundations
 
 **Nothing AI-specific ships here. Three of these five items are correctness fixes that earn their keep regardless.**
 
@@ -819,7 +819,7 @@ Written **only** from the human send path in `routes/chats.js`. See 5.2 for the 
 
 **Why it matters beyond the agent:** there is currently no record of when a human last replied to a customer, so response-time reporting is impossible.
 
-Backfill is **not** safe — historical messages do not record whether a send was human or automated. Leave existing rows null and let them populate forward.
+Backfill is **not** safe - historical messages do not record whether a send was human or automated. Leave existing rows null and let them populate forward.
 
 ### 0.3 `flowEngine.evaluate` and `automationEngine.evaluate` return `{handled, how}`
 
@@ -831,7 +831,7 @@ Currently nothing downstream can tell whether a flow matched a message. The agen
 
 ### 0.4 `ai_jobs` table and an interval-poller runner
 
-A job row per queued agent turn. The runner follows the existing runner pattern (`broadcastRunner`, `forwardRunner`, `flowRunner`, `alertRunner`) — interval poll, claim a row, process, mark terminal.
+A job row per queued agent turn. The runner follows the existing runner pattern (`broadcastRunner`, `forwardRunner`, `flowRunner`, `alertRunner`) - interval poll, claim a row, process, mark terminal.
 
 Requirements: single-claim safety under concurrent runners, bounded retries, a terminal failed state that does not retry forever, and no unbounded queue growth. A job that has been claimed and not completed within a timeout must become reclaimable.
 
@@ -839,7 +839,7 @@ Requirements: single-claim safety under concurrent runners, bounded retries, a t
 
 Today `clients.status` enforces nothing. A suspended client can still send.
 
-Enforce it at the send path, not the route — there are several routes and one send path. `messagingService.sendChatMessage` and `getSendableWaba` are the right places. A suspended client's send fails with a clear error code; the agent does not run at all.
+Enforce it at the send path, not the route - there are several routes and one send path. `messagingService.sendChatMessage` and `getSendableWaba` are the right places. A suspended client's send fails with a clear error code; the agent does not run at all.
 
 **Gate (owner decision, 2026-10-12): P4 is NOT a gate on this unit.** The unit blocks `suspended` only. 0 of 44 client rows are `suspended`, so it is a no-op today and cannot cut anyone off. P4 (GV Mart on a real, active row with a working token) remains a gate on **3.5, moving GV Mart**, and on any design that blocks non-`active` clients. Do not conflate the two again. **No gate remains for 0.5 (owner decision, 2026-10-13): P5, the per-person admin audit in 3.9, is dropped as a gate and is its own high-priority backlog item.** One correction to the reasoning recorded with that decision: "nothing suspends automatically" is not quite true. `paymentReminderRunner` (started in `index.js`) auto-suspends a client 5 days after an admin marks them unpaid (`auto_suspended_for_nonpayment`). No client is marked unpaid today (0 of 14 non-test clients; 0 auto-suspended), so it is a no-op now, but once 0.5 ships the first such suspension will cut off sends without a person flipping a switch on that day. That is the feature working as designed; it is a reason to make sure the admin can see who is suspended and why (the Client Detail banner already does), not a reason to hold 0.5.
 
@@ -869,11 +869,11 @@ What the client experiences, checked against the code (2026-10-13):
 
 ---
 
-## 7. Phase 1 — single-turn reply, shadow mode
+## 7. Phase 1 - single-turn reply, shadow mode
 
 The agent runs, produces a reply, and **does not send it.** Replies are stored and reviewed.
 
-> **HARD PRECONDITION (P6), ahead of every Phase 1 unit — added 2026-10-12, owner-accepted.** Shadow mode sends customer message text, and the client's knowledge, to a third-party model provider. It sends nothing to the customer, but it is **not** "nothing leaves our infrastructure", and shadow mode runs on real traffic. No Phase 1 unit may make a model call on real client traffic until all three of these exist:
+> **HARD PRECONDITION (P6), ahead of every Phase 1 unit - added 2026-10-12, owner-accepted.** Shadow mode sends customer message text, and the client's knowledge, to a third-party model provider. It sends nothing to the customer, but it is **not** "nothing leaves our infrastructure", and shadow mode runs on real traffic. No Phase 1 unit may make a model call on real client traffic until all three of these exist:
 >
 > 1. **A privacy policy clause** that says AI features send message content to a named provider, what is and is not sent, retention, whether it is used for training, and that the feature is off unless the client turns it on (`SPEC.md` §11.1). The policy is placeholder text today.
 > 2. **A consent position per client**, recorded: who agreed, when, to which exact wording (`SPEC.md` §11.2, `ai_agent_consent_events`). Shadow mode runs only for a client who has agreed, one client first.
@@ -882,13 +882,13 @@ The agent runs, produces a reply, and **does not send it.** Replies are stored a
 > **Item 3 is a legal question, not an engineering one, and so is the wording of item 1. It needs an actual lawyer, not our judgement.** Engineering can build the consent record and the toggle; it cannot decide what the clause must say, or whether the client's own customers must be told, and must not guess. This does not block Phase 0, or Phase 1 code written and tested against stubs.
 
 **Build:**
-1. Agent configuration per client — enabled flag, `knowledge_md`, `knowledge_tokens` (capped 2,500), tone, escalation rules, business hours.
-2. `get_knowledge_for` as specified in 5.1 — Phase 1 body returns `agent.knowledge_md`.
+1. Agent configuration per client - enabled flag, `knowledge_md`, `knowledge_tokens` (capped 2,500), tone, escalation rules, business hours.
+2. `get_knowledge_for` as specified in 5.1 - Phase 1 body returns `agent.knowledge_md`.
 3. The model call against Claude Haiku 4.5. No caching (5.4).
 4. All eight gates, in spec order, evaluated before the model call and before the send decision.
 5. `NEEDS_HUMAN` handling as a success path.
-6. Cost logging — `cost_paise` as integer, per turn, attributed to the client.
-7. Shadow storage — the drafted reply, the gates that passed, the gate that blocked if any, token counts and cost.
+6. Cost logging - `cost_paise` as integer, per turn, attributed to the client.
+7. Shadow storage - the drafted reply, the gates that passed, the gate that blocked if any, token counts and cost.
 
 **Why shadow mode:** it produces a real evaluation set from real customer messages with zero risk to a client relationship. Run it for a week on one client before anything sends. The gate-4 bug would have been invisible in testing and obvious in shadow.
 
@@ -903,13 +903,13 @@ The agent runs, produces a reply, and **does not send it.** Replies are stored a
 
 ---
 
-## 8. Phase 2 — suggested reply, then live
+## 8. Phase 2 - suggested reply, then live
 
 Two sub-steps. Do not merge them.
 
-**2a — suggested reply.** The draft appears in the Wasi inbox as a one-click suggestion. A human sends it, edits it, or discards it. Record which. This is the last cheap source of evaluation data and it is also a feature worth selling on its own.
+**2a - suggested reply.** The draft appears in the Wasi inbox as a one-click suggestion. A human sends it, edits it, or discards it. Record which. This is the last cheap source of evaluation data and it is also a feature worth selling on its own.
 
-**2b — auto-send, one client.** The agent sends when all gates pass. Start with the single client whose shadow results were best. Keep a kill switch per client that takes effect on the next turn, not the next deploy.
+**2b - auto-send, one client.** The agent sends when all gates pass. Start with the single client whose shadow results were best. Keep a kill switch per client that takes effect on the next turn, not the next deploy.
 
 > **HARD RULE (owner, 2026-10-12): the `smb_message_echoes` subscription must be live and verified BEFORE 2b.** 7 of the 9 connected WABAs are Coexistence, and the app is not subscribed to the echo field today (0 echo-sourced messages, ever). While it is not, `last_agent_reply_at` cannot move for a reply sent from the owner's own phone, gate 4 cannot see the human, and the agent would answer on top of them in front of their customer. "Verified" means a real echo captured: an `audit_log` row for the field and a `messages` row with `source = 'whatsapp_app'`. Until then, the only protection for those clients is the `outside_hours` schedule, which narrows the exposure and does not close it. The agent must not go live on a Coexistence client while it is blind to phone replies. Subscription also has an ordering constraint already recorded in 3.0: production must run `cb27227` first. Do not subscribe `history` until a handler exists.
 
@@ -943,18 +943,18 @@ Two sub-steps. Do not merge them.
 
 ---
 
-## 9. Phase 3 — knowledge and handover
+## 9. Phase 3 - knowledge and handover
 
 - Knowledge ingestion: a client uploads documents, Wasi converts them to markdown and enforces the 2,500-token cap, with clear feedback when their content exceeds it.
-- Template-aware replies: when the 24-hour window is closed, the agent proposes an approved template rather than free text. This closes the loop with Section 2.2 — the failure mode becomes a template suggestion instead of a dropped send.
+- Template-aware replies: when the 24-hour window is closed, the agent proposes an approved template rather than free text. This closes the loop with Section 2.2 - the failure mode becomes a template suggestion instead of a dropped send.
 - Handover: an explicit, visible transition to a human with context, and a rule for when the agent resumes.
 
 ---
 
-## 10. Phase 4 — productise
+## 10. Phase 4 - productise
 
 - Plan limits and a billing meter built on the `cost_paise` log and the request log from 3.6.
-- A client-facing agent builder — knowledge, tone, escalation, hours, without Wasi touching the database.
+- A client-facing agent builder - knowledge, tone, escalation, hours, without Wasi touching the database.
 - Per-client analytics: handled, refused, escalated, cost. **Real data only.** See 3.1.
 - Retrieval, **only if** a real client's knowledge genuinely exceeds the cap and trimming it hurts answer quality. The seam from 5.1 is where it goes.
 
@@ -1017,7 +1017,7 @@ verified against this codebase, and committed:
     docs/ai-agent/SPEC.md   (as amended at commit 8c1e075; first committed 7226a637)
 
 Read it first and in full. It is normative. Do not redesign it. If you find
-something in it that contradicts the code, say so explicitly as a finding —
+something in it that contradicts the code, say so explicitly as a finding -
 do not silently plan around it.
 
 TASK
@@ -1031,7 +1031,7 @@ Phase 0 items:
   0.2  chats.last_agent_reply_at, written ONLY from the human send path in
        server/src/routes/chats.js. Never from flowRunner/flowEngine,
        broadcastRunner, the Hub API (apiV1Messages.js), the agent itself, or
-       chatsRepo.insertEcho. Do not backfill — historical rows cannot
+       chatsRepo.insertEcho. Do not backfill - historical rows cannot
        distinguish human from automated sends.
   0.3  flowEngine.evaluate and automationEngine.evaluate return {handled, how}
   0.4  ai_jobs table plus an interval-poller runner following the existing
@@ -1053,7 +1053,7 @@ Read, do not assume:
   2. Every write path into messages and chats. Specifically which paths call
      chatsRepo.insertInbound, insertOutboundPending and insertEcho, so 0.1 and
      0.2 are written in exactly the right places and nowhere else.
-  3. The human send path in server/src/routes/chats.js — confirm it is the only
+  3. The human send path in server/src/routes/chats.js - confirm it is the only
      route a human reply can leave through. If there is a second, name it.
   4. The existing runner pattern. Read one runner end to end and tell me how
      claiming, retrying and terminal states are done today, so ai_jobs matches
@@ -1062,18 +1062,18 @@ Read, do not assume:
      numbered file on master. They differ: 081 and 082 are stranded Instagram
      migrations below the highest applied (085). Take the next free numbers at
      implementation time. Do not pre-assign numbers in the plan.
-  6. messagingService.sendChatMessage and getSendableWaba — confirm these are
+  6. messagingService.sendChatMessage and getSendableWaba - confirm these are
      the right place for 0.5, and that no send path bypasses them.
   7. Whether a test harness exists and what it can actually run. If there is no
-     way to test a runner's single-claim behaviour today, say so — that is a
+     way to test a runner's single-claim behaviour today, say so - that is a
      Phase 0 item.
 
-CONSTRAINTS — these are not negotiable
+CONSTRAINTS - these are not negotiable
   - Read-only for this session. No writes, no migrations, no commits.
   - Never print a secret value. Name the variable, the file and the commit.
   - Never rewrite git history.
   - Autovacuum on messages, chats and contacts was re-enabled on 2026-10-12. Do not change it.
-  - Never use session-level settings over DATABASE_URL — the pooler leaks them
+  - Never use session-level settings over DATABASE_URL - the pooler leaks them
     between sessions. Use `begin read only` or `set local`.
   - Do not plan multi-number support or any change to
     wabasRepo.findByClientId. It is a separate 1.5–3 week project and must not
@@ -1098,7 +1098,7 @@ Do not start implementing. Report the plan and stop.
 
 ---
 
-## Appendix A — `debug_token` output
+## Appendix A - `debug_token` output
 
 **Source:** `diagnostic_scope_check.js`, run on the production VPS (the only machine that can decrypt WABA tokens) in a session reported by the project owner, 2026-10-12. Reported, not independently re-run. No token value is reproduced here; ids and scope names only.
 
@@ -1132,18 +1132,18 @@ Failure counts for the five already run: `998094716164113` 574, `176660523120364
 - **Messaging tier:** `messaging_limit_tier` absent on TNPSC, the demo and the stale row, present (`TIER_250`) on Sirah Digital. The field works; see 3.12.
 - **`code_verification_status`:** `EXPIRED` on both numbers checked; benign on the evidence (3.12).
 
-## Appendix B — artifacts and documents
+## Appendix B - artifacts and documents
 
 | Document | Location | State |
 |---|---|---|
 | AI Agent Specification | `docs/ai-agent/SPEC.md` (amended at `8c1e075`; first committed `7226a637`) | Committed, normative |
-| Wasi AI Bot — Build and Launch Plan | Claude doc `f1f3ab0e-d42e-4db4-8dea-4e9ba418548e` | Live |
+| Wasi AI Bot - Build and Launch Plan | Claude doc `f1f3ab0e-d42e-4db4-8dea-4e9ba418548e` | Live |
 | Wasi Pricing Model | Claude doc `558b65f9-c6d1-4a11-b040-cdcabfa1abaa` | Live, shared with TL and Manager |
 | Wasi Plans and Pricing | Claude doc `338248b9-4569-49dd-89c2-64b83d61cd4d` | Live, not on landing page yet |
 | Wasi API Reference | Claude doc `514f1794-5289-449f-a8f3-36190499d746` | Written, **not published**. Strip the final internal-notes section first. |
 | Wasi Logo Design Brief | Claude doc `441e0f38-b1fa-4918-86a8-b27adf21f8d2` | Live, 40 questions unanswered |
 
-## Appendix C — verification record, 2026-10-12
+## Appendix C - verification record, 2026-10-12
 
 Result of checking this document's factual claims against the repository (`master`, `37cd0ed`), the production database (read-only) and the live site. Corrections are inline above, marked **Verified** or **UNVERIFIED**.
 
@@ -1177,7 +1177,7 @@ Not checked in this pass: Meta's current documentation, the live Meta webhook su
 | Unpushed commits `9a97664`, `4235a24`, `f55a97c`, `37cd0ed`, `65c5a2c` | No tokens, keys or live secrets. They publish client names, WABA and phone-number ids, a client phone number, client UUIDs, a local dev DB password in a snippet, and the default seed credentials with a statement that they still worked in production. All in `docs/HANDOVER-2026-10-03.md` except `65c5a2c`'s ids and UUIDs in this file |
 | `.claude/` tracked? | No. Only `scheduled_tasks.lock` was ever committed, untracked in `a988716`. Committing just the 3-line `.gitignore` change is safe |
 
-## Appendix D — investigation history and corrected figures (2026-10-12)
+## Appendix D - investigation history and corrected figures (2026-10-12)
 
 Three figures this document treated as established were artifacts. They are recorded here so they are not reintroduced.
 

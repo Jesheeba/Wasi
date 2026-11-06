@@ -3,7 +3,7 @@ const { pool } = require('../db/pool');
 
 // Session invalidation (password reset item 3): a token's `tokenVersion`
 // claim must match admin_users.token_version at request time, not just
-// verify as a signed, unexpired JWT — a password change bumps the column,
+// verify as a signed, unexpired JWT - a password change bumps the column,
 // which invalidates every token issued before it immediately, on the very
 // next request, without a token blocklist. A token issued before this
 // feature shipped carries no `tokenVersion` claim at all; treated as 0,

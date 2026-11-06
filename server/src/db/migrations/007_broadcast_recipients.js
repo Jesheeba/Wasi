@@ -2,8 +2,8 @@
 // broadcastRunner background loop can claim work in batches (FOR UPDATE SKIP
 // LOCKED) and survive a process restart mid-send without losing progress or
 // double-sending completed recipients. Real delivered/read numbers are
-// computed by joining to `messages` at read time (see broadcastsRepo.list) —
-// not duplicated here — so there's one source of truth for message status.
+// computed by joining to `messages` at read time (see broadcastsRepo.list) -
+// not duplicated here - so there's one source of truth for message status.
 
 exports.up = (pgm) => {
   pgm.addColumn('broadcasts', {

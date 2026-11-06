@@ -1,9 +1,9 @@
-// PLAN.md item 7 — per-contact custom attribute values. contact_attributes
+// PLAN.md item 7 - per-contact custom attribute values. contact_attributes
 // (migration 011) has only ever been type definitions ("this client has a
 // 'city' attribute of type text") with nowhere to store a value per
 // contact until now.
 //
-// value stays `text` (no per-type columns) — matches this repo's existing
+// value stays `text` (no per-type columns) - matches this repo's existing
 // loose-storage convention (e.g. message_templates.body_param_examples);
 // the per-type check (number/date/boolean format) is write-time app-layer
 // validation (routes/contacts.js, using utils/validate.js's
@@ -12,7 +12,7 @@
 //
 // UNIQUE(contact_id, attribute_id) (no client_id in the constraint, same as
 // contact_attributes_client_name_unique on the parent table not needing
-// client_id either — contact_id and attribute_id both already imply a
+// client_id either - contact_id and attribute_id both already imply a
 // single client) is what makes the route's upsert a plain
 // ON CONFLICT (contact_id, attribute_id) DO UPDATE.
 exports.up = (pgm) => {
@@ -44,7 +44,7 @@ exports.up = (pgm) => {
 };
 
 exports.down = async (pgm) => {
-  // Same discipline as every other tenant-table down() in this plan — real
+  // Same discipline as every other tenant-table down() in this plan - real
   // per-contact business data (a client's actual custom field values)
   // could exist by the time a rollback runs on this shared database.
   const [{ count }] = await pgm.db.select('select count(*)::int as count from contact_attribute_values');

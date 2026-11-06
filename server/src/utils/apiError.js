@@ -1,4 +1,4 @@
-// Shared Hub API v1 error-response shape — wasi-master-plan.md §8.6:
+// Shared Hub API v1 error-response shape - wasi-master-plan.md §8.6:
 // { error: { code, message, ...extra } } on every /api/v1/* response,
 // replacing the five inconsistent ad-hoc shapes routes/apiV1*.js used to
 // hand-roll individually. `code` is a stable machine-readable string (safe

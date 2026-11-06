@@ -1,13 +1,13 @@
 // Real bug, fixed: GET /api/analytics/tags used to join on contacts.tag_id
 // only, the same blind spot broadcastRecipientsRepo.createFromAudience had
-// before its Option B fix — a contact tagged via item 8/8.5's additive
+// before its Option B fix - a contact tagged via item 8/8.5's additive
 // contact_tags picker never counted toward its tag's contact_count,
 // silently understating a real client-facing analytics number. Fixed with
 // the same OR EXISTS shape, not a replacement (contacts.tag_id still has
-// one real, live write path — the Automation Flow Builder's Assign Tag
-// action node — this must not regress). Verifies:
+// one real, live write path - the Automation Flow Builder's Assign Tag
+// action node - this must not regress). Verifies:
 // 1. A contact tagged ONLY via contact_tags now counts toward contact_count.
-// 2. A contact tagged ONLY via contacts.tag_id directly still counts — no regression.
+// 2. A contact tagged ONLY via contacts.tag_id directly still counts - no regression.
 // 3. A contact matching via BOTH mechanisms (e.g. migration 050's backfill
 //    shape) is counted exactly once, not twice.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -70,10 +70,10 @@ test('1. a contact tagged ONLY via the additive contact_tags endpoint now counts
 
   const row = await getTagRow(tag.id);
   assert.ok(row, 'the tag itself must still appear in the report even before this fix');
-  assert.equal(row.contact_count, 1, 'a contact_tags-only tag must now count — this is the exact bug that was reported');
+  assert.equal(row.contact_count, 1, 'a contact_tags-only tag must now count - this is the exact bug that was reported');
 });
 
-test('2. a contact tagged ONLY via contacts.tag_id directly (the flow builder\'s Assign Tag path) still counts — no regression', async () => {
+test('2. a contact tagged ONLY via contacts.tag_id directly (the flow builder\'s Assign Tag path) still counts - no regression', async () => {
   const tag = await createTag(`${SUITE_PREFIX}PrimaryOnly_${Date.now()}`);
   const contact = await createContact(`${SUITE_PREFIX}C2`, `9181${String(Date.now()).slice(-8)}`);
   await pool.query('update contacts set tag_id = $1 where id = $2', [tag.id, contact.id]);

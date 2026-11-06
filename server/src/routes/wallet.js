@@ -15,7 +15,7 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 // Reuses the Orders API + Razorpay Checkout.js widget (same pattern as
-// billing.js's subscription checkout) — the frontend opens the widget with
+// billing.js's subscription checkout) - the frontend opens the widget with
 // this order, and razorpayWebhook.js completes the credit on payment.captured.
 router.post('/recharge', asyncHandler(async (req, res) => {
   const { amount_inr } = walletRechargeSchema.parse(req.body);

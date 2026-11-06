@@ -1,6 +1,6 @@
-// Read-only tools — each wraps one GET endpoint under server/src/routes/
+// Read-only tools - each wraps one GET endpoint under server/src/routes/
 // apiV1*.js. `limit` fields default and cap to the same bounds those routes
-// enforce server-side (see apiV1Conversations.js/apiV1Contacts.js) — kept
+// enforce server-side (see apiV1Conversations.js/apiV1Contacts.js) - kept
 // here too so the tool schema itself documents the ceiling to a calling
 // model, not just a runtime 400 if it guesses too high.
 const { z } = require('zod');
@@ -13,7 +13,7 @@ const tools = [
     config: {
       title: 'List WhatsApp message templates',
       description:
-        'List every WhatsApp message template on this account, including its Meta approval status (approved, pending, or rejected). Always check this before calling send_template_message — sending an unapproved template will fail. Use get_template_details for one template\'s full parameter list.',
+        'List every WhatsApp message template on this account, including its Meta approval status (approved, pending, or rejected). Always check this before calling send_template_message - sending an unapproved template will fail. Use get_template_details for one template\'s full parameter list.',
       inputSchema: {},
     },
     handler: withToolErrorHandling(async () => {
@@ -26,7 +26,7 @@ const tools = [
     config: {
       title: 'Get WhatsApp template details',
       description:
-        'Get the full stored definition of one WhatsApp message template — body text, header/footer, buttons, and the named parameters its body expects (with example values) — so you know exactly what to pass as `params` to send_template_message.',
+        'Get the full stored definition of one WhatsApp message template - body text, header/footer, buttons, and the named parameters its body expects (with example values) - so you know exactly what to pass as `params` to send_template_message.',
       inputSchema: {
         template_id: z.string().uuid().describe('The template\'s `id` field, from list_templates.'),
       },
@@ -43,7 +43,7 @@ const tools = [
       description:
         'List this account\'s WhatsApp conversations (chats), most recently active first. Each entry includes the chat id (needed for get_conversation_history) and the contact\'s name/phone.',
       inputSchema: {
-        limit: z.coerce.number().int().min(1).max(100).default(20).describe('Maximum conversations to return (1-100, default 20). Kept small by default to avoid flooding your context — raise it only if you specifically need more.'),
+        limit: z.coerce.number().int().min(1).max(100).default(20).describe('Maximum conversations to return (1-100, default 20). Kept small by default to avoid flooding your context - raise it only if you specifically need more.'),
       },
     },
     handler: withToolErrorHandling(async ({ limit }) => {
@@ -89,7 +89,7 @@ const tools = [
     config: {
       title: 'Get Wasi account / WhatsApp connection status',
       description:
-        'Check whether this Wasi account has a connected WhatsApp Business number, and its Meta quality rating. Useful for self-diagnosing a send failure — a waba_not_connected error means there\'s nothing connected yet.',
+        'Check whether this Wasi account has a connected WhatsApp Business number, and its Meta quality rating. Useful for self-diagnosing a send failure - a waba_not_connected error means there\'s nothing connected yet.',
       inputSchema: {},
     },
     handler: withToolErrorHandling(async () => {
@@ -102,7 +102,7 @@ const tools = [
     config: {
       title: 'Get Hub API rate limit',
       description:
-        'Get the Wasi Hub API\'s request rate ceiling for this account. This is the account-wide limit shared across every Hub API call (sends and reads alike) — use it to pace a burst of sends (e.g. a broadcast) rather than firing requests until one gets rate-limited.',
+        'Get the Wasi Hub API\'s request rate ceiling for this account. This is the account-wide limit shared across every Hub API call (sends and reads alike) - use it to pace a burst of sends (e.g. a broadcast) rather than firing requests until one gets rate-limited.',
       inputSchema: {},
     },
     handler: withToolErrorHandling(async () => {

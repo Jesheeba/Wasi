@@ -10,12 +10,12 @@ const hashPassword = (plain) => bcrypt.hash(plain, 10);
 const comparePassword = (plain, hash) => bcrypt.compare(plain, hash);
 
 // tokenVersion is the session-invalidation epoch (server/src/db/migrations/
-// 079_identity_token_version.js) — the auth middleware compares this claim
+// 079_identity_token_version.js) - the auth middleware compares this claim
 // against the subject's current token_version column on every request, so a
 // password change/reset can invalidate every token issued before it without
 // a token blocklist. `client.token_version`/etc. is expected to already be
 // on the row passed in here (every caller fetches it via a `select *` or an
-// explicit column list that includes it) — defaulting to 0 below only covers
+// explicit column list that includes it) - defaulting to 0 below only covers
 // a caller that hasn't been updated to select it, not the "old token"
 // case (that's handled on the verify side, not here).
 function signClientToken(client) {

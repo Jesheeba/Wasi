@@ -1,5 +1,5 @@
 // Resolves the `media id` a media-header template (IMAGE/VIDEO/DOCUMENT)
-// needs at SEND time — a different Meta object than the `header_handle`
+// needs at SEND time - a different Meta object than the `header_handle`
 // used at template CREATION time (Resumable Upload API, see
 // routes/templates.js). Shared by every send path (broadcastRunner,
 // flowEngine, the one-off chat send) via messagingService.sendChatMessage,
@@ -8,19 +8,19 @@
 // Design (see migration 028_template_media_cache.js and the media-header
 // investigation this was scoped from): a media id is reusable across many
 // messages but expires 30 days after upload. Rather than persisting the
-// original file ourselves (explicitly out of scope — no media library),
+// original file ourselves (explicitly out of scope - no media library),
 // Meta is the file store: before a cached id's 30-day window closes, this
 // downloads the media back via GET /{media-id} and re-uploads it to mint a
 // fresh id. One resolve serves an entire broadcast run AND every flow
 // execution that hits the same template, not one upload per recipient/
-// contact — that reuse is the whole point of caching by template_id rather
+// contact - that reuse is the whole point of caching by template_id rather
 // than resolving fresh on every send.
 const dns = require('dns').promises;
 const net = require('net');
 const metaClient = require('../utils/metaClient');
 const templateMediaCacheRepo = require('../repositories/templateMediaCacheRepo');
 
-// Refresh before the real 30-day expiry, not at the edge of it — a
+// Refresh before the real 30-day expiry, not at the edge of it - a
 // broadcast or flow send that straddles the threshold should never race a
 // download against Meta actually deleting the media.
 const REFRESH_THRESHOLD_MS = 25 * 24 * 60 * 60 * 1000;
@@ -30,7 +30,7 @@ function isMediaHeaderType(headerType) {
   return MEDIA_HEADER_TYPES.has(headerType);
 }
 
-// Single source of truth for header-media constraints — originally lived in
+// Single source of truth for header-media constraints - originally lived in
 // routes/templates.js only; exported from here now that resolveMediaIdFromUrl
 // (below) needs the same limits to validate a CRM-supplied URL, and
 // routes/templates.js imports this instead of keeping its own copy.
@@ -40,7 +40,7 @@ const MEDIA_HEADER_LIMITS = {
   DOCUMENT: { maxBytes: 100 * 1024 * 1024, mimeTypes: { 'application/pdf': 'application/pdf' } },
 };
 
-// Distinct from a Meta rejection (MessagingError 'send_failed') — this
+// Distinct from a Meta rejection (MessagingError 'send_failed') - this
 // means the send never reached Meta at all because there was no valid media
 // id to send with. messagingService wraps this as MessagingError
 // 'media_resolution_failed' so every existing caller (chats route,
@@ -49,7 +49,7 @@ const MEDIA_HEADER_LIMITS = {
 class MediaResolutionError extends Error {}
 
 // The initial cache seed happens directly in routes/templates.js, not here
-// — template creation needs the standard Media API upload interleaved with
+// - template creation needs the standard Media API upload interleaved with
 // the Resumable Upload API call (for the creation-time handle) and the
 // local template row (the cache write needs its id), in a specific order;
 // there's no clean single call this module could offer that fits that
@@ -57,7 +57,7 @@ class MediaResolutionError extends Error {}
 //
 // assetId (optional): points at a specific non-default asset row (see
 // templateMediaCacheRepo.insertAsset / migration 030) uploaded just for one
-// send — a chat message, a broadcast, a flow node — instead of the
+// send - a chat message, a broadcast, a flow node - instead of the
 // template's approval-time default. Omitted, this resolves the default
 // exactly as before.
 async function resolveMediaId(db, clientId, waba, accessToken, template, assetId) {
@@ -67,13 +67,13 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
   if (!cached) {
     if (assetId) {
       throw new MediaResolutionError(
-        `The selected media for "${template.name}" could not be found (it may have been removed) — choose a file again before sending.`
+        `The selected media for "${template.name}" could not be found (it may have been removed) - choose a file again before sending.`
       );
     }
     // Distinguishing "no default, but other media exists" from "nothing was
     // ever uploaded" matters: a template synced in from Meta (see
     // templateSyncService.createFromMetaSync) starts with zero cache rows
-    // regardless of what's actually been uploaded through this app since —
+    // regardless of what's actually been uploaded through this app since -
     // "was never uploaded through this app" is simply false once at least
     // one asset exists, and was found to actively mislead someone
     // troubleshooting a template that already has usable media, just none
@@ -83,12 +83,12 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
       const list = others.map((a) => `"${a.filename || a.media_id}"`).join(', ');
       throw new MediaResolutionError(
         `"${template.name}" has no default header media set, so a plain send/broadcast has nothing to use. ` +
-        `${others.length} uploaded file${others.length > 1 ? 's' : ''} already exist for this template (${list}) — ` +
+        `${others.length} uploaded file${others.length > 1 ? 's' : ''} already exist for this template (${list}) - ` +
         `set one as the default, or point this send at one of them directly.`
       );
     }
     throw new MediaResolutionError(
-      `"${template.name}"'s header media was never uploaded through this app — upload it before this can be sent.`
+      `"${template.name}"'s header media was never uploaded through this app - upload it before this can be sent.`
     );
   }
 
@@ -109,12 +109,12 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
     return { mediaId: updated.media_id, filename: updated.filename };
   } catch (err) {
     // Refresh failing means the cached id itself is at or past 30 days and
-    // Meta no longer has it to hand back — no local copy to fall back to,
+    // Meta no longer has it to hand back - no local copy to fall back to,
     // by design (see module comment). Rare: only reachable if a send
     // legitimately sat unresolved for the entire refresh margin, or the
     // cache row's resolved_at is stale relative to reality.
     throw new MediaResolutionError(
-      `"${template.name}"'s header media could not be refreshed — its copy on Meta's side has likely expired. Re-upload the header media for this template before it can be sent. (${err.message})`
+      `"${template.name}"'s header media could not be refreshed - its copy on Meta's side has likely expired. Re-upload the header media for this template before it can be sent. (${err.message})`
     );
   }
 }
@@ -130,9 +130,9 @@ function inIpv4Range(ip, base, bits) {
 
 // Blocks the address ranges an SSRF payload would actually target: loopback,
 // RFC1918 private space, link-local (which is also where cloud providers
-// serve instance-metadata credentials — 169.254.169.254), and a few less
+// serve instance-metadata credentials - 169.254.169.254), and a few less
 // common but still non-public blocks. Not an exhaustive IANA reservation
-// list — just enough to keep a CRM-supplied "fetch this URL" from reaching
+// list - just enough to keep a CRM-supplied "fetch this URL" from reaching
 // this server's own network.
 const BLOCKED_IPV4_RANGES = [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
@@ -150,7 +150,7 @@ function isBlockedAddress(ip) {
     if (mapped) return isBlockedAddress(mapped[1]);
     return false;
   }
-  return true; // couldn't classify it — fail closed
+  return true; // couldn't classify it - fail closed
 }
 
 // Guards against sending this server fetching its own internal network (or
@@ -180,11 +180,11 @@ async function assertPublicHttpsUrl(rawUrl) {
 }
 
 // A CRM-supplied document/image/video URL for one send (Hub API's
-// headerMediaUrl, see routes/apiV1Messages.js) — the alternative to
+// headerMediaUrl, see routes/apiV1Messages.js) - the alternative to
 // resolveMediaId's asset-id lookup, for a caller that has never uploaded
 // anything through this app's UI. Downloads the file itself (Meta's
 // template `link` parameter is documented as less reliable than `id`, and
-// every other send path here already goes through an uploaded media id —
+// every other send path here already goes through an uploaded media id -
 // see the module comment), uploads it to Meta, and caches the resulting id
 // as a new non-default asset so a retry of the same logical send can reuse
 // it without a second fetch.
@@ -211,7 +211,7 @@ async function resolveMediaIdFromUrl(db, clientId, waba, accessToken, template, 
   const mimeType = limits.mimeTypes[rawContentType];
   if (!mimeType) {
     throw new MediaResolutionError(
-      `headerMediaUrl's Content-Type ("${rawContentType || 'unknown'}") isn't accepted for a ${template.header_type} header — expected: ${Object.keys(limits.mimeTypes).join(', ')}.`
+      `headerMediaUrl's Content-Type ("${rawContentType || 'unknown'}") isn't accepted for a ${template.header_type} header - expected: ${Object.keys(limits.mimeTypes).join(', ')}.`
     );
   }
   const buffer = Buffer.from(await res.arrayBuffer());
@@ -236,7 +236,7 @@ async function resolveMediaIdFromUrl(db, clientId, waba, accessToken, template, 
   return { mediaId: asset.media_id, filename: asset.filename };
 }
 
-// Meta's send-time header parameter shape — lowercase type key, matching a
+// Meta's send-time header parameter shape - lowercase type key, matching a
 // plain media message's shape (see metaClient.sendTemplateMessage's
 // `components`). `filename` is Meta-recommended (not required) for a
 // document header so it displays as something other than an opaque name.
@@ -256,7 +256,7 @@ module.exports = {
   REFRESH_THRESHOLD_MS,
   MEDIA_HEADER_LIMITS,
   // Exported for the SSRF-guard unit tests (test/mediaHeaderService.test.js)
-  // — pure and DNS-free for IP-literal input, so testable without a network.
+  // - pure and DNS-free for IP-literal input, so testable without a network.
   isBlockedAddress,
   assertPublicHttpsUrl,
 };

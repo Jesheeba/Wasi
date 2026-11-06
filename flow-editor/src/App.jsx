@@ -26,7 +26,7 @@ function IssuesBanner({ issues }) {
   if (!issues.length) return null;
   return (
     <div className="wf-issues-banner">
-      <b>{issues.length} issue{issues.length === 1 ? '' : 's'} found</b> — these would fail or misbehave at
+      <b>{issues.length} issue{issues.length === 1 ? '' : 's'} found</b> - these would fail or misbehave at
       runtime and block activating this flow.
     </div>
   );
@@ -69,7 +69,7 @@ function FlowEditor() {
 
   useEffect(() => { load(); }, [load]);
 
-  // --- Mutations — every one reloads the whole graph afterward, same
+  // --- Mutations - every one reloads the whole graph afterward, same
   // "one action, one round trip" shape the step-list editor already uses,
   // so canvas and list never drift (both read the same REST endpoints). ---
 
@@ -81,10 +81,10 @@ function FlowEditor() {
   const handleDeleteNode = useCallback(async (nodeId) => {
     try { await api.deleteNode(flowId, nodeId); load(); }
     catch (err) {
-      // The server's real FK guard (contact_flow_state.current_node_id) —
+      // The server's real FK guard (contact_flow_state.current_node_id) -
       // surfaced plainly rather than the raw "Invalid reference" text, per
       // the crash-fix work: a contact is genuinely standing on this node.
-      setError(err.status === 400 ? 'Cannot delete — a contact is currently on this node.' : err.message);
+      setError(err.status === 400 ? 'Cannot delete - a contact is currently on this node.' : err.message);
     }
   }, [flowId, load]);
 
@@ -124,12 +124,12 @@ function FlowEditor() {
       load();
     } catch (err) {
       // 409 here is the validator's own block (routes/automationFlows.js)
-      // — its message is already specific per-issue text, safe to show raw.
+      // - its message is already specific per-issue text, safe to show raw.
       setError(err.body?.error || err.message);
     }
   }, [flowId, graph, load]);
 
-  // Deletes the whole flow (not just a node/edge — those already have their
+  // Deletes the whole flow (not just a node/edge - those already have their
   // own delete buttons on the card/branch itself). This page is normally
   // embedded in the main CRM's Bot Flow Editor modal (an <iframe>, same
   // origin) rather than opened as its own browser tab, so on success it
@@ -204,7 +204,7 @@ function FlowEditor() {
 
     if (conditionType === 'always') {
       const existing = graph.edges.find((e) => e.from_node_id === fromNode.id && e.condition_type === 'always');
-      if (existing) { setError('This node already has an outgoing branch — delete it before adding a new one.'); return; }
+      if (existing) { setError('This node already has an outgoing branch - delete it before adding a new one.'); return; }
     }
     try {
       await api.createEdge(flowId, { from_node_id: connection.source, to_node_id: connection.target, condition_type: conditionType, ...(conditionValue ? { condition_value: conditionValue } : {}) });
@@ -216,7 +216,7 @@ function FlowEditor() {
   // (n8n/AiSensy's "stretch a thread" pattern, confirmed in this session's
   // own research). onConnectStart records where the drag began; onConnectEnd
   // checks whether it ended on a real target (a .react-flow__handle under
-  // the pointer) — if not, opens the type picker at that screen position. ---
+  // the pointer) - if not, opens the type picker at that screen position. ---
   const onConnectStart = useCallback((_event, params) => { connectingRef.current = params; }, []);
   const onConnectEnd = useCallback((event) => {
     const target = event.target;

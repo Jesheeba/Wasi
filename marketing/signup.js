@@ -1,19 +1,19 @@
-// Wasi CRM — client onboarding wizard.
+// Wasi CRM - client onboarding wizard.
 // Plain vanilla JS, no build step. Talks directly to the Express/Postgres
 // backend documented in server/README.md.
 
 (() => {
   // Same-origin in production (this page is served by the same Express
-  // process as the API — see server/src/app.js); cross-port only in local
+  // process as the API - see server/src/app.js); cross-port only in local
   // dev where static files run separately from the API on :4000.
   const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '4000')
     ? 'http://localhost:4000'
     : '';
 
-  // Fallback only — overwritten by GET /api/billing/plans as soon as it
+  // Fallback only - overwritten by GET /api/billing/plans as soon as it
   // loads, so a pricing change in the plans table doesn't need a redeploy to
   // take effect in the actual checkout math (the static plan cards' marked-up
-  // copy below is a separate, rarely-changed concern — this project has no
+  // copy below is a separate, rarely-changed concern - this project has no
   // build step to template them from the same source).
   let PLAN_PRICING_INR = { Starter: 999, Growth: 2999, Scale: 7999 };
 
@@ -92,7 +92,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // STEP 1 — Account creation
+  // STEP 1 - Account creation
   // ---------------------------------------------------------------------
   function clearFieldErrors() {
     document.querySelectorAll('.field-error').forEach((el) => (el.textContent = ''));
@@ -175,7 +175,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // STEP 2 — Plan selection + Razorpay checkout
+  // STEP 2 - Plan selection + Razorpay checkout
   // ---------------------------------------------------------------------
   function selectPlan(plan) {
     state.selectedPlan = plan;
@@ -243,11 +243,11 @@
       state.subscription = data.subscription;
 
       if (!data.keyId) {
-        // Backend created the order row but has no Razorpay key configured —
+        // Backend created the order row but has no Razorpay key configured -
         // shouldn't normally happen since checkout throws first, but handle
         // it defensively rather than trying to open a broken widget.
         state.checkoutOutcome = 'unconfigured';
-        setBanner('step2-warn', "Payment isn't fully configured in this environment yet — you can continue to test the WhatsApp connection step below.", infoIconSvg);
+        setBanner('step2-warn', "Payment isn't fully configured in this environment yet - you can continue to test the WhatsApp connection step below.", infoIconSvg);
         revealStep2Next();
         return;
       }
@@ -256,7 +256,7 @@
       // the order details the backend just created.
       await loadScriptOnce('https://checkout.razorpay.com/v1/checkout.js');
       state.checkoutOutcome = 'opened';
-      setBanner('step2-info', 'Complete payment in the popup to activate billing — or click Next below to continue testing without completing payment.', infoIconSvg);
+      setBanner('step2-info', 'Complete payment in the popup to activate billing - or click Next below to continue testing without completing payment.', infoIconSvg);
       revealStep2Next();
 
       const rzp = new window.Razorpay({
@@ -288,7 +288,7 @@
       if (err.status === 502) {
         // Expected in this dev environment: no real Razorpay keys configured.
         state.checkoutOutcome = 'unconfigured';
-        setBanner('step2-warn', "Payment isn't configured in this environment yet — you can continue to test the WhatsApp connection step below.", infoIconSvg);
+        setBanner('step2-warn', "Payment isn't configured in this environment yet - you can continue to test the WhatsApp connection step below.", infoIconSvg);
         revealStep2Next();
       } else {
         state.checkoutOutcome = 'error';
@@ -316,7 +316,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // STEP 3 — Connect WhatsApp (Meta Embedded Signup)
+  // STEP 3 - Connect WhatsApp (Meta Embedded Signup)
   // ---------------------------------------------------------------------
   let step3Initialized = false;
 
@@ -352,7 +352,7 @@
         <div class="connect-box">
           <div class="connect-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></div>
           <h3>WhatsApp connection isn't available yet</h3>
-          <p>This platform's Meta App hasn't been configured (no <code>META_APP_ID</code>/<code>META_CONFIG_ID</code> set). Contact your platform admin to finish setup — your account and plan are already saved, so you won't lose progress.</p>
+          <p>This platform's Meta App hasn't been configured (no <code>META_APP_ID</code>/<code>META_CONFIG_ID</code> set). Contact your platform admin to finish setup - your account and plan are already saved, so you won't lose progress.</p>
           <button type="button" class="btn btn-primary" id="step3-skip">
             Skip for now
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -391,7 +391,7 @@
     connectBtn.addEventListener('click', () => startEmbeddedSignup(state.onboardingConfig));
   }
 
-  // Uses the shared window.WasiEmbeddedSignup helper (embeddedSignup.js) —
+  // Uses the shared window.WasiEmbeddedSignup helper (embeddedSignup.js) -
   // same FB SDK load + postMessage handshake the logged-in app's
   // Settings > WhatsApp screen uses, so this logic only exists once.
   async function startEmbeddedSignup({ appId, configId }) {
@@ -407,10 +407,10 @@
       });
       await completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence });
     } catch (err) {
-      // PLAN.md item 25, Part B — embeddedSignup.js marks the "FINISH
+      // PLAN.md item 25, Part B - embeddedSignup.js marks the "FINISH
       // arrived, the OAuth code never did" race with err.incomplete instead
       // of a plain rejection. Record it as its own state rather than
-      // showing the same generic failure a real non-attempt would — Meta
+      // showing the same generic failure a real non-attempt would - Meta
       // really did link the account on its side.
       if (err.incomplete) {
         try {
@@ -420,17 +420,17 @@
           });
           statusEl.innerHTML = `<div class="status-pill error">${err.message}</div>`;
         } catch (recordErr) {
-          // Fixed 2026-09-07 — this used to be console.error'd into
+          // Fixed 2026-09-07 - this used to be console.error'd into
           // silence. This is the worst case in the whole flow: Meta linked
-          // the account AND we failed to even record that fact — if this is
+          // the account AND we failed to even record that fact - if this is
           // swallowed too, there is zero trace anywhere, browser or server,
           // exactly the failure class this item exists to close. Unlike
           // app.js's toast (which auto-dismisses in 2.2s), this status pill
           // stays on screen until the user navigates away, so it's loud
-          // enough here without needing a blocking alert() too — but the
+          // enough here without needing a blocking alert() too - but the
           // WABA ID must actually be in it for a support contact to be useful.
           console.error('Failed to record incomplete WhatsApp connection:', recordErr.message);
-          statusEl.innerHTML = `<div class="status-pill error">Meta linked your WhatsApp account, but we also failed to record that on our end — nothing was saved automatically. Please contact support with this WhatsApp Business Account ID: <strong>${err.waba_id}</strong></div>`;
+          statusEl.innerHTML = `<div class="status-pill error">Meta linked your WhatsApp account, but we also failed to record that on our end - nothing was saved automatically. Please contact support with this WhatsApp Business Account ID: <strong>${err.waba_id}</strong></div>`;
         }
         return;
       }
@@ -440,7 +440,7 @@
 
   async function completeWhatsAppConnect(code, { waba_id, phone_number_id, via_coexistence }) {
     const statusEl = document.getElementById('step3-status');
-    // Real progress instead of a silent "Finishing setup…" the whole time —
+    // Real progress instead of a silent "Finishing setup…" the whole time -
     // 2026-09-08: server-side discovery (debug_token, phone number
     // enumeration, webhook subscription, registration, template sync) is
     // now the primary path and can genuinely take several seconds.
@@ -448,7 +448,7 @@
     const serverProgressTimers = [
       setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Verifying your account with Meta…</div>'; }, 3000),
       setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Finding your WhatsApp number…</div>'; }, 8000),
-      setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Still working — almost done…</div>'; }, 15000),
+      setTimeout(() => { statusEl.innerHTML = '<div class="status-pill pending">Still working - almost done…</div>'; }, 15000),
     ];
     try {
       const data = await api('/api/onboarding/whatsapp/connect', {
@@ -464,30 +464,30 @@
       serverProgressTimers.forEach(clearTimeout);
       // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason in
       // body.detail, with a generic body.error as the top-level summary (see
-      // that route's catch block) — this used to show only the generic
+      // that route's catch block) - this used to show only the generic
       // string, so a real rejection (e.g. the new missing-phone_number_id
       // case, 2026-09-05) read as a content-free "WhatsApp connection
       // failed" with no way to tell what actually happened. Preferring
       // body.detail surfaces the actual reason instead.
-      statusEl.innerHTML = `<div class="status-pill error">${(err.body && (err.body.detail || err.body.error)) || err.message}${err.body && err.body.hint ? ` — ${err.body.hint}` : ''}</div>`;
+      statusEl.innerHTML = `<div class="status-pill error">${(err.body && (err.body.detail || err.body.error)) || err.message}${err.body && err.body.hint ? ` - ${err.body.hint}` : ''}</div>`;
     }
   }
 
   // ---------------------------------------------------------------------
-  // STEP 4 — Done
+  // STEP 4 - Done
   // ---------------------------------------------------------------------
   function renderDoneSummary() {
     const wabaLine = state.wabaConnected
       ? 'Connected'
-      : (state.wabaSkipped ? 'Skipped — connect later from Settings' : 'Not connected');
+      : (state.wabaSkipped ? 'Skipped - connect later from Settings' : 'Not connected');
     const paymentLine = state.checkoutOutcome === 'success'
       ? 'Paid'
       : (state.checkoutOutcome === 'unconfigured' ? 'Not configured in this environment' : 'Pending');
 
     document.getElementById('done-summary').innerHTML = `
-      <div class="row"><span class="lbl">Business</span><span class="val">${(state.client && state.client.name) || '—'}</span></div>
-      <div class="row"><span class="lbl">Email</span><span class="val">${(state.client && state.client.email) || '—'}</span></div>
-      <div class="row"><span class="lbl">Plan</span><span class="val">${state.selectedPlan || '—'} (₹${PLAN_PRICING_INR[state.selectedPlan] || '—'}/mo)</span></div>
+      <div class="row"><span class="lbl">Business</span><span class="val">${(state.client && state.client.name) || '-'}</span></div>
+      <div class="row"><span class="lbl">Email</span><span class="val">${(state.client && state.client.email) || '-'}</span></div>
+      <div class="row"><span class="lbl">Plan</span><span class="val">${state.selectedPlan || '-'} (₹${PLAN_PRICING_INR[state.selectedPlan] || '-'}/mo)</span></div>
       <div class="row"><span class="lbl">Payment</span><span class="val">${paymentLine}</span></div>
       <div class="row"><span class="lbl">WhatsApp</span><span class="val">${wabaLine}</span></div>
     `;

@@ -1,15 +1,15 @@
-// Consent hardening Phase 2 (approved plan) — bulk "Mark as opted in" in
+// Consent hardening Phase 2 (approved plan) - bulk "Mark as opted in" in
 // Contacts, per-contact opt-in/opt-out control, and the
 // MaxListenersExceededWarning fix in consentRepo.recordEvent found while
-// building this phase (bulk opt-in calls recordEvent once per contact —
+// building this phase (bulk opt-in calls recordEvent once per contact -
 // hundreds in one request).
 //
-// Real DB, dedicated disposable test client (own SUITE_PREFIX) — same
+// Real DB, dedicated disposable test client (own SUITE_PREFIX) - same
 // convention as every other file in this directory. No Meta call is
 // reachable from anything this file exercises (consent never touches
 // messagingService/metaClient), and nothing here touches alert_events/
 // failed_consent_writes/alertNotifier at all, so there's nothing to stub on
-// that front — this phase's own "stubs only, no production writes, nothing
+// that front - this phase's own "stubs only, no production writes, nothing
 // sent" instruction is satisfied by construction, not by mocking anything.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -31,13 +31,13 @@ function authed(token) {
 }
 
 // contactCreateSchema has no max length on phone, so no truncation is
-// needed — a counter appended after Date.now() guarantees uniqueness even
+// needed - a counter appended after Date.now() guarantees uniqueness even
 // across near-simultaneous calls (e.g. inside Promise.all), unlike the
 // Date.now()-plus-a-trailing-digit-then-sliced-to-12 pattern other test
 // files use for a realistic-looking phone number: that pattern is safe
 // there because each of THEIR calls happens at a distinctly later moment,
 // but slicing to 12 characters here cut off the very digit meant to
-// distinguish 3 contacts created in one Promise.all — a real bug in this
+// distinguish 3 contacts created in one Promise.all - a real bug in this
 // file's own first draft, caught because it made every contact after the
 // first collide on phone and 409, leaving `.id` undefined.
 let phoneCounter = 0;
@@ -60,12 +60,12 @@ async function createContact(phone, name = 'Phase2 Test Contact') {
 //
 // createdTeamMemberIds is tracked so after() can delete this file's own
 // auth_tokens rows before the client (and its team_members, which cascade)
-// is deleted — auth_tokens.subject_id has NO foreign key at all (it's
+// is deleted - auth_tokens.subject_id has NO foreign key at all (it's
 // polymorphic, referencing either a client or a team_member by convention
 // only, see authTokensRepo.js), so a team-invite token row is never cleaned
 // up by cascade the way team_members itself is. Confirmed for real, not
 // assumed: a direct query found 440 such orphaned rows on the shared
-// database while verifying this file's own residue — the overwhelming
+// database while verifying this file's own residue - the overwhelming
 // majority predate this file and this session entirely (the same
 // established pattern in teamMemberAuth.test.js has the identical gap),
 // but this file's own contribution is fixed here rather than left to add
@@ -124,7 +124,7 @@ after(async () => {
   // Both of these tables lack a foreign key back to clients/team_members
   // (see createdTeamMemberIds' own comment above and routes/contacts.js's
   // bulk-consent audit_log.record call), so neither is cleaned up by the
-  // client deletion's cascade below — deleted explicitly here instead,
+  // client deletion's cascade below - deleted explicitly here instead,
   // scoped precisely to what this file itself created.
   if (createdTeamMemberIds.length) {
     await pool.query(`delete from auth_tokens where subject_id = any($1::uuid[])`, [createdTeamMemberIds]);
@@ -205,7 +205,7 @@ test('2. bulk opt-in mixed states: already-opted-in is skipped (not re-written),
   assert.equal(data.notFound, 1);
   assert.equal(data.total, 4);
 
-  // The already-opted-in contact gets NO new consent_events row — bulk
+  // The already-opted-in contact gets NO new consent_events row - bulk
   // opt-in must not clutter the audit trail with a redundant re-confirmation
   // for a contact whose status didn't actually change.
   const after = await pool.query(
@@ -214,7 +214,7 @@ test('2. bulk opt-in mixed states: already-opted-in is skipped (not re-written),
   );
   assert.equal(after.rows[0].c, before.rows[0].c);
 
-  // The opted-out contact must still be opted_out — sticky opt-out held.
+  // The opted-out contact must still be opted_out - sticky opt-out held.
   const optedOutRow = await contactsRepo.findById(pool, testClientId, optedOut.id);
   assert.equal(optedOutRow.opt_in_status, 'opted_out');
 
@@ -291,15 +291,15 @@ test('6. consentRepo.recordEvent: a few hundred calls on the pool with no MaxLis
   const onWarning = (warning) => warnings.push(warning);
   process.on('warning', onWarning);
   try {
-    // Always 'opted_out' — an earlier draft alternated opted_in/opted_out,
+    // Always 'opted_out' - an earlier draft alternated opted_in/opted_out,
     // which sounded like it would exercise more of recordEvent but is
     // actually wrong: after the very first opted_out write, every following
     // opted_in attempt is sticky-opt-out-blocked (Phase 1), so the loop
     // would throw at i=2, not run 300 times. Opting OUT is never blocked
     // regardless of current status, so re-recording it 300 times is both
-    // valid and exercises the exact thing under test — 300 real
+    // valid and exercises the exact thing under test - 300 real
     // connect()/release() cycles on the pool, the shape bulk opt-in
-    // produces against a large selection — without hitting an unrelated
+    // produces against a large selection - without hitting an unrelated
     // guard.
     for (let i = 0; i < 300; i++) {
       await consentRepo.recordEvent(testClientId, contact.id, { event: 'opted_out', source: 'test_loop' });
@@ -323,7 +323,7 @@ test('7. the shared consent statement is served raw and matches what the server 
   assert.ok(CONSENT_STATEMENT.length > 20);
 
   // Confirms the bulk route stores this EXACT string, not a hand-copied one
-  // that could drift — the real end-to-end guarantee this file exists for.
+  // that could drift - the real end-to-end guarantee this file exists for.
   const contact = await createContact();
   const { status, data } = await bulkOptIn(clientToken, { contactIds: [contact.id], method: 'other', note: 'x', confirmed: true });
   assert.equal(status, 200, JSON.stringify(data));

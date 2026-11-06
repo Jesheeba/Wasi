@@ -11,7 +11,7 @@ const { requireClientOrTeamAuth } = require('../middleware/requireClientOrTeamAu
 
 const router = Router();
 
-// Mounted at /api/auth/team (server/src/app.js), not tenant-scoped — a team
+// Mounted at /api/auth/team (server/src/app.js), not tenant-scoped - a team
 // member has no client_id-bound identity yet at the moment they're
 // accepting an invite or logging in, so both handlers run on the privileged
 // pool, same reasoning as routes/auth.js's own /login and /register.
@@ -40,7 +40,7 @@ router.post('/login', authLimiter, asyncHandler(async (req, res) => {
 
   const teamMember = await teamMembersRepo.findForLogin(pool, tenantSlug, email);
   // A team member who hasn't accepted their invite yet has no password_hash
-  // at all — treated identically to "wrong password" below, not a distinct
+  // at all - treated identically to "wrong password" below, not a distinct
   // error, so this can't be used to enumerate which invites are pending.
   if (!teamMember || !teamMember.password_hash) {
     return res.status(401).json({ error: 'Invalid email or password' });
@@ -58,11 +58,11 @@ router.post('/login', authLimiter, asyncHandler(async (req, res) => {
 }));
 
 // Item 5.5's session-resume equivalent of routes/auth.js's GET /me, for a
-// team_member token specifically — the frontend's resume-on-load IIFE needs
+// team_member token specifically - the frontend's resume-on-load IIFE needs
 // SOME way to re-validate a stored team-member token and re-fetch fresh
 // profile info on every page load, the same way it already does for an
 // owner via /api/auth/me. requireClientOrTeamAuth (not requireClientAuth)
-// is deliberate here — it's the one place an owner token hitting this route
+// is deliberate here - it's the one place an owner token hitting this route
 // gets a clear, explicit 403 rather than the generic "wrong token type"
 // requireClientAuth would give elsewhere, since an owner legitimately
 // having this token isn't a security concern the way it is on the

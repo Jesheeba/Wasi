@@ -1,7 +1,7 @@
 // Covers 3 fixes for the same underlying gap (a media-header template with
-// no default template_media_cache row — e.g. one synced in from Meta via
+// no default template_media_cache row - e.g. one synced in from Meta via
 // templateSyncService.createFromMetaSync, which has no way to backfill a
-// media id — silently could not be sent by a plain broadcast/chat send with
+// media id - silently could not be sent by a plain broadcast/chat send with
 // no way to fix it or even understand why):
 //   1. mediaHeaderService.resolveMediaId's error message no longer claims
 //      "was never uploaded through this app" when other assets DO exist.
@@ -12,7 +12,7 @@
 //      describeMetaError + return metaError, matching create/edit/delete.
 // Real DB writes through a disposable test client (same pattern as
 // templateEdit.test.js); Meta calls faked by stubbing global.fetch for
-// graph.facebook.com only — see CLAUDE.md's testing conventions.
+// graph.facebook.com only - see CLAUDE.md's testing conventions.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test } = require('node:test');
@@ -67,7 +67,7 @@ async function teardown({ pool, clientId, server }) {
   await new Promise((resolve) => server.close(resolve));
 }
 
-test('resolveMediaId: no default and no other assets — "never uploaded" wording, unchanged', async () => {
+test('resolveMediaId: no default and no other assets - "never uploaded" wording, unchanged', async () => {
   const ctx = await setup();
   const { pool, messageTemplatesRepo, mediaHeaderService, clientId, waba, server } = ctx;
   try {
@@ -90,7 +90,7 @@ test('resolveMediaId: no default and no other assets — "never uploaded" wordin
   }
 });
 
-test('resolveMediaId: no default but other assets exist — corrected wording, names the assets', async () => {
+test('resolveMediaId: no default but other assets exist - corrected wording, names the assets', async () => {
   const ctx = await setup();
   const { pool, messageTemplatesRepo, templateMediaCacheRepo, mediaHeaderService, clientId, waba, server } = ctx;
   try {
@@ -98,9 +98,9 @@ test('resolveMediaId: no default but other assets exist — corrected wording, n
       client_id: clientId, name: `${SUITE_PREFIX}doc2`, category: 'Utility', status: 'approved',
       header: { type: 'DOCUMENT' },
     });
-    // Simulates a template synced in from Meta (createFromMetaSync — no
+    // Simulates a template synced in from Meta (createFromMetaSync - no
     // cache row at all) that later had media uploaded via POST
-    // /:id/header-media (insertAsset — always non-default).
+    // /:id/header-media (insertAsset - always non-default).
     await templateMediaCacheRepo.insertAsset(pool, clientId, template.id, { mediaId: 'media_1', filename: 'po_form.pdf' });
 
     await assert.rejects(
@@ -132,7 +132,7 @@ test('templateMediaCacheRepo.upsert: writes the default row on first call, updat
     assert.equal(first.media_id, 'media_v1');
 
     // A second upsert (the 30-day refresh path, or a re-run of creation)
-    // must update the SAME row in place, not insert a duplicate — this is
+    // must update the SAME row in place, not insert a duplicate - this is
     // exactly the case the broken ON CONFLICT target used to throw on.
     const second = await templateMediaCacheRepo.upsert(pool, clientId, template.id, { mediaId: 'media_v2', filename: 'v2.pdf' });
     assert.equal(second.id, first.id);
@@ -254,7 +254,7 @@ test('POST /api/templates (media header) 502: a real Meta upload rejection surfa
     global.fetch = async (url, options) => {
       const urlStr = url.toString();
       if (urlStr.includes('graph.facebook.com') && urlStr.includes('/uploads')) {
-        // Resumable Upload API session + byte upload — let creation get far
+        // Resumable Upload API session + byte upload - let creation get far
         // enough to reach the standard Media API upload call below.
         if (options?.method === 'POST' && !urlStr.includes('/media')) {
           return { ok: true, json: async () => ({ id: 'upload_session_1' }) };
@@ -296,7 +296,7 @@ test('POST /api/templates (media header) 502: a real Meta upload rejection surfa
     assert.equal(res.status, 502);
     const body = await res.json();
     assert.equal(body.error, 'Could not upload header media to Meta');
-    assert.equal(body.detail, 'Media Upload Failed — The file you uploaded could not be processed by WhatsApp.');
+    assert.equal(body.detail, 'Media Upload Failed - The file you uploaded could not be processed by WhatsApp.');
     assert.equal(body.metaError.error_user_msg, 'The file you uploaded could not be processed by WhatsApp.');
   } finally {
     global.fetch = originalFetch;
@@ -342,7 +342,7 @@ test('POST /:id/header-media 502: same describeMetaError/metaError wiring for th
     assert.equal(res.status, 502);
     const body = await res.json();
     assert.equal(body.error, 'Could not upload media to Meta');
-    assert.equal(body.detail, 'Media Upload Failed — The file is too large for this header type.');
+    assert.equal(body.detail, 'Media Upload Failed - The file is too large for this header type.');
     assert.equal(body.metaError.error_user_msg, 'The file is too large for this header type.');
   } finally {
     global.fetch = originalFetch;

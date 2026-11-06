@@ -1,9 +1,9 @@
-// Delay/timeout poller for the flow engine — same shape as
+// Delay/timeout poller for the flow engine - same shape as
 // broadcastRunner.js/forwardRunner.js: setInterval tick, atomic
 // claim-batch-then-release, execute unlocked (may call out to Meta),
 // finalize with its own atomic write. Without this, a contact sitting at a
 // delay node or an un-replied send_interactive_buttons node with a timeout
-// edge would stay 'active' forever — nothing else in the codebase ever
+// edge would stay 'active' forever - nothing else in the codebase ever
 // looks at contact_flow_state.due_at.
 const { pool } = require('../db/pool');
 const contactFlowStateRepo = require('../repositories/contactFlowStateRepo');
@@ -33,7 +33,7 @@ async function advanceOne(row) {
     if (!contact) {
       // Contact deleted mid-flight (flow_nodes/edges/contact_flow_state all
       // cascade-delete with the client, but a single contact row can be
-      // removed independently) — nothing left to message, end the flow.
+      // removed independently) - nothing left to message, end the flow.
       await contactFlowStateRepo.finalizeProcessing(pool, { ...base, nodeId: row.current_node_id, status: 'cancelled' });
       return;
     }
@@ -42,7 +42,7 @@ async function advanceOne(row) {
     await contactFlowStateRepo.finalizeProcessing(pool, { ...base, ...rest });
   } catch (err) {
     console.error('flowRunner: advanceOne failed for contact', row.contact_id, err.message);
-    // Resolve the claim one way or another — leaving it 'processing'
+    // Resolve the claim one way or another - leaving it 'processing'
     // forever (or worse, throwing back to a caller that never retries)
     // would mean this contact never gets reclaimed by the 5-minute stuck-row
     // sweep in claimDueBatch either, since that sweep only fires for rows

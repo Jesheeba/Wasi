@@ -1,6 +1,6 @@
-// MCP protocol conformance — a real MCP Client (from the same SDK) talks to
+// MCP protocol conformance - a real MCP Client (from the same SDK) talks to
 // our real McpServer over an in-memory transport pair (no shell/stdio
-// process spawning, no network — see @modelcontextprotocol/sdk's
+// process spawning, no network - see @modelcontextprotocol/sdk's
 // InMemoryTransport). Confirms: initialization succeeds, every tool this
 // server advertises has a name/description/inputSchema a client can
 // actually use, and a tool call round-trips through the real MCP JSON-RPC
@@ -49,7 +49,7 @@ test('listTools returns every registered tool with a usable name, description, a
 
 // The SDK validates inputSchema itself (before our handler ever runs) and
 // surfaces a violation as a normal isError:true tool result carrying the
-// zod validation message — not a rejected JSON-RPC call — see probe output
+// zod validation message - not a rejected JSON-RPC call - see probe output
 // captured while writing this test: {"content":[{"type":"text","text":
 // "MCP error -32602: ... Array must contain at most 3 element(s) at
 // buttons"}],"isError":true}. Proves the schema-level constraint (plan doc

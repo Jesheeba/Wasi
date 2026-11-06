@@ -1,4 +1,4 @@
-# Wasi AI Bot — Implementation Runbook
+# Wasi AI Bot - Implementation Runbook
 
 **Phases 0 and 1, broken into buildable units**
 Date: 12 October 2026
@@ -18,7 +18,7 @@ Three documents, three jobs. Do not mix them up.
 
 Every unit below is sized so one Claude Code session can land it and you can verify it before the next one starts. Do not batch them. The reason is in §1.3.
 
-**Facts in this document carry their source.** Where a line number or a count appears, it was verified against the repository or the production database on 12 October 2026. Where something is unverified, it says so. If a session finds a fact here is wrong, the session is probably right — this document was written outside the repo.
+**Facts in this document carry their source.** Where a line number or a count appears, it was verified against the repository or the production database on 12 October 2026. Where something is unverified, it says so. If a session finds a fact here is wrong, the session is probably right - this document was written outside the repo.
 
 > **Verified and corrected in-repo, 12 October 2026 (evening).** Every appendix fact and every unit was checked against the working tree, `pgmigrations`, and a read-only production query. Corrections are marked **[corrected]** or **[added]** inline; the full list is in the "Corrections log" after the appendix. Read the log first if you read nothing else. The file was moved from the repo root (`AI_FEATURE_IMPLEMENTATION.md`) to `docs/ai-agent/IMPLEMENTATION.md`, the path its own prompts use.
 
@@ -26,7 +26,7 @@ Every unit below is sized so one Claude Code session can land it and you can ver
 
 ## 1. Before any code is written
 
-### 1.1 Preconditions — hard gates
+### 1.1 Preconditions - hard gates
 
 These are not suggestions. Each one, if skipped, makes a Phase 0 unit either unverifiable or actively harmful.
 
@@ -53,11 +53,11 @@ P1 and P2 are a morning's work **[corrected: P2 is not; it is blocked on `BUILD_
 Paste these into every implementation prompt. They are not negotiable and they were all earned.
 
 ```
-- Never print a secret value — password, hash, token, API key, app secret.
+- Never print a secret value - password, hash, token, API key, app secret.
   Name the variable, the file and the commit.
 - Never rewrite git history.
 - Database writes only where the task explicitly authorises them. Reads use
-  `begin read only` or `set local` — never session-level settings over
+  `begin read only` or `set local` - never session-level settings over
   DATABASE_URL, because the pooler leaks them between sessions.
 - Never pre-assign a migration number. Take the next free one at
   implementation time. 081 and 082 exist only on feature/instagram-phase-1
@@ -65,7 +65,7 @@ Paste these into every implementation prompt. They are not negotiable and they w
 - Local development cannot decrypt production WABA tokens
   (utils/encryption.js derives the key from SERVER_SECRET). That is correct
   behaviour. Do not work around it. Anything needing a live Meta call runs
-  on the VPS via `docker exec wasi-crm node ...` — the VPS host has no
+  on the VPS via `docker exec wasi-crm node ...` - the VPS host has no
   node_modules (a local checkout does).
 - Do not touch wabasRepo.findByClientId or anything about multi-number
   support. That is a separate 1.5–3 week project.
@@ -74,7 +74,7 @@ Paste these into every implementation prompt. They are not negotiable and they w
 
 ### 1.3 Why one unit per session
 
-Across nine days of this project, every attempt to move several things at once produced a report where the interesting finding was buried and the error was invisible. The sessions that caught real bugs — the gate 4 logic error, the `insertEcho` contradiction, the Coexistence figures, `findAnyConnected` — were the ones given a single, narrow question.
+Across nine days of this project, every attempt to move several things at once produced a report where the interesting finding was buried and the error was invisible. The sessions that caught real bugs - the gate 4 logic error, the `insertEcho` contradiction, the Coexistence figures, `findAnyConnected` - were the ones given a single, narrow question.
 
 One unit, one session, one verification. Then the next.
 
@@ -101,7 +101,7 @@ One unit, one session, one verification. Then the next.
 
 ---
 
-## 2. Phase 0 — foundations
+## 2. Phase 0 - foundations
 
 Five units. Three of them are correctness fixes that earn their keep whether or not the agent ever ships.
 
@@ -109,7 +109,7 @@ Build order: **0.1 → 0.2 → 0.3 → 0.4 → 0.5**. 0.5 last, because it is th
 
 ---
 
-### Unit 0.1 — `chats.last_inbound_at`
+### Unit 0.1 - `chats.last_inbound_at`
 
 **Goal.** Know, from the database, when a chat's 24-hour customer service window opened.
 
@@ -117,12 +117,12 @@ Build order: **0.1 → 0.2 → 0.3 → 0.4 → 0.5**. 0.5 last, because it is th
 
 **Files.**
 - A migration (next free number, taken at implementation time)
-- `server/src/repositories/chatsRepo.js` — `insertInbound`
+- `server/src/repositories/chatsRepo.js` - `insertInbound`
 - Any other path that creates an inbound message row. **Find them; do not assume `insertInbound` is the only one.**
 
 **Schema.** Add `last_inbound_at timestamptz` to `chats`, nullable. No default.
 
-**Write rule.** Set to the inbound message's own timestamp on every inbound message. Use the message's timestamp, not `now()` — a webhook can be delivered late or retried, and the window Meta enforces runs from when the customer sent, not when you processed it.
+**Write rule.** Set to the inbound message's own timestamp on every inbound message. Use the message's timestamp, not `now()` - a webhook can be delivered late or retried, and the window Meta enforces runs from when the customer sent, not when you processed it.
 
 **[added] Findings from the repo, 12 Oct:**
 - `chatsRepo.insertInbound` (`chatsRepo.js:207`) is the **only** production code path that inserts a `direction = 'in'` message. The other `insert into messages` sites are `insertOutboundPending`, `insertEcho` (both outbound) and the seed scripts (`seed.js`, `seedLandingDemo.js`). So there is no bypass.
@@ -145,14 +145,14 @@ Read docs/ai-agent/SPEC.md first for context. Do not redesign anything in it.
 
 GOAL
 Add chats.last_inbound_at (timestamptz, nullable, no default) and populate it
-on every inbound message, using the MESSAGE's own timestamp — not now().
+on every inbound message, using the MESSAGE's own timestamp - not now().
 A webhook can arrive late or be retried, and Meta's 24-hour window runs from
 when the customer sent.
 
 BEFORE WRITING CODE
 1. Find every code path that creates an inbound message row. I know about
    chatsRepo.insertInbound. Find the rest and list them with file and line.
-   If any path bypasses insertInbound, say so — that changes the design.
+   If any path bypasses insertInbound, say so - that changes the design.
 2. Confirm which timestamp field on the inbound payload is the customer's
    send time, and what it is called by the time it reaches insertInbound.
 3. Take the next free migration number. Do not pre-assign. 081 and 082 exist
@@ -161,7 +161,7 @@ BEFORE WRITING CODE
 THEN
 - Write the migration, with a down migration.
 - Write the column in every path found in step 1.
-- Write the backfill as a separate, batched script — not inside the
+- Write the backfill as a separate, batched script - not inside the
   migration. It should be re-runnable and report chats updated vs chats
   total.
 - Write tests: inbound sets it to the message timestamp; a second inbound
@@ -181,7 +181,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 0.2 — `chats.last_agent_reply_at`
+### Unit 0.2 - `chats.last_agent_reply_at`
 
 **Goal.** Know when a *human* last replied to a customer.
 
@@ -189,11 +189,11 @@ Commit. Do not push.
 
 **Files.**
 - A migration (next free number)
-- `server/src/routes/chats.js` — the human send path, and **only** that path. **[corrected]** There are **two** routes: `POST /:id/messages` (line 181) and `POST /:id/messages/:messageId/retry` (line 230). `POST /` (line 42) only creates a chat and sends nothing. Do **not** put the write in `messagingService.sendChatMessage` or `retryMessage`: both are shared by the flow engine, `automationEngine`, `broadcastRunner` and the Hub API, which is exactly the bug this unit exists to avoid. Write it in the route handler, after a successful send.
+- `server/src/routes/chats.js` - the human send path, and **only** that path. **[corrected]** There are **two** routes: `POST /:id/messages` (line 181) and `POST /:id/messages/:messageId/retry` (line 230). `POST /` (line 42) only creates a chat and sends nothing. Do **not** put the write in `messagingService.sendChatMessage` or `retryMessage`: both are shared by the flow engine, `automationEngine`, `broadcastRunner` and the Hub API, which is exactly the bug this unit exists to avoid. Write it in the route handler, after a successful send.
 
 **Schema.** Add `last_agent_reply_at timestamptz` to `chats`, nullable, no default.
 
-**Write rule — read this twice.**
+**Write rule - read this twice.**
 
 Written **only** from the human send path in `server/src/routes/chats.js` (the two routes above).
 
@@ -212,7 +212,7 @@ Never written from:
 
 **How the message-id exclusion already works [corrected].** `chatsRepo.insertEcho` (`chatsRepo.js:259`) inserts with `on conflict (meta_message_id) do nothing` and returns `rows[0]` (null when the id already exists). So the exclusion is: write `last_agent_reply_at` **inside the existing `if (rows[0])` block**, and nowhere else. No second lookup is needed. One real gap to test for: an echo that arrives before Wasi has saved `meta_message_id` on its own just-sent outbound row would not conflict, would insert a duplicate row, and would count as human. Say so in the report if the session can reproduce it.
 
-**Why the exclusion is required.** If Wasi's own API sends also echo back, writing blindly means the agent's reply marks a human as active, and the agent goes silent. Meta's documentation lists only the Business app and companion devices as echo sources, so this is defensive rather than load-bearing — but the cost of being wrong is the agent never replying at all, so build the exclusion regardless.
+**Why the exclusion is required.** If Wasi's own API sends also echo back, writing blindly means the agent's reply marks a human as active, and the agent goes silent. Meta's documentation lists only the Business app and companion devices as echo sources, so this is defensive rather than load-bearing - but the cost of being wrong is the agent never replying at all, so build the exclusion regardless.
 
 **Backfill.** **Do not backfill.** Historical message rows do not record whether a send was human or automated. Leave existing rows null and let them populate forward. A wrong backfill here silences the agent on every existing chat.
 
@@ -242,7 +242,7 @@ Add chats.last_agent_reply_at (timestamptz, nullable, no default).
 WRITE IT FROM EXACTLY TWO PLACES
 1. The human send path in server/src/routes/chats.js.
 2. chatsRepo.insertEcho, BUT ONLY when the echo is not Wasi's own outbound
-   coming back — match on message id and skip if an outbound row for that id
+   coming back - match on message id and skip if an outbound row for that id
    already exists.
 
 NEVER WRITE IT FROM
@@ -264,14 +264,14 @@ them null.
 
 BEFORE WRITING CODE
 1. Confirm the human send path in routes/chats.js is the ONLY route a human
-   reply can leave through. If there is a second, name it — it changes the
+   reply can leave through. If there is a second, name it - it changes the
    design.
 2. Confirm how insertEcho receives the message id and whether an outbound
    row for the same id is findable at that point. If it is not, say so and
    propose how to make it so, rather than writing the field blindly.
 3. Take the next free migration number.
 
-TESTS — these are the acceptance criteria, all six must pass
+TESTS - these are the acceptance criteria, all six must pass
 - A human send through routes/chats.js writes it.
 - A broadcast send does NOT.
 - A flow send does NOT.
@@ -292,7 +292,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 0.3 — `{handled, how}` from the automation engines
+### Unit 0.3 - `{handled, how}` from the automation engines
 
 **Goal.** Let anything downstream know whether a flow or automation already handled a message.
 
@@ -301,10 +301,10 @@ Commit. Do not push.
 **Files.**
 - `flowEngine.evaluate`
 - `automationEngine.evaluate`
-- `server/src/routes/metaWebhook.js` — the flow call, line 260 (`await flowEngine.evaluate(pool, clientId, contact, chat, msg, body)`), inside a try/catch that logs and continues
+- `server/src/routes/metaWebhook.js` - the flow call, line 260 (`await flowEngine.evaluate(pool, clientId, contact, chat, msg, body)`), inside a try/catch that logs and continues
 - **Every other caller.** **[corrected]** Found: there is exactly **one** production caller of `flowEngine.evaluate` (`metaWebhook.js:260`) and exactly **one** of `automationEngine.evaluate` (`flowEngine.js:491`, at the end of `flowEngine.evaluate` itself). So `flowEngine.evaluate`'s return must be built from its own `continueFlow` / `captureReply` branches **plus** `automationEngine.evaluate`'s result. Tests that exercise these directly: `flowEngineRunToRest.test.js`, `flowEngineCaptureReplyEndToEnd.test.js`, `metaWebhookEchoRouting.test.js`; re-run them.
 
-**Design.** Return `{ handled: boolean, how: string | null }`. `how` is a short identifier naming what handled it — a flow id, a node id, a rule name — for logging and later analytics. Not a sentence. **[added] Use the vocabulary and the `handled: true` branches in `SPEC.md` §7 (gate 5): `flow_continued`, `flow_capture_reply`, `rule_started_flow`, `rule_text_reply`. `unmatched_input` is `handled: false`** (decision 15: the agent stays silent anyway). **A thrown engine error is not `handled: false`.** The existing catch at `metaWebhook.js:262` must record it as `flow_error` (decision 18) so the agent stays silent *and* a rising rate is visible; collapsing it into `handled: false` would let the agent speak over a failing flow.
+**Design.** Return `{ handled: boolean, how: string | null }`. `how` is a short identifier naming what handled it - a flow id, a node id, a rule name - for logging and later analytics. Not a sentence. **[added] Use the vocabulary and the `handled: true` branches in `SPEC.md` §7 (gate 5): `flow_continued`, `flow_capture_reply`, `rule_started_flow`, `rule_text_reply`. `unmatched_input` is `handled: false`** (decision 15: the agent stays silent anyway). **A thrown engine error is not `handled: false`.** The existing catch at `metaWebhook.js:262` must record it as `flow_error` (decision 18) so the agent stays silent *and* a rising rate is visible; collapsing it into `handled: false` would let the agent speak over a failing flow.
 
 **The test.** A message that matches a flow returns `handled: true` with a non-null `how`. A message that matches nothing returns `handled: false`. Every existing caller still behaves identically.
 
@@ -318,10 +318,10 @@ and automationEngine.evaluate return {handled, how}.
 
 GOAL
 Both functions return { handled: boolean, how: string | null }. `how` is a
-short identifier naming what handled the message — a flow id, node id or
+short identifier naming what handled the message - a flow id, node id or
 rule name. Not a sentence.
 
-BEFORE WRITING CODE — THIS IS THE RISKY PART
+BEFORE WRITING CODE - THIS IS THE RISKY PART
 Find EVERY caller of flowEngine.evaluate and automationEngine.evaluate and
 list them with file and line. I know about server/src/routes/metaWebhook.js
 around line 260. Find the rest. Changing a return shape breaks every caller
@@ -352,7 +352,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 0.4 — `ai_jobs` and its runner
+### Unit 0.4 - `ai_jobs` and its runner
 
 **[corrected] This does not wait for P3.** `BUILD_PLAN` 3.14 fixes three *other* runners. This unit is a *new* poller and must not copy the three that have the bug (`sendabilityMonitorRunner`, `messagingTierRefreshRunner`, `metaTemplateLibraryRefreshRunner`: only the success path advances `checked_at`, so a failing row is due every tick, forever, which produced ~1,650 audit rows from one dead WABA row). The pattern to copy is **`forwardRunner` + `webhookDeliveriesRepo`**, as `SPEC.md` §5/§6 already says: the row is leased at insert, claimed with the CTE `FOR UPDATE SKIP LOCKED` form, `attempt_count` / `next_attempt_at` advance on failure (backoff 1m→5m→30m→2h→6h), `attemptImmediately()` is fire-and-forget, and the 5-second tick is retry/fallback only. Do **not** use the `WHERE id IN (SELECT ... LIMIT)` claim form: `broadcastRecipientsRepo.claimBatch` had a real PG17 bug with it (CLAUDE.md, Known Gaps).
 
@@ -390,7 +390,7 @@ Commit. Do not push.
 Implement unit 0.4 from docs/ai-agent/IMPLEMENTATION.md: the ai_jobs table
 and its runner.
 
-PATTERN — READ THIS FIRST
+PATTERN - READ THIS FIRST
 Copy forwardRunner + webhookDeliveriesRepo (SPEC.md sections 5 and 6), NOT
 sendabilityMonitorRunner, messagingTierRefreshRunner or
 metaTemplateLibraryRefreshRunner. Those three have the bug in BUILD_PLAN 3.14
@@ -405,7 +405,7 @@ BEFORE WRITING CODE
    Match that pattern. Do not invent a second one. Use the ai_jobs DDL from
    SPEC.md section 6.
 2. Tell me whether a test harness exists that can exercise two concurrent
-   runners against one job. If not, say so — building it is part of this
+   runners against one job. If not, say so - building it is part of this
    unit.
 3. Take the next free migration number.
 
@@ -415,10 +415,10 @@ REQUIREMENTS
   becomes claimable again, so one crash does not strand it forever.
 - Bounded retries with backoff per 3.14. Not infinite.
 - A terminal failed state that does not retry.
-- No unbounded table growth — a retention policy or a cap.
+- No unbounded table growth - a retention policy or a cap.
 - Audit rows on state transitions only, never per attempt.
 
-TESTS — all five
+TESTS - all five
 - A job can be enqueued.
 - Two concurrent runners claim it exactly once.
 - A job claimed and abandoned becomes reclaimable after the timeout.
@@ -452,7 +452,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 0.5 — `clients.status` enforcement
+### Unit 0.5 - `clients.status` enforcement
 
 **Product decision required before this ships (owner, 13 Oct): shipping it makes a client's sends stop five days after an admin marks them unpaid, with no person present that day, and the Wasi app shows no suspended indicator.** What the client experiences and the open questions are in `BUILD_PLAN` 0.5.
 
@@ -465,13 +465,13 @@ Commit. Do not push.
 **Goal.** A suspended client cannot send. Nothing else changes.
 
 **Files.**
-- `server/src/services/messagingService.js` — `sendChatMessage` and `getSendableWaba`
+- `server/src/services/messagingService.js` - `sendChatMessage` and `getSendableWaba`
 
-**Design.** Enforce at the **send path**, not the routes. There are several routes and one send path. Block on `suspended` specifically. Do not block `pending_setup` — that would cut off five live clients.
+**Design.** Enforce at the **send path**, not the routes. There are several routes and one send path. Block on `suspended` specifically. Do not block `pending_setup` - that would cut off five live clients.
 
 Return a clear error code consistent with the existing eight 409 codes (`waba_not_connected`, `consent_required`, `plan_limit_reached`, `session_window_closed`, `auth_code_required`, `auth_code_invalid`, `media_resolution_failed`, `conflict`). **[corrected source]** Seven are `MessagingError` codes in `messagingService.js`; `conflict` is not a send-path code at all, it comes from `apiV1ErrorHandler.js:29` (a Postgres unique violation). Any `MessagingError` other than `send_failed` is mapped to 409 by `apiV1Messages.js:115`, so a new code gets the 409 automatically. The retry-only code `not_failed` is not a Hub API code.
 
-**And log the rejection.** `session_window_closed` is currently thrown in `messagingService.js` (lines 113 and 249) before any message row is created and is written nowhere — no `messages` row, no audit trail. A client can be rejected repeatedly and the database shows nothing. (The "63 times" in the earlier draft has no source and could not be reproduced; treat it as illustrative.) Do not add a ninth invisible rejection. **Recommendation (12 Oct): this unit carries its own logging; it does not wait for 3.6.** 3.6 is unbuilt and unscheduled, so waiting leaves this the one send rejection nobody can see for an unbounded time. Write one `audit_log` row per client per hour (action `send_rejected_client_suspended`, `actor_type` `system`, `target` the client id and the error code), throttled by an existence check on the last hour. **The throttle is mandatory**: a suspended client's integration can retry every second, and the unthrottled version is exactly the ~1,650-row flood of `BUILD_PLAN` 3.14. Do not widen this to `session_window_closed` in the same unit. When 3.6 lands it replaces this row rather than duplicating it.
+**And log the rejection.** `session_window_closed` is currently thrown in `messagingService.js` (lines 113 and 249) before any message row is created and is written nowhere - no `messages` row, no audit trail. A client can be rejected repeatedly and the database shows nothing. (The "63 times" in the earlier draft has no source and could not be reproduced; treat it as illustrative.) Do not add a ninth invisible rejection. **Recommendation (12 Oct): this unit carries its own logging; it does not wait for 3.6.** 3.6 is unbuilt and unscheduled, so waiting leaves this the one send rejection nobody can see for an unbounded time. Write one `audit_log` row per client per hour (action `send_rejected_client_suspended`, `actor_type` `system`, `target` the client id and the error code), throttled by an existence check on the last hour. **The throttle is mandatory**: a suspended client's integration can retry every second, and the unthrottled version is exactly the ~1,650-row flood of `BUILD_PLAN` 3.14. Do not widen this to `session_window_closed` in the same unit. When 3.6 lands it replaces this row rather than duplicating it.
 
 **The test.**
 - A suspended client's send fails with the documented code, through every send path
@@ -487,7 +487,7 @@ Return a clear error code consistent with the existing eight 409 codes (`waba_no
 Implement unit 0.5 from docs/ai-agent/IMPLEMENTATION.md: clients.status
 enforcement.
 
-PRECONDITIONS — CHECK BOTH, STOP IF EITHER FAILS
+PRECONDITIONS - CHECK BOTH, STOP IF EITHER FAILS
 1. GV Mart must be on a real active client row with a working token. Their
    token currently holds public_profile only.
 2. Confirm the current count of non-test clients by status. As of 12 Oct, 8
@@ -500,7 +500,7 @@ A SUSPENDED client cannot send. Nothing else changes.
 DESIGN
 - Enforce at the SEND PATH, not the routes. messagingService.sendChatMessage
   and getSendableWaba. There are several routes and one send path.
-- Block on 'suspended' only. DO NOT block 'pending_setup' — real clients
+- Block on 'suspended' only. DO NOT block 'pending_setup' - real clients
   operate while pending_setup and five of them hold connected WABAs.
 - Return an error code consistent with the existing eight 409 codes.
 
@@ -540,7 +540,7 @@ Commit. Do not push.
 
 ---
 
-### Phase 0 — definition of done
+### Phase 0 - definition of done
 
 All of these, demonstrated rather than asserted:
 
@@ -557,7 +557,7 @@ All of these, demonstrated rather than asserted:
 
 ---
 
-## 3. Phase 1 — single-turn reply, shadow mode
+## 3. Phase 1 - single-turn reply, shadow mode
 
 The agent runs, produces a reply, and **does not send it.** Drafts are stored and reviewed by a human.
 
@@ -569,7 +569,7 @@ Build order: **1.1 → 1.2 → 1.3 → 1.4 → 1.5**.
 
 ---
 
-### Unit 1.1 — agent configuration
+### Unit 1.1 - agent configuration
 
 **Goal.** Per-client agent settings, with the knowledge cap enforced at write time.
 
@@ -620,7 +620,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 1.2 — `get_knowledge_for`
+### Unit 1.2 - `get_knowledge_for`
 
 **Goal.** The seam that lets Phase 2 add retrieval without touching anything else.
 
@@ -645,7 +645,7 @@ Phase 1 body: return agent.knowledge_md. Ignore the message argument
 entirely.
 
 KEEP THE message PARAMETER even though Phase 1 ignores it. That is the whole
-purpose of this unit — Phase 2 adds retrieval by changing this function's
+purpose of this unit - Phase 2 adds retrieval by changing this function's
 body and nothing else. Omit the parameter now and Phase 2 becomes a refactor
 of every call site.
 
@@ -665,11 +665,11 @@ Commit. Do not push.
 
 ---
 
-### Unit 1.3 — the eight gates
+### Unit 1.3 - the eight gates
 
 **Goal.** All eight gates from `SPEC.md`, in spec order. **[corrected]** Gates 1–7 run before the model call; **gate 8 (answer in scope) is evaluated on the model's output**, so it cannot run before it. Gate 5 is enforced at the call site (a job is enqueued only when the flow engine returned `{handled: false}`), with a re-check for jobs that arrive another way. Gate 1 includes the consent check and the schedule check; gate 2 is two independent checks (`ai_muted`, `ai_cooldown_until`) that must log different reasons.
 
-**Read the gate list from `SPEC.md`.** Do not take it from this document or from memory. There are eight, and gate 4 is the human-active gate — verified against the spec on 12 October.
+**Read the gate list from `SPEC.md`.** Do not take it from this document or from memory. There are eight, and gate 4 is the human-active gate - verified against the spec on 12 October.
 
 Gate 4 depends on units 0.1 and 0.2. It cannot be built before them and cannot be tested without them.
 
@@ -697,7 +697,7 @@ List all eight gates as the spec defines them, with what each one blocks and
 what data it reads. If any gate needs data that does not exist yet, say so
 rather than approximating it.
 
-TESTS — one per gate, eight in total
+TESTS - one per gate, eight in total
 Each gate must have a test that proves it FIRES, not just that it exists.
 Report all eight individually. A gate with no firing test is a gate we do
 not know we have.
@@ -715,7 +715,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 1.4 — the model call and cost accounting
+### Unit 1.4 - the model call and cost accounting
 
 **Goal.** Call Claude Haiku 4.5, handle `NEEDS_HUMAN`, record cost.
 
@@ -748,7 +748,7 @@ so it can be recorded in section 19.
 
 NEEDS_HUMAN IS A SUCCESS PATH
 It routes the chat to a human. Log it separately from errors, and make the
-refusal rate queryable — it is the main quality signal in Phase 1.
+refusal rate queryable - it is the main quality signal in Phase 1.
 
 COST
 cost_paise as an INTEGER. Never a float, never a currency type. Record per
@@ -774,7 +774,7 @@ Commit. Do not push.
 
 ---
 
-### Unit 1.5 — shadow storage
+### Unit 1.5 - shadow storage
 
 **Goal.** Store what the agent *would* have sent, with enough context to judge it.
 
@@ -794,7 +794,7 @@ PER TURN, STORE
 - the triggering message id
 - the drafted reply, or the refusal
 - which gates passed, and which gate blocked if any
-- the knowledge used (or a hash of it, if storing it per turn is wasteful —
+- the knowledge used (or a hash of it, if storing it per turn is wasteful -
   tell me which you chose and why)
 - input and output token counts
 - cost_paise
@@ -806,7 +806,7 @@ messagingService.sendChatMessage or any Meta call. This is the safety
 property of the whole phase.
 
 ALSO BUILD
-A way for a human to read the drafts — a simple admin view or a query I can
+A way for a human to read the drafts - a simple admin view or a query I can
 run. Shadow mode is worthless if reviewing 100 drafts is painful.
 
 TESTS
@@ -823,7 +823,7 @@ Commit. Do not push.
 
 ---
 
-### Phase 1 — definition of done
+### Phase 1 - definition of done
 
 - [ ] 100 real inbound messages through the pipeline, each with a stored draft or refusal
 - [ ] Every one of the eight gates has fired at least once, in shadow or in a test
@@ -840,9 +840,9 @@ The 50-draft review is the gate to Phase 2. Without it you are guessing.
 
 Phase 2 is two sub-steps and they must not be merged.
 
-**2a — suggested reply.** The draft appears in the inbox as a one-click suggestion. A human sends it, edits it, or discards it, and which of the three is recorded. This is the last cheap source of evaluation data, and it is a sellable feature on its own.
+**2a - suggested reply.** The draft appears in the inbox as a one-click suggestion. A human sends it, edits it, or discards it, and which of the three is recorded. This is the last cheap source of evaluation data, and it is a sellable feature on its own.
 
-**2b — auto-send, one client.** Gates pass, the agent sends. Start with the client whose shadow results were best. A per-client kill switch that takes effect on the **next turn**, not the next deploy.
+**2b - auto-send, one client.** Gates pass, the agent sends. Start with the client whose shadow results were best. A per-client kill switch that takes effect on the **next turn**, not the next deploy.
 
 **Gate to 2b:** suggestion acceptance above 70% unedited over 100 suggestions.
 
@@ -881,9 +881,9 @@ Fill this in as units land. One row per unit. This is how you know where you are
 
 ---
 
-## Appendix — facts this document relies on
+## Appendix - facts this document relies on
 
-Each was re-checked on 12 October 2026 (evening). "Re-checked" below says by what. If a session finds one is wrong, the session is probably right — record the correction with its source.
+Each was re-checked on 12 October 2026 (evening). "Re-checked" below says by what. If a session finds one is wrong, the session is probably right - record the correction with its source.
 
 | Fact | Source | Re-check result |
 |---|---|---|
@@ -905,7 +905,7 @@ Each was re-checked on 12 October 2026 (evening). "Re-checked" below says by wha
 | *[added]* `smb_message_echoes` not subscribed; 0 `messages.source = 'whatsapp_app'` | Production query; `SPEC.md` decision 14 | Confirmed 0 rows today. Subscription state itself not re-called. |
 | *[added]* `admin_users` has 1 row; 0 `admin_login_*` audit rows | Production query | Confirmed. |
 
-**Standing rule, inherited from `BUILD_PLAN.md`:** no figure enters this document without its source named. Four figures in the 12 October investigation — "55 of 66", "95 key creations", "1,738 deleted messages", "241 failures" — were all artifacts of counting something adjacent to the thing they were named after, and each one drove priorities for days before being checked.
+**Standing rule, inherited from `BUILD_PLAN.md`:** no figure enters this document without its source named. Four figures in the 12 October investigation - "55 of 66", "95 key creations", "1,738 deleted messages", "241 failures" - were all artifacts of counting something adjacent to the thing they were named after, and each one drove priorities for days before being checked.
 
 ---
 

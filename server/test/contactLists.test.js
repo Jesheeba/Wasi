@@ -1,4 +1,4 @@
-// Contact Lists (wasi-master-plan.md §8.3) — CSV import route, real DB.
+// Contact Lists (wasi-master-plan.md §8.3) - CSV import route, real DB.
 // Same dedicated-disposable-test-client pattern as apiKeysSelfServe.test.js.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 

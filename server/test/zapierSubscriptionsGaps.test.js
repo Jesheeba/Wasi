@@ -1,13 +1,13 @@
-// Independent QA pass (Phase 4 Zapier integration) — regression tests for
+// Independent QA pass (Phase 4 Zapier integration) - regression tests for
 // real gaps found by adversarial testing, NOT covered by
 // apiV1Subscriptions.test.js. Originally written to PASS while proving each
 // defect existed (per this file's own stated convention: "if a fix ships,
 // the relevant assertion should be flipped/removed as part of that fix").
 // All four were fixed the same session (revoke/delete now clean up
-// zapier_subscriptions rows explicitly — routes/apiKeys.js;
+// zapier_subscriptions rows explicitly - routes/apiKeys.js;
 // zapierSubscribeSchema now rejects link-local target_url and non-http(s)
-// schemes — utils/validate.js; create() upserts on (client_id, target_url,
-// event) — migration 041/zapierSubscriptionsRepo.js) — assertions below are
+// schemes - utils/validate.js; create() upserts on (client_id, target_url,
+// event) - migration 041/zapierSubscriptionsRepo.js) - assertions below are
 // flipped to prove the fixes instead.
 //
 // Same dedicated-disposable-test-client + fake-waba pattern as
@@ -130,7 +130,7 @@ test('FIXED: revoking the owning API key now actually stops its Zapier subscript
     `select id from webhook_deliveries where client_id = $1 and target_url = $2`,
     [testClientId, targetUrl]
   );
-  assert.equal(rows.length, 0, 'FIX PROOF: no delivery is enqueued to a subscription owned by a REVOKED key — ' +
+  assert.equal(rows.length, 0, 'FIX PROOF: no delivery is enqueued to a subscription owned by a REVOKED key - ' +
     'revoking a compromised/rotated key now actually cuts off its Zapier integration from live WhatsApp data.');
 });
 
@@ -158,13 +158,13 @@ test('FIXED: soft-deleting (DELETE /api/api-keys/:id) the owning API key ALSO no
     [testClientId, targetUrl]
   );
   assert.equal(rows.length, 0, 'FIX PROOF: apiKeysRepo.softDelete\'s caller (routes/apiKeys.js DELETE /:id) now explicitly ' +
-    'removes the subscription too — it no longer keeps receiving events forever after a client deletes the key.');
+    'removes the subscription too - it no longer keeps receiving events forever after a client deletes the key.');
 });
 
 test('FIXED (partial, by design): POST /api/v1/subscriptions now rejects the cloud-metadata/link-local endpoint and non-http schemes', async () => {
   const key = await issueSelfServeKey(`${SUITE_PREFIX}ssrf_key`);
   const rejected = [
-    'http://169.254.169.254/latest/meta-data/', // cloud metadata endpoint — the real-world exploited case
+    'http://169.254.169.254/latest/meta-data/', // cloud metadata endpoint - the real-world exploited case
     'ftp://example.com/x',
     'file:///etc/passwd',
   ];
@@ -180,10 +180,10 @@ test('FIXED (partial, by design): POST /api/v1/subscriptions now rejects the clo
   // apiV1Subscriptions.test.js) depends on subscribing real
   // http.createServer instances on loopback to capture and verify
   // deliveries. Full private-range/loopback blocking needs an env-gated
-  // bypass to keep that pattern working — a real, larger follow-up
+  // bypass to keep that pattern working - a real, larger follow-up
   // documented in CLAUDE.md Known Gaps, not silently dropped. The identical
   // gap already exists, unaddressed, on wabas.forward_to_url/client_webhooks'
-  // callback_url (same bare z.string().url()) — inherited, not introduced.
+  // callback_url (same bare z.string().url()) - inherited, not introduced.
   const stillAccepted = ['http://127.0.0.1/steal', 'http://localhost/steal', 'http://0.0.0.0/steal'];
   const createdIds = [];
   for (const target_url of stillAccepted) {
@@ -196,7 +196,7 @@ test('FIXED (partial, by design): POST /api/v1/subscriptions now rejects the clo
   for (const id of createdIds) await pool.query('delete from zapier_subscriptions where id = $1', [id]);
 });
 
-test('FIXED: subscribing the same target_url twice is idempotent — no duplicate row, no double delivery', async () => {
+test('FIXED: subscribing the same target_url twice is idempotent - no duplicate row, no double delivery', async () => {
   const key = await issueSelfServeKey(`${SUITE_PREFIX}dup_key`);
   const targetUrl = 'http://127.0.0.1:1/dup-target';
 
@@ -225,7 +225,7 @@ test('FIXED: subscribing the same target_url twice is idempotent — no duplicat
 
 test('confirmed OK: unsubscribing does not retroactively cancel a delivery that was already enqueued before the unsubscribe', async () => {
   // Documented as acceptable per the build's own review scope ("they were
-  // already queued, so they'll fire once more") — this test proves that is
+  // already queued, so they'll fire once more") - this test proves that is
   // in fact the real, current behavior, not an assumption.
   const key = await issueSelfServeKey(`${SUITE_PREFIX}orphan_key`);
   const targetUrl = 'http://127.0.0.1:1/orphan-target';
@@ -248,7 +248,7 @@ test('confirmed OK: unsubscribing does not retroactively cancel a delivery that 
   const { rows: after } = await pool.query(
     `select id, status from webhook_deliveries where client_id = $1 and target_url = $2`, [testClientId, targetUrl]
   );
-  assert.equal(after.length, 1, 'the already-enqueued pending delivery is NOT cleaned up by unsubscribe — it remains queued and will still fire once');
+  assert.equal(after.length, 1, 'the already-enqueued pending delivery is NOT cleaned up by unsubscribe - it remains queued and will still fire once');
   assert.equal(after[0].status, 'pending');
 
   await pool.query('delete from webhook_deliveries where client_id = $1 and target_url = $2', [testClientId, targetUrl]);

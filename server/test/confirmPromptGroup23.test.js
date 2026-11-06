@@ -1,23 +1,23 @@
-// UI/UX consistency pass, Group 2/3 — this app had 6 native confirm() calls
+// UI/UX consistency pass, Group 2/3 - this app had 6 native confirm() calls
 // and 2 native prompt() calls, each an unstyled browser dialog with none of
 // the app's own theming, sitting alongside every other action's real modal.
 // Ported admin/app.js's showConfirm into app.js (root) as showConfirm() +
 // closeConfirm(), reusing the exact same pattern (re-cloning the action
-// button on every open so listeners never stack), and added showPrompt() —
-// a genuine prompt() replacement, not just confirm()'s — by injecting a
+// button on every open so listeners never stack), and added showPrompt() -
+// a genuine prompt() replacement, not just confirm()'s - by injecting a
 // text <input> into the same #modal-confirm markup. Per direct instruction,
 // a prompt replacement without autofocus-on-open and Enter-to-submit would
 // be a downgrade from the native dialog it replaces, so both are proven
 // here, not just that a themed dialog now exists.
 //
 // This test proves, at 1366x768 and a mobile width:
-//  1. A confirm() site (logout) now shows the real themed modal — not the
-//     browser's native dialog — and Cancel vs. Confirm both behave
+//  1. A confirm() site (logout) now shows the real themed modal - not the
+//     browser's native dialog - and Cancel vs. Confirm both behave
 //     correctly (stays logged in / actually logs out).
 //  2. A prompt() site (forgot password, pre-login) autofocuses its input on
 //     open and submits on Enter, driving the real request through.
 //  3. A second prompt() site (API key creation, post-login) proves the same
-//     autofocus+Enter behavior end-to-end creates a real API key — not just
+//     autofocus+Enter behavior end-to-end creates a real API key - not just
 //     that the dialog opens.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 process.env.ALLOWED_ORIGINS = 'http://localhost:4000';
@@ -71,24 +71,24 @@ async function login(page) {
 for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 }]) {
   const label = `${viewport.width}x${viewport.height}`;
 
-  test(`${label}: logout confirm() site — real themed modal, Cancel keeps the session, Confirm logs out`, async () => {
+  test(`${label}: logout confirm() site - real themed modal, Cancel keeps the session, Confirm logs out`, async () => {
     const page = await browser.newPage({ viewport });
     await login(page);
 
     await page.click('#user-profile-item');
     // .modal-overlay only ever toggles opacity/pointer-events, never
-    // display:none (index.css) — Playwright's visible/hidden locator
+    // display:none (index.css) - Playwright's visible/hidden locator
     // states don't key off opacity, so they'd report "visible" even
     // before .open is added. Assert on the .open class itself instead,
     // same fix Group 4's test already established for this exact class of
     // element (page.waitForSelector('#id.open', ...)).
     await page.waitForSelector('#modal-confirm.open', { timeout: 3000 });
     assert.equal(await page.locator('#modal-confirm-title').textContent(), 'Log out?');
-    // Real theming, not a bare native dialog — a non-transparent background.
+    // Real theming, not a bare native dialog - a non-transparent background.
     const bg = await page.locator('#modal-confirm .modal-box').evaluate((el) => getComputedStyle(el).backgroundColor);
     assert.notEqual(bg, 'rgba(0, 0, 0, 0)');
 
-    // Cancel — session must survive. The Cancel button and the header's X
+    // Cancel - session must survive. The Cancel button and the header's X
     // button both carry data-close-modal="modal-confirm" (by design, both
     // close it), so target Cancel specifically by its text to keep this a
     // single, unambiguous click.
@@ -97,10 +97,10 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
     assert.notEqual(await page.evaluate(() => localStorage.getItem('client_token')), null,
       'cancelling logout must not have logged the user out');
 
-    // Confirm — must actually log out. At mobile widths, interacting with
+    // Confirm - must actually log out. At mobile widths, interacting with
     // the confirm modal closes the mobile sidebar drawer as a side effect
     // (clicking outside the drawer, which the modal's Cancel button
-    // counts as, closes it) — same re-toggle-if-needed pattern login()
+    // counts as, closes it) - same re-toggle-if-needed pattern login()
     // uses, since #user-profile-item lives inside that drawer. The drawer
     // moves off-canvas via `transform`, not display/visibility, so check
     // its .mobile-open class directly rather than #user-profile-item's
@@ -121,7 +121,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
     await page.close();
   });
 
-  test(`${label}: forgot-password prompt() site — input autofocuses on open, Enter submits`, async () => {
+  test(`${label}: forgot-password prompt() site - input autofocuses on open, Enter submits`, async () => {
     const page = await browser.newPage({ viewport });
     await page.goto(`${baseUrl}/app`);
     await page.waitForTimeout(500);
@@ -134,7 +134,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
 
     await input.fill('someone@example.com');
     await input.press('Enter');
-    // A real submit was driven by Enter (not just typing) — the modal
+    // A real submit was driven by Enter (not just typing) - the modal
     // closes and the real backend response reaches the user as a toast.
     await page.waitForFunction(() => !document.getElementById('modal-confirm').classList.contains('open'), { timeout: 3000 });
     await assert.doesNotReject(() => page.locator('.toast').first().waitFor({ state: 'attached', timeout: 3000 }));
@@ -142,7 +142,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 375, height: 812 
     await page.close();
   });
 
-  test(`${label}: API key creation prompt() site — autofocus + Enter creates a real key end-to-end`, async () => {
+  test(`${label}: API key creation prompt() site - autofocus + Enter creates a real key end-to-end`, async () => {
     const page = await browser.newPage({ viewport });
     await login(page);
 

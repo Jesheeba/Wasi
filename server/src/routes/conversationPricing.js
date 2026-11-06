@@ -1,6 +1,6 @@
-// PLAN.md item 15 — Meta conversation pricing / cost calculator, admin CRUD
+// PLAN.md item 15 - Meta conversation pricing / cost calculator, admin CRUD
 // side. Mounted under /api/admin with its own requireAdminAuth() (app.js),
-// same as clientsRouter — not a client-facing write surface. See
+// same as clientsRouter - not a client-facing write surface. See
 // routes/analytics.js's GET /cost-estimate for the client-facing read side.
 const { Router } = require('express');
 const conversationPricingRepo = require('../repositories/conversationPricingRepo');
@@ -13,7 +13,7 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(await conversationPricingRepo.list());
 }));
 
-// Upsert by (category, country_code) — re-submitting an existing pair
+// Upsert by (category, country_code) - re-submitting an existing pair
 // updates its rate in place rather than erroring, matching this codebase's
 // established "re-entering = updating" precedent.
 router.post('/', asyncHandler(async (req, res) => {

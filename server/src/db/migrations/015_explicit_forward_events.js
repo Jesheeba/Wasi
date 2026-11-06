@@ -2,21 +2,21 @@
 // forward targets (build plan Phase 5 follow-up). The commit that unified
 // client_webhooks onto the same durable queue as wabas.forward_to_url also
 // widened client_webhooks from message.received-only to all three event
-// types — a real contract change for existing subscribers, made without
+// types - a real contract change for existing subscribers, made without
 // asking. Checked live against the deployed database first: zero rows in
 // client_webhooks and zero wabas with forward_to_url set, so nothing was
-// actually broken by it — but "nobody's subscribed yet" is exactly the
+// actually broken by it - but "nobody's subscribed yet" is exactly the
 // window to fix this properly rather than ship a default that could
 // surprise the first real subscriber.
 //
-// Both events columns are required, not defaulted — a subscription that
+// Both events columns are required, not defaulted - a subscription that
 // doesn't say which events it wants isn't "implicitly all of them," it's
 // invalid. client_webhooks.events is NOT NULL outright (a row only exists
 // once a client has configured a webhook, so "row exists" already implies
 // "some events are wanted"). wabas.forward_events is nullable at the
 // column level, matching forward_to_url/forward_secret's own nullability
 // (forwarding is optional per waba), but a CHECK enforces that whenever
-// forward_to_url is set, forward_events must be too — you cannot configure
+// forward_to_url is set, forward_events must be too - you cannot configure
 // a target URL without also declaring what it receives.
 //
 // Both CHECKs validate every array element is one of the three known event
@@ -36,7 +36,7 @@ exports.up = (pgm) => {
   `);
   // Table is empty in every environment this has been deployed to (checked
   // live), so the temporary default above never actually backfills a real
-  // row into an implicit "all events" state — it exists only so the
+  // row into an implicit "all events" state - it exists only so the
   // ADD COLUMN + ADD CONSTRAINT can run in one statement against Postgres's
   // own NOT NULL evaluation order. Dropped immediately: from here on,
   // omitting events on a new row is a real error, not a default.

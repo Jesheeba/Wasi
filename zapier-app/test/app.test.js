@@ -1,7 +1,7 @@
 // Real end-to-end integration: the actual Zapier app (this package's real
 // authentication.js/triggers/creates), driven through zapier-platform-core's
 // own createAppTester, against the REAL Wasi backend (server/src/app.js's
-// createApp(), the same Express app production runs) — same pattern and
+// createApp(), the same Express app production runs) - same pattern and
 // same safety rail as mcp-server/test/integration.test.js: a dedicated,
 // disposable test client (never the demo one), deleted in after(). ONLY the
 // outbound call to graph.facebook.com is faked; every other hop (Zapier
@@ -9,7 +9,7 @@
 // real, unmodified code path.
 //
 // Requires ALLOW_SHARED_PRODUCTION_DB=yes-i-understand-the-risk for this one
-// invocation (see server/src/utils/dbSafety.js) — there is no separate dev
+// invocation (see server/src/utils/dbSafety.js) - there is no separate dev
 // database for this project. Run explicitly (`npm run test:integration` in
 // this package), not part of a plain `npm test` here, same convention as
 // mcp-server.
@@ -147,7 +147,7 @@ test('New WhatsApp Message Received: subscribe registers a real row, a real inbo
     authData, targetUrl,
   });
   assert.ok(subscribed.id, 'performSubscribe must return the created subscription (with id, for performUnsubscribe later)');
-  assert.ok(subscribed.secret, 'performSubscribe must return a secret — this is what bundle.subscribeData carries for perform() to verify signatures with');
+  assert.ok(subscribed.secret, 'performSubscribe must return a secret - this is what bundle.subscribeData carries for perform() to verify signatures with');
 
   const { rows } = await pool.query('select * from zapier_subscriptions where id = $1', [subscribed.id]);
   assert.equal(rows.length, 1);
@@ -169,7 +169,7 @@ test('New WhatsApp Message Received: subscribe registers a real row, a real inbo
   // subscribeData it persisted from performSubscribe (secret included), and
   // the real raw HTTP request forwardRunner.js sent (rawRequest.content is
   // the exact byte sequence the signature was computed over, not the
-  // already-parsed cleanedRequest) — proving perform() both verifies a
+  // already-parsed cleanedRequest) - proving perform() both verifies a
   // genuine signature and correctly unwraps forwardRunner's { event, data }
   // envelope down to just the message fields Zapier should show.
   const results = await appTester(App.triggers.new_message_received.operation.perform, {
@@ -232,7 +232,7 @@ test('Send WhatsApp Message (text): real round trip captures the exact Graph API
   const phone = `91913${Date.now()}`.slice(0, 12);
   const contact = await contactsRepo.upsertByPhone(pool, testClientId, { phone, name: 'Zapier App Text Contact', wa_id: phone });
   const chat = await chatsRepo.findOrCreateByContact(pool, testClientId, contact);
-  // Opens the 24h session window — same setup mcp-server's send_button_message
+  // Opens the 24h session window - same setup mcp-server's send_button_message
   // integration test uses, for the same reason (a text send is otherwise
   // correctly rejected with session_window_closed).
   await chatsRepo.insertInbound(pool, testClientId, chat.id, {
@@ -245,12 +245,12 @@ test('Send WhatsApp Message (text): real round trip captures the exact Graph API
     if (!String(url).includes('graph.facebook.com')) return originalFetch(url, options);
     capturedRequest = { url: String(url), body: JSON.parse(options.body) };
     // zapier-platform-core patches global.fetch process-wide (not just for
-    // its own z.request() calls) to log every outbound request — including
+    // its own z.request() calls) to log every outbound request - including
     // this server's own metaClient.js -> fetch() call, since it runs in the
     // same process as this test. Its logging wrapper iterates the real
     // Headers API (.get, .entries), so a fake response needs a real
     // Headers instance, not a plain object, or it throws from INSIDE
-    // zapier-platform-core, not from this app's own code — confirmed by
+    // zapier-platform-core, not from this app's own code - confirmed by
     // tracing the stack through
     // node_modules/zapier-platform-core/src/tools/fetch-logger.js. Not an
     // issue for mcp-server's equivalent test, which never loads

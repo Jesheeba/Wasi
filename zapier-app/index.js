@@ -5,7 +5,7 @@ const sendMessageCreate = require('./creates/sendMessage');
 const packageJson = require('./package.json');
 
 // Injects Authorization + resolves every request URL against the client's
-// own base_url in exactly one place — no trigger/create builds its own
+// own base_url in exactly one place - no trigger/create builds its own
 // fetch call, same discipline as mcp-server/src/hubClient.js's hubRequest.
 const addAuthHeader = (request, z, bundle) => {
   request.headers = { ...request.headers, Authorization: `Bearer ${bundle.authData.api_key}` };
@@ -16,7 +16,7 @@ const addAuthHeader = (request, z, bundle) => {
 };
 
 // Hub API v1's error shape is { error: { code, message, ...extra } }
-// (server/src/utils/apiError.js) — normalized into a real thrown error here,
+// (server/src/utils/apiError.js) - normalized into a real thrown error here,
 // the one place every trigger/create's response passes through, so none of
 // them need to parse this shape themselves.
 const handleErrors = (response, z, bundle) => {

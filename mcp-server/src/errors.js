@@ -12,31 +12,31 @@ const { HubApiError } = require('./hubClient');
 // is already fairly clear) so this adds actionable next-step guidance on
 // top, not a duplicate restatement.
 const HUB_CODE_HINTS = {
-  waba_not_connected: 'This Wasi account has no connected WhatsApp Business number yet — connect one from the Wasi admin panel before sending.',
-  consent_required: 'Call search_contacts or check this contact\'s opt-in status — marketing templates can only be sent to contacts who have explicitly opted in.',
+  waba_not_connected: 'This Wasi account has no connected WhatsApp Business number yet - connect one from the Wasi admin panel before sending.',
+  consent_required: 'Call search_contacts or check this contact\'s opt-in status - marketing templates can only be sent to contacts who have explicitly opted in.',
   plan_limit_reached: 'This account has hit its monthly conversation limit for the current billing plan. Sending will resume next billing cycle, or after an upgrade.',
-  session_window_closed: 'Use send_template_message instead — free-form text/button/list messages only work within 24 hours of the contact\'s last inbound message.',
-  media_resolution_failed: 'The template\'s media header (image/video/document) could not be resolved — check the header_media_url, or that the template\'s default sample media is still valid.',
-  send_failed: 'Meta (WhatsApp) rejected the send attempt — see the attached Meta error detail, if any, for the specific reason.',
+  session_window_closed: 'Use send_template_message instead - free-form text/button/list messages only work within 24 hours of the contact\'s last inbound message.',
+  media_resolution_failed: 'The template\'s media header (image/video/document) could not be resolved - check the header_media_url, or that the template\'s default sample media is still valid.',
+  send_failed: 'Meta (WhatsApp) rejected the send attempt - see the attached Meta error detail, if any, for the specific reason.',
   missing_api_key: 'Set WASI_API_KEY as an environment variable in your MCP client configuration.',
   missing_base_url: 'Set WASI_API_BASE_URL to your Wasi instance\'s base URL in your MCP client configuration.',
-  network_error: 'The Wasi Hub API could not be reached — check WASI_API_BASE_URL and network connectivity.',
+  network_error: 'The Wasi Hub API could not be reached - check WASI_API_BASE_URL and network connectivity.',
   last_active_key: 'This is the account\'s only active API key and cannot be removed without a replacement.',
 };
 
-// Meta Graph API error codes worth explaining in plain English — not
+// Meta Graph API error codes worth explaining in plain English - not
 // exhaustive (Meta has hundreds), just the ones a normal send is actually
 // likely to hit. See metaClient.js's graphFetch for how metaError is
 // attached to a Hub API error response in the first place.
 const META_ERROR_HINTS = {
-  131047: 'The 24-hour customer service window is closed for this recipient — send a template message instead of free-form text/interactive.',
-  131026: 'This number has not messaged your WhatsApp Business number before (or has blocked it) — an approved template is required for the first outbound message.',
+  131047: 'The 24-hour customer service window is closed for this recipient - send a template message instead of free-form text/interactive.',
+  131026: 'This number has not messaged your WhatsApp Business number before (or has blocked it) - an approved template is required for the first outbound message.',
   131009: 'One or more parameter values in this request failed WhatsApp\'s validation (e.g. a malformed phone number).',
-  132000: 'Template parameter validation failed — check that every {{parameter}} placeholder in the template has a matching value.',
-  132001: 'This template name/language pair isn\'t recognized by Meta — call list_templates to see what\'s actually approved for this account.',
+  132000: 'Template parameter validation failed - check that every {{parameter}} placeholder in the template has a matching value.',
+  132001: 'This template name/language pair isn\'t recognized by Meta - call list_templates to see what\'s actually approved for this account.',
   132005: 'This template has been paused by Meta due to quality/engagement issues and cannot currently be sent.',
   132007: 'This template was rejected by Meta and cannot be used to send messages.',
-  190: 'The connected WhatsApp Business number\'s access token is invalid or expired — it needs to be reconnected from the Wasi admin panel.',
+  190: 'The connected WhatsApp Business number\'s access token is invalid or expired - it needs to be reconnected from the Wasi admin panel.',
 };
 
 function formatHubApiError(err) {
@@ -60,7 +60,7 @@ function formatHubApiError(err) {
   return parts.filter(Boolean).join(' ');
 }
 
-// A tool handler's return value on failure — MCP's CallToolResult shape
+// A tool handler's return value on failure - MCP's CallToolResult shape
 // with isError: true, which surfaces the text to the model as the tool's
 // output (distinct from a protocol-level error, which would hide the
 // message from the model entirely).

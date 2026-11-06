@@ -2,7 +2,7 @@
 // GET /api/v1/messages/:id/status, GET /api/v1/templates/:id,
 // GET /api/v1/conversations[/:id/messages], GET /api/v1/contacts,
 // GET /api/v1/account[/rate-limit]. Same dedicated-disposable-test-client
-// pattern as apiV1.test.js — see that file's before()/after() comments for
+// pattern as apiV1.test.js - see that file's before()/after() comments for
 // why a throwaway client (never the demo one) is used and deleted after.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -55,7 +55,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const created = await fetch(`${baseUrl}/api/admin/api-keys`, {
     method: 'POST',
@@ -199,10 +199,10 @@ test('get_template_details: returns the full stored shape for one template, 404s
     body: JSON.stringify({
       name: `${SUITE_PREFIX}tpl_${Date.now()}`,
       category: 'Utility',
-      // 18 words / 1 param — clears MIN_WORDS_PER_PARAM's real 9-word floor
+      // 18 words / 1 param - clears MIN_WORDS_PER_PARAM's real 9-word floor
       // (templateParams.js, tightened in 0fa3465 after this fixture was
       // first written at 5 words, which then started 400ing here).
-      body: 'Hi {{customer_name}}, great news — your recent order has now shipped and is on its way to you.',
+      body: 'Hi {{customer_name}}, great news - your recent order has now shipped and is on its way to you.',
       bodyParamExamples: { customer_name: 'Asha' },
     }),
   }).then((r) => r.json());
@@ -211,7 +211,7 @@ test('get_template_details: returns the full stored shape for one template, 404s
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.equal(data.name, created.name);
-  assert.equal(data.body, 'Hi {{customer_name}}, great news — your recent order has now shipped and is on its way to you.');
+  assert.equal(data.body, 'Hi {{customer_name}}, great news - your recent order has now shipped and is on its way to you.');
 
   const notFound = await fetch(`${baseUrl}/api/v1/templates/00000000-0000-0000-0000-000000000099`, {
     headers: apiAuthed(apiKey),

@@ -1,7 +1,7 @@
 import { PALETTE_ITEMS } from './constants.js';
 
 // Shown when a connection is dragged from a handle and dropped on empty
-// canvas (React Flow's onConnectEnd with no valid target) — n8n and
+// canvas (React Flow's onConnectEnd with no valid target) - n8n and
 // AiSensy's "stretch a thread to empty space" pattern (confirmed live in
 // both, this session's earlier investigation). Picking a type creates the
 // node at the drop position AND the edge in one action, via

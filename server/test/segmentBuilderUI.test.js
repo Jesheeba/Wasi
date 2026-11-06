@@ -1,14 +1,14 @@
-// Real-browser coverage for PLAN.md item 9's frontend — the New Campaign
+// Real-browser coverage for PLAN.md item 9's frontend - the New Campaign
 // modal's "By Segment" audience mode and its inline AND/OR condition
 // builder (index.html's #segment-builder, app.js's segment-builder
 // section). The backend (contactSegments.test.js) already proves the API
-// end-to-end, including a real broadcast created against a segment — this
+// end-to-end, including a real broadcast created against a segment - this
 // file covers what only exists in the browser: the mode toggle, the
 // condition rows' field-dependent op/value controls, the debounced live
 // preview count, and saving a segment into the picker.
 //
 // Same fixed-port-4000 + ALLOWED_ORIGINS override as templateLibraryUI.test.js
-// (the original precedent) and chatUiPass.test.js — safe to run alongside
+// (the original precedent) and chatUiPass.test.js - safe to run alongside
 // either now that npm test forces --test-concurrency=1 (CLAUDE.md's
 // Conventions section), which serializes every test file's process.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -31,7 +31,7 @@ function authed(token) {
 }
 
 // Same selectOption()-is-unreliable-here workaround as templateLibraryUI.test.js
-// / chatUiPass.test.js's tests 11/13 — set the value directly and dispatch a
+// / chatUiPass.test.js's tests 11/13 - set the value directly and dispatch a
 // real change event instead of driving Playwright's own actionability polling.
 async function setSelect(el, value) {
   await page.evaluate(({ el, value }) => { el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); }, { el, value });
@@ -113,7 +113,7 @@ test('1. selecting "By Segment" reveals the segment section and hides the tag/li
 test('2. a tag condition shows the correct live preview count against real data', async () => {
   await page.click('#toggle-new-segment-builder-btn');
   await page.waitForTimeout(300);
-  // The builder auto-adds one blank row on first open — its field defaults
+  // The builder auto-adds one blank row on first open - its field defaults
   // to "tag", so just pick the real tag in that row's target select.
   const tagSelectId = await page.evaluate(() => {
     const row = document.querySelector('#segment-conditions-list .segment-condition-row');
@@ -158,8 +158,8 @@ test('3. an attribute condition (text, "is exactly") also produces the correct c
   await page.waitForTimeout(700);
 
   const status = await page.textContent('#segment-preview-status');
-  // OR(tag=VIP, city=Mumbai) — contacts 0 and 1 are VIP, contact 0 is also
-  // Mumbai (already counted) — still exactly 2 matching contacts overall.
+  // OR(tag=VIP, city=Mumbai) - contacts 0 and 1 are VIP, contact 0 is also
+  // Mumbai (already counted) - still exactly 2 matching contacts overall.
   assert.match(status, /Matches 2 contacts/);
 });
 

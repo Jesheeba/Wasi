@@ -1,4 +1,4 @@
-// End-to-end capture_reply runtime path through flowEngine.evaluate() —
+// End-to-end capture_reply runtime path through flowEngine.evaluate() -
 // same "stub every repo/service flowEngine requires" pattern
 // flowEngineRunToRest.test.js already established (no real DB, no real
 // Meta send; Node caches each require() to the same object, so overwriting
@@ -49,7 +49,7 @@ test('evaluate: a reply to a waiting capture_reply node is stored and the flow a
   ];
   let advanceCall = null;
   restores.push(stub(contactFlowStateRepo, 'advance', async (db, args) => { advanceCall = args; return { id: 'row-1' }; }));
-  restores.push(stub(automationEngine, 'evaluate', async () => { throw new Error('should not fall through to automationEngine — the capture_reply branch always has an always edge here'); }));
+  restores.push(stub(automationEngine, 'evaluate', async () => { throw new Error('should not fall through to automationEngine - the capture_reply branch always has an always edge here'); }));
 
   try {
     await assert.doesNotReject(() =>
@@ -71,7 +71,7 @@ test('evaluate: a reply to a waiting capture_reply node is stored and the flow a
   }
 });
 
-test('evaluate: a reply that fails the attribute\'s type validation still advances the flow — the value is just skipped', async () => {
+test('evaluate: a reply that fails the attribute\'s type validation still advances the flow - the value is just skipped', async () => {
   const flowState = { flow_id: 'flow-1', current_node_id: CAPTURE_NODE_ID, version: 2 };
   const events = [];
   const upserts = [];
@@ -103,7 +103,7 @@ test('evaluate: a reply that fails the attribute\'s type validation still advanc
     const captureEvent = events.find((e) => e.eventType === 'reply_captured');
     assert.equal(captureEvent.detail.capture.captured, false);
     assert.equal(captureEvent.detail.capture.reason, 'value_does_not_match_attribute_type');
-    // The flow still advances — a bad-format answer shouldn't trap the contact.
+    // The flow still advances - a bad-format answer shouldn't trap the contact.
     assert.equal(advanceCall.status, 'completed');
     assert.equal(advanceCall.nodeId, END_NODE_ID);
   } finally {
@@ -135,7 +135,7 @@ test('evaluate: a capture_reply node with no always edge falls through to unmatc
 });
 
 // Sanity check that this file's stubbing didn't leak into other node types'
-// existing behavior — a plain send_interactive_buttons wait still goes
+// existing behavior - a plain send_interactive_buttons wait still goes
 // through resolveInboundEdge's button/keyword/default matching, untouched.
 test('evaluate: a non-capture_reply waiting node is unaffected by the capture_reply branch', async () => {
   const BUTTONS_NODE_ID = 'node-buttons';

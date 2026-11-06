@@ -1,10 +1,10 @@
-/* Wasi Admin Panel — layered on top of ../index.css and /design-system.css
+/* Wasi Admin Panel - layered on top of ../index.css and /design-system.css
    (loaded AFTER this file, so design-system tokens/components win ties).
 
    Admin-only pieces live here: the grouped sidebar profile, KPI tiles, the
    scrollable sticky-header table wrapper, client-detail tabs/cards, the
    secrets (copy-once) panel, and the API Guide. Status colours come from the
-   shared .badge-* / .alert-* components — no inline hex colours. */
+   shared .badge-* / .alert-* components - no inline hex colours. */
 
 body {
   overflow: auto;
@@ -442,7 +442,7 @@ body {
 }
 
 /* Author `display` on .pagination / .alert would otherwise beat the UA
-   [hidden] rule — make hidden always win. */
+   [hidden] rule - make hidden always win. */
 [hidden] { display: none !important; }
 
 .tab-flag { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); font-size: 0.65rem; font-weight: 700; vertical-align: middle; }

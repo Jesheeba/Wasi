@@ -7,7 +7,7 @@ async function list() {
   return rows;
 }
 
-// Upsert by the table's own unique (category, country_code) pair — an
+// Upsert by the table's own unique (category, country_code) pair - an
 // admin re-entering a rate for a pair that already exists updates it in
 // place, matching this codebase's established "re-entering = updating"
 // precedent (tagsRepo.findOrCreateByName) rather than erroring on conflict.
@@ -28,7 +28,7 @@ async function remove(id) {
   return rowCount > 0;
 }
 
-// Used by GET /api/analytics/cost-estimate — a plain select against the
+// Used by GET /api/analytics/cost-estimate - a plain select against the
 // restricted wasi_app role works fine here (table-level SELECT grant,
 // migration 055, no RLS: conversation_pricing isn't a tenant table).
 async function findRate(db, category, countryCode) {

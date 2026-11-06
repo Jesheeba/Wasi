@@ -1,7 +1,7 @@
-// Template {{named}} parameter resolution (server/src/utils/templateParamMapping.js) —
-// shared between broadcastRunner.js (the priority fix — a broadcast's
+// Template {{named}} parameter resolution (server/src/utils/templateParamMapping.js) -
+// shared between broadcastRunner.js (the priority fix - a broadcast's
 // param_mappings, set once at creation) and flowEngine.js's send_template
-// node (config.paramMappings). Pure-function testing — no DB, no network —
+// node (config.paramMappings). Pure-function testing - no DB, no network -
 // same reasoning templateSyncService.test.js and flowEngine.test.js
 // document for their pure halves. Priority fix found live during
 // production testing: broadcastRunner's sendOneRecipient built
@@ -42,7 +42,7 @@ test('resolveParamValues: no mappings resolves to an empty object, not a throw',
 });
 
 // --- contact_attribute mappings (PLAN.md campaign-paramMappings-UI follow-up) ---
-// broadcastRunner.js is the only real caller of the 3rd argument — it fetches
+// broadcastRunner.js is the only real caller of the 3rd argument - it fetches
 // attributeValuesByAttributeId per recipient only when needed, and falls back
 // to {} on a lookup failure (see broadcastRunner.js's own comment). This file
 // only tests the pure resolution logic, not that fetch/fallback wiring.

@@ -64,8 +64,8 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
 function createApp() {
   const app = express();
   // Without this, express-rate-limit's default keyGenerator (req.ip) resolves
-  // to the immediate socket peer — the proxy in front of us (ngrok locally,
-  // Render's load balancer in production) — not the real client, so every
+  // to the immediate socket peer - the proxy in front of us (ngrok locally,
+  // Render's load balancer in production) - not the real client, so every
   // distinct caller shares one rate-limit bucket instead of getting their
   // own. `1` trusts exactly one hop of X-Forwarded-For, matching both of
   // those single-proxy setups.
@@ -75,23 +75,23 @@ function createApp() {
   // branch, was brought in). CSP left off deliberately: the root/admin/
   // marketing static pages (no build step) rely on inline scripts/styles,
   // and a default CSP would break them without a real audit of every
-  // inline block first — a separate, riskier follow-up. Every other helmet
+  // inline block first - a separate, riskier follow-up. Every other helmet
   // default (HSTS, X-Content-Type-Options, X-Frame-Options, X-Powered-By
   // removal, etc.) is safe to enable immediately.
   //
-  // crossOriginOpenerPolicy overridden 2026-09-07 — DO NOT REMOVE OR REVERT
+  // crossOriginOpenerPolicy overridden 2026-09-07 - DO NOT REMOVE OR REVERT
   // TO HELMET'S DEFAULT ('same-origin'). This is the confirmed root cause of
   // a 4-day WhatsApp Embedded Signup outage (12+ real onboarding attempts
   // across multiple clients/browsers/machines, escalated to Meta support,
-  // who confirmed our app config was correct — the actual bug was here the
+  // who confirmed our app config was correct - the actual bug was here the
   // whole time). This line was introduced 2026-08-29 (git log -S "helmet(" --
   // exactly one commit), squarely between the last confirmed successful
   // Coexistence connection (2026-08-24) and the first confirmed failure
-  // (early September) — closing the "what changed" question definitively.
+  // (early September) - closing the "what changed" question definitively.
   // Mechanism, confirmed against MDN's own COOP reference: with the
   // default 'same-origin', a cross-origin popup this page opens (Meta's
   // FB.login() dialog, window.open() to facebook.com) is placed in a NEW
-  // browsing context group — window.opener is severed from the popup's own
+  // browsing context group - window.opener is severed from the popup's own
   // side, silently blocking every postMessage the popup tries to send back
   // (window.opener.postMessage(...) has nothing to send to). This explains
   // every symptom that made this look like a Meta-side issue: the popup
@@ -101,16 +101,16 @@ function createApp() {
   // OUR origin, not anything account- or browser-specific.
   // 'same-origin-allow-popups' is MDN's own documented fix for this exact
   // class of integration ("when using a cross-origin service for OAuth or
-  // payments") — it keeps this page cross-origin-isolated from things that
+  // payments") - it keeps this page cross-origin-isolated from things that
   // open IT, while still letting it retain window.opener with things IT
   // opens, which is exactly what Embedded Signup's popup needs.
   // Cross-Origin-Embedder-Policy and Cross-Origin-Resource-Policy were
   // checked and ruled out as contributing factors: COEP isn't sent by
   // helmet's defaults at all (confirmed via live response headers, not
   // assumed), and CORP governs only whether OTHER origins can load THIS
-  // origin's subresources (images/scripts/fetches) — it has no effect on
+  // origin's subresources (images/scripts/fetches) - it has no effect on
   // window.open() or postMessage (confirmed against MDN's CORP reference)
-  // — so leaving CORP at its default here is unrelated and safe.
+  // - so leaving CORP at its default here is unrelated and safe.
   app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
@@ -122,7 +122,7 @@ function createApp() {
     },
     credentials: true,
   }));
-  // Captures raw bytes alongside the parsed body — needed to verify the
+  // Captures raw bytes alongside the parsed body - needed to verify the
   // Razorpay and Meta webhook signatures, which are computed over the exact
   // raw payload.
   app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
@@ -132,12 +132,12 @@ function createApp() {
 
   app.use('/health', healthRouter);
 
-  // authLimiter is no longer applied blanket here — routes/auth.js applies
+  // authLimiter is no longer applied blanket here - routes/auth.js applies
   // it per-route now, since GET /me (called on every page load to resume a
-  // session) needs a much more generous limiter than /login /register do —
+  // session) needs a much more generous limiter than /login /register do -
   // see rateLimit.js's sessionCheckLimiter for why.
   app.use('/api/auth', authRouter);
-  // Team-member login/accept-invite (PLAN.md item 1) — issues its own JWT
+  // Team-member login/accept-invite (PLAN.md item 1) - issues its own JWT
   // type ('team_member'), no auth required to reach these two handlers
   // themselves, same as /api/auth's own /login and /register.
   app.use('/api/auth/team', authTeamRouter);
@@ -145,20 +145,20 @@ function createApp() {
 
   // Tenant-scoped: real client JWT required. withTenantContext runs every
   // request inside its own transaction as the restricted `wasi_app` role
-  // with app.current_client_id set (migration 013_tenant_isolation.js) —
+  // with app.current_client_id set (migration 013_tenant_isolation.js) -
   // RLS is the actual enforcement, this just makes the connection subject
   // to it.
   //
   // Two auth middlewares are deliberately in play here, not one (PLAN.md
-  // item 1): requireClientAuth accepts ONLY a `type: 'client'` (owner) JWT —
+  // item 1): requireClientAuth accepts ONLY a `type: 'client'` (owner) JWT -
   // a team_member token is rejected at the JWT-type check itself, before
   // any role logic runs. requireClientOrTeamAuth additionally accepts a
   // `type: 'team_member'` JWT, paired with requireRole(...) at each
   // individual route inside that router (never router-wide) to gate exactly
   // which team roles reach it. Routers kept on requireClientAuth
   // (onboarding, billing, wallet, client-webhook, api-keys, payment-links)
-  // are the highest-blast-radius actions — Meta token, billing, wallet,
-  // Hub API credentials, integration secrets — and stay unreachable by any
+  // are the highest-blast-radius actions - Meta token, billing, wallet,
+  // Hub API credentials, integration secrets - and stay unreachable by any
   // team-member role at all, including one titled Admin (a deliberate,
   // stricter-than-the-reference-spec choice, not an oversight).
   app.use('/api/contacts', requireClientOrTeamAuth, withTenantContext, contactsRouter);
@@ -190,35 +190,35 @@ function createApp() {
 
   // Admin-only: internal team, gated by admin JWT.
   app.use('/api/clients', requireAdminAuth(), clientsRouter);
-  // Mounted before the broader /api/admin below — Express matches in
+  // Mounted before the broader /api/admin below - Express matches in
   // registration order, and this is the more specific prefix.
   app.use('/api/admin/conversation-pricing', requireAdminAuth(), conversationPricingRouter);
   app.use('/api/admin', requireAdminAuth(), adminRouter);
 
   // Hub API (build plan Phase 5): other Sirah applications, authenticated by
-  // a Wasi-issued API key (requireApiKey), not a client JWT — always the
+  // a Wasi-issued API key (requireApiKey), not a client JWT - always the
   // privileged connection, see middleware/requireApiKey.js.
   app.use('/api/v1/messages', apiLimiter, apiV1MessagesRouter);
   app.use('/api/v1/templates', apiLimiter, apiV1TemplatesRouter);
   app.use('/api/v1/conversations', apiLimiter, apiV1ConversationsRouter);
   app.use('/api/v1/contacts', apiLimiter, apiV1ContactsRouter);
   app.use('/api/v1/account', apiLimiter, apiV1AccountRouter);
-  // Zapier REST Hook subscribe/unsubscribe (build plan Phase 4) — same Hub
+  // Zapier REST Hook subscribe/unsubscribe (build plan Phase 4) - same Hub
   // API shape as the five routers above, not a client-facing resource.
   app.use('/api/v1/subscriptions', apiLimiter, apiV1SubscriptionsRouter);
   // Catches unmatched /api/v1/* paths and any error thrown inside the six
   // routers above (Zod validation, Postgres constraint violations, an
-  // uncaught error) — both in the {error: {code, message}} shape, before
+  // uncaught error) - both in the {error: {code, message}} shape, before
   // falling through to the app-wide handlers below, which stay on the old
   // {error: 'string'} shape for every other route in this app.
   app.use('/api/v1', apiV1NotFoundHandler);
   app.use('/api/v1', apiV1ErrorHandler);
 
-  // Static frontends (no build step) — mounted explicitly by directory
+  // Static frontends (no build step) - mounted explicitly by directory
   // rather than serving the whole repo root, so server/.env, node_modules,
   // etc. are never reachable over HTTP even by path-guessing.
   //
-  // The public domain root is the marketing landing page, not the CRM app —
+  // The public domain root is the marketing landing page, not the CRM app -
   // a first-time visitor to wasi.sirahagents.com should see the pitch, not
   // an unauthenticated app shell. The CRM app itself (this same root
   // index.html/app.js) is reachable at /app; marketing's own "Log in" links
@@ -235,15 +235,15 @@ function createApp() {
   // frontend-owned file) so the Create/Edit Template modal's live "flag
   // while typing" validation (app.js) runs the EXACT same functions
   // routes/templates.js's validateStandardTemplateFields calls at submit
-  // time — one source of truth, not a hand-duplicated client-side copy
+  // time - one source of truth, not a hand-duplicated client-side copy
   // that can drift. Safe to serve raw: pure validation logic, no secrets,
   // no server-only code path.
   app.get('/templateParams.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'templateParams.js')));
-  // Same static-asset pattern as templateParams.js immediately above —
+  // Same static-asset pattern as templateParams.js immediately above -
   // consent hardening Phase 2's shared opt-in confirmation wording (see
   // consentStatement.js's own module comment).
   app.get('/consentStatement.js', (req, res) => res.sendFile(path.join(__dirname, 'utils', 'consentStatement.js')));
-  // Same static-asset pattern again — the "why can't my client send" banner
+  // Same static-asset pattern again - the "why can't my client send" banner
   // (root CRM app) and admin's client-detail view both need the exact same
   // plain-English mapping of a Meta sendability error code, not two
   // hand-written copies that can drift apart. See sendabilityMessages.js's
@@ -252,15 +252,15 @@ function createApp() {
   app.use('/marketing', express.static(path.join(REPO_ROOT, 'marketing')));
   app.use('/admin', express.static(path.join(REPO_ROOT, 'admin')));
   // Postman collection + environment template for the admin panel's API
-  // Guide view to link to directly — static files, no auth needed (no
+  // Guide view to link to directly - static files, no auth needed (no
   // secrets in them, placeholders only; see postman/README.md).
   app.use('/postman', express.static(path.join(REPO_ROOT, 'postman')));
-  // Stage 1 spike (flow-editor/) — the one build-step exception in this
+  // Stage 1 spike (flow-editor/) - the one build-step exception in this
   // repo, served from its own path exactly like marketing/admin above, not
   // injected into index.html/app.js's existing load path. Built by the
   // Dockerfile's separate flow-editor-build stage; this directory won't
   // exist until that runs (`npm run build` inside flow-editor/), so it's
-  // absent in a plain `git clone` — expected, not a bug.
+  // absent in a plain `git clone` - expected, not a bug.
   app.use('/flow-editor', express.static(path.join(REPO_ROOT, 'flow-editor/dist')));
 
   app.use(notFoundHandler);

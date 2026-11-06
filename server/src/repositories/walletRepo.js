@@ -6,7 +6,7 @@ async function createPending(db, clientId, amountInr, razorpayOrderId) {
   return rows[0];
 }
 
-// Razorpay-webhook-triggered — looked up by order id, not a known client_id,
+// Razorpay-webhook-triggered - looked up by order id, not a known client_id,
 // so this always runs on the privileged connection.
 async function markStatusByOrderId(db, orderId, status) {
   const { rows } = await db.query(
@@ -16,7 +16,7 @@ async function markStatusByOrderId(db, orderId, status) {
   return rows[0] || null;
 }
 
-// Balance is derived from the ledger, not a stored counter — no risk of the
+// Balance is derived from the ledger, not a stored counter - no risk of the
 // two drifting apart.
 async function balance(db, clientId) {
   const { rows } = await db.query(

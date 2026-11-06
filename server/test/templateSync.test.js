@@ -1,6 +1,6 @@
 // Template sync (server/src/services/templateSyncService.js). Most of this
 // is pure-function testing (reconcileTemplates, metaClient.js's
-// parseTemplateComponents) — no DB, no network, same reasoning
+// parseTemplateComponents) - no DB, no network, same reasoning
 // templateParams.test.js documents for keeping that logic separate from
 // metaClient.js's actual fetch calls. Two exceptions: the pagination test
 // stubs global.fetch directly (no real Meta App needed to prove the
@@ -90,7 +90,7 @@ test('reconcileTemplates: an already-orphaned row is not re-flagged', () => {
   assert.deepEqual(toOrphan, []);
 });
 
-test('reconcileTemplates: idempotent — running twice with identical input produces identical output', () => {
+test('reconcileTemplates: idempotent - running twice with identical input produces identical output', () => {
   const meta = [{ id: 'meta_1', name: 'a', status: 'APPROVED', category: 'UTILITY', components: [] }];
   const local = [];
   const first = reconcileTemplates(meta, local);
@@ -156,8 +156,8 @@ test('listTemplates: walks paging.next until exhausted, concatenating every page
       };
     }
     if (callCount === 2) {
-      // paging.next as actually returned by Meta carries no access_token —
-      // confirmed against a real response earlier this session — so this
+      // paging.next as actually returned by Meta carries no access_token -
+      // confirmed against a real response earlier this session - so this
       // proves listTemplates re-appends it rather than dropping auth on
       // page 2+.
       assert.match(urlStr, /after=CURSOR1/);
@@ -170,7 +170,7 @@ test('listTemplates: walks paging.next until exhausted, concatenating every page
         }),
       };
     }
-    throw new Error('unexpected extra fetch call — pagination did not stop when paging.next was absent');
+    throw new Error('unexpected extra fetch call - pagination did not stop when paging.next was absent');
   };
 
   try {

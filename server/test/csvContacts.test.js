@@ -1,7 +1,7 @@
-// Pure-function tests for utils/csvContacts.js — no DB, no server (same
+// Pure-function tests for utils/csvContacts.js - no DB, no server (same
 // reasoning as dbSafety.test.js/apiV1ErrorHandler.test.js). This is the
 // actual enforcement of "malformed rows are rejected visibly, never
-// silently dropped" (wasi-master-plan.md §8.3) — every row asserted
+// silently dropped" (wasi-master-plan.md §8.3) - every row asserted
 // accounted for in exactly one of validRows/errors.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -58,7 +58,7 @@ test('parseContactsCsv: missing name column falls back to phone as the display n
   assert.deepEqual(validRows, [{ name: '919876543210', phone: '919876543210' }]);
 });
 
-test('parseContactsCsv: no "phone" column at all — whole file rejected with one clear error, not silently empty', () => {
+test('parseContactsCsv: no "phone" column at all - whole file rejected with one clear error, not silently empty', () => {
   const csv = 'name,email\nPriya,priya@example.com';
   const { validRows, errors } = parseContactsCsv(csv);
   assert.equal(validRows.length, 0);
@@ -113,7 +113,7 @@ test('parseContactsCsv: empty file is rejected with a clear error', () => {
   assert.match(errors[0].reason, /empty/i);
 });
 
-test('parseContactsCsv: an unrecognized column (e.g. "tags") is reported, not silently dropped — import still proceeds', () => {
+test('parseContactsCsv: an unrecognized column (e.g. "tags") is reported, not silently dropped - import still proceeds', () => {
   const csv = 'name,phone,tags\nPriya,919876543210,VIP;Repeat\nRavi,919812345678,New';
   const { validRows, errors } = parseContactsCsv(csv);
   assert.equal(validRows.length, 2, 'name/phone still import even though tags is unrecognized');
@@ -132,7 +132,7 @@ test('parseContactsCsv: an unrecognized column is reported exactly once even if 
   assert.equal(errors.filter((e) => /tags/i.test(e.reason)).length, 1);
 });
 
-test('parseContactsCsv({ includeTags: true }): PLAN.md item 8 — a "tags" column is read, semicolon-separated, and no longer reported as unrecognized', () => {
+test('parseContactsCsv({ includeTags: true }): PLAN.md item 8 - a "tags" column is read, semicolon-separated, and no longer reported as unrecognized', () => {
   const csv = 'name,phone,tags\nPriya,919876543210,VIP;Repeat Customer\nRavi,919812345678,';
   const { validRows, errors } = parseContactsCsv(csv, { includeTags: true });
   assert.equal(errors.length, 0, '"tags" is a known column when includeTags is true');

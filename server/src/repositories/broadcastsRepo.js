@@ -1,6 +1,6 @@
 // delivered_count/read_rate are computed live from the underlying messages'
 // real Cloud API delivery status (joined via broadcast_recipients.message_id)
-// rather than trusted as stored columns — one source of truth, no staleness
+// rather than trusted as stored columns - one source of truth, no staleness
 // between what the webhook knows and what this list shows.
 async function list(db, clientId) {
   const { rows } = await db.query(
@@ -48,18 +48,18 @@ async function findById(db, clientId, id) {
   return rows[0] || null;
 }
 
-// PLAN.md item 28 — the per-broadcast detail view's header strip. Same
+// PLAN.md item 28 - the per-broadcast detail view's header strip. Same
 // bucket definitions list()'s own lateral join already established
 // (delivered = messages.status in ('delivered','read'), i.e. "at least
-// delivered," read = messages.status = 'read' — a subset of delivered, not
+// delivered," read = messages.status = 'read' - a subset of delivered, not
 // a separate bucket, matching WhatsApp's own sent->delivered->read
 // progression), extended here with failed/pending so the 5 buckets the
 // detail view needs (sent/delivered/read/failed/skipped) plus pending sum
 // to recipient_count. "Failed" covers both a pre-send failure
-// (broadcast_recipients.status = 'failed' — e.g. contact deleted, retries
+// (broadcast_recipients.status = 'failed' - e.g. contact deleted, retries
 // exhausted before ever reaching Meta) and a post-send delivery failure
 // (status = 'sent' but the linked message later failed via the status
-// webhook) — the two failure moments this app tracks, unified into one
+// webhook) - the two failure moments this app tracks, unified into one
 // count since a client viewing this page doesn't care which stage it
 // failed at, only that it did.
 async function findByIdWithStats(db, clientId, id) {
@@ -117,14 +117,14 @@ async function create(db, clientId, {
 
 // Used both by routes/broadcasts.js (req.db, on creation with a
 // zero-recipient audience) and broadcastRunner (pool, once sending
-// completes) — no client_id in the WHERE clause, but RLS's policy still
+// completes) - no client_id in the WHERE clause, but RLS's policy still
 // restricts it to the caller's own tenant when run via req.db.
 async function markStatus(db, id, status) {
   await db.query('update broadcasts set status = $2 where id = $1', [id, status]);
 }
 
 // Every broadcast whose scheduled date has arrived and still has pending
-// recipients — the runner promotes these to 'Sending' each tick.
+// recipients - the runner promotes these to 'Sending' each tick.
 async function listDueScheduled(db) {
   const { rows } = await db.query(
     `select * from broadcasts where status = 'Scheduled' and (scheduled_date is null or scheduled_date <= current_date)`

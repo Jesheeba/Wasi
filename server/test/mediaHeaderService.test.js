@@ -38,10 +38,10 @@ test('buildMediaHeaderComponent: DOCUMENT with no filename omits the key rather 
   assert.deepEqual(component.parameters[0].document, { id: 'media789' });
 });
 
-// --- isBlockedAddress / assertPublicHttpsUrl — resolveMediaIdFromUrl's
+// --- isBlockedAddress / assertPublicHttpsUrl - resolveMediaIdFromUrl's
 // SSRF guard for a CRM-supplied headerMediaUrl. Pure enough to test without
 // a network: dns.lookup on an IP literal resolves it locally, no real DNS
-// query — same "no DB, no network" reasoning as flowEngine.test.js. ---
+// query - same "no DB, no network" reasoning as flowEngine.test.js. ---
 
 test('isBlockedAddress: blocks loopback, RFC1918, and link-local (cloud metadata) IPv4', () => {
   assert.equal(isBlockedAddress('127.0.0.1'), true);

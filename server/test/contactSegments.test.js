@@ -1,30 +1,30 @@
-// PLAN.md item 9 — AND/OR audience segment builder. Verifies:
+// PLAN.md item 9 - AND/OR audience segment builder. Verifies:
 // 1. AND combinator (tag + attribute): preview count matches a manual SQL
 //    count against the same fixture; POST /api/broadcasts against the
 //    segment creates exactly the matching broadcast_recipients rows.
 // 2. OR combinator.
 // 3. Each attribute type/op: number (gt), date (lt), boolean (eq), text (contains).
-// 4. segmentFilter.js parameterizes every value — a value containing raw
+// 4. segmentFilter.js parameterizes every value - a value containing raw
 //    SQL syntax is treated as a literal string comparison, not executed
 //    (real proof, not just code inspection: a value shaped like a SQL
 //    injection attempt only ever matches the one contact whose real
 //    attribute value equals it literally).
 // 5. Rejections: unknown attributeId, an op invalid for the attribute's
 //    real type, an unknown condition field.
-// 6. Mutual exclusivity (tag_id/contact_list_id/segment_id), both layers —
+// 6. Mutual exclusivity (tag_id/contact_list_id/segment_id), both layers -
 //    schema (400) and the DB's own CHECK constraint (migration 051).
-// 7. Role gating (Agent rejected, matching Broadcasts/Contact-Lists — NOT
+// 7. Role gating (Agent rejected, matching Broadcasts/Contact-Lists - NOT
 //    the same as items 6-8's Agent-writable Contacts routes) and
 //    unauthenticated rejection.
-// 8. Tenant isolation — a foreign segment_id 404s a broadcast creation
+// 8. Tenant isolation - a foreign segment_id 404s a broadcast creation
 //    attempt; another client's segments never listed.
 // 9. The SET LOCAL statement_timeout mechanism itself (real proof against
-//    this actual Postgres, not just trusted from docs) — a deliberately
+//    this actual Postgres, not just trusted from docs) - a deliberately
 //    slow query under a short SET LOCAL statement_timeout really does
 //    raise Postgres error 57014, the exact code routes/contactSegments.js
 //    and routes/broadcasts.js both catch to return a clear 503.
 // Same dedicated-disposable-test-client convention as every other file in
-// this directory. No real Meta call anywhere — broadcast creation only
+// this directory. No real Meta call anywhere - broadcast creation only
 // resolves recipients, never invokes broadcastRunner.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -76,7 +76,7 @@ async function setAttr(token, contactId, attributeId, value) {
   return fetch(`${baseUrl}/api/contacts/${contactId}/attributes/${attributeId}`, { method: 'PUT', headers: authed(token), body: JSON.stringify({ value }) });
 }
 
-// Real fixture: 4 contacts, a VIP tag, a "city" text attribute — used by
+// Real fixture: 4 contacts, a VIP tag, a "city" text attribute - used by
 // the AND/OR/broadcast tests below so their expected counts are derived
 // from real data, not hardcoded against assumptions.
 let vipTag, otherTag, cityAttr, contactA, contactB, contactC, contactD;
@@ -200,7 +200,7 @@ test('3e. opt_in_status field', async () => {
   assert.ok((await preview.json()).matchingCount >= 4, 'every fixture contact defaults to unknown opt-in status');
 });
 
-test('4. every value is parameterized — a SQL-injection-shaped value is compared literally, never executed', async () => {
+test('4. every value is parameterized - a SQL-injection-shaped value is compared literally, never executed', async () => {
   const attr = await createAttribute(clientToken, `${SUITE_PREFIX}Notes`, 'text');
   const malicious = "x'; DROP TABLE contacts; --";
   const c1 = await createContact(clientToken, `${SUITE_PREFIX}Injected`, `9203${String(Date.now()).slice(-8)}`);
@@ -211,7 +211,7 @@ test('4. every value is parameterized — a SQL-injection-shaped value is compar
   assert.equal(preview.status, 200, 'the malicious-shaped value must be handled as plain data, not break the query');
   assert.equal((await preview.json()).matchingCount, 1);
 
-  // The table must genuinely still exist and be queryable — proves the
+  // The table must genuinely still exist and be queryable - proves the
   // string was never concatenated into executable SQL.
   const stillThere = await pool.query('select count(*)::int as n from contacts where client_id = $1', [testClientId]);
   assert.ok(stillThere.rows[0].n > 0);
@@ -232,7 +232,7 @@ test('5b. an op invalid for the attribute\'s real type is rejected (e.g. "contai
   assert.match((await res.json()).error, /not valid for a boolean/i);
 });
 
-test('6a. mutual exclusivity: a broadcast cannot target both a tag and a segment — rejected at the schema layer', async () => {
+test('6a. mutual exclusivity: a broadcast cannot target both a tag and a segment - rejected at the schema layer', async () => {
   const segment = await fetch(`${baseUrl}/api/contact-segments`, {
     method: 'POST', headers: authed(clientToken),
     body: JSON.stringify({ name: `${SUITE_PREFIX}seg1`, filterJson: { combinator: 'AND', conditions: [{ field: 'tag', op: 'eq', value: vipTag.id }] } }),

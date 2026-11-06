@@ -67,7 +67,7 @@ router.post('/checkout', asyncHandler(async (req, res) => {
 
 // Client-initiated cancellation. We use Razorpay's one-off Orders API (not
 // the Subscriptions product), so there's no recurring mandate to cancel on
-// Razorpay's side — this just stops the client from being billed again at
+// Razorpay's side - this just stops the client from being billed again at
 // renewal. See DEPLOY.md / platform spec §7 if upgrading to real recurring
 // billing later.
 router.post('/cancel', asyncHandler(async (req, res) => {

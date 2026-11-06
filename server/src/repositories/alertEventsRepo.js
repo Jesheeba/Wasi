@@ -8,7 +8,7 @@ async function findOpen(alertType, dedupKey) {
   return rows[0] || null;
 }
 
-// Distinct from findOpen — used only by the daily digest as a plain
+// Distinct from findOpen - used only by the daily digest as a plain
 // sent-marker (open or already resolved both count as "already sent
 // today"), not as an ongoing condition to track.
 async function existsAny(alertType, dedupKey) {
@@ -41,7 +41,7 @@ async function resolveNow(id) {
 }
 
 // Resolves every OPEN alert of this type whose dedup_key isn't in this
-// tick's detection set — the condition stopped reproducing. `= any('{}')`
+// tick's detection set - the condition stopped reproducing. `= any('{}')`
 // is false for every row, so an empty stillOpenDedupKeys array (nothing
 // detected this tick) correctly resolves everything of this type that was
 // open, not nothing.

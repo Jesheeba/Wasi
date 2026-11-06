@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Wasi — Marketing site styles (landing, signup wizard, auth/legal pages)
+   Wasi - Marketing site styles (landing, signup wizard, auth/legal pages)
 
    Loaded BEFORE /design-system.css (tokens, .badge-*, .alert-*, focus ring).
    Standalone from index.css (the CRM shell) on purpose: marketing ships
@@ -141,7 +141,7 @@ section { padding: 88px 0; }
 .benefit h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 2px; }
 .benefit p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.45; }
 
-/* Faux app window — a static, illustrative HTML mock of the product. */
+/* Faux app window - a static, illustrative HTML mock of the product. */
 .hero-visual { position: relative; min-width: 0; }
 .app-mock {
   display: grid; grid-template-columns: 140px 210px 1fr; background: #fff;

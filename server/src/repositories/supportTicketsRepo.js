@@ -6,7 +6,7 @@ async function listByClientId(db, clientId) {
   return rows;
 }
 
-// All tickets across every tenant, joined with client identity — powers the
+// All tickets across every tenant, joined with client identity - powers the
 // admin Support/Tickets page (spec §5 "Support / Tickets" row). Admin-only,
 // always the privileged connection.
 async function listAll(db, status) {
@@ -31,7 +31,7 @@ async function create(db, clientId, { subject, message }) {
   return rows[0];
 }
 
-// Admin-only status flip — always the privileged connection.
+// Admin-only status flip - always the privileged connection.
 async function updateStatus(db, id, status) {
   const { rows } = await db.query(
     `update support_tickets set status = $2, updated_at = now() where id = $1 returning *`,

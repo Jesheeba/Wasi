@@ -1,17 +1,17 @@
-// Phase 6 Part C — the alerting engine's only schema need: one table
+// Phase 6 Part C - the alerting engine's only schema need: one table
 // tracking alert state so alertRunner.js (a 5-minute setInterval poller,
 // same shape as broadcastRunner.js/forwardRunner.js) can tell "newly
 // detected, notify" from "already open, don't re-notify" from "no longer
-// reproducing, resolve" — without that, every 5-minute tick would re-send
+// reproducing, resolve" - without that, every 5-minute tick would re-send
 // the same email forever for as long as a condition stays true.
 //
 // The partial unique index enforces "at most one OPEN alert per
 // (alert_type, dedup_key)" at the database level, not just in application
-// logic — a second detection of the same still-open condition can only
+// logic - a second detection of the same still-open condition can only
 // UPDATE the existing row (touching last_seen_at), never insert a
 // duplicate, even under concurrent runner ticks.
 //
-// No RLS/wasi_app grant — same treatment as audit_log/admin_users/
+// No RLS/wasi_app grant - same treatment as audit_log/admin_users/
 // meta_webhook_log: platform-internal, privileged-connection-only.
 exports.up = (pgm) => {
   pgm.createTable('alert_events', {

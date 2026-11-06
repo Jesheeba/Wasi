@@ -1,8 +1,8 @@
-// PLAN.md item 13 — messaging tier tracking, migration only. Verifies:
-// 1. The migration applied cleanly — wabas.messaging_tier exists, is
+// PLAN.md item 13 - messaging tier tracking, migration only. Verifies:
+// 1. The migration applied cleanly - wabas.messaging_tier exists, is
 //    nullable, and a real WABA row can be created/read with it left null.
 // 2. Nothing that already reads a wabas row breaks with the new column
-//    always null — wabasRepo.findByClientId (select *) still returns a
+//    always null - wabasRepo.findByClientId (select *) still returns a
 //    normal row shape.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 

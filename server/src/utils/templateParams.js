@@ -1,7 +1,7 @@
 // Named-parameter parsing/validation for WhatsApp message template text
 // (body and, if ever added, header). Meta's WhatsApp Business Platform now
-// rejects the old numbered {{1}}/{{2}} positional style for new templates —
-// confirmed by live rejection in WhatsApp Manager — so every template must
+// rejects the old numbered {{1}}/{{2}} positional style for new templates -
+// confirmed by live rejection in WhatsApp Manager - so every template must
 // use named parameters ({{customer_name}}) instead. Kept separate from
 // metaClient.js so the parsing/validation logic is unit-testable without a
 // real Meta App (see server/test/templateParams.test.js).
@@ -14,10 +14,10 @@
 //   - send-time body parameter objects: `{ type: "text", parameter_name, text }`
 // HEADER named params (`header_text_named_params`) are documented the same
 // way as BODY, but this codebase has no header field on templates yet, so
-// only BODY is wired up — the parsing/validation functions here are generic
+// only BODY is wired up - the parsing/validation functions here are generic
 // text-in, so header support is a small addition when a header field exists.
 // BUTTON named-parameter shapes are NOT documented by Meta as of this
-// writing (only positional/index syntax was confirmed for buttons) — button
+// writing (only positional/index syntax was confirmed for buttons) - button
 // support is intentionally not implemented; treat it as unverified/by-analogy
 // only if it's ever added.
 
@@ -25,7 +25,7 @@ const PLACEHOLDER_RE = /\{\{\s*([a-z0-9_]+)\s*\}\}/g;
 
 function extractPlaceholders(text) {
   const matches = [];
-  const re = new RegExp(PLACEHOLDER_RE); // fresh instance — a /g/ RegExp is stateful across exec() calls
+  const re = new RegExp(PLACEHOLDER_RE); // fresh instance - a /g/ RegExp is stateful across exec() calls
   let m;
   while ((m = re.exec(text || ''))) {
     matches.push({ raw: m[0], name: m[1], index: m.index, end: m.index + m[0].length });
@@ -37,14 +37,14 @@ function isPurelyNumeric(name) {
   return /^[0-9]+$/.test(name);
 }
 
-// PLACEHOLDER_RE only matches lowercase snake_case — correct, since that's
+// PLACEHOLDER_RE only matches lowercase snake_case - correct, since that's
 // Meta's real named-parameter syntax, but it means anything that LOOKS like
 // an attempted variable and isn't quite valid (wrong case, a space, a
 // symbol) is silently invisible to extractPlaceholders: not matched, not
 // flagged, just treated as inert literal text. An author who types
-// {{Customer}} thinking they created a variable gets zero feedback — no
+// {{Customer}} thinking they created a variable gets zero feedback - no
 // sample-value prompt (correctly, since nothing was recognized), no error
-// (nothing was checked either) — the mistake just ships. This catches that
+// (nothing was checked either) - the mistake just ships. This catches that
 // specific trap: any {{...}} span whose inner content isn't a valid name.
 const ANY_BRACE_RE = /\{\{\s*([^{}]*?)\s*\}\}/g;
 const VALID_NAME_RE = /^[a-z0-9_]+$/;
@@ -63,7 +63,7 @@ function findMalformedPlaceholders(text) {
 
 function malformedPlaceholderErrors(malformed, label) {
   return malformed.map((m) =>
-    `${label} contains "${m.raw}", which isn't a valid parameter name — ` +
+    `${label} contains "${m.raw}", which isn't a valid parameter name - ` +
     `parameter names must be lowercase letters, numbers, and underscores only (e.g. {{customer_name}}).`
   );
 }
@@ -72,7 +72,7 @@ function uniqueInOrder(items) {
   return [...new Set(items)];
 }
 
-// A variable can't be the very first or last token of the (trimmed) text —
+// A variable can't be the very first or last token of the (trimmed) text -
 // Meta's most common cause of automatic template rejection.
 function isVariableAtStartOrEnd(text) {
   const trimmed = (text || '').trim();
@@ -83,28 +83,28 @@ function isVariableAtStartOrEnd(text) {
 
 // Meta enforces a words-to-parameters ratio server-side (error_subcode
 // 2388293, error_user_title "Params Words Ratio Exceeds Limit") but has
-// never published the exact formula — checked Meta's Template Overview,
+// never published the exact formula - checked Meta's Template Overview,
 // Guidelines, and Error Codes reference pages directly; none state a
 // threshold. The coefficient below was raised from 3 to 7 on 2026-08-31
 // after real evidence showed the old one was too lenient, not just
 // under-margined: submitting real templates for Sirah Digital's WABA,
 // `1_hour_reminder` (18 words, 3 params, ratio 6.0) and `5_minute_reminder`
-// (15 words, 2 params, ratio 7.5) both passed the OLD formula (3*params+2 —
+// (15 words, 2 params, ratio 7.5) both passed the OLD formula (3*params+2 -
 // required only 11 and 8 words respectively) but were REJECTED live by
 // Meta. The same session's other four templates, all approved by Meta,
 // sat at ratios of 16.0-20.5+ (`booking_confirmation`, `no_show`,
-// `attended`) — see server/test/templateParams.test.js's regression tests
+// `attended`) - see server/test/templateParams.test.js's regression tests
 // for the exact bodies. 7 is the MINIMUM coefficient that still catches
 // both confirmed-rejected cases (a coefficient of 6 lets the 7.5-ratio
-// case through) — deliberately not pushed any higher than that minimum:
+// case through) - deliberately not pushed any higher than that minimum:
 // 8 was tried first and correctly caught both real rejections too, but
 // also flagged 23 of the 36 Template Library seed entries
 // (templateLibraryContent.js) as newly invalid, several sitting at the
-// exact same ratio as the confirmed-rejected cases — a real, separate
+// exact same ratio as the confirmed-rejected cases - a real, separate
 // finding (that content may never have been round-tripped against real
 // Meta and could be equally at risk), but a much bigger, shared-content
 // fix than this pass's scope. 7 still flags 19 of those 36 for the same
-// reason — not eliminated, just not pushed wider without a deliberate
+// reason - not eliminated, just not pushed wider without a deliberate
 // decision to take that on. Still unofficial (Meta could tighten or
 // loosen it without notice) but now calibrated against real accept/reject
 // outcomes instead of third-party BSP docs alone.
@@ -138,23 +138,23 @@ function validateTemplateText(text, { label = 'Body' } = {}) {
 
   if (numericMatches.length > 0) {
     errors.push(
-      `${label} uses numbered parameters (${uniqueInOrder(numericMatches.map((m) => m.raw)).join(', ')}) — ` +
+      `${label} uses numbered parameters (${uniqueInOrder(numericMatches.map((m) => m.raw)).join(', ')}) - ` +
       `Meta no longer accepts these. Use named parameters instead, e.g. {{customer_name}}.`
     );
   }
   if (numericMatches.length > 0 && namedMatches.length > 0) {
-    errors.push(`${label} mixes numbered and named parameters in one template — Meta does not support this. Use one style only.`);
+    errors.push(`${label} mixes numbered and named parameters in one template - Meta does not support this. Use one style only.`);
   }
   if (errors.length > 0) {
     return { valid: false, paramFormat: numericMatches.length ? 'positional' : 'named', params: [], errors };
   }
 
   if (isVariableAtStartOrEnd(text)) {
-    errors.push(`${label} cannot start or end with a variable — add surrounding text before/after {{${matches[0].name}}}.`);
+    errors.push(`${label} cannot start or end with a variable - add surrounding text before/after {{${matches[0].name}}}.`);
     return { valid: false, paramFormat: 'named', params: [], errors };
   }
 
-  // Occurrence count, not deduped — a repeated {{name}} still occupies its
+  // Occurrence count, not deduped - a repeated {{name}} still occupies its
   // own slot and dilutes the ratio the same way a distinct parameter would.
   const paramCount = matches.length;
   const wordCount = countWords(text);
@@ -162,7 +162,7 @@ function validateTemplateText(text, { label = 'Body' } = {}) {
   if (wordCount < required) {
     errors.push(
       `${label} has too few words for its ${paramCount} parameter${paramCount === 1 ? '' : 's'} ` +
-      `(${wordCount} word${wordCount === 1 ? '' : 's'}, needs at least ${required}) — Meta rejects templates that ` +
+      `(${wordCount} word${wordCount === 1 ? '' : 's'}, needs at least ${required}) - Meta rejects templates that ` +
       `are mostly variables with little surrounding text (error 2388293, "Params Words Ratio Exceeds Limit"). ` +
       `Add more descriptive text around the variable(s), or reduce the number of parameters.`
     );
@@ -176,7 +176,7 @@ function validateTemplateText(text, { label = 'Body' } = {}) {
 // There's no UI yet for an author to supply real examples, so this derives
 // a readable placeholder from the parameter name itself (e.g.
 // "customer_name" -> "Customer Name"). Used as a frontend preview
-// suggestion / fallback only — the actual submitted example now comes from
+// suggestion / fallback only - the actual submitted example now comes from
 // the author-supplied sample values (routes/templates.js), which Meta
 // requires, not just recommends.
 function defaultExampleFor(paramName) {
@@ -186,7 +186,7 @@ function defaultExampleFor(paramName) {
 
 // Header text differs from body: Meta allows at most ONE {{variable}}, not
 // several. Deliberately narrower than validateTemplateText, not a
-// header-specific superset of it — the start/end-variable rule and the
+// header-specific superset of it - the start/end-variable rule and the
 // words-ratio rule above were both reverse-engineered specifically against
 // BODY rejections; neither has been confirmed to apply to headers, so this
 // only checks numbered-vs-named and the one-param cap. This is the "small
@@ -208,12 +208,12 @@ function validateHeaderText(text) {
 
   if (numericMatches.length > 0) {
     errors.push(
-      `Header uses a numbered parameter (${uniqueInOrder(numericMatches.map((m) => m.raw)).join(', ')}) — ` +
+      `Header uses a numbered parameter (${uniqueInOrder(numericMatches.map((m) => m.raw)).join(', ')}) - ` +
       `Meta no longer accepts these. Use a named parameter instead, e.g. {{customer_name}}.`
     );
   }
   if (matches.length > 1) {
-    errors.push(`Header can have at most one variable — found ${matches.length}.`);
+    errors.push(`Header can have at most one variable - found ${matches.length}.`);
   }
   if (errors.length > 0) {
     return { valid: false, paramFormat: numericMatches.length ? 'positional' : 'named', params: [], errors };
@@ -223,24 +223,24 @@ function validateHeaderText(text) {
 }
 
 // Real client rejection, not a hypothetical: Riyaz (Sirah Digital)'s
-// `booking_otp` template — body "Your Sirah Digital verification code is
+// `booking_otp` template - body "Your Sirah Digital verification code is
 // {{code}}. It expires in 10 minutes. For your security, do not share this
-// code with anyone." — submitted under Utility, rejected by Meta with
+// code with anyone." - submitted under Utility, rejected by Meta with
 // rejection_reason 'INCORRECT_CATEGORY'. Every existing rule in this file
-// is purely structural (placeholder syntax, word count, sample coverage) —
+// is purely structural (placeholder syntax, word count, sample coverage) -
 // nothing here has ever looked at what the template's text actually SAYS.
 // This is the first content-based check, and it stays narrow on purpose:
 // checked against every rejected template this app has ever recorded
-// (2 total, in production, ever) — the other one ('INVALID_FORMAT', a
+// (2 total, in production, ever) - the other one ('INVALID_FORMAT', a
 // one-off from an internal test template) has no real recurring pattern to
 // generalize from, so it's not encoded here. This one phrase-list is
 // deliberately an UNOFFICIAL heuristic, same class as the words-ratio rule
-// above, and gets the identical treatment: a WARNING, never a hard block —
+// above, and gets the identical treatment: a WARNING, never a hard block -
 // a legitimate Utility/Marketing template could plausibly mention "code"
 // in an unrelated sense (a discount code, a tracking code), and blocking
 // on a false positive would be worse than warning and letting the author
 // decide. This can only ever catch patterns this app has actually seen
-// rejected — it is not, and cannot be, a guarantee of catching every way
+// rejected - it is not, and cannot be, a guarantee of catching every way
 // Meta might reject a template (policy/quality/business-verification
 // reasons aren't detectable from template text at all).
 const AUTH_CONTENT_RE = /\b(verification code|one[- ]?time password|\botp\b|security code|authentication code|passcode)\b/i;
@@ -259,7 +259,7 @@ function checkCategoryContentMismatch(text, category) {
     mismatch: true,
     warning:
       'This reads like an OTP/verification-code message. Meta requires those to be submitted under the ' +
-      'Authentication category (its own auto-generated wording, no custom body) — a Utility or Marketing ' +
+      'Authentication category (its own auto-generated wording, no custom body) - a Utility or Marketing ' +
       'submission with this kind of content has been rejected before with reason INCORRECT_CATEGORY. ' +
       'Consider switching Category to Authentication before submitting, unless this really isn\'t an OTP message.',
   };
@@ -279,14 +279,14 @@ const templateParams = {
   checkCategoryContentMismatch,
 };
 
-// Dual CommonJS/browser export — this file is pure string/regex/array logic
+// Dual CommonJS/browser export - this file is pure string/regex/array logic
 // with zero Node dependencies (confirmed deliberately, see this module's own
 // header comment), so it's served as-is as a static asset (server/src/app.js)
 // and loaded directly via <script src="/templateParams.js"> in index.html,
 // BEFORE app.js. That makes the live "flag while typing" template validation
 // in app.js's Create/Edit Template modal call these EXACT same functions the
 // server's own validateStandardTemplateFields (routes/templates.js) runs at
-// submit time — not a hand-duplicated copy that can drift from server truth,
+// submit time - not a hand-duplicated copy that can drift from server truth,
 // which is what this file's own comments already flagged as a real risk for
 // the one rule (malformed placeholders) app.js had already ported by hand
 // before this shared-module approach existed.

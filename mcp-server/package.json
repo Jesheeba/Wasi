@@ -1,7 +1,7 @@
 {
   "name": "@wasi/mcp-server",
   "version": "0.1.0",
-  "description": "MCP (Model Context Protocol) server for Wasi's WhatsApp Hub API — send messages, manage templates, and read conversations from any MCP-compatible AI client.",
+  "description": "MCP (Model Context Protocol) server for Wasi's WhatsApp Hub API - send messages, manage templates, and read conversations from any MCP-compatible AI client.",
   "private": true,
   "type": "commonjs",
   "main": "src/index.js",

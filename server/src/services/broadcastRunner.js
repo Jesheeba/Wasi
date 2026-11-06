@@ -1,4 +1,4 @@
-// Background campaign fan-out — no Redis/BullMQ, just a Postgres-backed
+// Background campaign fan-out - no Redis/BullMQ, just a Postgres-backed
 // queue (broadcast_recipients) polled on an interval, since a single Node
 // process with a modest concurrency cap comfortably covers a small-to-mid
 // tenant SaaS without adding a broker. Progress survives a process restart
@@ -17,30 +17,30 @@ const TICK_MS = 5000;
 const BATCH_SIZE = 25;
 const SEND_CONCURRENCY = 5; // well under Meta's lowest per-tier throughput cap
 
-// Per-broadcast pacing (wasi-master-plan.md §8.3, Phase 3) — optional,
+// Per-broadcast pacing (wasi-master-plan.md §8.3, Phase 3) - optional,
 // stored on broadcasts.pacing_config (migration 039). A broadcast with no
 // pacing_config keeps the exact pre-Phase-3 behavior (BATCH_SIZE every
-// tick, unchanged) — this only ever narrows the claim size, never widens
+// tick, unchanged) - this only ever narrows the claim size, never widens
 // it past BATCH_SIZE, since claiming more than SEND_CONCURRENCY can
 // usefully process per tick anyway wouldn't change actual throughput.
 // This paces THIS APP's own send rate against a client-configured ceiling
-// (e.g. to protect a fresh/low-tier number's quality rating) — it is not,
+// (e.g. to protect a fresh/low-tier number's quality rating) - it is not,
 // and isn't meant to be, live Meta throughput/tier enforcement (see
 // migration 039's comment for why that's explicitly out of scope this
 // phase). A slower real tick (send latency, DB round-trips) only ever
-// makes the achieved rate slower than configured, never faster — safe for
+// makes the achieved rate slower than configured, never faster - safe for
 // a rate ceiling.
 // Independent audit found: `messages_per_minute` is only validated at the
 // zod schema layer (validate.js's broadcastCreateSchema), unlike
 // tag_id/contact_list_id's mutual exclusivity, which also has a DB CHECK
-// constraint as a second guarantee — a non-numeric value reaching this
+// constraint as a second guarantee - a non-numeric value reaching this
 // column any other way (a future admin tool, a direct DB edit, a bug
 // elsewhere) turns into `NaN` here, which Postgres rejects as a LIMIT
 // parameter ("invalid input syntax for type bigint"). Confirmed this isn't
 // just theoretical: that error propagates out of claimBatch, out of
 // processBroadcast (whose own try/catch only wraps the claim transaction
 // and rethrows), and tick()'s loop has one try/catch around the WHOLE
-// loop — so one broadcast with a bad pacing_config would abort every
+// loop - so one broadcast with a bad pacing_config would abort every
 // OTHER active broadcast's processing for that tick, indefinitely (the bad
 // broadcast stays 'Sending' and gets re-selected every 5s). Number.isFinite
 // guards against this at the source rather than relying on tick()'s loop
@@ -53,8 +53,8 @@ function effectiveBatchSize(broadcast) {
 }
 
 // Load-analysis follow-up: distinguishes a TRANSIENT send failure (worth
-// retrying — a rate limit or a network/timeout blip) from a PERMANENT one
-// (a rejected template, an invalid phone, a disabled account — retrying
+// retrying - a rate limit or a network/timeout blip) from a PERMANENT one
+// (a rejected template, an invalid phone, a disabled account - retrying
 // changes nothing) so sendOneRecipient's catch can route to
 // broadcastRecipientsRepo.markFailedAttempt (backoff + eventual give-up)
 // instead of markFailed (immediate, terminal) only for the former.
@@ -67,20 +67,20 @@ function effectiveBatchSize(broadcast) {
 //    this phone number in a short period of time") are both in Meta's
 //    public Cloud API error code reference; 4 ("Application request limit
 //    reached") is the general cross-Graph-API platform rate limit, not
-//    WhatsApp-specific. These are Meta's documented codes, not guessed —
+//    WhatsApp-specific. These are Meta's documented codes, not guessed -
 //    but, like this session's messaging-tier field, NOT yet confirmed
 //    against a real live rate-limited send from this app (this dev
-//    environment can't decrypt a real production WABA token — see
+//    environment can't decrypt a real production WABA token - see
 //    CLAUDE.md's SERVER_SECRET Known Gap). Widen/correct this list once a
 //    real 429 from this app's own traffic is captured.
 //  - err.metaError absent: this is either metaClient.js's own timeout
 //    (fetchWithTimeout's thrown "Meta API request timed out after Ns", no
 //    HTTP response was ever received) or a raw network-level failure
 //    (Node's fetch throws a generic "fetch failed" for DNS/connection-reset/
-//    refused). Both are transient by nature — nothing about the recipient
+//    refused). Both are transient by nature - nothing about the recipient
 //    or the message caused them.
 // Deliberately excludes err.code values other than 'send_failed'
-// (waba_not_connected, media_resolution_failed) — those are account/config
+// (waba_not_connected, media_resolution_failed) - those are account/config
 // problems a retry a few minutes later won't fix either, and
 // consent_required is already routed to markSkipped before this is ever
 // reached.
@@ -102,12 +102,12 @@ async function runWithConcurrency(items, limit, worker) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
 }
 
-// PLAN.md item 12 — Smart Sending (spec §3.5/§10.1): skip a contact who
+// PLAN.md item 12 - Smart Sending (spec §3.5/§10.1): skip a contact who
 // already received ANOTHER broadcast (any campaign, this client-wide, not
-// just this one) within broadcasts.smart_sending_hours — null/unset
+// just this one) within broadcasts.smart_sending_hours - null/unset
 // disables it entirely, same nullable-means-off convention as
 // pacing_config. Checked first, before any consent check or Cloud API
-// call — a recently-messaged contact should never even reach those, not
+// call - a recently-messaged contact should never even reach those, not
 // just be skipped after attempting them.
 async function sendOneRecipient(broadcast, recipient, template) {
   if (broadcast.smart_sending_hours) {
@@ -119,27 +119,27 @@ async function sendOneRecipient(broadcast, recipient, template) {
   }
   // Real bug, fixed (same fix as apiV1Messages.js): this used to hardcode
   // templateLanguage: 'en_US' for every campaign send regardless of what
-  // language the template was actually approved under — confirmed live via
+  // language the template was actually approved under - confirmed live via
   // a read-only production check that Sirah Digital and Wasi Demo Client
   // both have an 'en'-language approved template, meaning every broadcast
   // against either has been silently failing against real Meta
   // (error 132001, "template name does not exist in the translation").
   // `template` is already fetched once per batch by processBroadcast
-  // (messageTemplatesRepo.findByNameAndClient) — this just uses its real
+  // (messageTemplatesRepo.findByNameAndClient) - this just uses its real
   // `language` column instead of guessing.
   //
   // template is null when this template has no local row at all (deleted
   // locally between broadcast creation and send time, the same edge case
   // the pre-existing templateComponents check already handled). Unlike
-  // that case — which still attempts a best-effort send with no params,
-  // an existing tradeoff this fix doesn't revisit — there is no reasonable
+  // that case - which still attempts a best-effort send with no params,
+  // an existing tradeoff this fix doesn't revisit - there is no reasonable
   // language to guess here: sending with a wrong one just reproduces the
   // exact silent-failure class this fix closes, so this fails the
   // recipient immediately with a clear local reason instead of attempting
   // a send that would fail against Meta anyway, less specifically and
   // slower (a real round trip).
   if (!template) {
-    await broadcastRecipientsRepo.markFailed(pool, recipient.id, 'Template not found locally — cannot determine its real approved language to send correctly.');
+    await broadcastRecipientsRepo.markFailed(pool, recipient.id, 'Template not found locally - cannot determine its real approved language to send correctly.');
     return;
   }
 
@@ -153,7 +153,7 @@ async function sendOneRecipient(broadcast, recipient, template) {
     const chat = await chatsRepo.findOrCreateByContact(pool, broadcast.client_id, contact);
 
     // Only fetched when this broadcast actually maps a param to a contact
-    // attribute — most campaigns don't, so this adds zero DB round-trips to
+    // attribute - most campaigns don't, so this adds zero DB round-trips to
     // the common case. A lookup failure here must never abort this
     // recipient's send (let alone the rest of the batch/broadcast): it's
     // caught on its own and falls back to {}, which resolveParamValues'
@@ -180,7 +180,7 @@ async function sendOneRecipient(broadcast, recipient, template) {
     });
     await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {
-    // Consent gate rejected it before any Cloud API call was made — skip,
+    // Consent gate rejected it before any Cloud API call was made - skip,
     // not fail (build plan Phase 4). Reusing messagingService's own check
     // rather than re-implementing it here means there's exactly one place
     // that decides whether a template send needs consent.
@@ -197,17 +197,17 @@ async function sendOneRecipient(broadcast, recipient, template) {
 async function processBroadcast(broadcast) {
   const client = await pool.connect();
   // A checked-out client is a separate EventEmitter from the pool it came
-  // from — pool.on('error', ...) (server/src/db/pool.js) only covers idle
+  // from - pool.on('error', ...) (server/src/db/pool.js) only covers idle
   // clients still sitting in the pool, not one actively held here mid-
   // transaction. Same crash risk (see pool.js's comment for the mechanism),
   // different object; needs its own listener. This runs every 5s for the
-  // life of the process, so it's held far more often than any single route —
+  // life of the process, so it's held far more often than any single route -
   // and pg.Pool reuses the same underlying Client object across separate
   // connect()/release() cycles, so the listener MUST be removed before
   // release(), not just added on connect(): found live (Phase 3 pacing
   // testing repeatedly calling processBroadcast in a tight loop, far more
   // per-minute than the real 5s tick would in practice) as a genuine
-  // MaxListenersExceededWarning — a real, if previously invisible,
+  // MaxListenersExceededWarning - a real, if previously invisible,
   // pre-existing accumulation, not introduced by pacing itself.
   const onClientError = (err) => {
     console.error('broadcastRunner: checked-out client error (non-fatal):', err.message);
@@ -227,7 +227,7 @@ async function processBroadcast(broadcast) {
   }
 
   if (batch.length > 0) {
-    // Fetched once per batch, not per recipient — the template row doesn't
+    // Fetched once per batch, not per recipient - the template row doesn't
     // change mid-broadcast, and every recipient in this batch needs the
     // same body/header parameter-name split (buildTemplateComponents).
     const template = await messageTemplatesRepo.findByNameAndClient(pool, broadcast.client_id, broadcast.template_name);
@@ -252,7 +252,7 @@ async function tick() {
       // Independent audit finding: a single try/catch around this whole
       // loop means one broadcast throwing (the NaN pacing_config case
       // above, or any other future error) aborts every OTHER client's
-      // active broadcast for this tick too — not just the bad one, and not
+      // active broadcast for this tick too - not just the bad one, and not
       // just once, since the bad broadcast stays 'Sending' and gets
       // re-selected every 5s indefinitely. Isolated per-broadcast so one
       // client's broken campaign can't starve everyone else's.

@@ -2,7 +2,7 @@
 // changes in a real browser against the real admin app:
 //  1. the sidebar renders in labelled groups and still exposes every view
 //  2. the pre-redesign hash routes (#health-monitor, #waba-health,
-//     #platform-overview, #failures, #volume) still resolve — to the merged
+//     #platform-overview, #failures, #volume) still resolve - to the merged
 //     Health / Statistics views and the right tab
 //  3. a refresh / deep link on #client-detail/<id> lands on that client (it used
 //     to always land on the dashboard), keeping the selected tab
@@ -10,7 +10,7 @@
 //  5. Templates Review asks for confirmation (showing the template body) before
 //     Approve/Reject, and a FAILED confirm keeps the dialog open with the error
 //  6. Delete Client needs the client's exact name typed before it enables
-//  7. "Send reminder to all active clients" previews the recipients — it is
+//  7. "Send reminder to all active clients" previews the recipients - it is
 //     cancelled here, never confirmed, so nothing is ever sent
 //
 // Everything runs against a disposable client (created through the real admin
@@ -69,7 +69,7 @@ after(async () => {
   if (clientId) {
     await pool.query('delete from clients where id = $1', [clientId]).catch(() => {});
     // audit_log.target / actor_id have no FK to clients, so the cascade above
-    // never cleans these — remove exactly this client's rows.
+    // never cleans these - remove exactly this client's rows.
     await pool.query(`delete from audit_log where target like $1 or actor_id::text = $2`, [`%${clientId}%`, clientId]).catch(() => {});
   }
   await pool.end();
@@ -77,7 +77,7 @@ after(async () => {
 
 // POST /api/admin/auth/login is rate-limited to 5 per 15 minutes (adminLoginLimiter),
 // so only `ui: true` goes through the real login form; every other page restores
-// the session the same way a returning admin's browser does — from localStorage.
+// the session the same way a returning admin's browser does - from localStorage.
 async function openAdmin(viewport = { width: 1366, height: 800 }, hash = '', { ui = false } = {}) {
   const context = await browser.newContext({ viewport });
   if (!ui) {
@@ -208,7 +208,7 @@ test('Delete Client needs the exact client name typed before the confirm button 
   await page.fill('#confirm-modal-require-input', clientName);
   assert.equal(await action.isDisabled(), false, 'the exact name enables it');
 
-  // Cancel — the client must still exist.
+  // Cancel - the client must still exist.
   await page.click('#confirm-modal .modal-actions .btn-secondary');
   await page.waitForFunction(() => !document.getElementById('confirm-modal').classList.contains('open'));
   const { rows } = await pool.query('select 1 from clients where id = $1', [clientId]);
@@ -223,7 +223,7 @@ test('Templates Review: Approve asks first, shows the body, and a failed confirm
   const row = page.locator(`#templates-review-table-body tr[data-template-id="${templateId}"]`);
   await row.waitFor();
 
-  // Clicking Approve opens a confirm — it does NOT approve straight away.
+  // Clicking Approve opens a confirm - it does NOT approve straight away.
   await row.locator('[data-template-action="approved"]').click();
   await page.waitForSelector('#confirm-modal.open');
   assert.match(await page.locator('#confirm-modal-title').textContent(), /Approve this template/);
@@ -242,7 +242,7 @@ test('Templates Review: Approve asks first, shows the body, and a failed confirm
   assert.equal(await page.locator('#confirm-modal-action-btn').isDisabled(), false, 'the admin can retry');
   await page.unroute(`**/api/admin/templates/${templateId}`);
 
-  // Cancel — status still pending.
+  // Cancel - status still pending.
   await page.click('#confirm-modal .modal-actions .btn-secondary');
   const statusAfter = (await pool.query('select status from message_templates where id = $1', [templateId])).rows[0].status;
   assert.equal(statusAfter, 'pending');

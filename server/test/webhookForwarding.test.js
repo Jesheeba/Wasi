@@ -2,14 +2,14 @@
 // a correct HMAC signature, a forward failure never changes the response
 // given to Meta (the whole reason the delivery attempt is decoupled into
 // forwardRunner.js instead of awaited inline in metaWebhook.js), a failed
-// delivery is retried with backoff rather than dropped, and — since
+// delivery is retried with backoff rather than dropped, and - since
 // routes/metaWebhook.js's enqueueForwards unifies both forward targets
-// into this one queue — that client_webhooks (the client's own
+// into this one queue - that client_webhooks (the client's own
 // self-configured integration webhook) goes through the exact same
 // durable, retried path as wabas.forward_to_url now, not the fire-and-
 // forget fetch it used to be, and that a client with both configured gets
 // one delivery per target for the same event. Dedicated test client + a
-// fake waba_id, same pattern as metaWebhookDispatch.test.js — this WABA is
+// fake waba_id, same pattern as metaWebhookDispatch.test.js - this WABA is
 // never given a real access token, so nothing here can reach a real phone
 // or a real Meta call.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -33,7 +33,7 @@ const FORWARD_SECRET = 'test-suite-forward-secret';
 
 // metaWebhook.js's enqueueForwards now fires forwardRunner.attemptImmediately
 // on every row right after enqueue (fire-and-forget, not awaited by the
-// webhook request) — a real delivery attempt is already in flight the
+// webhook request) - a real delivery attempt is already in flight the
 // moment signedMetaPost's response comes back, so tests below wait for
 // that automatic attempt to land instead of manually calling deliverOne
 // themselves, which would now double-deliver on top of it.
@@ -144,7 +144,7 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
   assert.equal(parsed.event, 'message.received');
 
   // Full message.received payload-shape regression coverage (fix #3 +
-  // follow-ups A/C/D/E/F-cleanup) — asserts the exact key set at every
+  // follow-ups A/C/D/E/F-cleanup) - asserts the exact key set at every
   // level, not just presence of the good fields, so a future change that
   // re-leaks an internal id (id/client_id/meta_message_id) or reintroduces
   // a meaningless constant field (direction/error_reason/meta_error_code/
@@ -181,7 +181,7 @@ test('1. an inbound message enqueues a delivery, and forwardRunner delivers it w
 
 // Payload shape matches a real production capture (audit_log,
 // interactive_message_received, 2026-08-19): {"type":"button_reply",
-// "button_reply":{"id":"flow_test_yes","title":"Yes"}} — not reconstructed
+// "button_reply":{"id":"flow_test_yes","title":"Yes"}} - not reconstructed
 // from Meta's docs.
 function buttonReplyPayload(phone) {
   return {
@@ -244,7 +244,7 @@ test('1b. a button_reply tap forwards both id and title in message.interactive, 
   await new Promise((resolve) => target.close(resolve));
 });
 
-// SYNTHETIC, unlike buttonReplyPayload above — no list message has ever been
+// SYNTHETIC, unlike buttonReplyPayload above - no list message has ever been
 // sent by this app (no metaClient function builds one yet) so there is no
 // real production capture to build this from. Constructed directly from
 // Meta's documented interactive.list_reply shape (id/title/description)
@@ -279,7 +279,7 @@ function listReplyPayload(phone) {
   };
 }
 
-test('1c. a list_reply tap (synthetic — no real capture exists yet) forwards id/title/description instead of the old "[interactive]" placeholder', async () => {
+test('1c. a list_reply tap (synthetic - no real capture exists yet) forwards id/title/description instead of the old "[interactive]" placeholder', async () => {
   let receivedBody;
   const target = http.createServer((req, res) => {
     let chunks = '';
@@ -319,7 +319,7 @@ test('1c. a list_reply tap (synthetic — no real capture exists yet) forwards i
 });
 
 test('2. a forward failure does not change the 200 Meta receives, and is retried with backoff, not dropped', async () => {
-  // Unreachable on purpose (connection refused) — the forward target being
+  // Unreachable on purpose (connection refused) - the forward target being
   // completely dead is the failure mode this is actually protecting against.
   const deadUrl = 'http://127.0.0.1:1/dead';
 
@@ -345,7 +345,7 @@ test('2. a forward failure does not change the 200 Meta receives, and is retried
 
   // The automatic immediate attempt (metaWebhook.js's enqueueForwards ->
   // forwardRunner.attemptImmediately) is already in flight against deadUrl
-  // by now — wait for it to fail and reschedule, rather than asserting
+  // by now - wait for it to fail and reschedule, rather than asserting
   // attempt_count === 0 and manually calling deliverOne, which was the old
   // poll-only architecture's invariant.
   const after = await waitFor(async () => {
@@ -357,7 +357,7 @@ test('2. a forward failure does not change the 200 Meta receives, and is retried
   assert.ok(after.last_error, 'the failure reason must be recorded, not silently dropped');
   assert.ok(
     new Date(after.next_attempt_at).getTime() > Date.now(),
-    'next_attempt_at must be pushed into the future — a backoff, not an immediate retry'
+    'next_attempt_at must be pushed into the future - a backoff, not an immediate retry'
   );
 });
 
@@ -376,8 +376,8 @@ test('3. client_webhooks (the client\'s own generic webhook) is delivered throug
   await new Promise((resolve) => target.listen(0, resolve));
   const targetUrl = `http://localhost:${target.address().port}/client-hook`;
 
-  // No wabas.forward_to_url this time — isolates the client_webhooks path.
-  // forward_events must go to null alongside it — migration
+  // No wabas.forward_to_url this time - isolates the client_webhooks path.
+  // forward_events must go to null alongside it - migration
   // 015_explicit_forward_events.js's CHECK requires both null or both set.
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: TEST_WABA_ID,
@@ -426,7 +426,7 @@ test('4. a client with both a hub forward target and their own client_webhook co
     forward_events: ['message.received'],
   });
   // client_webhooks was already configured by test 3 above (upsert, so this
-  // just confirms it's still set — one row per client_id, not re-created).
+  // just confirms it's still set - one row per client_id, not re-created).
   const webhook = await fetch(`${baseUrl}/api/client-webhook`, {
     headers: { Authorization: `Bearer ${clientToken}` },
   }).then((r) => r.json());
@@ -450,7 +450,7 @@ test('4. a client with both a hub forward target and their own client_webhook co
 });
 
 test('5. a target subscribed to a different event does not receive one it never asked for', async () => {
-  // Subscribed only to message_template_status_update — an inbound message
+  // Subscribed only to message_template_status_update - an inbound message
   // (message.received) must NOT enqueue a delivery for it. This is the
   // actual proof for the concern that started this file: unifying the two
   // forward mechanisms must not silently widen what an existing subscriber

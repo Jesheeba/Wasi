@@ -1,7 +1,7 @@
 // flowEngine.js's captureReply() is the one DB-touching piece of the
 // capture_reply node type that's still cheap to unit-test with a fake db
 // (same "route on SQL shape" pattern flowValidation.test.js already uses)
-// rather than deferring to a live end-to-end check — it's a pure decision
+// rather than deferring to a live end-to-end check - it's a pure decision
 // tree (5 branches) once its two repo calls are stubbed, no Meta API or
 // real Postgres involved.
 const { test } = require('node:test');
@@ -33,14 +33,14 @@ function node(attributeId) {
   return { id: 'n1', config: { body: 'What is your name?', attribute_id: attributeId } };
 }
 
-test('captureReply: no attribute configured — skipped, not stored', async () => {
+test('captureReply: no attribute configured - skipped, not stored', async () => {
   const db = fakeDb({});
   const outcome = await captureReply(db, CLIENT_ID, CONTACT, { id: 'n1', config: {} }, 'Priya Sharma');
   assert.equal(outcome.captured, false);
   assert.equal(outcome.reason, 'no_attribute_configured');
 });
 
-test('captureReply: attribute was deleted after the flow was built — skipped', async () => {
+test('captureReply: attribute was deleted after the flow was built - skipped', async () => {
   const db = fakeDb({ attributesById: {} });
   const outcome = await captureReply(db, CLIENT_ID, CONTACT, node('ghost-attr'), 'Priya Sharma');
   assert.equal(outcome.captured, false);

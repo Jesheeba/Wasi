@@ -1,16 +1,16 @@
-// PLAN.md item 14 — CTWA (Click-to-WhatsApp ad) referral capture. Verifies,
+// PLAN.md item 14 - CTWA (Click-to-WhatsApp ad) referral capture. Verifies,
 // against a SIMULATED webhook payload only (matching §6.2's documented real
-// shape, constructed as test fixture data — never real ad traffic, per
+// shape, constructed as test fixture data - never real ad traffic, per
 // explicit instruction):
 // 1. An inbound message carrying Meta's referral object lands in
 //    messages.referral verbatim.
-// 2. An inbound message with NO referral (the ordinary case) stores null —
+// 2. An inbound message with NO referral (the ordinary case) stores null -
 //    this feature must never invent attribution for organic contacts.
 // 3. It surfaces correctly in GET /api/analytics/ctwa, grouped by
 //    (source_id, headline), with an unrelated (no-referral) message never
 //    polluting the count.
 // 4. It surfaces in item 10's Contact 360 timeline's message_in detail.
-// No verification against real ad traffic is performed here — that is
+// No verification against real ad traffic is performed here - that is
 // explicitly pending on the plan owner's side, per instruction.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 

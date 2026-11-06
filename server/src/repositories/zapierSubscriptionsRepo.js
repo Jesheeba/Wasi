@@ -1,16 +1,16 @@
 const crypto = require('crypto');
 
-// Only 'message.received' is wired today (see migration 040's comment) —
+// Only 'message.received' is wired today (see migration 040's comment) -
 // the column's CHECK constraint is the real enforcement; this repo doesn't
 // duplicate that validation, routes/apiV1Subscriptions.js's zod schema does.
 //
 // Upserts on (client_id, target_url, event) (migration 041, independent QA
-// finding) — a repeat subscribe for the identical target/event (a retried
+// finding) - a repeat subscribe for the identical target/event (a retried
 // Zapier subscribe call, or a Zap re-enabled without a clean unsubscribe)
 // reuses the existing row and its existing secret rather than creating a
 // second one, which previously caused every matching inbound message to be
 // delivered twice. api_key_id is updated to whichever key subscribed most
-// recently; the secret is intentionally NOT regenerated on conflict — the
+// recently; the secret is intentionally NOT regenerated on conflict - the
 // receiving Zap already has it from the first subscribe.
 async function create(db, clientId, apiKeyId, targetUrl, event) {
   const secret = crypto.randomBytes(24).toString('hex');
@@ -25,7 +25,7 @@ async function create(db, clientId, apiKeyId, targetUrl, event) {
   return rows[0];
 }
 
-// Read by routes/metaWebhook.js's enqueueForwards — every active
+// Read by routes/metaWebhook.js's enqueueForwards - every active
 // subscription for this client listening for this event, same shape as the
 // wabas.forward_to_url / client_webhooks lookups it already does alongside
 // this one. Unlike those two single-valued targets, there can be many rows
@@ -48,11 +48,11 @@ async function remove(db, clientId, id) {
 
 // Called from routes/apiKeys.js's revoke/delete (build plan Phase 4,
 // independent audit finding). migration 040's api_key_id has ON DELETE
-// CASCADE, but that only fires on a real SQL DELETE — apiKeysRepo.revoke
+// CASCADE, but that only fires on a real SQL DELETE - apiKeysRepo.revoke
 // and softDelete are both tombstones (revoked_at/deleted_at columns, never
 // an actual row delete), so the cascade this migration's own comment
 // promised never runs in practice. Called explicitly instead: a client
-// revoking a key expects any integration using it — including a live Zap —
+// revoking a key expects any integration using it - including a live Zap -
 // to actually stop, matching app.js's own confirm-dialog text ("Any
 // integration ... will stop working immediately").
 async function removeByApiKeyId(db, apiKeyId) {

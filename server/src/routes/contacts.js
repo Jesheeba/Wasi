@@ -20,7 +20,7 @@ const { CONSENT_STATEMENT } = require('../utils/consentStatement');
 
 const router = Router();
 
-// Same size cap/reasoning as contactLists.js's identical uploadCsv —
+// Same size cap/reasoning as contactLists.js's identical uploadCsv -
 // plain text, a contact export is a handful of KB to a few MB even at tens
 // of thousands of rows.
 const uploadCsv = multer({
@@ -45,21 +45,21 @@ router.post('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (r
   res.status(201).json(contact);
 }));
 
-// PLAN.md item 6 — reuses contactLists.js's own CSV-parsing utility
+// PLAN.md item 6 - reuses contactLists.js's own CSV-parsing utility
 // (csvContacts.js's parseContactsCsv, name/phone columns, case-insensitive
 // header, RFC4180-ish quoting) rather than a second parser; unlike that
 // route, there's no list/membership concept here at all, just contacts.
 //
 // PLAN.md item 8 fold-in: { includeTags: true } makes the shared parser
 // also read a "tags" column (semicolon-separated names) instead of
-// reporting it as unrecognized — this route is the one CSV-import path
+// reporting it as unrecognized - this route is the one CSV-import path
 // that now has somewhere real to put it (contact_tags). Each parsed tag
 // name is find-or-created (tagsRepo.findOrCreateByName) then additively
-// attached (contactTagsRepo.add) — never touches contacts.tag_id, the
+// attached (contactTagsRepo.add) - never touches contacts.tag_id, the
 // permanent primary tag, matching item 8's own additive-only design.
 router.post('/import', requireRole('Admin', 'Manager', 'Agent'), uploadCsv.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded — expected a "file" field containing a CSV.' });
+    return res.status(400).json({ error: 'No file uploaded - expected a "file" field containing a CSV.' });
   }
   const { validRows, errors } = parseContactsCsv(req.file.buffer.toString('utf8'), { includeTags: true });
   const imported = await contactsRepo.importFromRows(req.db, req.clientId, validRows);
@@ -76,7 +76,7 @@ router.post('/import', requireRole('Admin', 'Manager', 'Agent'), uploadCsv.singl
 
   // A header-level 'unrecognized_column' notice (e.g. an ignored
   // truly-unknown column) is still shown in errors below, but doesn't
-  // correspond to any one failed row — excluded from failedCount so it
+  // correspond to any one failed row - excluded from failedCount so it
   // doesn't misreport "N rows failed" when every row actually imported fine.
   const failedRows = errors.filter((e) => e.type !== 'unrecognized_column');
   res.json({
@@ -101,11 +101,11 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
   res.status(204).send();
 }));
 
-// Consent hardening Phase 2 — bulk "Mark as opted in," gated to
+// Consent hardening Phase 2 - bulk "Mark as opted in," gated to
 // Owner/Admin/Manager only (requireRole's own list excludes Agent
-// entirely; Owner always passes regardless of the list — see
+// entirely; Owner always passes regardless of the list - see
 // middleware/requireRole.js). Every id in contactIds is attempted
-// independently — one bad/blocked id must never abort the rest of the
+// independently - one bad/blocked id must never abort the rest of the
 // batch, matching this codebase's own established "one bad row can't kill
 // the batch" discipline (contactListsRepo.addMembersFromRows,
 // broadcastRunner's per-broadcast try/catch, etc.). A shared batchId
@@ -114,7 +114,7 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
 //
 // findManyByIds is fetched up front purely to report an honest
 // updated/alreadyOptedIn split without a wasted recordEvent call for a
-// contact that's already opted_in — it is NOT the authority on whether a
+// contact that's already opted_in - it is NOT the authority on whether a
 // write is allowed. consentRepo.recordEvent's own row lock is: a contact
 // that looked 'unknown' in this pre-fetch but gets a real inbound STOP
 // between the fetch and this specific row's write still lands in
@@ -157,7 +157,7 @@ router.post('/bulk-consent', requireRole('Admin', 'Manager'), asyncHandler(async
   await auditLogRepo.record({
     actor_type: 'client', actor_id: req.clientId,
     action: 'contacts_bulk_opt_in',
-    // "<id>: <description>" convention — matches auditLogRepo.list's own
+    // "<id>: <description>" convention - matches auditLogRepo.list's own
     // dual-shape match (see that repo's module comment / CLAUDE.md's fixed
     // audit-trail-filter bug) so this shows up on the client's own history
     // the same way every other self-serve action already does.
@@ -167,7 +167,7 @@ router.post('/bulk-consent', requireRole('Admin', 'Manager'), asyncHandler(async
   res.json({ batchId, total: data.contactIds.length, updated, alreadyOptedIn, skippedOptedOut, notFound });
 }));
 
-// The only route that can change opt_in_status for a single contact —
+// The only route that can change opt_in_status for a single contact -
 // deliberately not part of the generic PATCH above (see validate.js's
 // consentEventCreateSchema comment). Requires a source; writes an
 // immutable consent_events row in the same transaction as the status
@@ -176,7 +176,7 @@ router.post('/bulk-consent', requireRole('Admin', 'Manager'), asyncHandler(async
 //
 // Consent hardening Phase 1: opted_out is sticky (consentRepo.recordEvent
 // throws ConsentBlockedError for an 'opted_in' event against an
-// already-opted-out contact) — surfaced here as a 409, not a 500, since a
+// already-opted-out contact) - surfaced here as a 409, not a 500, since a
 // client/team member hitting this isn't a server error, it's this route
 // correctly refusing to overwrite a real opt-out. actorType/actorId thread
 // through so the new consent_events columns (migration 077) are populated.
@@ -184,7 +184,7 @@ router.post('/bulk-consent', requireRole('Admin', 'Manager'), asyncHandler(async
 // Consent hardening Phase 2: an Agent may mark a contact opted_out (routine
 // day-to-day moderation, matches this route's existing role gate), but
 // never opted_in (that needs the same evidence-backed confirmation bulk
-// opt-in requires — an Agent has no such flow) — this is a distinction
+// opt-in requires - an Agent has no such flow) - this is a distinction
 // requireRole's plain role-list can't express (it's per-event, not
 // per-route), so it's checked explicitly here instead. Bulk opt-in above
 // doesn't need the equivalent check: its own requireRole list excludes
@@ -193,7 +193,7 @@ router.post('/:id/consent', requireRole('Admin', 'Manager', 'Agent'), asyncHandl
   uuid.parse(req.params.id);
   const data = consentEventCreateSchema.parse(req.body);
   if (data.event === 'opted_in' && req.actorType === 'team_member' && req.actorRole === 'Agent') {
-    return res.status(403).json({ error: 'Agents can mark a contact opted out, but not opted in — that needs Admin, Manager, or Owner.' });
+    return res.status(403).json({ error: 'Agents can mark a contact opted out, but not opted in - that needs Admin, Manager, or Owner.' });
   }
   try {
     const contact = await consentRepo.recordEvent(req.clientId, req.params.id, {
@@ -218,7 +218,7 @@ router.get('/:id/consent', requireRole('Admin', 'Manager', 'Agent'), asyncHandle
   res.json(await consentRepo.listEventsForContact(req.db, req.clientId, req.params.id));
 }));
 
-// PLAN.md item 7 — per-contact custom attribute values.
+// PLAN.md item 7 - per-contact custom attribute values.
 router.get('/:id/attributes', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const contact = await contactsRepo.findById(req.db, req.clientId, req.params.id);
@@ -247,8 +247,8 @@ router.put('/:id/attributes/:attributeId', requireRole('Admin', 'Manager', 'Agen
   res.json({ attributeId: saved.attributeId, name: attribute.name, type: attribute.type, value: saved.value });
 }));
 
-// PLAN.md item 8 — multi-tag contacts, additive to contacts.tag_id (the
-// permanent primary tag — unaffected by any of these three routes). Same
+// PLAN.md item 8 - multi-tag contacts, additive to contacts.tag_id (the
+// permanent primary tag - unaffected by any of these three routes). Same
 // role gating as attributes above: read/write is Admin/Manager/Agent,
 // matching Contacts' own row for day-to-day tagging use, not Contacts'
 // stricter Admin/Manager-only DELETE (which removes the whole contact, a
@@ -284,7 +284,7 @@ router.delete('/:id/tags/:tagId', requireRole('Admin', 'Manager', 'Agent'), asyn
   res.status(204).send();
 }));
 
-// PLAN.md item 10 — Contact 360 activity timeline. Read-only, no schema
+// PLAN.md item 10 - Contact 360 activity timeline. Read-only, no schema
 // change; merges messages/broadcast sends/flow entries/consent events.
 router.get('/:id/timeline', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);

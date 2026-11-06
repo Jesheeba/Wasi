@@ -1,4 +1,4 @@
-// Pure-function tests for middleware/apiV1ErrorHandler.js — deliberately
+// Pure-function tests for middleware/apiV1ErrorHandler.js - deliberately
 // doesn't import pool.js/app.js (same reasoning as test/dbSafety.test.js:
 // no DB/server needed to verify this), so it runs with no DATABASE_URL
 // guard involved at all.
@@ -6,7 +6,7 @@
 // Covers the generic catch-all branches (Postgres 23505/23503, an uncaught
 // error, and the 404 handler) that apiV1.test.js/apiV1Reads.test.js/
 // apiV1ErrorShape.test.js can't reach through a real HTTP request without
-// contriving an actual constraint violation — Hub API v1's two write
+// contriving an actual constraint violation - Hub API v1's two write
 // endpoints (POST /api/v1/messages, POST /api/v1/templates) have no
 // realistically-reachable unique/FK constraint a valid request could hit
 // (messageTemplatesRepo.create has no unique(client_id, name) constraint;

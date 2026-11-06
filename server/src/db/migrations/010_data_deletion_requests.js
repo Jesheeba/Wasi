@@ -1,8 +1,8 @@
 // Meta's data-deletion callback must return a status URL that actually
-// resolves to something (spec §10) — previously it returned a URL that 404'd
+// resolves to something (spec §10) - previously it returned a URL that 404'd
 // since no route implemented it. Requests default to 'pending' because we
 // can't automatically map a Facebook user_id to a specific client's data (a
-// WABA is tied to a business, not the individual FB user who connected it —
+// WABA is tied to a business, not the individual FB user who connected it -
 // see the comment in routes/metaDataDeletion.js); an admin marks one
 // 'completed' after manually confirming/purging anything identifiable.
 

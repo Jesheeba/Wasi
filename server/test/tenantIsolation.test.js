@@ -1,9 +1,9 @@
 // Database-level tenant isolation (build plan Phase 3). These tests exist to
-// prove the database is doing the enforcing, not the app — see migration
+// prove the database is doing the enforcing, not the app - see migration
 // 013_tenant_isolation.js and server/src/middleware/tenantContext.js for the
 // mechanism (a restricted `wasi_app` role, no BYPASSRLS, with
 // app.current_client_id set via SET LOCAL inside a request-scoped
-// transaction). Two disposable test clients, never the demo client — same
+// transaction). Two disposable test clients, never the demo client - same
 // reasoning as every other test file in this suite (see api.test.js).
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -54,7 +54,7 @@ after(async () => {
   await pool.end();
 });
 
-test('1. a query with NO client_id filter at all returns only the current tenant\'s rows — proves Postgres is enforcing it, not the app', async () => {
+test('1. a query with NO client_id filter at all returns only the current tenant\'s rows - proves Postgres is enforcing it, not the app', async () => {
   // Client A gets a real contact through the normal API (normal app-layer
   // path, exercising the actual req.db/tenantContext wiring).
   const contactA = await fetch(`${baseUrl}/api/contacts`, {
@@ -64,8 +64,8 @@ test('1. a query with NO client_id filter at all returns only the current tenant
   }).then((r) => r.json());
   assert.ok(contactA?.id);
 
-  // Run the SAME unscoped query — no `where client_id = ...` anywhere in
-  // the SQL text — once as each tenant, using the exact mechanism
+  // Run the SAME unscoped query - no `where client_id = ...` anywhere in
+  // the SQL text - once as each tenant, using the exact mechanism
   // tenantContext.js uses (BEGIN; SET LOCAL ROLE wasi_app; set_config), not
   // going through the app at all. If RLS weren't real, this query would
   // return every tenant's contacts regardless of which one is "current".
@@ -87,22 +87,22 @@ test('1. a query with NO client_id filter at all returns only the current tenant
   assert.ok(!idsAsB.includes(contactA.id), 'tenant B must not see tenant A\'s contact from an unfiltered query');
 
   const idsAsA = await unscopedContactIdsAs(clientA.id);
-  assert.ok(idsAsA.includes(contactA.id), 'tenant A must see its own contact from the same unfiltered query — proves this isn\'t just "always empty"');
+  assert.ok(idsAsA.includes(contactA.id), 'tenant A must see its own contact from the same unfiltered query - proves this isn\'t just "always empty"');
 });
 
-test('2. the admin path still works — sees across every tenant, unaffected by RLS', async () => {
+test('2. the admin path still works - sees across every tenant, unaffected by RLS', async () => {
   const adminLogin = await fetch(`${baseUrl}/api/admin/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
-  assert.ok(adminLogin.token, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminLogin.token, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const overview = await fetch(`${baseUrl}/api/admin/overview`, { headers: authed(adminLogin.token) }).then((r) => r.json());
   assert.ok('clientsByStatus' in overview);
 
   // /api/clients (admin-only) must be able to see BOTH test clients created
-  // in before() — a real cross-tenant read, not just "the request succeeded".
+  // in before() - a real cross-tenant read, not just "the request succeeded".
   const clients = await fetch(`${baseUrl}/api/clients`, { headers: authed(adminLogin.token) }).then((r) => r.json());
   const ids = clients.map((c) => c.id);
   assert.ok(ids.includes(clientA.id) && ids.includes(clientB.id), 'admin listing must see both tenants at once');
@@ -110,7 +110,7 @@ test('2. the admin path still works — sees across every tenant, unaffected by 
 
 test('3. broadcastRunner\'s cross-client listing still sees broadcasts from multiple tenants in one call', async () => {
   // A broadcast with zero matching recipients is marked 'Completed'
-  // immediately on creation (routes/broadcasts.js) — each client needs at
+  // immediately on creation (routes/broadcasts.js) - each client needs at
   // least one contact so its broadcast actually stays 'Sending' long enough
   // for listActive() to find it.
   await fetch(`${baseUrl}/api/contacts`, {
@@ -154,11 +154,11 @@ test('3. broadcastRunner\'s cross-client listing still sees broadcasts from mult
 
   // listActive/listDueScheduled are the queries broadcastRunner.tick() uses
   // to discover work across every client, by design (see migration
-  // 013_tenant_isolation.js's module comment) — always the privileged pool,
+  // 013_tenant_isolation.js's module comment) - always the privileged pool,
   // never req.db. Calling tick() itself here would reach every real
   // 'Sending' broadcast in this shared dev database (including the demo
   // client's), which is exactly the live-data risk flagged earlier in this
-  // project's history — so this checks the listing query directly instead.
+  // project's history - so this checks the listing query directly instead.
   const active = await broadcastsRepo.listActive(pool);
   const activeIds = active.map((b) => b.id);
   assert.ok(activeIds.includes(broadcastA.id), 'broadcastRunner must still see tenant A\'s broadcast');

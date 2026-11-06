@@ -1,5 +1,5 @@
 // Delivers everything routes/metaWebhook.js's enqueueForwards() enqueues
-// (build plan Phase 5) — both wabas.forward_to_url (a hub-connected
+// (build plan Phase 5) - both wabas.forward_to_url (a hub-connected
 // consuming app) and client_webhooks.callback_url (a client's own
 // self-configured integration webhook) feed the same webhook_deliveries
 // queue and get delivered by this one runner; there's no per-target logic
@@ -13,7 +13,7 @@
 // than an inline await in metaWebhook.js: the actual HTTP delivery attempt
 // must never happen inside the request that's answering Meta. metaWebhook.js
 // only ever does a fast, local enqueue (webhookDeliveriesRepo.enqueue) in
-// the same success path as its other writes — a failed enqueue is a
+// the same success path as its other writes - a failed enqueue is a
 // genuine processing failure (correctly triggers the existing 500-so-Meta-
 // retries behavior), but a failed *delivery* to the consuming app, or that
 // app's endpoint being slow, must never turn into a non-200 to Meta. This
@@ -64,7 +64,7 @@ async function deliverOne(delivery) {
       pool, delivery.id, err.message, delivery.attempt_count
     );
     // Loud and structured on purpose, matching metaWebhook.js's "metaWebhook
-    // FAILURE:" convention — grep-able, meant to be wired to an alert (see
+    // FAILURE:" convention - grep-able, meant to be wired to an alert (see
     // wasi-build-plan.md §6.1) rather than scrolled past.
     console.error(giveUp ? 'webhookForward PERMANENT FAILURE:' : 'webhookForward retry scheduled:', {
       deliveryId: delivery.id,
@@ -98,7 +98,7 @@ function stop() {
 }
 
 // Called from routes/metaWebhook.js right after webhookDeliveriesRepo.
-// enqueue() resolves, on the row it just returned — real production data
+// enqueue() resolves, on the row it just returned - real production data
 // (2026-08-31) showed ~99% of deliveries succeed on the first attempt, and
 // the ENTIRE latency on those was this runner's own TICK_MS poll wait
 // (median ~4s, p95 ~7.3s across 1,021 real deliveries; near-zero actual
@@ -107,7 +107,7 @@ function stop() {
 //
 // Safe to race the periodic tick because enqueue() already leases the row
 // (next_attempt_at pushed out, same window claimBatch itself uses) before
-// this ever runs — the tick's own query only picks up rows whose lease has
+// this ever runs - the tick's own query only picks up rows whose lease has
 // expired, so it can never grab this same row concurrently and double-
 // deliver the event. Fire-and-forget, same reasoning as this file's own
 // top-of-file comment on why delivery must never block metaWebhook.js's

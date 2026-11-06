@@ -1,13 +1,13 @@
-// Real-browser coverage for PLAN.md item 11's frontend — the Campaigns
+// Real-browser coverage for PLAN.md item 11's frontend - the Campaigns
 // table's Pause/Resume button (index.html's #broadcasts-table-body,
 // app.js's renderBroadcasts). Backend correctness (the real listActive()
 // gate, the actual send pipeline) is broadcastPauseResume.test.js's job;
-// this covers what only a real browser can show — the button appears for
+// this covers what only a real browser can show - the button appears for
 // the right status, click it, and the row updates to reflect what the
 // server actually did.
 //
 // Same fixed-port-4000 + ALLOWED_ORIGINS override as templateLibraryUI.test.js
-// (the original precedent) — safe alongside any other file now that npm
+// (the original precedent) - safe alongside any other file now that npm
 // test forces --test-concurrency=1 (CLAUDE.md's Conventions section).
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 process.env.ALLOWED_ORIGINS = 'http://localhost:4000';
@@ -40,7 +40,7 @@ before(async () => {
   assert.ok(testClientId, 'dedicated test client registration must succeed');
 
   // Created directly (pool, no real send needed for a UI test) rather than
-  // through the launch flow — that path is already covered end-to-end by
+  // through the launch flow - that path is already covered end-to-end by
   // broadcastPauseResume.test.js and the New Campaign modal's own tests.
   await broadcastsRepo.create(pool, testClientId, {
     title: `${SUITE_PREFIX}Campaign`, tag_id: null, contact_list_id: null, segment_id: null,

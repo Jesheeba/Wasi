@@ -1,7 +1,7 @@
 // Unit tests per tool: correct Hub API request construction (method, path,
-// query, body) and correct error-code-to-plain-English mapping — with
+// query, body) and correct error-code-to-plain-English mapping - with
 // global.fetch stubbed to a canned response, no network, no database. Runs
-// as part of the default `npm test` (see package.json) — unlike
+// as part of the default `npm test` (see package.json) - unlike
 // test/integration.test.js, nothing here touches the real backend/DB.
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,7 +19,7 @@ async function callHandler(name, args) {
 
 let originalFetch;
 let calls;
-// path -> response (status, body) — matched by exact "METHOD path" key.
+// path -> response (status, body) - matched by exact "METHOD path" key.
 // GET /api/v1/account is pre-seeded on every test since hubClient.getClientId()
 // caches its result for the whole process, and most tools call it first.
 let responses;
@@ -150,7 +150,7 @@ test('get_rate_limit_status: GETs /api/v1/account/rate-limit', async () => {
 test('a Hub API code with a known hint (session_window_closed) gets the plain-English next-step appended', async () => {
   responses.set('POST /api/v1/messages', {
     status: 409,
-    body: { error: { code: 'session_window_closed', message: 'This chat is outside the 24-hour customer service window — send a template message instead.' } },
+    body: { error: { code: 'session_window_closed', message: 'This chat is outside the 24-hour customer service window - send a template message instead.' } },
   });
   const result = await callHandler('send_text_message', { to: '919876543210', body: 'hi' });
   assert.equal(result.isError, true);

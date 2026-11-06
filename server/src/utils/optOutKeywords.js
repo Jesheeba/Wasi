@@ -1,16 +1,16 @@
 // Inbound opt-out detection (build plan Phase 4). Matches the WHOLE message
 // body (after trimming and stripping trailing punctuation), not a substring
-// search — "please don't stop the delivery" must not trigger this. This
+// search - "please don't stop the delivery" must not trigger this. This
 // mirrors how real-world STOP-keyword compliance actually works (e.g. US
 // CTIA guidelines define STOP as a message body that *is* "stop", not one
 // that contains it) and keeps false-positive risk low, which matters more
 // here than catching every possible phrasing: a false positive silently
 // blocks legitimate marketing to someone who never asked to stop, a false
-// negative is a compliance gap — both are real costs, so precision is the
+// negative is a compliance gap - both are real costs, so precision is the
 // deliberate choice over recall.
 //
 // The Tamil/Tanglish entries are a best-effort list for Indian SMBs'
-// customer base, NOT verified by a native speaker — extend or correct this
+// customer base, NOT verified by a native speaker - extend or correct this
 // as real inbound messages surface gaps, rather than treating it as
 // complete. Tanglish (Tamil words transliterated into Latin script) varies
 // by writer, so this covers the most commonly seen spellings, not all of them.

@@ -1,7 +1,7 @@
 // broadcastCreateSchema / broadcastParamMappingSchema (server/src/utils/validate.js)
-// — pure zod schema tests, no DB. Added alongside the campaign modal's new
+// - pure zod schema tests, no DB. Added alongside the campaign modal's new
 // contact_attribute mapping source (PLAN.md campaign-paramMappings-UI
-// follow-up) — the New Campaign modal previously 400'd on every template
+// follow-up) - the New Campaign modal previously 400'd on every template
 // with a {{variable}} because it never sent paramMappings at all; this
 // covers the schema's acceptance of the now-3-way source, and that it still
 // rejects the same malformed shapes it always has.

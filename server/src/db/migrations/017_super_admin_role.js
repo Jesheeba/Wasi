@@ -1,6 +1,6 @@
-// Phase 6 Part A — a distinct super-admin role for cross-tenant operational
+// Phase 6 Part A - a distinct super-admin role for cross-tenant operational
 // visibility (client health, templates, volume, API keys, failures across
-// ALL clients — see routes/superAdmin.js). Deliberately not a boolean flag
+// ALL clients - see routes/superAdmin.js). Deliberately not a boolean flag
 // on an existing admin_users row: it's a new role value gated behind its
 // OWN JWT token type ('super_admin', signed by signSuperAdminToken in
 // utils/auth.js and checked by middleware/requireSuperAdminAuth.js) and its

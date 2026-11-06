@@ -1,7 +1,7 @@
-// PLAN.md item 25 — server-side WABA/phone discovery, the needs_manual_
+// PLAN.md item 25 - server-side WABA/phone discovery, the needs_manual_
 // resolution state, and the "Meta linked it, we never got the code" state.
 // Same dedicated-disposable-client pattern as api.test.js (never the demo
-// client — see that file's own comment for why). metaClient is stubbed the
+// client - see that file's own comment for why). metaClient is stubbed the
 // same way api.test.js's coexistence test already does; never a real Meta
 // call.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -54,7 +54,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
@@ -65,7 +65,7 @@ after(async () => {
 
 beforeEach(() => {
   restoreMetaClient();
-  // Base stubs every test in this file needs — individual tests override
+  // Base stubs every test in this file needs - individual tests override
   // debugToken/listPhoneNumbers as their scenario requires.
   stubMetaClient({
     exchangeCodeForToken: async () => 'short-lived-fake',
@@ -102,7 +102,7 @@ test('discovery: resolves a single WABA and phone number when the popup supplied
 });
 
 test('discovery: multiple phone numbers, exactly one is_on_biz_app, auto-resolves to it', async () => {
-  // Added 2026-09-07 (see CLAUDE.md Known Gaps) — a WABA with more than one
+  // Added 2026-09-07 (see CLAUDE.md Known Gaps) - a WABA with more than one
   // number used to always defer to manual resolution; is_on_biz_app is
   // Meta's own documented signal for the Coexistence-connected number, so a
   // single unambiguous match should now resolve automatically.
@@ -172,7 +172,7 @@ test('discovery: multiple WABAs records needs_manual_resolution, does not guess'
   assert.deepEqual(rows[0].connect_diagnostics.wabaTargetIds, ['waba-A', 'waba-B']);
 
   // Scoped to this test's own scenario (target ilike '%multiple_wabas%'),
-  // not just actor_id — this file's shared disposable test client now also
+  // not just actor_id - this file's shared disposable test client now also
   // produces a 'multiple_phone_numbers' needs_manual_resolution audit row
   // in the still-defers test above; an unscoped count here would double-
   // count across tests rather than verifying THIS scenario was audited.
@@ -223,7 +223,7 @@ test('connect-incomplete: records the "Meta linked it, we never got the code" st
   assert.equal(audit.length, 1);
 
   // admin's retry-provisioning must give a distinct, honest message for this
-  // state, not the generic "no connection to retry" — different meaning.
+  // state, not the generic "no connection to retry" - different meaning.
   const retryRes = await fetch(`${baseUrl}/api/admin/clients/${testClientId}/retry-provisioning`, {
     method: 'POST',
     headers: authed(adminToken),

@@ -1,11 +1,11 @@
-// PLAN.md item 8 — multi-tag contacts, additive to contacts.tag_id (the
+// PLAN.md item 8 - multi-tag contacts, additive to contacts.tag_id (the
 // permanent primary tag). Verifies:
 // 1. GET /:id/tags on an untagged contact returns an empty list.
 // 2. POST attaches a tag; GET reflects it; contacts.tag_id is untouched.
 // 3. A contact can carry more than one tag simultaneously.
 // 4. Attaching the same tag twice is a safe no-op, not a duplicate/error.
 // 5. DELETE detaches one tag without affecting others or contacts.tag_id.
-// 6. Tenant isolation — cannot read/write another client's contact's tags,
+// 6. Tenant isolation - cannot read/write another client's contact's tags,
 //    and cannot attach another client's tag id even if guessed.
 // 7. Role gating (Agent allowed) and unauthenticated rejection.
 // 8. 404s: unknown contact, unknown tag id on POST, unknown tag on DELETE.
@@ -198,7 +198,7 @@ test('8. 404s: unknown contact, unknown tag id on POST, unknown tag on DELETE', 
 test('9. migration 050 backfill: an already-tagged contact (via contacts.tag_id, pre-dating contact_tags) shows up in contact_tags', async () => {
   const tag = await createTag(clientToken, `${SUITE_PREFIX}Backfilled`);
   // Sets contacts.tag_id directly at the DB level to simulate a contact
-  // tagged before this migration ever ran — the real backfill scenario —
+  // tagged before this migration ever ran - the real backfill scenario -
   // rather than going through the (deliberately tag_id-untouched) tags
   // sub-routes this file otherwise tests.
   const legacyContact = await fetch(`${baseUrl}/api/contacts`, {
@@ -207,7 +207,7 @@ test('9. migration 050 backfill: an already-tagged contact (via contacts.tag_id,
   }).then((r) => r.json());
   await pool.query('update contacts set tag_id = $1 where id = $2', [tag.id, legacyContact.id]);
   // Re-run the exact backfill statement migration 050 ran once, since this
-  // row didn't exist at migration time — proves the STATEMENT is correct,
+  // row didn't exist at migration time - proves the STATEMENT is correct,
   // matching what the real migration already did for every contact that
   // existed when it ran (verified directly against the local DB earlier).
   await pool.query(

@@ -1,18 +1,18 @@
-// PLAN.md item 10 — Contact 360 activity timeline. Verifies:
+// PLAN.md item 10 - Contact 360 activity timeline. Verifies:
 // 1. A new contact with no history returns { events: [] }.
 // 2. A contact with mixed history (message in, message out, a sent
 //    broadcast, a flow entry, a consent change) returns all 5, correctly
 //    interleaved in real descending chronological order across all 4
-//    event sources — not just correct within one source.
+//    event sources - not just correct within one source.
 // 3. Only 'sent' broadcast_recipients rows appear (not pending/failed/skipped).
 // 4. Only 'entered' flow_events rows appear (not the step-by-step ones).
-// 5. Tenant isolation — another client's contact's history never leaks in.
+// 5. Tenant isolation - another client's contact's history never leaks in.
 // 6. Role gating (Agent allowed, matching every other Contacts sub-route)
 //    and unauthenticated rejection; 404 for an unknown contact id.
 // Same dedicated-disposable-test-client convention as every other file in
 // this directory. Fixture events are inserted directly (pool.query, precise
 // now() - interval offsets) rather than through the real send/broadcast/flow
-// pipelines — same established pattern as chatAssignment.test.js's own
+// pipelines - same established pattern as chatAssignment.test.js's own
 // direct message inserts, needed here for exact, non-flaky cross-source
 // ordering control.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -161,7 +161,7 @@ test('2-4. mixed history across all 4 sources returns correctly-interleaved desc
   assert.equal(res.status, 200);
   const { events } = await res.json();
 
-  assert.equal(events.length, 5, 'exactly 5 real events — the excluded step-event and skipped-recipient rows must not appear');
+  assert.equal(events.length, 5, 'exactly 5 real events - the excluded step-event and skipped-recipient rows must not appear');
   assert.deepEqual(
     events.map((e) => e.type),
     ['broadcast_sent', 'message_out', 'flow_entered', 'message_in', 'consent_changed'],

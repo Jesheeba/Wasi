@@ -1,8 +1,8 @@
-// PLAN.md item 3 — internal notes with @mention. Every read resolves
+// PLAN.md item 3 - internal notes with @mention. Every read resolves
 // author_team_member_id/mentioned_team_member_ids into {id, name} shapes
 // (per the plan's own verify text: "confirm it's returned with the mention
 // resolved to a name") rather than leaving the caller to look names up
-// separately — the raw id columns stay in the response too, for anything
+// separately - the raw id columns stay in the response too, for anything
 // that needs them directly.
 
 async function resolveNames(db, clientId, notes) {

@@ -16,7 +16,7 @@ const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 // Admin authentication events had no record at all: /login wrote nothing, so
 // after the published seed password was found live in production there was
 // no way to say who had logged in, or from where. req.ip is the real client
-// address — app.js sets `trust proxy` to 1 (the host's nginx), so this reads
+// address - app.js sets `trust proxy` to 1 (the host's nginx), so this reads
 // nginx's X-Forwarded-For, not the proxy's own address. A failed audit write
 // must never block (or break) a login, so it is logged and swallowed; the
 // attempted email is recorded, never the password.
@@ -28,7 +28,7 @@ async function recordAdminAuthEvent(req, action, adminId, target) {
   }
 }
 
-// app.js mounts this whole router behind authLimiter (20/15min per IP) —
+// app.js mounts this whole router behind authLimiter (20/15min per IP) -
 // /login gets this additional, stricter limiter on top (5/15min per
 // IP+email) since it's the single highest-blast-radius login in the app.
 // forgot-password/reset-password below stay on authLimiter alone.
@@ -84,7 +84,7 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
   await adminUsersRepo.updatePassword(consumed.subject_id, password_hash);
   await adminUsersRepo.bumpTokenVersion(consumed.subject_id);
   await recordAdminAuthEvent(req, 'admin_password_reset_completed', consumed.subject_id, consumed.subject_id);
-  res.json({ message: 'Password updated — you can log in now.' });
+  res.json({ message: 'Password updated - you can log in now.' });
 }));
 
 module.exports = router;

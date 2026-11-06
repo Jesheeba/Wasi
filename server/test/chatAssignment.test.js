@@ -1,6 +1,6 @@
-// PLAN.md item 2 — chat assignment + open/resolved status. Verifies:
+// PLAN.md item 2 - chat assignment + open/resolved status. Verifies:
 // 1. The backfill logic's 3 cases (migration 045_chat_assignment_status.js)
-//    against synthetic data, inline — migrations don't re-run once
+//    against synthetic data, inline - migrations don't re-run once
 //    recorded, so this proves the ALGORITHM the migration encodes is
 //    correct (the thing worth regression-protecting), run directly against
 //    disposable test chats rather than re-invoking the migration file.
@@ -84,7 +84,7 @@ async function createChat(name) {
 }
 
 // Mirrors migration 045's exact backfill UPDATE, run against synthetic rows
-// this test creates and cleans up itself — proves the algorithm, not a
+// this test creates and cleans up itself - proves the algorithm, not a
 // literal re-run of the (already-applied, non-repeatable) migration file.
 async function runBackfillOn(chatIds) {
   await pool.query(
@@ -124,7 +124,7 @@ test('2. backfill: an answered inbound (even at the identical timestamp) resolve
     `insert into messages (chat_id, client_id, direction, body, sent_at) values ($1, $2, 'in', 'hi', $3)`,
     [chat.id, testClientId, sentAt]
   );
-  // Same timestamp as the inbound, on purpose — this is the exact case
+  // Same timestamp as the inbound, on purpose - this is the exact case
   // found live via seed.js (both messages land inside one transaction, so
   // Postgres's now() is identical for both) that the >= fix addresses.
   await pool.query(
@@ -213,7 +213,7 @@ test('8. unassign: an Agent can unassign a chat currently assigned to themselves
   assert.equal(unassignOthers.status, 403);
 });
 
-test('9. resolve/reopen are Admin/Manager only — an Agent gets 403', async () => {
+test('9. resolve/reopen are Admin/Manager only - an Agent gets 403', async () => {
   const agent = await createTeamMemberJwt('Agent');
   const chat = await createChat(`${SUITE_PREFIX}resolve-agent`);
   const resolveRes = await fetch(`${baseUrl}/api/chats/${chat.id}/resolve`, { method: 'POST', headers: authed(agent.jwt) });

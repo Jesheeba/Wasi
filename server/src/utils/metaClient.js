@@ -1,6 +1,6 @@
 // Thin wrapper around the Meta Graph API for WhatsApp Embedded Signup + Cloud API
 // provisioning (spec §3). Requires a real Meta App (META_APP_ID/META_APP_SECRET) and
-// a WhatsApp product config (META_CONFIG_ID) — none of that exists in dev by default,
+// a WhatsApp product config (META_CONFIG_ID) - none of that exists in dev by default,
 // so every call here will fail with a clear error until real credentials are set.
 const { validateTemplateText, validateHeaderText, defaultExampleFor } = require('./templateParams');
 
@@ -9,7 +9,7 @@ const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 // Every Graph API call below goes through this instead of raw fetch() so a
 // stalled request (Meta-side network issue, not the normal multi-minute
-// Coexistence phone-linking wait — that happens entirely inside the FB.login
+// Coexistence phone-linking wait - that happens entirely inside the FB.login
 // popup, before any of these calls run) fails after a bounded time instead of
 // hanging the connect route forever. Upload/download calls get a longer
 // budget since they carry real file bytes (up to 100MB documents), not just
@@ -29,7 +29,7 @@ async function fetchWithTimeout(url, options = {}, ms = DEFAULT_TIMEOUT_MS) {
 }
 
 // A template body/header failed local named-parameter validation before ever
-// reaching Meta — distinct from a real Graph API rejection so callers (the
+// reaching Meta - distinct from a real Graph API rejection so callers (the
 // templates route) can return 400 instead of 502.
 class TemplateValidationError extends Error {
   constructor(errors) {
@@ -61,7 +61,7 @@ async function graphFetch(path, { method = 'GET', accessToken, body } = {}) {
   if (!res.ok) {
     const message = data?.error?.message || `Meta Graph API error (${res.status})`;
     const error = new Error(message);
-    // Attached, not just the message string — the hub API (routes/
+    // Attached, not just the message string - the hub API (routes/
     // apiV1Messages.js) returns this to the calling app so it can act on
     // error_subcode (e.g. 131047 = 24h window closed) rather than parsing
     // a human-readable sentence. Purely additive: existing callers that
@@ -91,7 +91,7 @@ async function exchangeCodeForToken(code) {
 
 // Converts a short-lived user token into a long-lived one (~60 days) via the
 // fb_exchange_token grant (spec §3 step 4, second half). This is the token
-// that should actually be persisted — a short-lived token alone expires
+// that should actually be persisted - a short-lived token alone expires
 // within hours and can't support an ongoing client relationship.
 async function exchangeForLongLivedToken(shortLivedToken) {
   assertConfigured();
@@ -109,13 +109,13 @@ async function exchangeForLongLivedToken(shortLivedToken) {
   return data.access_token;
 }
 
-// Server-side WABA/phone discovery (PLAN.md item 25) — the fallback when
+// Server-side WABA/phone discovery (PLAN.md item 25) - the fallback when
 // Embedded Signup's postMessage never delivered waba_id/phone_number_id
 // (confirmed 2026-09-05/07: Meta's real Coexistence FINISH event routinely
-// omits phone_number_id, and the two return channels — FB.login's callback
-// and the postMessage — are independent and can arrive one without the
+// omits phone_number_id, and the two return channels - FB.login's callback
+// and the postMessage - are independent and can arrive one without the
 // other). debug_token's own access_token is the APP's credential
-// ({id}|{secret}), not the user token being inspected — same app-level auth
+// ({id}|{secret}), not the user token being inspected - same app-level auth
 // shape exchangeCodeForToken/exchangeForLongLivedToken above already use,
 // bypassing graphFetch for the same reason those two do: it needs its own
 // two-parameter query construction (input_token + a different access_token),
@@ -134,17 +134,17 @@ async function debugToken(inputToken) {
   return data.data; // { granular_scopes: [{ scope, target_ids }], ... }
 }
 
-// Real, officially-documented enumeration endpoint — the second half of
+// Real, officially-documented enumeration endpoint - the second half of
 // server-side discovery once a candidate WABA id is known (from
 // debugToken's granular_scopes above). Uses the ordinary per-client token,
 // unlike debugToken itself.
-// is_on_biz_app/platform_type added 2026-09-07 (see CLAUDE.md Known Gaps) —
+// is_on_biz_app/platform_type added 2026-09-07 (see CLAUDE.md Known Gaps) -
 // Meta's Coexistence doc specifically calls these out for confirming which
 // number under a WABA is the one linked via the WhatsApp Business app,
 // needed so wabaConnectionService.js's discovery can auto-resolve a
 // multi-number WABA to the right candidate instead of always deferring to
 // manual resolution the moment there's more than one. Explicit `fields`
-// REPLACES the default field set on this endpoint, not adds to it — the
+// REPLACES the default field set on this endpoint, not adds to it - the
 // pre-existing default fields are listed out alongside the two new ones so
 // nothing already relied on (display name, quality rating) is silently lost.
 async function listPhoneNumbers(wabaId, accessToken) {
@@ -168,16 +168,16 @@ async function registerPhoneNumber(phoneNumberId, accessToken, pin) {
 // CLAUDE.md's Known Gaps / messagingTierRefreshRunner.js). This field IS
 // documented in Meta's own public Cloud API reference (phone-number
 // resource, values TIER_50/TIER_250/TIER_1K/TIER_10K/TIER_100K/
-// TIER_UNLIMITED), but — following this codebase's own repeated rule not to
+// TIER_UNLIMITED), but - following this codebase's own repeated rule not to
 // trust an unconfirmed Meta shape (see metaWebhook.js's handleUnmappedWabaEvent
-// history) — callers must still treat an absent/unexpected value as unknown,
+// history) - callers must still treat an absent/unexpected value as unknown,
 // never assume it's always present. Not yet verified against a live
 // response from this session (local dev can't decrypt a real production
-// WABA token — see CLAUDE.md's SERVER_SECRET Known Gap); the deployed
+// WABA token - see CLAUDE.md's SERVER_SECRET Known Gap); the deployed
 // server or a fresh local WABA connection is needed for that.
 // is_on_biz_app/code_verification_status/platform_type/status/health_status
 // added 2026-09-18 for sendability monitoring (see migration
-// 074_wabas_sendability.js and services/sendabilityMonitorRunner.js) —
+// 074_wabas_sendability.js and services/sendabilityMonitorRunner.js) -
 // `status` here is Meta's own phone-number-resource field, unrelated to this
 // app's wabas.status connection-state enum; callers must not conflate them.
 async function getPhoneNumberDetails(phoneNumberId, accessToken) {
@@ -187,12 +187,12 @@ async function getPhoneNumberDetails(phoneNumberId, accessToken) {
   );
 }
 
-// Sendability probe (Layer 3, 2026-09-18) — the only check proven, by hand,
+// Sendability probe (Layer 3, 2026-09-18) - the only check proven, by hand,
 // to catch a billing-shaped sendability block (TNPSC: registration fine,
-// health_status AVAILABLE on every entity, still couldn't send — the credit
+// health_status AVAILABLE on every entity, still couldn't send - the credit
 // line was the previous BSP's). Sends a template that does not exist to a
 // NANPA-reserved fictional number (555-0100-0199, permanently reserved for
-// fictional/testing use, never assigned to a real subscriber) — no message
+// fictional/testing use, never assigned to a real subscriber) - no message
 // can ever be delivered: the template doesn't exist, and neither does the
 // recipient. Meta evaluates permission BEFORE validating the template or
 // recipient, so the response classifies sendability without ever attempting
@@ -201,15 +201,15 @@ async function getPhoneNumberDetails(phoneNumberId, accessToken) {
 // Verified BY HAND against both ends before this was wired into a runner:
 //   Fortune (healthy):  HTTP 404, (#132001) template not found  -> sendable
 //   TNPSC   (blocked):  HTTP 403, (#200) OAuthException permission denied -> not sendable
-// Classify on error.code, NOT HTTP status — both responses are OAuthException
+// Classify on error.code, NOT HTTP status - both responses are OAuthException
 // and status alone does not distinguish them.
 const SENDABILITY_PROBE_TO = '12025550100'; // +1 202 555 0100, NANPA-reserved fictional
 const SENDABILITY_PROBE_TEMPLATE_NAME = '__wasi_sendability_probe__';
 
 // Returns a classification, never throws for any HTTP response Meta actually
-// sends back (403/404/whatever — these are the NORMAL, expected outcomes of
+// sends back (403/404/whatever - these are the NORMAL, expected outcomes of
 // this probe, not failures). Only throws if the request itself never got a
-// response at all (network/timeout, via fetchWithTimeout) — that is a real
+// response at all (network/timeout, via fetchWithTimeout) - that is a real
 // failure, distinct from an unrecognized response, and callers must not
 // treat it as evidence sendability changed.
 async function probeSendability(phoneNumberId, accessToken) {
@@ -236,7 +236,7 @@ async function probeSendability(phoneNumberId, accessToken) {
   if (error?.code === 200) {
     return { sendable: false, reason: error.message || '(#200) Permission denied', code: error.code, errorData };
   }
-  // Never guessed either way — an unrecognized code, a genuine 200 success
+  // Never guessed either way - an unrecognized code, a genuine 200 success
   // (shouldn't happen with a nonexistent template, but handled defensively
   // rather than assumed impossible), or a body with no Meta error object at
   // all all land here, with exactly what came back preserved for a human to
@@ -253,7 +253,7 @@ async function probeSendability(phoneNumberId, accessToken) {
 
 // Meta's documented tier values -> the real numeric 24h unique-conversation
 // cap they represent. Anything not in this map (null, a future tier value
-// Meta adds, or a genuinely malformed response) returns null — "unknown,"
+// Meta adds, or a genuinely malformed response) returns null - "unknown,"
 // never guessed or defaulted to a number. Infinity for TIER_UNLIMITED is
 // deliberate: callers comparing `audienceSize > cap - used` need arithmetic
 // that never fires a false warning for an unlimited-tier account.
@@ -269,7 +269,7 @@ function messagingTierCap(tierValue) {
   return Object.prototype.hasOwnProperty.call(MESSAGING_TIER_CAPS, tierValue) ? MESSAGING_TIER_CAPS[tierValue] : null;
 }
 
-// profile_picture_url here is a Meta-hosted CDN link for DISPLAY only —
+// profile_picture_url here is a Meta-hosted CDN link for DISPLAY only -
 // setting a new picture is a different field (profile_picture_handle,
 // write-only, obtained via the Resumable Upload API), not interchangeable.
 async function getBusinessProfile(phoneNumberId, accessToken) {
@@ -279,7 +279,7 @@ async function getBusinessProfile(phoneNumberId, accessToken) {
   );
 }
 
-// `fields` is forwarded as-is — routes/onboarding.js is responsible for it
+// `fields` is forwarded as-is - routes/onboarding.js is responsible for it
 // containing only the keys the caller actually wants changed (see
 // businessProfileUpdateSchema, an all-optional partial schema, and the
 // route's own trim-and-drop-blank pass). This function does no filtering of
@@ -293,13 +293,13 @@ async function updateBusinessProfile(phoneNumberId, accessToken, fields) {
 }
 
 // Resumable Upload API (https://developers.facebook.com/docs/graph-api/guides/upload/)
-// — the mechanism for both a business profile picture (profile_picture_handle)
+// - the mechanism for both a business profile picture (profile_picture_handle)
 // and a template media header (example.header_handle). Two steps:
 // 1) open a session against the APP (not the WABA/phone number) scoped to
 //    one file's size+type, 2) upload the bytes to that session and get back
 //    a handle. The session step uses the same Bearer-token convention as
 //    every other call in this file (graphFetch handles that); the upload
-//    step does NOT — Meta requires the literal "OAuth" scheme there, a
+//    step does NOT - Meta requires the literal "OAuth" scheme there, a
 //    real, confirmed inconsistency in their own API, not a typo here.
 async function createUploadSession(appId, accessToken, { fileName, fileLength, fileType }) {
   const url = new URL(`${GRAPH_BASE}/${appId}/uploads`);
@@ -333,13 +333,13 @@ async function uploadFileBytes(uploadSessionId, accessToken, buffer) {
 }
 
 // Standard Media API (https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media)
-// — NOT the Resumable Upload API above. This is the one that mints a
+// - NOT the Resumable Upload API above. This is the one that mints a
 // `media id` usable in an outbound message's header parameter (image/video/
 // document). Meta requires this specific upload mechanism for a media
 // header's `header_handle` example (createUploadSession/uploadFileBytes),
-// but rejects that handle if reused at send time — sending needs a media id
+// but rejects that handle if reused at send time - sending needs a media id
 // from here instead. The id is reusable across many messages (confirmed:
-// no "consumed on first use" behavior) and expires 30 days after upload —
+// no "consumed on first use" behavior) and expires 30 days after upload -
 // see services/mediaHeaderService.js for the cache/refresh built around
 // that lifetime.
 async function uploadMedia(phoneNumberId, accessToken, buffer, mimeType, filename) {
@@ -363,7 +363,7 @@ async function uploadMedia(phoneNumberId, accessToken, buffer, mimeType, filenam
 }
 
 // Returns a short-lived (5 minute) download URL for a media id this app
-// already holds — used by mediaHeaderService's refresh cycle to pull the
+// already holds - used by mediaHeaderService's refresh cycle to pull the
 // bytes back from Meta before a cached id's 30-day window closes, rather
 // than this app persisting the file itself (see migration
 // 028_template_media_cache.js's module comment).
@@ -374,13 +374,13 @@ async function getMediaUrl(mediaId, accessToken) {
 async function downloadMediaBytes(url, accessToken) {
   const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${accessToken}` } }, UPLOAD_TIMEOUT_MS);
   if (!res.ok) {
-    throw new Error(`Meta media download failed (${res.status}) — the media id it was resolved from may have expired.`);
+    throw new Error(`Meta media download failed (${res.status}) - the media id it was resolved from may have expired.`);
   }
   const arrayBuffer = await res.arrayBuffer();
   return { buffer: Buffer.from(arrayBuffer), mimeType: res.headers.get('content-type') || null };
 }
 
-// Free-form text — only deliverable inside the 24h customer service window
+// Free-form text - only deliverable inside the 24h customer service window
 // (i.e. the contact messaged in within the last 24h). Meta rejects it
 // outside that window with a real API error; callers should check
 // messagingService's session-window logic first rather than relying on that
@@ -399,20 +399,20 @@ async function sendTextMessage(phoneNumberId, accessToken, toPhone, body) {
   return data.messages?.[0]?.id;
 }
 
-// Free-form interactive reply buttons — like sendTextMessage, only
+// Free-form interactive reply buttons - like sendTextMessage, only
 // deliverable inside the 24h customer service window (no template approval
 // needed, but same window constraint). Meta caps free-form button messages
-// at 3 buttons, 20 chars each — enforced at the schema level for the one
+// at 3 buttons, 20 chars each - enforced at the schema level for the one
 // caller that takes untrusted external input (validate.js's
 // apiMessageSendSchema, for the Hub API); the flow engine's own caller
 // builds `buttons` from a flow node's own config, authored through the flow
 // editor UI, not re-validated here either way, matching how sendTextMessage
 // doesn't re-validate body length. `buttons` is [{ id, title }]; `id` is
-// what comes back in the webhook's interactive.button_reply.id on click —
+// what comes back in the webhook's interactive.button_reply.id on click -
 // this is the value flow branching matches against, never the (editable)
 // title. `header`/`footer` are optional text-only additions (Meta also
 // supports image/video/document headers on button messages; not built here
-// — no caller has asked for a media header on an interactive message yet,
+// - no caller has asked for a media header on an interactive message yet,
 // unlike template headers which mediaHeaderService.js already handles).
 async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bodyText, buttons, header, footer }) {
   const interactive = {
@@ -438,7 +438,7 @@ async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bod
   return data.messages?.[0]?.id;
 }
 
-// Interactive list message — Meta's other interactive.type shape, alongside
+// Interactive list message - Meta's other interactive.type shape, alongside
 // sendInteractiveMessage's "button" above. Deliberately its own function,
 // not a branch inside sendInteractiveMessage: the object shape
 // (action.button + action.sections[].rows[] vs action.buttons[]) and limits
@@ -447,7 +447,7 @@ async function sendInteractiveMessage(phoneNumberId, accessToken, toPhone, { bod
 // duplicating the decision validate.js's apiMessageSendSchema already makes
 // by which fields are present (buttons vs sections). Row/section counts and
 // lengths, including the combined-10-rows-total limit, are enforced there,
-// not re-validated here — same as sendInteractiveMessage not re-validating
+// not re-validated here - same as sendInteractiveMessage not re-validating
 // body length. `sections` is [{ title?, rows: [{ id, title, description? }] }].
 async function sendListMessage(phoneNumberId, accessToken, toPhone, { bodyText, buttonText, sections, header, footer }) {
   const interactive = {
@@ -482,17 +482,17 @@ async function sendListMessage(phoneNumberId, accessToken, toPhone, { bodyText, 
 }
 
 // Builds the `components` array for sending a template whose BODY uses
-// named parameters — `paramValues` is { [param_name]: value }. Unlike the
+// named parameters - `paramValues` is { [param_name]: value }. Unlike the
 // old positional shape (an ordered array), each object here carries its own
 // `parameter_name`, so order doesn't matter. Pass {} (or omit) for a
-// template with no variables — sendTemplateMessage defaults `components` to [].
+// template with no variables - sendTemplateMessage defaults `components` to [].
 //
 // A template approved with classic positional placeholders ({{1}}, {{2}}, …)
-// rejects a send that uses the named form (`parameter_name`) — Meta expects
+// rejects a send that uses the named form (`parameter_name`) - Meta expects
 // plain positional `{type:'text', text}` entries, in order, with no
 // parameter_name at all. The keys themselves say which form is needed
 // unambiguously: a named placeholder can never be "1"/"2"/... and a
-// positional one can never be "customer_name" — so detect purely numeric
+// positional one can never be "customer_name" - so detect purely numeric
 // keys and emit the positional shape for them instead of guessing from a
 // client/category flag.
 function buildNamedBodyComponents(paramValues) {
@@ -518,7 +518,7 @@ function buildNamedBodyComponents(paramValues) {
   }];
 }
 
-// Same shape as buildNamedBodyComponents, for a template's HEADER — Meta
+// Same shape as buildNamedBodyComponents, for a template's HEADER - Meta
 // caps a text header at one named parameter (see templateParams.js's
 // validateHeaderText), but this doesn't re-enforce that; it just builds
 // whatever's passed. Pass {} (or omit) for a template with no header
@@ -539,10 +539,10 @@ function buildNamedHeaderComponents(paramValues) {
 // Builds the `components` array for SENDING an Authentication template
 // (OTP / Copy code button). Meta requires the one-time code twice: once as
 // the body's parameter and once as the button's parameter (sub_type 'url',
-// index '0' — Meta's documented shape for both COPY_CODE and ONE_TAP
+// index '0' - Meta's documented shape for both COPY_CODE and ONE_TAP
 // authentication buttons; a send with only the body fails with "(#131008)
 // Required parameter is missing"). Unlike buildNamedBodyComponents, the body
-// parameter carries no `parameter_name` — Authentication bodies are Meta-
+// parameter carries no `parameter_name` - Authentication bodies are Meta-
 // generated with a positional {{1}}, not a named parameter.
 function buildAuthenticationSendComponents(code) {
   const value = String(code);
@@ -553,13 +553,13 @@ function buildAuthenticationSendComponents(code) {
 }
 
 // Extracts the one-time code from a caller's raw `params` for an
-// Authentication template send — strictly: exactly one entry, whose value is
+// Authentication template send - strictly: exactly one entry, whose value is
 // a non-empty (after trimming) string or a finite number. Returns
 // { code } (always a string; a number is converted) or { error } with a
 // message saying what was wrong. Runs on the RAW params, before
 // buildNamedBodyComponents, because that function stringifies everything
 // (null -> "null") and its key order (integer-like keys first) would make
-// "pick one of several" arbitrary — so anything ambiguous is rejected
+// "pick one of several" arbitrary - so anything ambiguous is rejected
 // instead of guessed at. Length is checked separately in
 // messagingService.sendChatMessage, which every caller passes through.
 function extractAuthenticationCode(params) {
@@ -576,9 +576,9 @@ function extractAuthenticationCode(params) {
   return { code: String(value) };
 }
 
-// Template messages — deliverable any time (business-initiated), required
+// Template messages - deliverable any time (business-initiated), required
 // outside the 24h window and for all broadcast/campaign sends. `components`
-// follows Meta's template component array shape — build it with
+// follows Meta's template component array shape - build it with
 // buildNamedBodyComponents() for a template with named body parameters, or
 // pass [] for a template with no variables.
 async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, language = 'en_US', components = [] }) {
@@ -595,7 +595,7 @@ async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, 
   return data.messages?.[0]?.id;
 }
 
-// Builds the Meta Graph API request body for template creation — separated
+// Builds the Meta Graph API request body for template creation - separated
 // from the actual fetch call so it's unit-testable without a real Meta App
 // (see server/test/templateParams.test.js). Throws TemplateValidationError
 // if any piece fails validation. Category-branched: Authentication's shape
@@ -632,7 +632,7 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
     } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.type)) {
       // `handle` is resolved by routes/templates.js via
       // metaClient.createUploadSession/uploadFileBytes BEFORE this is ever
-      // called — Meta requires the Resumable Upload API's one-time handle
+      // called - Meta requires the Resumable Upload API's one-time handle
       // here, not the reusable media id services/mediaHeaderService.js
       // resolves separately for sending. Defensive, not reachable through
       // the normal route: that route always resolves a handle first.
@@ -654,7 +654,7 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
     bodyComponent.example = {
       body_text_named_params: bodyValidation.params.map((param_name) => ({
         param_name,
-        // Author-supplied sample value is now the source of truth — Meta
+        // Author-supplied sample value is now the source of truth - Meta
         // requires a real example, not just any placeholder (validate.js's
         // messageTemplateCreateSchema enforces one exists per parameter
         // before this is ever reached). defaultExampleFor is only a
@@ -679,19 +679,19 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
   }
 
   const payload = { name, category: category.toUpperCase(), language, components };
-  // Omitted entirely for a template with no variables — Meta defaults to
+  // Omitted entirely for a template with no variables - Meta defaults to
   // "positional" when absent, which is irrelevant with zero parameters.
   if (bodyValidation.paramFormat === 'named') payload.parameter_format = 'named';
   return payload;
 }
 
 // Authentication templates don't take an author-written body/header/footer
-// at all — Meta generates that text itself from these fixed options. Shape
+// at all - Meta generates that text itself from these fixed options. Shape
 // per Meta's Authentication Templates docs (not doc-confirmed live the way
-// BODY's named-parameter format was — flag same as header/button shapes
+// BODY's named-parameter format was - flag same as header/button shapes
 // below if Meta rejects this): BODY carries add_security_recommendation,
 // FOOTER carries code_expiration_minutes, and exactly one OTP button is
-// required. Only COPY_CODE is implemented — Meta also has ONE_TAP, not
+// required. Only COPY_CODE is implemented - Meta also has ONE_TAP, not
 // built, wasn't asked for.
 function buildAuthenticationPayload({ name, language = 'en_US', codeExpirationMinutes, addSecurityDisclaimer, otpButtonType }) {
   const components = [
@@ -710,7 +710,7 @@ function buildAuthenticationPayload({ name, language = 'en_US', codeExpirationMi
 
 // Submits a message template to Meta for approval. Approval status arrives
 // asynchronously via the `message_template_status_update` webhook field
-// (already handled in metaWebhook.js) — this call just registers it.
+// (already handled in metaWebhook.js) - this call just registers it.
 async function createMessageTemplate(wabaId, accessToken, templateData) {
   const payload = buildTemplateCreatePayload(templateData);
   const data = await graphFetch(`/${wabaId}/message_templates`, {
@@ -721,15 +721,15 @@ async function createMessageTemplate(wabaId, accessToken, templateData) {
   return data; // { id, status, category }
 }
 
-// Meta Official Template Library (wasi-master-plan.md §2b) — fetches
+// Meta Official Template Library (wasi-master-plan.md §2b) - fetches
 // Meta's OWN global catalog, not a WABA-scoped resource (confirmed: the
 // documented endpoint is GET /message_template_library, not
 // /{waba-id}/message_template_library). Any currently-connected WABA's
-// access token is sufficient — services/metaTemplateLibraryRefreshRunner.js
+// access token is sufficient - services/metaTemplateLibraryRefreshRunner.js
 // picks one, since this catalog is identical regardless of which WABA asks
 // for it. Bypasses graphFetch (same reasoning as listTemplates above: needs
 // its own query-param building, not graphFetch's single access_token-only
-// GET shape) — pagination is not implemented since Meta's own docs don't
+// GET shape) - pagination is not implemented since Meta's own docs don't
 // document a paging.next for this endpoint (unlike message_templates); if
 // that changes, add the same paging loop listTemplates already has.
 async function listTemplateLibraryCatalog(accessToken, { search, topic, usecase, industry, language, name } = {}) {
@@ -753,22 +753,22 @@ async function listTemplateLibraryCatalog(accessToken, { search, topic, usecase,
   return data.data || [];
 }
 
-// Creates a template from Meta's own pre-approved library content —
+// Creates a template from Meta's own pre-approved library content -
 // SAME endpoint as createMessageTemplate (confirmed via Meta's docs: "same
 // endpoint as standard template creation, but with specialized fields"),
-// just a different payload shape. category is hardcoded 'UTILITY' — the
+// just a different payload shape. category is hardcoded 'UTILITY' - the
 // only value Meta's own docs confirm this flow supports ("Must be UTILITY
 // for use with Template Library"), not a caller-supplied option, so this
 // function can never accidentally submit a non-Utility library template.
 // buttonInputs arrives here in the FLAT shape routes/templateLibrary.js's
 // libraryButtonInputSchema validates ({ type, base_url } / { type,
-// phone_number }) — this function is the one place that reshapes it into
+// phone_number }) - this function is the one place that reshapes it into
 // Meta's own documented library_template_button_inputs wire format, which
 // nests the URL type's destination under a `url` object
 // ({ type: 'URL', url: { base_url } }) but keeps PHONE_NUMBER flat
 // ({ type: 'PHONE_NUMBER', phone_number }). Independent audit finding: an
 // earlier version of this function forwarded the flat shape straight
-// through unchanged, silently contradicting this exact comment — Meta
+// through unchanged, silently contradicting this exact comment - Meta
 // would have received a malformed URL button on every real submission.
 // Only sent if the library entry actually has buttons; omitted key, not an
 // empty array, for a button-free entry (matches this project's general
@@ -798,7 +798,7 @@ async function createTemplateFromLibrary(wabaId, accessToken, { name, libraryTem
 }
 
 // Edits an ALREADY-SUBMITTED template in place. Unlike createMessageTemplate,
-// this targets the template's own numeric id (not the WABA) — Meta re-
+// this targets the template's own numeric id (not the WABA) - Meta re-
 // reviews the new content while the CURRENTLY-APPROVED content keeps
 // sending until that review resolves (Meta's own documented "Edit Message
 // Templates" behavior), so there's no sendability gap the way there would
@@ -817,11 +817,11 @@ async function updateMessageTemplate(templateId, accessToken, templateData) {
   return data;
 }
 
-// Fetches every template on a WABA, not just the first page — Meta
+// Fetches every template on a WABA, not just the first page - Meta
 // paginates this endpoint, and a client with 30+ templates would silently
 // lose the tail on a naive single fetch (see services/templateSyncService.js).
 // paging.next is a full URL but, confirmed against a real response, does
-// NOT carry access_token — re-appended on every page, not just the first.
+// NOT carry access_token - re-appended on every page, not just the first.
 // MAX_TEMPLATE_PAGES is a safety backstop against a malformed/looping
 // paging.next, not a real-world cap (50 pages is thousands of templates).
 const LIST_TEMPLATES_FIELDS = 'id,name,status,category,language,components,rejected_reason';
@@ -848,14 +848,14 @@ async function listTemplates(wabaId, accessToken) {
     if (!url.searchParams.get('access_token')) url.searchParams.set('access_token', accessToken);
   }
   console.error(
-    `metaClient.listTemplates: hit the ${MAX_TEMPLATE_PAGES}-page safety cap for WABA ${wabaId} — ` +
+    `metaClient.listTemplates: hit the ${MAX_TEMPLATE_PAGES}-page safety cap for WABA ${wabaId} - ` +
     `paging.next kept returning more pages than expected; returning what was fetched so far, not looping forever.`
   );
   return all;
 }
 
 // Deletes a template on Meta. Unlike createMessageTemplate/listTemplates,
-// Meta targets this by query params, not id-in-path or a JSON body — `name`
+// Meta targets this by query params, not id-in-path or a JSON body - `name`
 // alone deletes EVERY language variant sharing that name on the WABA, so
 // callers should also pass hsm_id (the template's own meta_template_id) to
 // scope the delete to just this one language, matching this app's local
@@ -877,11 +877,11 @@ async function deleteMessageTemplate(wabaId, accessToken, name, hsmId) {
   return data;
 }
 
-// Inverse of buildUtilityMarketingPayload's component construction — turns
+// Inverse of buildUtilityMarketingPayload's component construction - turns
 // Meta's real `components` array (as returned by listTemplates) into this
 // app's local column shape. Deliberately permissive, unlike the authoring
 // path: a template synced FROM Meta was already accepted by Meta, so this
-// must never throw or reject it — not on numbered {{1}} parameters (older
+// must never throw or reject it - not on numbered {{1}} parameters (older
 // templates on a client's WABA will have them; stored as-is, never
 // converted or rejected the way authoring through this app's own form
 // would be), and not on a component with no `example` at all (a template
@@ -903,7 +903,7 @@ function parseTemplateComponents(components) {
   } else if (Array.isArray(positionalParams) && Array.isArray(positionalParams[0])) {
     // Positional/numbered-style example ({{1}}, {{2}}, ...): Meta returns
     // example.body_text as [["value1", "value2"]], lined up with body
-    // order, not param names — keyed by position (matching the {{N}}
+    // order, not param names - keyed by position (matching the {{N}}
     // numbering in the body text itself) since there's no name to key by.
     positionalParams[0].forEach((example, i) => {
       bodyParamExamples[String(i + 1)] = example;

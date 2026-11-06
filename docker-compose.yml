@@ -1,10 +1,10 @@
-# Wasi CRM — VPS deployment behind the host's own nginx + certbot (no Traefik
+# Wasi CRM - VPS deployment behind the host's own nginx + certbot (no Traefik
 # on this box; see /etc/nginx/sites-enabled/wasi.sirahagents.com and the
 # certbot command in DEPLOY.md / the deploy notes for the reverse-proxy side).
 #
 # Port 4002 is assigned per the VPS's existing port map: 4000 = lexdraft-api,
 # 8081 = lexdraft-web, 8080 = evolution_api, 4001 = evolution-go,
-# 5432/6543 = supabase-pooler. Bound to 127.0.0.1 only — nginx on the host
+# 5432/6543 = supabase-pooler. Bound to 127.0.0.1 only - nginx on the host
 # reaches it there; nothing else on the box or the internet can hit 4002
 # directly.
 
@@ -25,7 +25,7 @@ services:
     # forwardRunner.js) are in-process setInterval pollers, started inside
     # this same Node process, with no distributed coordination between
     # instances. Both claim rows with `FOR UPDATE SKIP LOCKED`, so a second
-    # replica probably wouldn't double-send — but that hasn't been reviewed
+    # replica probably wouldn't double-send - but that hasn't been reviewed
     # or tested under concurrency. Do not scale this service past 1 replica
     # without reviewing that first. It also wouldn't work as written: two
     # replicas can't both bind host port 4002.

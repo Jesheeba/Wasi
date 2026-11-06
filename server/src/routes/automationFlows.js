@@ -1,6 +1,6 @@
-// Flow CRUD — the step-list editor's backend (build plan Stage 6). Mounted
+// Flow CRUD - the step-list editor's backend (build plan Stage 6). Mounted
 // under requireClientAuth/withTenantContext, same as automation-rules and
-// every other client-scoped resource — req.db is the RLS-restricted
+// every other client-scoped resource - req.db is the RLS-restricted
 // connection, so every query here is already tenant-isolated at the
 // Postgres level, not just by these WHERE clauses.
 const { Router } = require('express');
@@ -30,7 +30,7 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(flow);
 }));
 
-// Full graph in one call — the editor needs the flow, every node, and
+// Full graph in one call - the editor needs the flow, every node, and
 // every edge to render the step list; fetching them as three separate
 // round trips from the client would just be slower for no benefit.
 // `issues` (server/src/services/flowValidation.js) rides along on every
@@ -52,7 +52,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   const data = automationFlowUpdateSchema.parse(req.body);
 
   // Activation is the one transition that must not be allowed to save
-  // something that's confirmed broken — draft edits and archiving are
+  // something that's confirmed broken - draft edits and archiving are
   // unrestricted (a flow under construction is expected to be transiently
   // incomplete). Re-validates against the CURRENT nodes/edges rather than
   // trusting the client's last-fetched copy, since node/edge state could
@@ -88,7 +88,7 @@ router.post('/:id/nodes', asyncHandler(async (req, res) => {
   const data = flowNodeCreateSchema.parse(req.body);
   const node = await flowNodesRepo.create(req.db, req.clientId, flow.id, data);
   // The first node created on a flow becomes its entry point automatically
-  // — a flow with nodes but no entry_node_id can never run (flowEngine.js's
+  // - a flow with nodes but no entry_node_id can never run (flowEngine.js's
   // startFlow returns immediately if it's null), and there's no reason to
   // make the author take a second explicit step for the common case of
   // building a flow node-by-node from the start. Still editable afterward
@@ -112,7 +112,7 @@ router.delete('/:id/nodes/:nodeId', asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   uuid.parse(req.params.nodeId);
   // flow_edges rows referencing this node cascade-delete (migration 023:
-  // both from_node_id and to_node_id are ON DELETE CASCADE) — no manual
+  // both from_node_id and to_node_id are ON DELETE CASCADE) - no manual
   // edge cleanup needed here.
   const deleted = await flowNodesRepo.remove(req.db, req.clientId, req.params.nodeId);
   if (!deleted) return res.status(404).json({ error: 'Not found' });
@@ -132,7 +132,7 @@ router.post('/:id/edges', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'to_node_id must belong to this flow' });
   }
   // Write-time half of flowEngine.js's edge-legality guarantee (see
-  // isEdgeTypeLegalForNode's comment) — reject a keyword/button_id/default
+  // isEdgeTypeLegalForNode's comment) - reject a keyword/button_id/default
   // edge off a node type that can never receive an inbound event to match
   // it against, and a timeout edge off anything but a waiting node, before
   // it's ever saved, rather than letting it sit dead in the graph.
@@ -146,7 +146,7 @@ router.post('/:id/edges', asyncHandler(async (req, res) => {
   res.status(201).json(edge);
 }));
 
-// Reordering only (priority) — see flowEdgesRepo.update's comment. The
+// Reordering only (priority) - see flowEdgesRepo.update's comment. The
 // step editor's move-up/move-down controls call this twice per swap (once
 // per edge).
 router.patch('/:id/edges/:edgeId', asyncHandler(async (req, res) => {

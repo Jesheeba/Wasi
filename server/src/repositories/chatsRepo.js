@@ -1,5 +1,5 @@
 // assignedTo (PLAN.md item 2's queue filters, resolved by the route layer
-// before this is called — 'me' is already translated to the caller's real
+// before this is called - 'me' is already translated to the caller's real
 // actorId, this function never needs to know what "me" means):
 //   'unassigned' -> assigned_team_member_id is null
 //   a uuid       -> assigned_team_member_id = that id
@@ -104,7 +104,7 @@ async function findMessageById(db, clientId, chatId, messageId) {
   return rows[0] || null;
 }
 
-// Hub API v1 (build plan Phase 5's MCP tool inventory, get_message_status) —
+// Hub API v1 (build plan Phase 5's MCP tool inventory, get_message_status) -
 // unlike findMessageById above, the caller only has the message id, not its
 // chat_id (a Hub API caller sends a message and gets back {id, ...} from
 // POST /api/v1/messages; it doesn't separately track which chat that landed
@@ -128,11 +128,11 @@ async function lastInboundAt(db, clientId, chatId) {
   return rows[0]?.last_in || null;
 }
 
-// PLAN.md item 5 — unlike lastInboundAt above (a timestamp only, for the
+// PLAN.md item 5 - unlike lastInboundAt above (a timestamp only, for the
 // 24h session-window check), SLA tracking needs the inbound message's own
 // id to key chat_sla_logs' dedup-per-cycle mechanism. Returns null for a
 // chat with no inbound message at all (e.g. an owner-originated
-// conversation) — callers treat that as "nothing to measure," not an error.
+// conversation) - callers treat that as "nothing to measure," not an error.
 async function findLastInboundMessage(db, clientId, chatId) {
   const { rows } = await db.query(
     `select * from messages where client_id = $1 and chat_id = $2 and direction = 'in' order by sent_at desc limit 1`,
@@ -164,11 +164,11 @@ async function markSent(db, clientId, messageId, metaMessageId) {
 }
 
 // metaErrorCode is Meta's numeric error code (err.metaError?.code from
-// metaClient.js's graphFetch, e.g. 190/10 for auth-class errors) — optional
+// metaClient.js's graphFetch, e.g. 190/10 for auth-class errors) - optional
 // since not every failure reaches Meta at all (a plan-limit or consent
 // rejection never makes the API call), same reasoning messagingService.js's
 // sendError.metaError already documents. metaErrorSubcode (migration
-// 073_messages_error_subcode.js) is the same story one level deeper — a
+// 073_messages_error_subcode.js) is the same story one level deeper - a
 // single code like #200 covers several distinct causes distinguished only
 // by err.metaError?.error_subcode.
 async function markFailed(db, clientId, messageId, errorReason, metaErrorCode, metaErrorSubcode) {
@@ -180,17 +180,17 @@ async function markFailed(db, clientId, messageId, errorReason, metaErrorCode, m
   return rows[0] || null;
 }
 
-// Idempotent inbound insert — Meta redelivers webhook events on retry/ack
+// Idempotent inbound insert - Meta redelivers webhook events on retry/ack
 // timeout, so a repeated meta_message_id is a no-op, not a duplicate message.
 // Only ever called from metaWebhook.js, on the privileged connection.
 //
 // A new inbound message reopens a resolved chat (PLAN.md item 2 follow-up,
-// found via direct question, not originally specified) — living here rather
+// found via direct question, not originally specified) - living here rather
 // than in a route means it applies to every inbound path, not just one.
 // assigned_team_member_id is deliberately left untouched on reopen, not
 // nulled: chats.assigned_team_member_id already has ON DELETE SET NULL
 // (migration 045), so a deleted assignee's reference is cleared the moment
-// they're deleted, independent of resolve/reopen state — there is no
+// they're deleted, independent of resolve/reopen state - there is no
 // "resolved chat holding a stale assignment" state to strand. There's also
 // no disabled-but-not-deleted team_members status in this schema (only
 // invited/active), so there's no other ghost-assignee case to guard
@@ -198,11 +198,11 @@ async function markFailed(db, clientId, messageId, errorReason, metaErrorCode, m
 // caller adds one, so a reopened chat with its assignment intact
 // immediately reappears in the assignee's own queue, not just Admin/
 // Manager's unfiltered view.
-// PLAN.md item 14 — referral is Meta's documented CTWA (Click-to-WhatsApp
+// PLAN.md item 14 - referral is Meta's documented CTWA (Click-to-WhatsApp
 // ad) object, present only on a message that originated from an ad click;
 // null for every organic inbound message. Stored verbatim (source_url,
 // source_type, source_id, headline, body, media_type, image_url/video_url,
-// ctwa_clid) — this app never edits or interprets its shape beyond reading
+// ctwa_clid) - this app never edits or interprets its shape beyond reading
 // it back, so no per-field columns.
 async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt, referral }) {
   const { rows } = await db.query(
@@ -216,7 +216,7 @@ async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt
     // last_inbound_at (migration 086) is the start of Meta's 24-hour customer
     // service window, so it takes the message's OWN send time (the row's
     // sent_at: Meta's timestamp, or now() only when the payload had none),
-    // never now() at processing time — a late or retried webhook must not
+    // never now() at processing time - a late or retried webhook must not
     // move the window forward. greatest() makes it monotonic: two webhooks
     // processed out of order cannot move it backwards. It lives in this
     // statement, not a separate one, so it only ever runs when the insert
@@ -235,35 +235,35 @@ async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt
   return rows[0] || null;
 }
 
-// Coexistence echo ingestion (smb_message_echoes) — a message the BUSINESS
+// Coexistence echo ingestion (smb_message_echoes) - a message the BUSINESS
 // sent from their own phone (the WhatsApp Business app), which this app
 // never originated and never called Meta to send. Deliberately its own
 // function, not a variant of insertInbound (direction is 'in' there,
 // unconditionally) or insertOutboundPending (hardcodes status='pending' on
 // the assumption a later markSent/markFailed call is coming from THIS app's
-// own send path — for an echo, nothing will ever call either, since the
+// own send path - for an echo, nothing will ever call either, since the
 // send already fully happened on the phone before we ever heard about it;
 // reusing insertOutboundPending would leave the row stuck showing "sending"
 // forever). Idempotent on the echo's own Meta-assigned id, same on-conflict
 // pattern as insertInbound, so a redelivered webhook can't duplicate a row.
-// Sets chats.unread_count = 0, not "does not touch it" — this is a
+// Sets chats.unread_count = 0, not "does not touch it" - this is a
 // deliberate product call, not the original draft's assumption. An echo is
 // proof the business already saw and answered the thread from their own
 // phone; leaving unread_count alone would show a client who handles
 // everything on their phone a badge for conversations they've already
 // answered, which is the exact "this inbox is wrong" feeling this whole
 // build exists to fix. This is a real, narrow exception to the invariant
-// app.js's own comment (around its unread_count=0 PATCH) documents —
+// app.js's own comment (around its unread_count=0 PATCH) documents -
 // "chats.unread_count only ever increments server-side [on an inbound
-// message]; the client zeroes it" — an echo is the one case where the
+// message]; the client zeroes it" - an echo is the one case where the
 // SERVER now has direct proof of resolution without any client ever
 // opening the chat, so it zeroes it here instead of waiting for a PATCH
 // that may never come if the client keeps answering entirely from their
-// phone. Deliberately zeroes rather than decrements — an echo means the
+// phone. Deliberately zeroes rather than decrements - an echo means the
 // whole thread up to this point has been addressed, not just this one
 // message. Chat creation/lookup for a not-yet-seen contact is the caller's
 // job (mirrors handleInboundMessages' own contactsRepo.upsertByPhone +
-// findOrCreateByContact sequence), not this function's —
+// findOrCreateByContact sequence), not this function's -
 // findOrCreateByContact already covers "a business can start a conversation
 // from their phone."
 async function insertEcho(db, clientId, chatId, { metaMessageId, body, sentAt, source = 'whatsapp_app' }) {
@@ -275,7 +275,7 @@ async function insertEcho(db, clientId, chatId, { metaMessageId, body, sentAt, s
     [chatId, clientId, body, metaMessageId, sentAt || null, source]
   );
   if (rows[0]) {
-    // last_agent_reply_at (migration 087) — a person just replied from their
+    // last_agent_reply_at (migration 087) - a person just replied from their
     // own phone. Written ONLY here, inside `if (rows[0])`: an echo of a
     // message Wasi itself already has (its own send coming back) conflicts
     // on meta_message_id, inserts nothing, and so never counts as a human.
@@ -331,7 +331,7 @@ async function markAgentReplyNonFatal(db, clientId, chatId) {
   }
 }
 
-// Monotonic status guard, added 2026-09-25 — not echo-specific (WhatsApp
+// Monotonic status guard, added 2026-09-25 - not echo-specific (WhatsApp
 // status webhooks aren't guaranteed to arrive in order for any outbound
 // message, echo or otherwise), but flagged as urgent by the coexistence
 // work: an echo now starts life at 'delivered' immediately (insertEcho),
@@ -341,27 +341,27 @@ async function markAgentReplyNonFatal(db, clientId, chatId) {
 //
 // Covers the complete value set messages.status has ever allowed (migration
 // 006's own CHECK constraint, unchanged since): 'sent' -> 'delivered' ->
-// 'read' is a strict ladder that never moves backwards — an incoming status
+// 'read' is a strict ladder that never moves backwards - an incoming status
 // at or below the row's current rank is logged, not written. 'failed' is a
 // separate terminal branch, not on the ladder: it's only accepted while the
 // row isn't already 'delivered'/'read' (a message Meta already confirmed
-// delivered cannot subsequently fail — seeing that combination is logged as
+// delivered cannot subsequently fail - seeing that combination is logged as
 // an anomaly, not applied as a state change: no status write, no
 // error_reason/meta_error_code write, no failed_at stamp). 'pending' is
-// never accepted from a webhook at all — Meta's real status webhooks only
+// never accepted from a webhook at all - Meta's real status webhooks only
 // ever report sent/delivered/read/failed; 'pending' only ever comes from
 // insertOutboundPending, before any webhook has run.
 const STATUS_LADDER_RANK = { sent: 1, delivered: 2, read: 3 };
 
-// Pure and separately testable (no DB stubbing needed) — see
+// Pure and separately testable (no DB stubbing needed) - see
 // server/test/messageStatusMonotonicGuard.test.js.
 function decideStatusTransition(currentStatus, incomingStatus) {
   if (incomingStatus === 'pending') {
-    return { accept: false, reason: `status webhook reported 'pending', which Meta never sends — ignoring` };
+    return { accept: false, reason: `status webhook reported 'pending', which Meta never sends - ignoring` };
   }
   if (incomingStatus === 'failed') {
     if (currentStatus === 'delivered' || currentStatus === 'read') {
-      return { accept: false, reason: `'failed' arrived after the row was already '${currentStatus}' — treating as anomalous, not changing status` };
+      return { accept: false, reason: `'failed' arrived after the row was already '${currentStatus}' - treating as anomalous, not changing status` };
     }
     return { accept: true };
   }
@@ -369,13 +369,13 @@ function decideStatusTransition(currentStatus, incomingStatus) {
   const currentRank = STATUS_LADDER_RANK[currentStatus] || 0;
   // An incoming status this ladder doesn't recognize (not one of the 5
   // values messages.status has ever allowed) is accepted as-is, same as
-  // before this guard existed — never silently drop a genuinely new value.
+  // before this guard existed - never silently drop a genuinely new value.
   if (incomingRank === undefined) return { accept: true };
   if (incomingRank <= currentRank) {
     return {
       accept: false,
       reason: incomingRank < currentRank
-        ? `out-of-order status '${incomingStatus}' arrived while already '${currentStatus}' — recording the event, not moving the row backwards`
+        ? `out-of-order status '${incomingStatus}' arrived while already '${currentStatus}' - recording the event, not moving the row backwards`
         : undefined, // an exact repeat (e.g. a redelivered 'sent' after 'sent') is a normal no-op, not worth logging
     };
   }
@@ -384,7 +384,7 @@ function decideStatusTransition(currentStatus, incomingStatus) {
 
 // Delivery/read/failed receipts arrive for a meta_message_id we may not have
 // (send raced ahead of the webhook, or it's an inbound-message receipt we
-// don't track) — a no-op update is expected, not an error. Only ever called
+// don't track) - a no-op update is expected, not an error. Only ever called
 // from metaWebhook.js, on the privileged connection.
 async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorReason, metaErrorCode) {
   const { rows: existingRows } = await db.query(
@@ -400,7 +400,7 @@ async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorRe
 
   const newStatus = decision.accept ? status : existingRows[0].status;
   // A blocked 'failed' (decision.accept === false for status === 'failed')
-  // must not write error_reason/meta_error_code/failed_at either — the row
+  // must not write error_reason/meta_error_code/failed_at either - the row
   // is staying 'delivered'/'read', so persisting failure detail against it
   // would contradict its own status. Every other accepted transition
   // behaves exactly as before this guard existed.
@@ -408,9 +408,9 @@ async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorRe
 
   // delivered_at/read_at: stamped only the first time a message reaches
   // that status (coalesce keeps the original time on a duplicate webhook
-  // delivery, which Meta is known to send) — see migration
+  // delivery, which Meta is known to send) - see migration
   // 072_messages_status_timestamps.js for why these exist at all. Keyed on
-  // the INCOMING status, not the guard's decision — a late 'delivered'
+  // the INCOMING status, not the guard's decision - a late 'delivered'
   // arriving after 'read' is already recorded still proves delivery
   // happened, even though the ladder correctly keeps the headline status at
   // 'read'.

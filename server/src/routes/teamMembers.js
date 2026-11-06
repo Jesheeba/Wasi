@@ -33,7 +33,7 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
 // PLAN.md item 1's invite endpoint. Uses the privileged pool for the token
 // insert (authTokensRepo.create is always pool-based, matching routes/auth.js's
 // own password-reset/email-verification calls) even though the team member
-// and client lookups are tenant-scoped via req.db — the token isn't tenant data.
+// and client lookups are tenant-scoped via req.db - the token isn't tenant data.
 //
 // The invite email must carry tenantSlug, not just the accept-invite token:
 // POST /api/auth/team/login (routes/authTeam.js) needs {tenantSlug, email,
@@ -42,7 +42,7 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
 // itself returns a working JWT immediately (auto-login for that one
 // session), but with nothing telling the recipient their tenantSlug, EVERY
 // login after that first session (a new browser, cleared storage, or just
-// the 7-day token expiring) would be impossible — there'd be no way to fill
+// the 7-day token expiring) would be impossible - there'd be no way to fill
 // in a field on the login form they were never shown. Found and fixed
 // before this shipped, not discovered after a real invite went out.
 router.post('/:id/invite', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
@@ -57,7 +57,7 @@ router.post('/:id/invite', requireRole('Admin', 'Manager'), asyncHandler(async (
     subject: `You have been invited to join ${client.name} on Wasi CRM`,
     html: `<p>You've been invited to join <strong>${client.name}</strong>'s team on Wasi CRM. Set your password to get started:</p>` +
       `<p><a href="${APP_URL}/marketing/accept-team-invite.html?token=${token}">Accept invite</a></p>` +
-      `<p>Your organization ID for future logins is: <strong>${client.tenant_slug}</strong> — you'll need it along with your email and password.</p>`,
+      `<p>Your organization ID for future logins is: <strong>${client.tenant_slug}</strong> - you'll need it along with your email and password.</p>`,
   });
   res.json({ invited: true });
 }));

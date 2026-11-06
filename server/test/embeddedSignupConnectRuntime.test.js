@@ -3,14 +3,14 @@
 // path (2026-09-07, after 12+ real onboarding failures and a Meta support
 // escalation). Drives the REAL connect() function in a real browser
 // (Playwright), mocking only window.FB.login's callback and synthesizing
-// the postMessage events Meta's popup would send — everything else
+// the postMessage events Meta's popup would send - everything else
 // (loadSdk's script-tag/window.fbAsyncInit dance, the message listener's
 // origin filter, sessionData merging, pendingCodeReject, the hard timeout)
 // runs unmodified, exactly as shipped.
 //
 // window.FB.login is mocked because there is no way to drive Meta's real
 // popup from an automated test. The postMessage events are dispatched as
-// genuine MessageEvents via window.dispatchEvent with a spoofed `origin` —
+// genuine MessageEvents via window.dispatchEvent with a spoofed `origin` -
 // this is necessary (a real cross-window postMessage's origin can't be
 // spoofed from the same page) and correct: it exercises the actual
 // window.addEventListener('message', ...) listener this file registers,
@@ -104,7 +104,7 @@ beforeEach(async () => {
 async function runConnect(page, { loginBehavior, code, messages = [], fastForwardHardTimeout = false }) {
   return page.evaluate(async ({ loginBehavior, code, messages, fastForwardHardTimeout }) => {
     // loadSdk() would otherwise try to load the real facebook.com SDK
-    // script and wait for it to call window.fbAsyncInit — replaced here
+    // script and wait for it to call window.fbAsyncInit - replaced here
     // with a synchronous fake so connect()'s OWN logic (everything after
     // loadSdk resolves) runs completely unmodified.
     const fakeScript = document.createElement('script');
@@ -141,13 +141,13 @@ async function runConnect(page, { loginBehavior, code, messages = [], fastForwar
     });
 
     // fbAsyncInit is set synchronously by loadSdk() before FB.login is ever
-    // reached — calling it now (next microtask) lets the mocked SDK
+    // reached - calling it now (next microtask) lets the mocked SDK
     // "finish loading" so connect() proceeds into its real logic.
     await new Promise((r) => setTimeout(r, 0));
     if (window.fbAsyncInit) window.fbAsyncInit();
 
     if (fastForwardHardTimeout) {
-      // Real page timers under Playwright's clock mock — see clock.install()
+      // Real page timers under Playwright's clock mock - see clock.install()
       // call in the test itself, which must happen before this evaluate
       // runs so LOGIN_TIMEOUT_MS's real setTimeout is captured by the mock.
     }
@@ -161,7 +161,7 @@ async function runConnect(page, { loginBehavior, code, messages = [], fastForwar
   }, { loginBehavior, code, messages, fastForwardHardTimeout });
 }
 
-test('runtime 1: code returned, FINISH carries both waba_id and phone_number_id — resolves with full data', async () => {
+test('runtime 1: code returned, FINISH carries both waba_id and phone_number_id - resolves with full data', async () => {
   const result = await runConnect(page, {
     loginBehavior: 'code',
     code: 'real-code-1',
@@ -185,7 +185,7 @@ test('runtime 1: code returned, FINISH carries both waba_id and phone_number_id 
   assert.equal(audit.length, 1, 'a whatsapp_connected audit entry must exist');
 });
 
-test('runtime 2: code returned, FINISH carries waba_id only — resolves, backend discovers phone_number_id', async () => {
+test('runtime 2: code returned, FINISH carries waba_id only - resolves, backend discovers phone_number_id', async () => {
   stubMetaClient({ listPhoneNumbers: async () => [{ id: 'phone-rt2-discovered', display_phone_number: '+1 555 0102' }] });
 
   const result = await runConnect(page, {
@@ -195,7 +195,7 @@ test('runtime 2: code returned, FINISH carries waba_id only — resolves, backen
   });
   assert.equal(result.resolved, true, `connect() should resolve: ${JSON.stringify(result)}`);
   assert.equal(result.value.waba_id, 'waba-rt2');
-  assert.equal(result.value.phone_number_id, undefined, 'phone_number_id must NOT arrive client-side under v4 — this is the whole point of server-side discovery');
+  assert.equal(result.value.phone_number_id, undefined, 'phone_number_id must NOT arrive client-side under v4 - this is the whole point of server-side discovery');
 
   const res = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
     method: 'POST', headers: authed(clientToken), body: JSON.stringify(result.value),
@@ -207,7 +207,7 @@ test('runtime 2: code returned, FINISH carries waba_id only — resolves, backen
   assert.equal(rows[0].status, 'connected');
 });
 
-test('runtime 3: code returned, FINISH carries nothing — resolves client-side, fails cleanly server-side when discovery also can\'t resolve it', async () => {
+test('runtime 3: code returned, FINISH carries nothing - resolves client-side, fails cleanly server-side when discovery also can\'t resolve it', async () => {
   stubMetaClient({ debugToken: async () => ({ granular_scopes: [] }) }); // no WABA scope at all
 
   const result = await runConnect(page, {
@@ -215,23 +215,23 @@ test('runtime 3: code returned, FINISH carries nothing — resolves client-side,
     code: 'real-code-3',
     messages: [{ atMs: 30, event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', data: {} }],
   });
-  assert.equal(result.resolved, true, `connect() should resolve even with empty FINISH data — see resolve-on-FINISH comment: ${JSON.stringify(result)}`);
+  assert.equal(result.resolved, true, `connect() should resolve even with empty FINISH data - see resolve-on-FINISH comment: ${JSON.stringify(result)}`);
   assert.equal(result.value.waba_id, undefined);
   assert.equal(result.value.phone_number_id, undefined);
 
   const res = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
     method: 'POST', headers: authed(clientToken), body: JSON.stringify(result.value),
   });
-  assert.equal(res.status, 502, 'no silent failure — a real 502 with a specific reason');
+  assert.equal(res.status, 502, 'no silent failure - a real 502 with a specific reason');
   const body = await res.json();
   assert.match(body.detail, /never sent a WhatsApp Business Account/);
   const { rows } = await pool.query('select status from wabas where client_id = $1', [testClientId]);
   assert.equal(rows[0].status, 'failed');
   const { rows: audit } = await pool.query(`select action from audit_log where actor_id = $1 and action = 'whatsapp_connect_failed' order by created_at desc limit 1`, [testClientId]);
-  assert.equal(audit.length, 1, 'a whatsapp_connect_failed audit entry must exist — no silent failure path');
+  assert.equal(audit.length, 1, 'a whatsapp_connect_failed audit entry must exist - no silent failure path');
 });
 
-test('runtime 4: codeless callback (not_authorized), FINISH arrives later — rejects with err.incomplete, never a generic failure', async () => {
+test('runtime 4: codeless callback (not_authorized), FINISH arrives later - rejects with err.incomplete, never a generic failure', async () => {
   const result = await runConnect(page, {
     loginBehavior: 'codeless',
     messages: [{ atMs: 60, event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', data: { waba_id: 'waba-rt4' } }],
@@ -251,9 +251,9 @@ test('runtime 4: codeless callback (not_authorized), FINISH arrives later — re
   assert.equal(audit.length, 1, 'a whatsapp_connect_incomplete audit entry must exist');
 });
 
-test('runtime 5: codeless callback (not_authorized), nothing ever arrives — waits out the full hard timeout, rejects generically, never silently hangs', async () => {
+test('runtime 5: codeless callback (not_authorized), nothing ever arrives - waits out the full hard timeout, rejects generically, never silently hangs', async () => {
   // Playwright's Clock lets the page's own LOGIN_TIMEOUT_MS (10 real
-  // minutes) fire without the test actually waiting 10 minutes — installed
+  // minutes) fire without the test actually waiting 10 minutes - installed
   // fresh per-test since beforeEach creates a new page.
   await page.clock.install();
   const resultPromise = runConnect(page, { loginBehavior: 'codeless', messages: [] });
@@ -264,6 +264,6 @@ test('runtime 5: codeless callback (not_authorized), nothing ever arrives — wa
   const result = await resultPromise;
 
   assert.equal(result.resolved, false);
-  assert.equal(result.incomplete, false, 'no FINISH was ever seen — must be the generic timeout rejection, not marked incomplete');
+  assert.equal(result.incomplete, false, 'no FINISH was ever seen - must be the generic timeout rejection, not marked incomplete');
   assert.match(result.message, /Still not connected after 10 minutes/);
 });

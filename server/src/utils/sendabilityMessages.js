@@ -1,4 +1,4 @@
-// Plain-English sendability messaging — shared, dual-export module (same
+// Plain-English sendability messaging - shared, dual-export module (same
 // pattern as templateParams.js/consentStatement.js: served raw via a static
 // route so the client banner, the chat-send error surface, and admin's
 // client-detail view all read the exact same wording from one place,
@@ -6,14 +6,14 @@
 //
 // Built for the "why can't my client send" gap: today the raw data already
 // exists on the wabas row (sendable/sendable_reason/health_status/
-// probe_error_code — see migrations 074-076_wabas_*.js and
+// probe_error_code - see migrations 074-076_wabas_*.js and
 // sendabilityMonitorRunner.js's computeSendableVerdict) but nothing ever
-// translated it into something a client — or an admin glancing at their
-// account — can read without knowing what "#141006" means.
+// translated it into something a client - or an admin glancing at their
+// account - can read without knowing what "#141006" means.
 //
 // Every code below is a REAL Meta error code this app has actually seen or
 // that Meta documents for this exact failure class (141006 payment method,
-// 141010 business verification, 200 permission/credit-line) — same
+// 141010 business verification, 200 permission/credit-line) - same
 // discipline as this codebase's other content heuristics (see CLAUDE.md's
 // template category/content-mismatch entry): known codes get real, specific
 // wording; anything else gets an honest generic message plus the raw code,
@@ -31,7 +31,7 @@ const KNOWN_CODES = {
   },
   200: {
     headline: "Your account doesn't currently have permission to send messages.",
-    action: "This needs to be fixed on our side — contact us, this isn't something you can resolve yourself.",
+    action: "This needs to be fixed on our side - contact us, this isn't something you can resolve yourself.",
     actionKey: 'contact_support',
   },
 };
@@ -47,7 +47,7 @@ function genericUnknown(code) {
 
 // Given a single Meta error code (from a health_status entity, the
 // sendability probe, or a live send failure), returns a plain-English
-// {headline, action, actionKey, code} — always something usable, never
+// {headline, action, actionKey, code} - always something usable, never
 // null, so no caller has to invent its own fallback wording.
 function describeErrorCode(code) {
   const numeric = typeof code === 'number' ? code : (code != null && code !== '' ? Number(code) : null);
@@ -77,17 +77,17 @@ function findWorstHealthEntity(healthStatus) {
 // Three severities, deliberately NOT conflated (a client panicking over a
 // soft cap, or shrugging off a real outage, are both real failure modes of
 // getting this wrong):
-//   - 'blocked'  — sendable === false, or a health_status entity is BLOCKED.
+//   - 'blocked'  - sendable === false, or a health_status entity is BLOCKED.
 //                  The account genuinely cannot send right now.
-//   - 'limited'  — a health_status entity is LIMITED (and nothing is
+//   - 'limited'  - a health_status entity is LIMITED (and nothing is
 //                  BLOCKED). Degraded, not broken.
-//   - 'capped'   — messaging_tier is TIER_250, the tier Meta caps an
+//   - 'capped'   - messaging_tier is TIER_250, the tier Meta caps an
 //                  unverified/unapproved display name to. Sending still
 //                  works; this is a softer, informational notice, shown
 //                  even when neither of the above conditions is true.
 //
 // sendable === null (never successfully checked) is deliberately NOT a
-// banner condition — sendabilityMonitorRunner.js's own discipline treats
+// banner condition - sendabilityMonitorRunner.js's own discipline treats
 // "we couldn't check" as distinct from "we checked and it's a problem," and
 // a brand-new/never-probed account showing a scary banner on day one would
 // be a false alarm, not a real finding.
@@ -114,7 +114,7 @@ function describeSendability(waba) {
     return {
       severity: 'limited',
       headline: 'Your WhatsApp account is working, but sending is currently limited.',
-      action: 'This usually clears on its own — contact us if it continues for more than a day or two.',
+      action: 'This usually clears on its own - contact us if it continues for more than a day or two.',
       actionKey: 'contact_support',
       code,
       rawReason: worstHealth.entity?.errors?.[0]?.error_description || null,
@@ -125,7 +125,7 @@ function describeSendability(waba) {
     return {
       severity: 'capped',
       headline: 'Sending works, but your account is capped at 250 unique customers every 24 hours.',
-      action: "This is usually because your display name isn't approved yet — approving it (or building a track record with Meta) raises this limit over time.",
+      action: "This is usually because your display name isn't approved yet - approving it (or building a track record with Meta) raises this limit over time.",
       actionKey: 'contact_support',
       code: null,
       rawReason: null,

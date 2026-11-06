@@ -2,12 +2,12 @@
 //
 // Why this exists: coexistenceEchoIngestion.test.js calls handleMessageEchoes
 // directly, so by construction it cannot catch a mistake in the ROUTER's
-// dispatch — which is where this bug lived. POST / used to run
+// dispatch - which is where this bug lived. POST / used to run
 // handleInboundMessages for ANY change whose value.messages array was
 // non-empty, with no look at the field name. If an echo ever arrived as
 // `field: "smb_message_echoes"` with its array under `messages` (one of the
 // shapes the echo handler tolerates), BOTH handlers ran: the business's own
-// outgoing message was ingested as an INBOUND customer message — a contact
+// outgoing message was ingested as an INBOUND customer message - a contact
 // created for the business's own number, the flow engine and keyword
 // automation run on it, and a message.received forward enqueued.
 //
@@ -132,7 +132,7 @@ async function postChange(field, value) {
   return res.status;
 }
 
-test('router: field smb_message_echoes with the array under `messages` is ingested as an echo ONLY — never as an inbound message', async () => {
+test('router: field smb_message_echoes with the array under `messages` is ingested as an echo ONLY - never as an inbound message', async () => {
   const status = await postChange('smb_message_echoes', {
     messages: [{ id: 'wamid.ECHO_UNDER_MESSAGES', from: BUSINESS_NUMBER, to: CUSTOMER_NUMBER, timestamp: '1758700000', type: 'text', text: { body: 'Sent from my phone' } }],
   });

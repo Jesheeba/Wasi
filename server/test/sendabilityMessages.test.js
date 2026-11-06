@@ -1,4 +1,4 @@
-// Pure unit coverage for sendabilityMessages.js — no DB, no Meta calls, no
+// Pure unit coverage for sendabilityMessages.js - no DB, no Meta calls, no
 // pool import at all (this module has none), matching
 // sendabilityMonitorRunnerUnit.test.js's own "lazy require, pure function"
 // discipline. Covers the "why can't my client send" banner's decision logic:
@@ -22,7 +22,7 @@ test('describeErrorCode: known codes get their own specific wording', () => {
   assert.match(permissionInfo.action, /contact/i);
 });
 
-test('describeErrorCode: an unknown code gets a generic message, the raw code, and a support prompt — never blank', () => {
+test('describeErrorCode: an unknown code gets a generic message, the raw code, and a support prompt - never blank', () => {
   const info = describeErrorCode(999999);
   assert.ok(info.headline.length > 0);
   assert.match(info.action, /contact/i);
@@ -65,7 +65,7 @@ test('describeSendability: sendable === false is always "blocked", using probe_e
   assert.match(info.headline, /permission/i);
 });
 
-test('describeSendability: a BLOCKED health_status entity wins even when sendable/probe both look fine — the real 2026-09-18 payment-block case', () => {
+test('describeSendability: a BLOCKED health_status entity wins even when sendable/probe both look fine - the real 2026-09-18 payment-block case', () => {
   const waba = {
     sendable: true, // the probe alone said fine (permission-only, see sendabilityMonitorRunner.js)
     probe_error_code: null,
@@ -104,7 +104,7 @@ test('describeSendability: a blocked/limited signal takes priority over the soft
   assert.equal(info.severity, 'blocked');
 });
 
-test('describeSendability: sendable === null (never checked) is NOT a banner condition — no false alarm on a brand-new account', () => {
+test('describeSendability: sendable === null (never checked) is NOT a banner condition - no false alarm on a brand-new account', () => {
   assert.equal(describeSendability({ sendable: null, health_status: null, messaging_tier: null }), null);
 });
 

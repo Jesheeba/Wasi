@@ -1,5 +1,5 @@
 // Meta Official Template Library (wasi-master-plan.md §2b, build plan
-// Phase 2b) — distinct from templateLibrary.test.js (Wasi's own curated
+// Phase 2b) - distinct from templateLibrary.test.js (Wasi's own curated
 // library). Covers: the admin refresh pipeline actually calls Meta's real
 // catalog endpoint shape and filters to UTILITY-only, the client-facing
 // listing only ever exposes zero-variable entries (Phase 0 decision), the
@@ -8,18 +8,18 @@
 // persists a real message_templates row, and a parameterized entry is
 // rejected server-side even if directly targeted by id (defense in depth
 // beyond what the listing endpoint happens to filter). Only
-// graph.facebook.com is faked — everything else is the real code path
+// graph.facebook.com is faked - everything else is the real code path
 // against the real (shared dev/prod) database, dedicated disposable test
 // client, deleted in after().
 //
 // This file races with metaTemplateLibraryQA.test.js over the SAME shared
-// meta_template_library_cache table — found live while fixing the
+// meta_template_library_cache table - found live while fixing the
 // Auditor/QA-reported "stale cache entries never pruned" bug:
 // metaTemplateLibraryRepo.pruneMissing (called by every real admin refresh,
 // including the ones both test files trigger) deletes any cache row NOT in
 // the fetch it just saw. Node's test runner isolates each file into its own
 // process by default, but both processes still race against the SAME
-// shared cache table — if this file's refresh (fake catalog:
+// shared cache table - if this file's refresh (fake catalog:
 // shipping_confirmation/low_balance_warning) runs concurrently with the QA
 // file's refresh (fake catalog: entry_a/entry_b), each one's prune step
 // deletes the OTHER's just-inserted rows, since neither fake catalog
@@ -30,11 +30,11 @@
 //
 // FIXED at the runner level, 2026-09-03: `npm test` (server/package.json)
 // now passes `--test-concurrency=1`, so node's test runner never starts
-// this file's process until the previous file's has fully exited — this
+// this file's process until the previous file's has fully exited - this
 // race (and the unrelated chatUiPass.test.js/templateLibraryUI.test.js
 // fixed-port-4000 collision) can no longer happen regardless of file order.
 // This file no longer needs to be run as its own separate `node --test`
-// invocation — a plain `npm test` covers the whole suite. Left as
+// invocation - a plain `npm test` covers the whole suite. Left as
 // documentation of why the hazard existed, not as a live instruction.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -62,7 +62,7 @@ function authed(token) {
 
 // A real Meta catalog response shape, verified against Meta's own
 // documentation during Phase 0 (positional {{n}} params, category field,
-// buttons array) — not a guessed/simplified fixture.
+// buttons array) - not a guessed/simplified fixture.
 function fakeCatalogResponse() {
   return {
     data: [
@@ -91,7 +91,7 @@ function fakeCatalogResponse() {
         buttons: [],
       },
       {
-        // Deliberately MARKETING — proves the refresh pipeline filters to
+        // Deliberately MARKETING - proves the refresh pipeline filters to
         // UTILITY only (Phase 0 finding: "Must be UTILITY for use with
         // Template Library"), not just relying on Meta to never return one.
         id: `${SUITE_PREFIX}marketing_1`,
@@ -167,7 +167,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {
@@ -190,7 +190,7 @@ test('admin refresh: fetches Meta\'s catalog, keeps only UTILITY category, store
   const { rows: cached } = await pool.query(
     `select * from meta_template_library_cache where name like $1 order by name`, [`${SUITE_PREFIX}%`]
   );
-  assert.equal(cached.length, 2, 'exactly the 2 UTILITY entries must be cached — the MARKETING one must be filtered out');
+  assert.equal(cached.length, 2, 'exactly the 2 UTILITY entries must be cached - the MARKETING one must be filtered out');
   assert.ok(!cached.some((c) => c.name === `${SUITE_PREFIX}promo_blast`), 'the MARKETING entry must never reach the cache');
 
   const paramEntry = cached.find((c) => c.name === `${SUITE_PREFIX}low_balance_warning`);
@@ -214,7 +214,7 @@ test('GET /api/template-library/meta (client-facing) only returns zero-variable 
   assert.equal(res.status, 200);
   const entries = await res.json();
   assert.ok(entries.some((e) => e.name === `${SUITE_PREFIX}shipping_confirmation`), 'the zero-variable entry must be listed');
-  assert.ok(!entries.some((e) => e.name === `${SUITE_PREFIX}low_balance_warning`), 'the parameterized entry must NOT be listed — Wasi\'s pipeline is named-params-only, positional isn\'t supported yet');
+  assert.ok(!entries.some((e) => e.name === `${SUITE_PREFIX}low_balance_warning`), 'the parameterized entry must NOT be listed - Wasi\'s pipeline is named-params-only, positional isn\'t supported yet');
 });
 
 test('POST /api/template-library/meta/:id/use: real end-to-end, same message_templates endpoint standard creation uses', async () => {
@@ -249,7 +249,7 @@ test('POST /api/template-library/meta/:id/use: real end-to-end, same message_tem
 
   // Independent Auditor finding #1: the actual payload sent to Meta must
   // nest a URL button's destination under `url: { base_url }` (Meta's own
-  // documented library_template_button_inputs shape) — an earlier version
+  // documented library_template_button_inputs shape) - an earlier version
   // sent it flat as `{ type: 'URL', base_url }`, which Meta would have
   // rejected or silently mishandled on every real submission.
   assert.deepEqual(
@@ -261,7 +261,7 @@ test('POST /api/template-library/meta/:id/use: real end-to-end, same message_tem
   // Independent Auditor finding #2: the LOCALLY stored button must reflect
   // what the client actually submitted to Meta (their real store URL), not
   // the cached catalog entry's own placeholder example
-  // (https://example.com/track) — an earlier version stored the cached
+  // (https://example.com/track) - an earlier version stored the cached
   // entry's raw buttons_json unchanged, which would have silently reverted
   // to Meta's placeholder the next time this template was edited.
   assert.equal(rows[0].buttons[0].url, 'https://my-real-store.example.com', 'the persisted button URL must be the client\'s real submitted destination, not Meta\'s catalog placeholder');
@@ -313,7 +313,7 @@ test('POST /api/template-library/meta/:id/use: requires a connected WhatsApp num
 test('refreshNow throws a clear error when no WABA is connected anywhere', async () => {
   // Monkey-patches wabasRepo.findAnyConnected for this one call only,
   // rather than actually disconnecting any real client's WABA in this
-  // shared dev/prod database — restored in finally regardless of outcome.
+  // shared dev/prod database - restored in finally regardless of outcome.
   const original = wabasRepo.findAnyConnected;
   wabasRepo.findAnyConnected = async () => null;
   try {

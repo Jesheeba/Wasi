@@ -1,13 +1,13 @@
-// UI/UX consistency pass, Group 1 — .modal-box's max-height/overflow-y used
+// UI/UX consistency pass, Group 1 - .modal-box's max-height/overflow-y used
 // to live ONLY inside @media(max-width:640px), so any modal taller than the
-// viewport had no scroll mechanism at all above 640px — including 900px
+// viewport had no scroll mechanism at all above 640px - including 900px
 // tablet and 1366x768 desktop, confirmed via a real screenshot to be the
 // actual reported bug ("New Campaign doesn't scroll, content below Smart
 // Sending is unreachable"). Fixed by moving max-height:88vh/overflow-y:auto
 // into the base .modal-box rule (index.css) so it applies at every width,
 // not just narrow ones. This test proves the fix at 1366x768 (where it was
 // broken) AND at a mobile width (where it already worked, as a regression
-// guard) — New Campaign (#modal-create-campaign) is the real modal that was
+// guard) - New Campaign (#modal-create-campaign) is the real modal that was
 // reported, so it's the one exercised here rather than a synthetic one.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 process.env.ALLOWED_ORIGINS = 'http://localhost:4000';
@@ -37,7 +37,7 @@ before(async () => {
   }).then((r) => r.json());
 
   // UI redesign Stage 6: New Campaign is a 5-step wizard that only offers an
-  // APPROVED template, and Launch only exists on the last step — so reaching
+  // APPROVED template, and Launch only exists on the last step - so reaching
   // it needs a real approved template (stubbed Meta, then approved directly).
   const realFetch = global.fetch;
   global.fetch = async (url, opts) => {
@@ -74,7 +74,7 @@ async function openNewCampaignModal(viewport) {
   await page.waitForSelector('#app-shell:not([style*="display: none"])', { timeout: 10000 }).catch(() => {});
   await page.waitForTimeout(1000);
 
-  // Mobile widths hide the sidebar behind a hamburger toggle — matches the
+  // Mobile widths hide the sidebar behind a hamburger toggle - matches the
   // established .mobile-sidebar-toggle pattern (see breakpoints.css).
   const mobileToggle = page.locator('#mobile-sidebar-toggle-btn');
   if (await mobileToggle.isVisible().catch(() => false)) {
@@ -86,7 +86,7 @@ async function openNewCampaignModal(viewport) {
   await page.click('#open-create-broadcast-modal');
   await page.waitForSelector('#modal-create-campaign.open', { timeout: 5000 });
   await page.waitForTimeout(300);
-  // Walk to the final (Review & Launch) step — the only step with Launch.
+  // Walk to the final (Review & Launch) step - the only step with Launch.
   await page.fill('#new-campaign-name', `${SUITE_PREFIX}Campaign`);
   for (let step = 1; step < 5; step++) {
     await page.click('#campaign-wizard-next');
@@ -103,7 +103,7 @@ test('1366x768: .modal-box scrolls internally, and Launch Campaign (below Smart 
   assert.equal(overflowY, 'auto', '.modal-box must have overflow-y:auto at 1366x768, not just below 640px');
 
   // The wizard shows one step at a time, so the review step may or may not
-  // overflow at 768px tall — what must hold is that the box is capped to the
+  // overflow at 768px tall - what must hold is that the box is capped to the
   // viewport (so overflow WOULD scroll). The forced-overflow case is the
   // 1366x480 test below.
   const boxHeight = await modalBox.evaluate((el) => el.getBoundingClientRect().height);
@@ -133,7 +133,7 @@ test('1366x480 short viewport: the wizard step really overflows .modal-box, scro
   await page.close();
 });
 
-test('375x812 mobile: same modal still scrolls correctly (regression guard — this width already worked before the fix)', async () => {
+test('375x812 mobile: same modal still scrolls correctly (regression guard - this width already worked before the fix)', async () => {
   const page = await openNewCampaignModal({ width: 375, height: 812 });
 
   const modalBox = page.locator('#modal-create-campaign .modal-box');

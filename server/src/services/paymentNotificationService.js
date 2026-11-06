@@ -1,5 +1,5 @@
 // The one place every billing-related client message goes through, so every
-// attempt — successful or not — lands in payment_notifications. Calls
+// attempt - successful or not - lands in payment_notifications. Calls
 // clientNotifier.sendTemplateToClient via its module object (not a
 // destructured binding) so tests can stub it, same convention as the rest of
 // this codebase's services.

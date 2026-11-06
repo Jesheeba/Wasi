@@ -19,7 +19,7 @@ AISENSY_END_TO_END_ARCHITECTURE_AND_FLOWS.md
 .claude/
 
 # Loose docs/notes dropped at the repo root by accident (this repo is public;
-# a scratch planning file here has leaked production details once already —
+# a scratch planning file here has leaked production details once already -
 # see commit history around 2026-10-27). Does not affect already-tracked
 # root .md files (CLAUDE.md, DEPLOY.md, PLAN.md, etc.) or anything under a
 # subdirectory.

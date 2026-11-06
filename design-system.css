@@ -1,4 +1,4 @@
-/* WASI design system — shared by the client app, admin console and marketing.
+/* WASI design system - shared by the client app, admin console and marketing.
  *
  * Loaded AFTER each surface's own stylesheet (index.css / admin.css /
  * marketing.css). It is additive: it defines the tokens the older sheets never
@@ -13,7 +13,7 @@
 
 /* Design tokens (:root) live in breakpoints.css, which every surface loads
    and the image has always shipped, so a failed load of this file degrades
-   the extra components only — never the colours, spacing and radii index.css,
+   the extra components only - never the colours, spacing and radii index.css,
    admin.css and marketing.css depend on. */
 
 /* ------------------------------------------------------------------ base */

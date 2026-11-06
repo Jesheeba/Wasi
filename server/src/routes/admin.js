@@ -33,7 +33,7 @@ const { z } = require('zod');
 const router = Router();
 
 // Strips both secrets a wabas row can carry (Meta access token, hub-forward
-// signing secret) from any response — used by every route that returns a
+// signing secret) from any response - used by every route that returns a
 // waba row so a future added field can't reintroduce a leak by accident.
 function maskWaba(waba) {
   if (!waba) return null;
@@ -114,16 +114,16 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
 
-  // PLAN.md item 25, Part B/A — these two states are structurally different
+  // PLAN.md item 25, Part B/A - these two states are structurally different
   // from both "never attempted" and "connected": Meta linked *something*
   // real on its side, but this route's own mechanism (re-pull details for
   // an already-connected number) can't act on either. Distinct, honest
   // messages instead of the generic one, which used to read identically for
-  // "never even started" and "Meta actually linked it" — precisely the
+  // "never even started" and "Meta actually linked it" - precisely the
   // invisible-failure pattern this item exists to close.
   if (waba?.status === 'incomplete_meta_linked') {
     return res.status(400).json({
-      error: 'Meta linked this account but never handed back an authorization code to this app — there is nothing to retry from admin.',
+      error: 'Meta linked this account but never handed back an authorization code to this app - there is nothing to retry from admin.',
       detail: `WABA id on file: ${waba.waba_id || 'unknown'}. The client needs to reconnect via Settings > WhatsApp.`,
     });
   }
@@ -134,7 +134,7 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
     });
   }
   if (!waba || !waba.access_token_encrypted) {
-    return res.status(400).json({ error: 'No WhatsApp connection to retry — client must complete Embedded Signup first' });
+    return res.status(400).json({ error: 'No WhatsApp connection to retry - client must complete Embedded Signup first' });
   }
 
   try {
@@ -157,7 +157,7 @@ router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res)
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
   if (!waba || !waba.access_token_encrypted) {
-    return res.status(400).json({ error: 'No WhatsApp connection to check — client must complete Embedded Signup first' });
+    return res.status(400).json({ error: 'No WhatsApp connection to check - client must complete Embedded Signup first' });
   }
 
   const result = await messagingTierRefreshRunner.refreshOne(waba);
@@ -170,21 +170,21 @@ router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res)
 }));
 
 // --- Manual check: all three sendability layers plus the combined verdict
-// (registration, health, the send probe, and computeSendableVerdict — see
+// (registration, health, the send probe, and computeSendableVerdict - see
 // migration 074/075/076_wabas_*.js and sendabilityMonitorRunner.js).
 // refreshOne runs the sub-checks independently and never throws past the
 // pre-flight guard/a token-decrypt failure below, so `!result.ok` here means
 // the check couldn't even be attempted, not that any sub-check found a
-// problem — a found problem (not registered, probe denied, health blocked)
+// problem - a found problem (not registered, probe denied, health blocked)
 // is still a 200, visible in the returned waba's own columns
 // (wabas.sendable is the combined verdict; wabas.probe_sendable is the raw
-// probe result alone — see migration 076's header comment for why both
+// probe result alone - see migration 076's header comment for why both
 // exist). ---
 router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
   if (!waba || !waba.access_token_encrypted) {
-    return res.status(400).json({ error: 'No WhatsApp connection to check — client must complete Embedded Signup first' });
+    return res.status(400).json({ error: 'No WhatsApp connection to check - client must complete Embedded Signup first' });
   }
 
   const result = await sendabilityMonitorRunner.refreshOne(waba);
@@ -204,7 +204,7 @@ router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
 // --- Resolve a needs_manual_resolution WABA (PLAN.md item 25, Part A) ---
 // The access token from the original discovery attempt was persisted
 // (encrypted) specifically so this doesn't require the client to redo
-// signup — admin picks the correct candidate from connect_diagnostics,
+// signup - admin picks the correct candidate from connect_diagnostics,
 // this route completes the connection with the SAME completion logic the
 // normal client-facing route uses (wabaConnectionService.completeWabaConnection),
 // just fed admin-chosen ids instead of discovered/popup-supplied ones.
@@ -219,7 +219,7 @@ router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
 
   const accessToken = decrypt(waba.access_token_encrypted);
 
-  // phoneNumberId not yet known (the "multiple WABAs" case — admin has only
+  // phoneNumberId not yet known (the "multiple WABAs" case - admin has only
   // picked a WABA so far, phone numbers under it were never enumerated).
   // Look them up now: exactly one resolves immediately below; still more
   // than one means a second round-trip, same shape as the original
@@ -242,16 +242,16 @@ router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
         wabaId,
         candidatePhoneNumbers: phoneNumbers.map((p) => ({ id: p.id, display_phone_number: p.display_phone_number })),
       };
-      // Explicit JSON.stringify — pg does NOT auto-serialize a raw JS object
+      // Explicit JSON.stringify - pg does NOT auto-serialize a raw JS object
       // for a jsonb column (it applies Postgres-array-literal serialization
       // instead, which Postgres rejects as invalid JSON). This exact mistake
       // is documented in CLAUDE.md as having once wiped the production
       // template-library cache; not repeating it here. (waba.connect_diagnostics,
-      // spread above, IS already a parsed object — pg's jsonb type parser
-      // auto-parses on SELECT — this only applies to the outbound write.)
+      // spread above, IS already a parsed object - pg's jsonb type parser
+      // auto-parses on SELECT - this only applies to the outbound write.)
       await wabasRepo.upsertForClient(id, { waba_id: wabaId, status: 'needs_manual_resolution', connect_diagnostics: JSON.stringify(diagnostics) });
       return res.status(409).json({
-        error: 'This WhatsApp Business Account has more than one phone number — pick one to finish.',
+        error: 'This WhatsApp Business Account has more than one phone number - pick one to finish.',
         code: 'needs_manual_resolution',
         reason: 'multiple_phone_numbers',
         wabaId,
@@ -264,7 +264,7 @@ router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
   try {
     // via_coexistence isn't recoverable from connect_diagnostics (Meta's
     // FINISH event is the only signal for it, and by definition this state
-    // means we never confidently resolved past that point) — passing
+    // means we never confidently resolved past that point) - passing
     // `false` here used to matter a lot (see git history), but as of
     // 2026-09-08 completeWabaConnection no longer trusts this flag as its
     // primary signal: it checks Meta's own `is_on_biz_app` for the resolved
@@ -273,7 +273,7 @@ router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
     // happen in practice). Confirmed live: this exact "admin resolves an
     // ambiguous Coexistence WABA" path used to hard-fail every time with
     // "Register endpoint is not available for SMB businesses" (WABA
-    // 998094716164113, TNPSC Mentors) because of this hardcoded `false` —
+    // 998094716164113, TNPSC Mentors) because of this hardcoded `false` -
     // that's now fixed at the source, so `false` here is inert in the
     // common case, only a defensive fallback.
     const { waba: updated, templateSync } = await completeWabaConnection(pool, id, {
@@ -327,7 +327,7 @@ router.post('/admin-users', asyncHandler(async (req, res) => {
   const { name, email, password, role } = schema.parse(req.body);
   const password_hash = await hashPassword(password);
   const admin = await adminUsersRepo.create({ name, email, role, password_hash });
-  // Creating an admin account grants durable, high-privilege access — this is
+  // Creating an admin account grants durable, high-privilege access - this is
   // exactly the action that must be traceable after the fact (see migration
   // 021_audit_log_actor_ip.js's module comment for why actor_ip exists at all).
   await auditLogRepo.record({
@@ -399,10 +399,10 @@ router.patch('/tickets/:id', asyncHandler(async (req, res) => {
 }));
 
 // --- Hub API keys (build plan Phase 5) --- consuming apps (GV Mart, Sirah
-// CRM, etc.) don't self-serve keys — issuing one is a Sirah-team action,
+// CRM, etc.) don't self-serve keys - issuing one is a Sirah-team action,
 // same trust tier as creating an admin user above. Full list of keys across
 // every tenant, since this is inherently a cross-tenant admin view (spec
-// §6 "API keys — which app, which tenant, revoke").
+// §6 "API keys - which app, which tenant, revoke").
 router.get('/api-keys', asyncHandler(async (req, res) => {
   const clientId = req.query.client_id ? z.string().uuid().parse(req.query.client_id) : null;
   if (clientId) return res.json(await apiKeysRepo.listByClientId(pool, clientId));
@@ -415,7 +415,7 @@ router.get('/api-keys', asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
-// Raw key is returned exactly once, here — never retrievable again after
+// Raw key is returned exactly once, here - never retrievable again after
 // this response, same "show once" rule as everything else that generates a
 // secret in this codebase.
 router.post('/api-keys', asyncHandler(async (req, res) => {
@@ -427,7 +427,7 @@ router.post('/api-keys', asyncHandler(async (req, res) => {
   const { record, rawKey } = await apiKeysRepo.create(pool, client_id, app_name);
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'api_key_created', target: `${client_id}: ${app_name}` });
   // key_hash is internal (the lookup value requireApiKey.js hashes an
-  // incoming bearer key against) — the intended secret to reveal here is
+  // incoming bearer key against) - the intended secret to reveal here is
   // rawKey, given separately below; key_hash has no reason to ever leave
   // this process.
   const { key_hash, ...safeRecord } = record;
@@ -435,7 +435,7 @@ router.post('/api-keys', asyncHandler(async (req, res) => {
 }));
 
 // Bulk-issue a Hub API key for every client that doesn't already have an
-// active one — the admin-panel button for onboarding the whole existing
+// active one - the admin-panel button for onboarding the whole existing
 // client base onto the CRM integration at once, not just new clients
 // (the /api/clients auto-issue only covers clients created from here on).
 // Idempotent by construction: a client with any non-revoked key is skipped,
@@ -468,10 +468,10 @@ router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
   res.json(safeRevoked);
 }));
 
-// Delete works on a key in any state — see apiKeysRepo.softDelete's comment.
+// Delete works on a key in any state - see apiKeysRepo.softDelete's comment.
 // Soft tombstone, not a row delete, so it's a DELETE verb over an endpoint
 // that never actually removes the row; that's intentional (see migration
-// 034_api_key_soft_delete.js) — DELETE is still the correct HTTP semantics
+// 034_api_key_soft_delete.js) - DELETE is still the correct HTTP semantics
 // from the caller's point of view, since the key permanently leaves the list.
 router.delete('/api-keys/:id', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
@@ -483,15 +483,15 @@ router.delete('/api-keys/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// --- Hub inbound forwarding config (build plan Phase 5) — sets
+// --- Hub inbound forwarding config (build plan Phase 5) - sets
 // wabas.forward_to_url/forward_events for a client's connected WABA. Was
 // missing entirely until now: the columns existed (migration
 // 014_hub_capability.js) and metaWebhook.js already read them, but nothing
-// ever wrote them outside a test's direct repo call — this is the actual
+// ever wrote them outside a test's direct repo call - this is the actual
 // configuration point. Admin-provisioned, same trust tier as api-keys
 // above, since a hub-connected consuming app is set up by Sirah's own
 // team, not self-served. events is required (hubForwardConfigSchema),
-// not defaulted — see migration 015_explicit_forward_events.js.
+// not defaulted - see migration 015_explicit_forward_events.js.
 router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { forward_to_url, events } = hubForwardConfigSchema.parse(req.body);
@@ -503,15 +503,15 @@ router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
   const forward_secret = existing.forward_secret || crypto.randomBytes(24).toString('hex');
   const updated = await wabasRepo.upsertForClient(id, { forward_to_url, forward_secret, forward_events: events });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'hub_forward_configured', target: id });
-  // Only a genuinely new secret (first-time setup) is ever returned raw —
+  // Only a genuinely new secret (first-time setup) is ever returned raw -
   // saving the URL/events on top of an existing secret must not re-expose it.
   res.json(isNewSecret ? { ...maskWaba(updated), forward_secret } : maskWaba(updated));
 }));
 
-// Separate, explicit action — force-generates a new forward_secret even if
+// Separate, explicit action - force-generates a new forward_secret even if
 // one already exists, invalidating the old one immediately (deliveries
-// already queued keep using their snapshotted target_secret — see migration
-// 014_hub_capability.js's comment — only future deliveries are affected).
+// already queued keep using their snapshotted target_secret - see migration
+// 014_hub_capability.js's comment - only future deliveries are affected).
 // The frontend must warn before calling this.
 router.post('/clients/:id/hub-forward/regenerate-secret', asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
@@ -526,15 +526,15 @@ router.post('/clients/:id/hub-forward/regenerate-secret', asyncHandler(async (re
 
 // --- Platform Overview: tenant, WABA, phone number, connection status, plan,
 // connected date, in one row per client. Formerly the super-admin-only
-// /api/super-admin/clients view — folded in here since there's now a single
+// /api/super-admin/clients view - folded in here since there's now a single
 // admin dashboard, not a separate cross-tenant one. Still queries via `pool`
 // (not req.db) like the rest of this router; nothing about that changed. ---
 // last_login_at and the two dormancy flags below back the "make a dormant
-// client visible" fix — a client with 1,342 unanswered messages went 20
+// client visible" fix - a client with 1,342 unanswered messages went 20
 // days unnoticed because nothing here ever surfaced whether anyone was
 // actually using (or responding through) the account. Computed directly
 // here, not read from alert_events, so this is always live the moment the
-// page loads rather than lagging alertRunner's own 5-minute tick — same two
+// page loads rather than lagging alertRunner's own 5-minute tick - same two
 // conditions as alertRunner.js's checkDormantNoOutbound/checkNeverLoggedIn,
 // deliberately duplicated rather than shared: this is a read for display,
 // that file's version is the one with real alerting/notification side
@@ -564,7 +564,7 @@ router.get('/clients-overview', asyncHandler(async (req, res) => {
 // --- Health per client: quality rating, restriction status, last successful
 // webhook, forwarding failure count, messaging tier. The daily-check screen.
 // messaging_tier/messaging_tier_checked_at now come from the real column
-// (see messagingTierRefreshRunner.js) — 'unknown' means Meta was checked but
+// (see messagingTierRefreshRunner.js) - 'unknown' means Meta was checked but
 // didn't return the field, null means never checked yet; still never a
 // guessed value. ---
 router.get('/health', asyncHandler(async (req, res) => {
@@ -664,7 +664,7 @@ router.post('/payment-notifications/send-reminders', asyncHandler(async (req, re
   res.json({ total: clients.length, sent, failed });
 }));
 
-// Backs the Health Monitor's "Alerts are not configured" banner —
+// Backs the Health Monitor's "Alerts are not configured" banner -
 // alertingConfig.js is the single source of truth this and index.js's
 // startup warning both read, so they can never disagree. Pure env var
 // presence check, no DB.
@@ -672,12 +672,12 @@ router.get('/alerting-status', asyncHandler(async (req, res) => {
   res.json(getAlertingConfigStatus());
 }));
 
-// Admin-only "Send test alert" — bypasses alert_events entirely (no row
+// Admin-only "Send test alert" - bypasses alert_events entirely (no row
 // written, real or fake) so a test click never clutters the real alert
 // history or gets picked up as "already open" by alertRunner.js's own
 // dedup logic. Calls alertNotifier.notify() directly with a synthetic,
-// clearly-labeled alert and relays its real per-channel result — including
-// Resend's or Meta's exact error text — back to the admin UI, rather than
+// clearly-labeled alert and relays its real per-channel result - including
+// Resend's or Meta's exact error text - back to the admin UI, rather than
 // a bare success/failure toast.
 router.post('/alerts/test', asyncHandler(async (req, res) => {
   const result = await alertNotifier.notify({
@@ -705,7 +705,7 @@ router.get('/volume', asyncHandler(async (req, res) => {
 
 // --- Statistics/Analytics: trend data for the admin Statistics view.
 // Read-only aggregation over tables that already exist (usage_logs, clients,
-// webhook_deliveries, api_keys) — no new tables. `days` follows the same
+// webhook_deliveries, api_keys) - no new tables. `days` follows the same
 // clamped rolling-window convention as /volume above, for consistency. ---
 router.get('/stats', asyncHandler(async (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
@@ -807,7 +807,7 @@ router.get('/failures/webhook-deliveries', asyncHandler(async (req, res) => {
 }));
 
 // A flow that silently stopped is the same class of problem as a dropped
-// webhook — visible here for the same reason failures/sends and
+// webhook - visible here for the same reason failures/sends and
 // failures/webhook-deliveries are: an operator shouldn't have to query the
 // DB to find out automation broke for a client (flow_events'
 // 'stalled' detail carries the actual MessagingError message/code, see
@@ -835,7 +835,7 @@ router.get('/failures/stalled-flows', asyncHandler(async (req, res) => {
 }));
 
 // --- Settings (spec §5 "Settings" row) ---
-// Read-only status, never the actual secret values — this is a platform
+// Read-only status, never the actual secret values - this is a platform
 // config health check, not a way to edit secrets from a web form.
 router.get('/settings', asyncHandler(async (req, res) => {
   const plans = await plansRepo.list();
@@ -851,7 +851,7 @@ router.get('/settings', asyncHandler(async (req, res) => {
     },
     secrets: {
       // Matches the actual placeholder text in .env.example
-      // ("...-change-before-any-real-deploy") — a prior space-vs-hyphen
+      // ("...-change-before-any-real-deploy") - a prior space-vs-hyphen
       // mismatch here meant this always reported "Rotated" even on a
       // freshly-cloned dev environment that never touched these values.
       jwtSecretIsDefault: /change-me|change.before/.test(process.env.JWT_SECRET || ''),
@@ -861,11 +861,11 @@ router.get('/settings', asyncHandler(async (req, res) => {
   });
 }));
 
-// Meta Official Template Library (wasi-master-plan.md §2b) — admin-facing
+// Meta Official Template Library (wasi-master-plan.md §2b) - admin-facing
 // refresh controls. GET /status is read-only (last refresh time, whether
 // it errored, cached entry count); POST /refresh does the real Meta fetch
 // synchronously and returns the result inline, same "await it, no queue"
-// shape as every other admin-triggered action in this file — an admin
+// shape as every other admin-triggered action in this file - an admin
 // clicking "Refresh Catalog" expects to see the outcome, not poll for it.
 router.get('/template-library/meta/status', asyncHandler(async (req, res) => {
   const meta = await metaTemplateLibraryRepo.getRefreshMeta(pool);

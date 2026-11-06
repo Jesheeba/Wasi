@@ -1,11 +1,11 @@
-/* Shared breakpoint reference for the whole codebase — the single source of
+/* Shared breakpoint reference for the whole codebase - the single source of
    truth for the two responsive breakpoints already established in
    marketing/marketing.css (tablet 900px, mobile 640px). index.css and
    admin/admin.css previously had zero @media queries at all; any new
    responsive rule added to them should use these same two values.
 
    NOTE: CSS custom properties cannot be referenced inside @media conditions
-   (`@media (max-width: var(--x))` is not valid CSS in any browser) — that's
+   (`@media (max-width: var(--x))` is not valid CSS in any browser) - that's
    a platform limitation, not something a build step would fix without
    introducing one (this codebase deliberately has none). So every actual
    `@media (max-width: ...)` rule still has to hardcode the literal pixel

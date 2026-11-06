@@ -1,10 +1,10 @@
-// PLAN.md item 28 — per-recipient broadcast detail view (parts A-C: real
+// PLAN.md item 28 - per-recipient broadcast detail view (parts A-C: real
 // delivered_at/read_at/failed_at timestamps, the Meta message-error map,
 // and the new GET /:id, GET /:id/recipients, GET /:id/recipients/export
 // routes). Builds one broadcast with exactly one recipient per bucket the
 // header strip/table need to distinguish (pending, sent-no-further-status,
 // delivered, read, failed post-send, failed pre-send, skipped) via direct
-// repo calls — not by running broadcastRunner — so each bucket's real state
+// repo calls - not by running broadcastRunner - so each bucket's real state
 // is deliberately controlled rather than raced against timing.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -49,7 +49,7 @@ before(async () => {
   assert.ok(clientToken && testClientId, 'dedicated test client registration must succeed');
 
   // A zero-recipient broadcast (an empty, freshly-created tag matches no
-  // contact) — recipients are inserted directly below so this test controls
+  // contact) - recipients are inserted directly below so this test controls
   // each one's exact status, not left to a real audience match/send.
   const tagRes = await fetch(`${baseUrl}/api/tags`, {
     method: 'POST', headers: authed(clientToken),
@@ -86,7 +86,7 @@ before(async () => {
 
   const chat = await chatsRepo.create(pool, testClientId, { name: 'Detail Test Chat', phone: `9195${base}` });
 
-  // 1. Still pending — never claimed.
+  // 1. Still pending - never claimed.
   const pendingContact = await makeContact('0', 'Pending Contact');
   recipientIds.pending = await makeRecipient(pendingContact.id);
 
@@ -110,15 +110,15 @@ before(async () => {
   await broadcastRecipientsRepo.markSent(pool, recipientIds.read, readMessage.id);
   await chatsRepo.updateStatusByMetaId(pool, testClientId, readMessage.meta_message_id, 'read', null, null);
 
-  // 5. Failed AFTER Meta accepted the send (a real documented Meta code —
-  // 131047, "re-engagement window closed" — reported via the status webhook).
+  // 5. Failed AFTER Meta accepted the send (a real documented Meta code -
+  // 131047, "re-engagement window closed" - reported via the status webhook).
   const failedPostContact = await makeContact('4', 'Failed Post-Send Contact');
   recipientIds.failedPostSend = await makeRecipient(failedPostContact.id);
   const failedMessage = await makeSentMessage(chat.id, `wamid.${SUITE_PREFIX}failedpost`);
   await broadcastRecipientsRepo.markSent(pool, recipientIds.failedPostSend, failedMessage.id);
   await chatsRepo.updateStatusByMetaId(pool, testClientId, failedMessage.meta_message_id, 'failed', 'Re-engagement message', 131047);
 
-  // 6. Failed BEFORE ever reaching Meta (e.g. contact deleted mid-broadcast —
+  // 6. Failed BEFORE ever reaching Meta (e.g. contact deleted mid-broadcast -
   // broadcastRecipientsRepo.claimBatch's own orphan-handling shape).
   const failedPreContact = await makeContact('5', 'Failed Pre-Send Contact');
   recipientIds.failedPreSend = await makeRecipient(failedPreContact.id);

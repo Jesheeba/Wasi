@@ -2,11 +2,11 @@
 // recipient that hit a TRANSIENT send failure (a Meta rate-limit rejection,
 // a network timeout) used to be marked 'failed' permanently on the very
 // first attempt, identically to a genuinely permanent rejection. This adds
-// retry-with-backoff for the transient case only — migration 071's
+// retry-with-backoff for the transient case only - migration 071's
 // attempt_count/next_attempt_at, broadcastRecipientsRepo.markFailedAttempt,
 // and broadcastRunner.js's isTransientSendError classifier. Campaign-scoped
 // backoff (30s/2m/10m), deliberately much shorter than forwardRunner's
-// hours-long webhook schedule — see broadcastRecipientsRepo.js's own
+// hours-long webhook schedule - see broadcastRecipientsRepo.js's own
 // comment for why. Same dedicated-disposable-test-client + Meta-boundary-
 // only fetch-faking pattern as broadcastPacing.test.js.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -124,7 +124,7 @@ test('markFailedAttempt: retries at 30s/2m/10m, then gives up permanently on the
   let row = (await pool.query('select * from broadcast_recipients where id = $1', [recipient.id])).rows[0];
   assert.equal(row.status, 'pending', 'must be retryable, not terminal, after the 1st failure');
   assert.equal(row.attempt_count, 1);
-  // Wide tolerance windows, not a tight one — this project's own precedent
+  // Wide tolerance windows, not a tight one - this project's own precedent
   // (webhookForwarding.test.js) only asserts direction ("pushed into the
   // future") specifically to avoid flakiness from clock skew/latency
   // against the real remote Supabase instance; this asserts direction PLUS
@@ -142,12 +142,12 @@ test('markFailedAttempt: retries at 30s/2m/10m, then gives up permanently on the
   waitMs = new Date(row.next_attempt_at).getTime() - before2;
   assert.ok(waitMs > 90_000 && waitMs < 180_000, `expected ~2m backoff after attempt 2, got ${waitMs}ms`);
 
-  const r3 = await broadcastRecipientsRepo.markFailedAttempt(pool, recipient.id, 'transient failure #3 — final', row.attempt_count);
+  const r3 = await broadcastRecipientsRepo.markFailedAttempt(pool, recipient.id, 'transient failure #3 - final', row.attempt_count);
   assert.deepEqual(r3, { giveUp: true, nextAttemptCount: 3 });
   row = (await pool.query('select * from broadcast_recipients where id = $1', [recipient.id])).rows[0];
   assert.equal(row.status, 'failed', 'must give up permanently on the 3rd transient failure, not schedule a 4th attempt');
   assert.equal(row.attempt_count, 3);
-  assert.equal(row.error_reason, 'transient failure #3 — final');
+  assert.equal(row.error_reason, 'transient failure #3 - final');
 });
 
 // --- claimBatch must honor next_attempt_at, not just status='pending' ---
@@ -220,16 +220,16 @@ test('processBroadcast: a Meta rate-limit rejection is retried and the broadcast
 
     // --- Case A: rate-limited once, then succeeds ---
     // A dedicated tag with exactly this ONE real member, created and tagged
-    // BEFORE the broadcast — NOT the emptyTagId + a manual post-hoc
+    // BEFORE the broadcast - NOT the emptyTagId + a manual post-hoc
     // `insert into broadcast_recipients` this test originally used. That
     // pattern was wrong for what THIS test needs: routes/broadcasts.js's
     // POST handler marks a broadcast 'Completed' immediately at creation
     // when its audience resolves to zero recipients (a real, correct,
-    // pre-existing behavior — an empty-audience campaign has nothing to
+    // pre-existing behavior - an empty-audience campaign has nothing to
     // do). A manual insert afterward still gets processed by
     // processBroadcast, but the broadcast itself was already 'Completed'
     // before that ever ran, which made an earlier draft of this test's own
-    // "must still be Sending while a recipient retries" assertion fail —
+    // "must still be Sending while a recipient retries" assertion fail -
     // not because retry was broken, but because the test's own setup
     // short-circuited past the state it meant to observe. Tagging the
     // contact into a real, non-empty audience before creating the broadcast
@@ -266,14 +266,14 @@ test('processBroadcast: a Meta rate-limit rejection is retried and the broadcast
     await broadcastRunner.processBroadcast(row);
 
     let recipientRow = (await pool.query('select * from broadcast_recipients where broadcast_id = $1', [broadcast.id])).rows[0];
-    assert.equal(recipientRow.status, 'pending', 'rate-limited on the only attempt so far — must be scheduled to retry, not failed');
+    assert.equal(recipientRow.status, 'pending', 'rate-limited on the only attempt so far - must be scheduled to retry, not failed');
     assert.equal(recipientRow.attempt_count, 1);
     assert.match(recipientRow.error_reason, /130429|Rate limit/);
 
     row = (await pool.query('select * from broadcasts where id = $1', [broadcast.id])).rows[0];
-    // scheduled_date is TOMORROW (see this test's own comment on why —
+    // scheduled_date is TOMORROW (see this test's own comment on why -
     // avoiding this shared DB's live broadcastRunner), so
-    // broadcastsRepo.create left this row 'Scheduled', not 'Sending' — that
+    // broadcastsRepo.create left this row 'Scheduled', not 'Sending' - that
     // status field never flips to 'Sending' on its own since this test
     // calls processBroadcast() directly rather than tick()'s
     // Scheduled -> Sending promotion (same pattern broadcastPacing.test.js
@@ -289,13 +289,13 @@ test('processBroadcast: a Meta rate-limit rejection is retried and the broadcast
 
     recipientRow = (await pool.query('select * from broadcast_recipients where broadcast_id = $1', [broadcast.id])).rows[0];
     assert.equal(recipientRow.status, 'sent', 'the retried attempt must succeed once Meta stops rate-limiting it');
-    assert.equal(sendAttempts, 2, 'exactly 2 real Meta send calls — the rate-limited one and the retry, no more');
+    assert.equal(sendAttempts, 2, 'exactly 2 real Meta send calls - the rate-limited one and the retry, no more');
 
     row = (await pool.query('select * from broadcasts where id = $1', [broadcast.id])).rows[0];
     assert.equal(row.status, 'Completed');
 
     // --- Case B: an ordinary (non-rate-limit) rejection must fail
-    // immediately, with no retry at all — same dedicated-tag setup as Case
+    // immediately, with no retry at all - same dedicated-tag setup as Case
     // A, for the same reason (avoid the zero-recipient auto-Completed path). ---
     const rejectedTag = await fetch(`${baseUrl}/api/tags`, {
       method: 'POST', headers: authed(clientToken), body: JSON.stringify({ name: `${SUITE_PREFIX}rejected_tag` }),
@@ -325,8 +325,8 @@ test('processBroadcast: a Meta rate-limit rejection is retried and the broadcast
 
     const recipientRow2 = (await pool.query('select * from broadcast_recipients where broadcast_id = $1', [broadcast2.id])).rows[0];
     assert.equal(recipientRow2.status, 'failed', 'a non-rate-limit rejection must fail immediately, not be scheduled for retry');
-    assert.equal(recipientRow2.attempt_count, 0, 'markFailed (the permanent path) does not touch attempt_count — only markFailedAttempt does');
-    assert.equal(rejectedSendAttempts, 1, 'must never be retried — exactly one real Meta call for this recipient');
+    assert.equal(recipientRow2.attempt_count, 0, 'markFailed (the permanent path) does not touch attempt_count - only markFailedAttempt does');
+    assert.equal(rejectedSendAttempts, 1, 'must never be retried - exactly one real Meta call for this recipient');
 
     const finalBroadcast2 = await pool.query('select status from broadcasts where id = $1', [broadcast2.id]);
     assert.equal(finalBroadcast2.rows[0].status, 'Completed', 'a permanently-failed recipient still counts as resolved, so the broadcast completes');

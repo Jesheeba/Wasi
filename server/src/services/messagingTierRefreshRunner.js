@@ -1,14 +1,14 @@
 // Real-time messaging-tier detection. wabas.messaging_tier (migration 064)
 // and this file's own home were both deliberately left as a stub until now
-// — see that migration's comment and the TODO(messaging-tier) this replaces
-// in alertRunner.js — pending confirmation the real Graph API field name
+// - see that migration's comment and the TODO(messaging-tier) this replaces
+// in alertRunner.js - pending confirmation the real Graph API field name
 // wasn't guessed. It's documented in Meta's own public Cloud API reference
 // (messaging_limit_tier, on the phone-number resource), so this fetches it
 // for real now, but defensively: an absent/unexpected value is stored as
 // 'unknown', never silently misreported as a specific tier.
 //
 // Deliberately its own file, not folded into alertRunner.js despite that
-// file's TODO pointing there — alertRunner.js is a pure check-then-alert
+// file's TODO pointing there - alertRunner.js is a pure check-then-alert
 // engine (every checkX() function only reads and returns alert candidates;
 // none of them fetch-from-Meta-and-persist). A tier refresh is a fetch+write,
 // architecturally the same shape as metaTemplateLibraryRefreshRunner.js
@@ -21,7 +21,7 @@ const { decrypt } = require('../utils/encryption');
 const TICK_MS = 60 * 60 * 1000; // hourly check
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // tiers don't change minute-to-minute
 
-// Fetches and persists ONE waba's tier. Own try/catch — never throws out, so
+// Fetches and persists ONE waba's tier. Own try/catch - never throws out, so
 // one client's Meta failure (expired token, no real Meta app configured in
 // this environment, etc.) can't block every other client's refresh in the
 // same tick. Also callable directly by the admin "Refresh Tier" route,
@@ -34,7 +34,7 @@ async function refreshOne(waba) {
   try {
     const accessToken = decrypt(waba.access_token_encrypted);
     const details = await metaClient.getPhoneNumberDetails(waba.phone_number_id, accessToken);
-    // Logged once per refresh, not stripped after this is "confirmed" —
+    // Logged once per refresh, not stripped after this is "confirmed" -
     // matches this codebase's Embedded Signup diagnostic-logging precedent
     // (keep it in until a real live response has actually been inspected).
     console.log(`messagingTierRefreshRunner: raw phone-number details for waba ${waba.waba_id}:`, JSON.stringify(details));

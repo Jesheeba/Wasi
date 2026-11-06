@@ -1,14 +1,14 @@
-// Thin fetch wrapper — same shape as app.js's authFetch (Bearer token from
+// Thin fetch wrapper - same shape as app.js's authFetch (Bearer token from
 // localStorage, JSON in/out) since this page is served same-origin and
 // shares the same client_token key. No API_BASE branching (unlike app.js)
-// — that only exists there for the main app's local split-origin dev
+// - that only exists there for the main app's local split-origin dev
 // setup; this page is only ever tested served through Express itself
 // (createApp(), matching every other local verification this session),
 // where relative /api/... paths are always correct.
 function request(path, options = {}) {
   const token = localStorage.getItem('client_token');
   // A FormData body (uploadHeaderMedia) needs the browser to set its own
-  // multipart Content-Type with a boundary — same isFormData guard as
+  // multipart Content-Type with a boundary - same isFormData guard as
   // app.js's authFetch.
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   return fetch(`/api${path}`, {

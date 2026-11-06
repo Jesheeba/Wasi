@@ -1,21 +1,21 @@
 // Alerting config visibility (2026-09-22, read-only investigation ->
 // approved build): production has RESEND_API_KEY/ALERT_EMAIL_TO/
-// ALERT_WHATSAPP_TO/ALERT_WABA_ID all unset, invisibly — no email or
+// ALERT_WHATSAPP_TO/ALERT_WABA_ID all unset, invisibly - no email or
 // WhatsApp alert has ever actually been delivered. Covers:
 //   1. alertingConfig.js's getAlertingConfigStatus (pure, reused by index.js's
 //      startup warning and the admin Health Monitor banner).
-//   2. alertNotifier.notify()'s new { email, whatsapp } structured return —
+//   2. alertNotifier.notify()'s new { email, whatsapp } structured return -
 //      every real send path stubbed (emailService.sendEmail directly;
 //      Meta via the standard graph.facebook.com fetch stub), never a real
 //      email/WhatsApp send.
-//   3. POST /api/admin/alerts/test — confirms it relays notify()'s real
+//   3. POST /api/admin/alerts/test - confirms it relays notify()'s real
 //      result and, critically, writes NO row to alert_events (a test click
 //      must never pollute the real alert history).
 //   4. GET /api/admin/alerting-status.
 //   5. emailService.js's EMAIL_FROM fallback fix (now matches .env.example).
 //
 // process.env is mutated and restored per-test (these config vars have no
-// per-request/per-connection scope to fake instead) — every test resets
+// per-request/per-connection scope to fake instead) - every test resets
 // exactly what it changed in its own finally, and BEFORE/after this file's
 // own state is captured so nothing leaks into other test files even though
 // npm test runs them in separate processes anyway (--test-concurrency=1;
@@ -42,7 +42,7 @@ function authed(token) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 }
 
-// Snapshots and restores the 4 config env vars around a test body — used
+// Snapshots and restores the 4 config env vars around a test body - used
 // by every test that needs a specific configured/unconfigured combination,
 // so no test's env mutation can leak into the next one even on failure.
 async function withEnv(overrides, fn) {
@@ -76,7 +76,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const registered = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
@@ -90,7 +90,7 @@ before(async () => {
   testClientId = registered.client?.id;
   assert.ok(testClientId, 'dedicated test client registration must succeed');
 
-  // A real, connected disposable WABA for the WhatsApp-channel tests —
+  // A real, connected disposable WABA for the WhatsApp-channel tests -
   // never a real access token (encrypt() over a fake string, same
   // convention every other test file in this suite uses), and every Meta
   // call in this file is stubbed, so nothing ever reaches graph.facebook.com.
@@ -103,7 +103,7 @@ before(async () => {
 
   // alertNotifier.sendWhatsAppChannel now resolves wasi_ops_alert's real
   // approved language from its local row (the hardcoded-language fix under
-  // test elsewhere) instead of guessing 'en_US' — a local row is required
+  // test elsewhere) instead of guessing 'en_US' - a local row is required
   // for test 4's whatsapp-channel sends to even attempt a Meta call.
   await messageTemplatesRepo.create(pool, {
     client_id: testClientId, name: 'wasi_ops_alert', category: 'Utility', status: 'approved',
@@ -129,7 +129,7 @@ test('1. getAlertingConfigStatus reflects the 3 real env vars, independent of EM
     assert.equal(status.whatsappConfigured, false, 'whatsapp needs BOTH ALERT_WHATSAPP_TO and ALERT_WABA_ID');
   });
 
-  // Only one of the two whatsapp vars set — still not configured.
+  // Only one of the two whatsapp vars set - still not configured.
   await withEnv({ ALERT_WHATSAPP_TO: '15551234567', ALERT_WABA_ID: undefined }, () => {
     assert.equal(getAlertingConfigStatus().whatsappConfigured, false);
   });

@@ -1,4 +1,4 @@
-// PLAN.md item 3 — internal notes with @mention. Verifies:
+// PLAN.md item 3 - internal notes with @mention. Verifies:
 // 1. A note is created and returned with mentions resolved to {id, name}.
 // 2. Notes never appear in the customer-facing GET /:id/messages.
 // 3. A mention referencing a team member from another client is rejected.

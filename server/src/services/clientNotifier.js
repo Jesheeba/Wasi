@@ -1,15 +1,15 @@
 // Sends a WhatsApp template message FROM Wasi's own platform WABA TO one of
-// Wasi's own clients — payment reminders, suspension warnings, suspension
+// Wasi's own clients - payment reminders, suspension warnings, suspension
 // notices. Deliberately a separate module from alertNotifier.js, not a
 // shared helper: alertNotifier sends internal-ops alerts to Wasi's own
 // staff by repurposing whichever client's WABA happens to be connected
-// (harmless there — nothing external ever sees it). This module reaches an
+// (harmless there - nothing external ever sees it). This module reaches an
 // EXTERNAL client, who would see the message arrive from a *different*
 // Wasi client's business identity if the same "any connected WABA" shortcut
-// were reused here — confusing, a quality-rating risk to an uninvolved
+// were reused here - confusing, a quality-rating risk to an uninvolved
 // third party, and a policy risk (see this file's env var comment below).
 // PAYMENT_REMINDER_WABA_ID is therefore its own, separate config, expected
-// to point at Wasi's own dedicated WABA once one exists — never at
+// to point at Wasi's own dedicated WABA once one exists - never at
 // ALERT_WABA_ID's borrowed client number.
 const metaClient = require('../utils/metaClient');
 const wabasRepo = require('../repositories/wabasRepo');
@@ -76,36 +76,36 @@ async function mirrorToSenderInbox(waba, client, to, templateName, metaMessageId
 }
 
 // name/bodyParams describe an already-approved WhatsApp template (see this
-// feature's 3 candidate templates, held for review — Part C). `language` is
+// feature's 3 candidate templates, held for review - Part C). `language` is
 // no longer a caller-supplied/defaulted field (see the real bug this fix
-// closes, below) — it is always resolved from the template's own local row.
+// closes, below) - it is always resolved from the template's own local row.
 // Every caller in this feature is best-effort by design (a reminder/warning
 // that fails to send should never abort the runner's tick for every other
-// client) — callers catch and log, this function just throws with a clear
+// client) - callers catch and log, this function just throws with a clear
 // reason so the caller's log line says something real.
 //
 // Real bug, fixed (same class as apiV1Messages.js/broadcastRunner.js/
 // flowEngine.js): this used to accept a `language` option defaulting to
 // 'en_US', and its one caller (paymentNotificationService.sendAndLog) never
-// passed one — so every billing WhatsApp send (reminder/warning/suspension)
+// passed one - so every billing WhatsApp send (reminder/warning/suspension)
 // was sent as 'en_US' regardless of what language the template is actually
 // approved under. Resolved the same way as the other fixes: look up the
 // real local row (scoped to the sender WABA's own client, since that is
-// whose template this is — never the recipient client's) and use its
+// whose template this is - never the recipient client's) and use its
 // `language` column. No local row means there is no reasonable language to
 // guess, so this throws a clear local reason instead of attempting a send
 // that would fail against Meta anyway, less specifically.
 async function sendTemplateToClient(client, { name, bodyParams = {} }) {
   const to = await resolveRecipientPhone(client);
   if (!to) {
-    throw new ClientNotifyError(`${client.name} (${client.id}) has no contact_phone and no connected WhatsApp number on file — nothing to send to.`);
+    throw new ClientNotifyError(`${client.name} (${client.id}) has no contact_phone and no connected WhatsApp number on file - nothing to send to.`);
   }
 
   const waba = await resolveSenderWaba();
 
   const template = await messageTemplatesRepo.findByNameAndClient(pool, waba.client_id, name);
   if (!template) {
-    throw new ClientNotifyError(`Template "${name}" not found locally for the sender WABA's client — cannot determine its real approved language to send correctly.`);
+    throw new ClientNotifyError(`Template "${name}" not found locally for the sender WABA's client - cannot determine its real approved language to send correctly.`);
   }
 
   const accessToken = decrypt(waba.access_token_encrypted);

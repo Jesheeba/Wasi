@@ -2,7 +2,7 @@
 // decision: server-wide cache, admin-triggered + periodic refresh, never
 // fetched live per client request). Same setInterval-poller shape as every
 // other background worker in this file's sibling services (broadcastRunner,
-// forwardRunner) — but a much longer tick, since the underlying data (Meta's
+// forwardRunner) - but a much longer tick, since the underlying data (Meta's
 // own template catalog) changes on the order of weeks, not seconds.
 const { pool } = require('../db/pool');
 const wabasRepo = require('../repositories/wabasRepo');
@@ -18,13 +18,13 @@ const REFRESH_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // by tick() below when the cache has actually gone stale. Only ever
 // requests/stores category UTILITY entries and only ever refreshes the
 // zero-variable subset a client can actually use in v1 (Phase 0 decision,
-// see migration 042's comment) — parameterized entries are simply never
+// see migration 042's comment) - parameterized entries are simply never
 // fetched, not fetched-then-filtered, since there's no reason to cache
 // content v1 never surfaces.
 async function refreshNow() {
   const waba = await wabasRepo.findAnyConnected();
   if (!waba) {
-    throw new Error('No connected WABA available to fetch the Meta template library — connect at least one client\'s WhatsApp Business Account first.');
+    throw new Error('No connected WABA available to fetch the Meta template library - connect at least one client\'s WhatsApp Business Account first.');
   }
   const accessToken = decrypt(waba.access_token_encrypted);
 
@@ -48,9 +48,9 @@ async function refreshNow() {
 
   const count = await metaTemplateLibraryRepo.upsertBatch(pool, entries);
   // Removes any cached row Meta no longer lists in this fetch (Auditor/QA
-  // finding — upsertBatch alone never deleted anything). Scoped to the
+  // finding - upsertBatch alone never deleted anything). Scoped to the
   // UTILITY entries this fetch actually saw, not the raw unfiltered
-  // catalog — a MARKETING entry was never cached in the first place (see
+  // catalog - a MARKETING entry was never cached in the first place (see
   // the filter above), so it must never be "pruned" here either.
   await metaTemplateLibraryRepo.pruneMissing(pool, entries.map((e) => e.meta_library_id));
   await metaTemplateLibraryRepo.recordRefreshSuccess(pool, count);

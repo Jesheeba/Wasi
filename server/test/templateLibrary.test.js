@@ -1,9 +1,9 @@
-// Template Message Library (wasi-master-plan.md §2) — GET /api/template-library
+// Template Message Library (wasi-master-plan.md §2) - GET /api/template-library
 // (browse/filter) and POST /api/template-library/:id/use (usage logging).
 // Same dedicated-disposable-test-client pattern as apiKeysSelfServe.test.js:
 // real Postgres via createApp(), a throwaway client per suite, deleted in
 // after(). Runs against the real seeded content (seedTemplateLibrary.js),
-// not synthetic fixtures — this IS the same content clients actually see.
+// not synthetic fixtures - this IS the same content clients actually see.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
@@ -147,9 +147,9 @@ test('POST /api/template-library/:id/use: a malformed (non-UUID) id is rejected,
 // Real negative case, not the trivially-true "every returned row happens to
 // be active" check above (zero inactive rows exist in real seeded content,
 // so that alone never actually exercises the WHERE is_active = true clause
-// — a repo change that silently dropped the filter would still pass it).
+// - a repo change that silently dropped the filter would still pass it).
 // This flips one real row inactive, proves BOTH listActive and
-// findActiveById genuinely exclude it, then restores it in finally —
+// findActiveById genuinely exclude it, then restores it in finally -
 // shared production content, not a disposable row, so it must not be left
 // deactivated if this test fails partway through.
 test('GET /api/template-library and POST .../:id/use both genuinely exclude an is_active=false row', async () => {
@@ -205,7 +205,7 @@ test('POST /api/template-library/:id/use: records usage and returns the full ent
   assert.equal(usageRows.rows.length, 1, 'exactly one usage row must be recorded for this client+template');
 });
 
-test('POST /api/template-library/:id/use: usage is tenant-isolated by RLS — a different client\'s usage is invisible cross-tenant even querying the same library_template_id', async () => {
+test('POST /api/template-library/:id/use: usage is tenant-isolated by RLS - a different client\'s usage is invisible cross-tenant even querying the same library_template_id', async () => {
   const list = await fetch(
     `${baseUrl}/api/template-library?industry=E-commerce&use_case=order_confirmation`,
     { headers: authed(clientToken) }
@@ -216,7 +216,7 @@ test('POST /api/template-library/:id/use: usage is tenant-isolated by RLS — a 
 
   // Real RLS check: connect as each client's own tenant context and confirm
   // each only ever sees their own usage rows for this shared library entry,
-  // not the other client's — not just an application-level filter that
+  // not the other client's - not just an application-level filter that
   // could be bypassed by a query missing a WHERE clause.
   const primaryRows = await queryAsTenant(testClientId, 'select * from template_library_usage where library_template_id = $1', [entryId]);
   const otherRows = await queryAsTenant(otherClientId, 'select * from template_library_usage where library_template_id = $1', [entryId]);
@@ -234,7 +234,7 @@ test('POST /api/template-library/:id/use: 404 for an unknown id', async () => {
 });
 
 // Runs a query as the restricted wasi_app role with app.current_client_id
-// set, exactly the way a real request's req.db does (tenantContext.js) —
+// set, exactly the way a real request's req.db does (tenantContext.js) -
 // so this exercises the real RLS policy, not an application-level filter.
 async function queryAsTenant(clientId, sql, params) {
   const client = await pool.connect();

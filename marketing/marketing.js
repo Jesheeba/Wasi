@@ -1,4 +1,4 @@
-// Wasi marketing site — small progressive-enhancement behaviors.
+// Wasi marketing site - small progressive-enhancement behaviors.
 // No framework, no build step: plain DOM APIs only, matching the rest of this repo.
 
 document.addEventListener('DOMContentLoaded', () => {

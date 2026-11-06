@@ -1,9 +1,9 @@
-// Hub template API (build plan Phase 5) — same auth model and the same
+// Hub template API (build plan Phase 5) - same auth model and the same
 // creation path as routes/templates.js (named-parameter validation, the
 // params-words-ratio rule, and the real Meta submission when a WABA is
 // connected all live in messageTemplatesRepo/metaClient and are reused
 // as-is here, not reimplemented). Unlike the send endpoint, there's no
-// client_id field in the body — the API key already resolves to exactly
+// client_id field in the body - the API key already resolves to exactly
 // one client, and a template has no separate "who is this for" concept the
 // way a message's `to` does.
 const { Router } = require('express');
@@ -25,7 +25,7 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(pool, req.clientId));
 }));
 
-// get_template_details (MCP tool inventory) — full stored shape (body,
+// get_template_details (MCP tool inventory) - full stored shape (body,
 // header, footer, buttons, bodyParamExamples) so a caller knows exactly
 // what parameters a template needs before sending it, not just its
 // approval status.

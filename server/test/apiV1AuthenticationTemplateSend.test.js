@@ -2,15 +2,15 @@
 // Authentication (OTP / Copy code button) template through POST
 // /api/v1/messages always failed against Meta with "(#131008) Required
 // parameter is missing". Meta requires the one-time code TWICE for these
-// templates — once as the body parameter, once as the Copy code button's
-// parameter — and Wasi only ever sent the body (as a *named* parameter, which
+// templates - once as the body parameter, once as the Copy code button's
+// parameter - and Wasi only ever sent the body (as a *named* parameter, which
 // Authentication's Meta-generated positional {{1}} body doesn't take either).
 // Fixed in messagingService.sendChatMessage: for a template whose category is
 // Authentication, the code is lifted from the caller's params and re-emitted
 // as Meta's required body + button pair (metaClient.buildAuthenticationSendComponents).
 //
 // Own dedicated disposable test client (same pattern as
-// apiV1MessageLanguage.test.js). Every Meta call is stubbed — no real send.
+// apiV1MessageLanguage.test.js). Every Meta call is stubbed - no real send.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { test, before, after } = require('node:test');
@@ -56,7 +56,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 
   const created = await fetch(`${baseUrl}/api/admin/api-keys`, {
     method: 'POST',
@@ -104,7 +104,7 @@ test('extractAuthenticationCode accepts exactly one non-empty string or finite n
 test('Authentication template sends: valid codes reach Meta as body + button; every invalid request is rejected before Meta', async () => {
   const originalFetch = global.fetch;
   const sendRequests = [];
-  // Stubbed BEFORE template creation too — creating the template calls
+  // Stubbed BEFORE template creation too - creating the template calls
   // Meta's real create endpoint (see apiV1MessageLanguage.test.js).
   global.fetch = async (url, options) => {
     if (!String(url).includes('graph.facebook.com')) return originalFetch(url, options);

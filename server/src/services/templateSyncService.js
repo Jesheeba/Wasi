@@ -2,10 +2,10 @@
 // this app's local message_templates rows. Without this, a client whose
 // WABA already has approved templates (Embedded Signup connects an
 // EXISTING number, it doesn't provision a fresh one) sees an empty
-// template list in Wasi despite having working, sendable templates —
+// template list in Wasi despite having working, sendable templates -
 // every new client's first impression would be "nothing here."
 //
-// reconcileTemplates is kept pure — no DB, no network — same reasoning
+// reconcileTemplates is kept pure - no DB, no network - same reasoning
 // templateParams.js documents for staying separate from metaClient.js:
 // testable with plain JS objects (server/test/templateSync.test.js),
 // not a real Meta App or Postgres.
@@ -35,27 +35,27 @@ function mapMetaCategory(metaCategory) {
 // Meta's status vocabulary (APPROVED, PENDING, REJECTED, PAUSED, DISABLED,
 // IN_APPEAL, PENDING_DELETION) already uses underscores matching this
 // app's lowercase snake_case convention (migration
-// 016_widen_template_status_vocabulary.js) — a plain lowercase is enough,
+// 016_widen_template_status_vocabulary.js) - a plain lowercase is enough,
 // no translation table needed.
 function mapMetaStatus(metaStatus) {
   return String(metaStatus || 'pending').toLowerCase();
 }
 
 // Confirmed live against the real WABA: Meta's `rejected_reason` field on
-// a non-rejected template isn't absent or null — it's the literal string
+// a non-rejected template isn't absent or null - it's the literal string
 // "NONE". Treated as no reason, not stored as text.
 function mapRejectionReason(rejectedReason) {
   return rejectedReason && rejectedReason !== 'NONE' ? rejectedReason : null;
 }
 
 // Matching: prefer meta_template_id (unambiguous) when the local row has
-// one; fall back to name (unique per WABA — Meta enforces this, and it's
+// one; fall back to name (unique per WABA - Meta enforces this, and it's
 // how every local row created before this sync existed can still be
 // found) for rows with no stored id yet. A match via name backfills the
 // id (see messageTemplatesRepo.updateFromMetaSync).
 //
 // Orphan detection only considers local rows that HAVE a meta_template_id
-// — i.e. were confirmed to exist on Meta at some point. A row with none
+// - i.e. were confirmed to exist on Meta at some point. A row with none
 // is a local draft that was never submitted; it was never "on Meta" to
 // begin with, so it can't be missing from anything, and reconcile must
 // never touch it. Already-orphaned rows aren't re-flagged (orphaned_at
@@ -107,7 +107,7 @@ function reconcileTemplates(metaTemplates, localTemplates) {
 
 // The actual sync: fetch both sides, reconcile, write. `db` is the
 // caller's connection (req.db under a client-authenticated request, same
-// convention messagingService.js etc. use) — wabasRepo always uses the
+// convention messagingService.js etc. use) - wabasRepo always uses the
 // privileged pool internally regardless (access_token_encrypted is
 // revoked from the restricted role at the column level, see wabasRepo.js).
 async function syncTemplates(db, clientId) {

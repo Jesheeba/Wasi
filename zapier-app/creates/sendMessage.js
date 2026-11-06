@@ -1,12 +1,12 @@
 // Reuses POST /api/v1/messages (server/src/routes/apiV1Messages.js) exactly
-// as it is — no new send logic. Scoped to text + template message types
+// as it is - no new send logic. Scoped to text + template message types
 // only for this first version (Phase 0 decision): Wasi's interactive
 // button/list types need dynamic field mapping that doesn't fit Zapier's
 // static form-field UI well. Documented as a known gap (CLAUDE.md), not
 // built here.
 //
 // client_id is fetched fresh via GET /api/v1/account rather than cached in
-// authData — Zapier create actions run as short-lived, possibly separate
+// authData - Zapier create actions run as short-lived, possibly separate
 // invocations, so there's no long-lived process to hold an in-memory cache
 // the way mcp-server/src/hubClient.js's getClientId does for its one
 // long-running process. The extra round trip is negligible against a
@@ -60,7 +60,7 @@ module.exports = {
         },
       },
       { key: 'body', label: 'Message Text', type: 'text', helpText: 'Required for Text messages. Ignored for Template messages.' },
-      { key: 'template_name', label: 'Template Name', type: 'string', helpText: 'Required for Template messages — the exact, case-sensitive approved template name.' },
+      { key: 'template_name', label: 'Template Name', type: 'string', helpText: 'Required for Template messages - the exact, case-sensitive approved template name.' },
       { key: 'params', label: 'Template Parameters (JSON)', type: 'string', helpText: 'Optional, Template messages only. Named parameter values as JSON, e.g. {"customer_name": "Asha"}.' },
     ],
     perform,

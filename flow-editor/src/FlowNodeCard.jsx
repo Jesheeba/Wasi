@@ -7,7 +7,7 @@ const MEDIA_HEADER_TYPES = ['IMAGE', 'VIDEO', 'DOCUMENT'];
 
 // Lets this node point at a specific uploaded media asset (see
 // routes/templates.js's POST /:id/header-media) instead of always sending
-// the template's approval-time default sample — uploaded immediately on
+// the template's approval-time default sample - uploaded immediately on
 // choice so a bad file surfaces here, not at the next flow run.
 function TemplateMediaField({ cfg, onConfigChange, template }) {
   const [status, setStatus] = useState('');
@@ -20,7 +20,7 @@ function TemplateMediaField({ cfg, onConfigChange, template }) {
     try {
       const asset = await api.uploadHeaderMedia(template.id, file);
       onConfigChange({ ...cfg, headerMediaAssetId: asset.id, headerMediaFilename: asset.filename || file.name });
-      setStatus(`Ready — will send with "${file.name}".`);
+      setStatus(`Ready - will send with "${file.name}".`);
     } catch (err) {
       setStatus(`Upload failed: ${err.message}`);
     }
@@ -39,7 +39,7 @@ function TemplateMediaField({ cfg, onConfigChange, template }) {
   );
 }
 
-// Debounces text-field edits before PATCHing — AiSensy's cards save as you
+// Debounces text-field edits before PATCHing - AiSensy's cards save as you
 // type (visible via the live char counts), but firing one PATCH per
 // keystroke against a real API is wasteful; 500ms after the last keystroke
 // matches how a human perceives "I stopped typing" without feeling laggy.
@@ -71,12 +71,12 @@ function BranchRow({ edge, targetLabel, onDelete }) {
   );
 }
 
-// AddBranchControl — the non-drag path for keyword/default/timeout edges
+// AddBranchControl - the non-drag path for keyword/default/timeout edges
 // off a send_interactive_buttons node (button_id edges are drawn by
 // dragging from each button's own handle instead; see the node body
 // below). A fixed number of draggable handles doesn't make sense for
 // these three types since there's no natural 1:1 anchor the way a button
-// has — a small inline target picker is simpler and just as correct.
+// has - a small inline target picker is simpler and just as correct.
 function AddBranchControl({ conditionType, otherNodes, onAdd }) {
   const [targetId, setTargetId] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -85,7 +85,7 @@ function AddBranchControl({ conditionType, otherNodes, onAdd }) {
     <div className="wf-add-branch nodrag">
       <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="wf-select-sm">
         <option value="">{FLOW_EDGE_TYPE_LABELS[conditionType]} goes to…</option>
-        {otherNodes.map((n) => <option key={n.id} value={n.id}>{NODE_TYPE_LABELS[n.type]} — {n.id.slice(0, 8)}</option>)}
+        {otherNodes.map((n) => <option key={n.id} value={n.id}>{NODE_TYPE_LABELS[n.type]} - {n.id.slice(0, 8)}</option>)}
       </select>
       {conditionType === 'keyword' && (
         <input className="wf-input-sm" placeholder="keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
@@ -102,10 +102,10 @@ function AddBranchControl({ conditionType, otherNodes, onAdd }) {
   );
 }
 
-// The card itself — one component handles every node type, branching on
+// The card itself - one component handles every node type, branching on
 // data.node.type for which fields to show. AiSensy-style: fields are
 // edited directly on the card (Header/Body/Footer-shaped inputs with live
-// char counts), not in a separate modal — this is Stage 4's whole point.
+// char counts), not in a separate modal - this is Stage 4's whole point.
 export default function FlowNodeCard({ id, data, selected }) {
   const { node, isEntry, issues, outgoingEdges, otherNodes, templates, tags, attributes, onConfigChange, onDelete, onSetEntry, onAddBranch, onDeleteEdge } = data;
   const cfg = node.config || {};
@@ -116,7 +116,7 @@ export default function FlowNodeCard({ id, data, selected }) {
   const alwaysEdge = outgoingEdges.find((e) => e.condition_type === 'always');
   const showAlwaysHandle = ['send_text', 'send_template', 'delay', 'action', 'capture_reply'].includes(node.type) && !alwaysEdge;
 
-  const nodeLabel = (n) => (n ? `${NODE_TYPE_LABELS[n.type]} — ${n.id.slice(0, 8)}` : '—');
+  const nodeLabel = (n) => (n ? `${NODE_TYPE_LABELS[n.type]} - ${n.id.slice(0, 8)}` : '-');
   const findNode = (nid) => otherNodes.find((n) => n.id === nid) || (n => (n && n.id === node.id ? node : null))(node);
 
   return (
@@ -244,7 +244,7 @@ export default function FlowNodeCard({ id, data, selected }) {
         </div>
       )}
       {node.type === 'action' && cfg.kind === 'human_handoff' && (
-        <div className="wf-field-static">Ends automation — the chat stays visible to a human agent.</div>
+        <div className="wf-field-static">Ends automation - the chat stays visible to a human agent.</div>
       )}
 
       {/* Non-button branches for a buttons node; single 'always' branch display for single-output types. */}
@@ -269,7 +269,7 @@ export default function FlowNodeCard({ id, data, selected }) {
         </div>
       )}
 
-      {/* capture_reply's optional "no reply arrived" escape hatch — same
+      {/* capture_reply's optional "no reply arrived" escape hatch - same
           inline-picker pattern as send_interactive_buttons' timeout branch,
           since it's the one branch here that isn't a drag-from-handle. */}
       {node.type === 'capture_reply' && (
@@ -290,7 +290,7 @@ export default function FlowNodeCard({ id, data, selected }) {
   );
 }
 
-// Buttons sub-field — each button gets its own labelled, draggable source
+// Buttons sub-field - each button gets its own labelled, draggable source
 // handle (button_id edges are created by dragging FROM here, per Agent 2's
 // separate-labelled-port-per-edge design). Adding/removing a button here
 // also removes its now-orphaned edge in the same action (App.jsx's
@@ -300,7 +300,7 @@ export default function FlowNodeCard({ id, data, selected }) {
 function ButtonsField({ buttons, onChange, outgoingEdges, otherNodes, onAddBranch, onDeleteEdge }) {
   const nodeLabel = (nid) => {
     const n = otherNodes.find((x) => x.id === nid);
-    return n ? `${NODE_TYPE_LABELS[n.type]} — ${n.id.slice(0, 8)}` : '—';
+    return n ? `${NODE_TYPE_LABELS[n.type]} - ${n.id.slice(0, 8)}` : '-';
   };
   return (
     <div className="wf-field nodrag">
@@ -333,7 +333,7 @@ function ButtonsField({ buttons, onChange, outgoingEdges, otherNodes, onAddBranc
             {edge ? (
               <span className="wf-branch-target">&rarr; {nodeLabel(edge.to_node_id)}</span>
             ) : (
-              <span className="wf-branch-target wf-branch-unrouted">unrouted — drag from the dot</span>
+              <span className="wf-branch-target wf-branch-unrouted">unrouted - drag from the dot</span>
             )}
             <Handle
               type="source"

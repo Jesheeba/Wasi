@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const state = {
     user: null,
-    // actorType/actorRole/actorId — item 5.5 (PLAN.md). 'owner' + 'Owner' is
+    // actorType/actorRole/actorId - item 5.5 (PLAN.md). 'owner' + 'Owner' is
     // the default because every session used to BE the owner; a team-member
     // login/resume overwrites these three in enterApp. Nothing outside the
     // items-1-5 UI added this pass reads actorRole yet (see this session's
@@ -25,12 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     currentView: 'chat',
     activeChatId: null,
     // Set once per chat-open (openActiveChat), from the message id
-    // computeUnreadDividerMessageId lands on — never recomputed by a poll
+    // computeUnreadDividerMessageId lands on - never recomputed by a poll
     // tick, so the "Unread messages" line can't jump or vanish mid-session.
     // Cleared to null whenever a different chat opens.
     activeChatUnreadDividerMessageId: null,
     // Snapshot of chat.count (server's unread_count) taken the instant a
-    // chat is opened, before openActiveChat clears it to 0 — the input to
+    // chat is opened, before openActiveChat clears it to 0 - the input to
     // computeUnreadDividerMessageId's one-time placement guess.
     activeChatUnreadCountAtOpen: 0,
     chats: [],
@@ -53,12 +53,12 @@ document.addEventListener('DOMContentLoaded', () => {
     chatQueueFilter: 'all',
     activeChatNotes: [],
     contactAttributes: [],
-    // item 8.5 — which contact (if any) the Contacts-view detail panel
+    // item 8.5 - which contact (if any) the Contacts-view detail panel
     // currently has open; the staleness guard for
     // renderContactAttributesInto/renderContactTagsInto calls made from
     // that panel, parallel to activeChatId's role for the Chat drawer.
     activeContactDetailId: null,
-    // Consent hardening Phase 2 — Contacts-view bulk-select, a Set (not an
+    // Consent hardening Phase 2 - Contacts-view bulk-select, a Set (not an
     // array) so add/remove/has are O(1) regardless of how many contacts a
     // client selects. Cleared on every renderContacts() re-render (a fresh
     // contact list may not contain the same ids) and after a bulk action
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   refreshIcons();
 
-  // Mobile sidebar drawer (below the 900px tablet breakpoint — see
+  // Mobile sidebar drawer (below the 900px tablet breakpoint - see
   // index.css's matching @media block and breakpoints.css for the shared
   // value). #sidebar itself is untouched above that width; this only ever
   // toggles a class, the actual show/hide behavior lives entirely in CSS.
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
       else openSidebar();
     });
     backdrop.addEventListener('click', closeSidebar);
-    // Picking a nav item should close the drawer — otherwise it stays open,
+    // Picking a nav item should close the drawer - otherwise it stays open,
     // covering the view the user just navigated to.
     sidebar.querySelectorAll('.nav-item').forEach((item) => {
       item.addEventListener('click', closeSidebar);
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function authFetch(path, options = {}) {
     const token = localStorage.getItem('client_token');
     // A FormData body (the business-profile picture upload) needs the
-    // browser to set its own multipart Content-Type with a boundary — an
+    // browser to set its own multipart Content-Type with a boundary - an
     // explicit 'application/json' here would break that, and every existing
     // caller already sends a JSON string body, so this only changes
     // behavior for the one new caller that passes FormData.
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const err = new Error(body.error || `Request failed (${res.status})`);
       // The template form's error handler reads err.body.details for the
       // specific validation reasons (numbered params, missing sample
-      // values, etc.) — this was never actually attached, so that path was
+      // values, etc.) - this was never actually attached, so that path was
       // silently dead code; every failure just showed the generic
       // top-level message. Attaching it here fixes that for every caller,
       // not just templates.
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
-  // Full local date+time, for hover/tap tooltips and status-timeline lines —
+  // Full local date+time, for hover/tap tooltips and status-timeline lines -
   // never truncated to just a time the way timeLabel is.
   function fullTimeLabel(isoString) {
     if (!isoString) return '';
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // WhatsApp's own date-separator ladder: Today / Yesterday / weekday name
   // (within 7 days) / "23 September" (this year) / "23 September 2025"
   // (older). Compares LOCAL calendar days (viewer's own timezone), not a
-  // rolling 24h window — a chat opened at 00:30 must say "Today" correctly.
+  // rolling 24h window - a chat opened at 00:30 must say "Today" correctly.
   function dateLabel(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // For embedding into an HTML attribute (the tooltip text lives in
-  // data-full-time, read back out via CSS attr()) — escapeHtml alone doesn't
+  // data-full-time, read back out via CSS attr()) - escapeHtml alone doesn't
   // escape quotes, which would break out of the attribute.
   function escapeAttr(str) {
     return String(str || '')
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
       id: c.id,
       name: c.name,
       phone: c.phone,
-      tag: state.tagsById[c.tag_id]?.name || '—',
+      tag: state.tagsById[c.tag_id]?.name || '-',
       status: c.status,
       created: (c.created_at || '').slice(0, 10),
       optInStatus: c.opt_in_status || 'unknown',
@@ -236,18 +236,18 @@ document.addEventListener('DOMContentLoaded', () => {
       id: c.id,
       name: c.name,
       phone: c.phone,
-      tag: state.tagsById[c.tag_id]?.name || '—',
+      tag: state.tagsById[c.tag_id]?.name || '-',
       tagId: c.tag_id || null,
-      // Raw ISO, not pre-formatted — chatListTimeLabel derives the
+      // Raw ISO, not pre-formatted - chatListTimeLabel derives the
       // WhatsApp-style label (time-only for today, else a date) at render
       // time, so "Today" stays correct across midnight without a re-adapt.
       time: c.last_message_at,
       count: c.unread_count,
-      // item 2/5.5 — previously dropped by this adapter entirely, so no
+      // item 2/5.5 - previously dropped by this adapter entirely, so no
       // renderer could see them even though the API already returns both.
       status: c.status || 'open',
       assignedTeamMemberId: c.assigned_team_member_id || null,
-      // item 7 — the linked contact record, if any (chats.contact_id),
+      // item 7 - the linked contact record, if any (chats.contact_id),
       // needed to fetch/save its per-contact attribute values.
       contactId: c.contact_id || null
     };
@@ -257,12 +257,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return {
       id: b.id,
       title: b.title,
-      tag: state.tagsById[b.tag_id]?.name || '—',
+      tag: state.tagsById[b.tag_id]?.name || '-',
       status: b.status,
       delivered: String(b.delivered_count),
       readRate: `${Number(b.read_rate).toFixed(1)}%`,
       date: (b.scheduled_date || b.created_at || '').toString().slice(0, 10),
-      // Stage 6 — extra fields the list endpoint already returns, surfaced for
+      // Stage 6 - extra fields the list endpoint already returns, surfaced for
       // the redesigned table (no new request). delivered_count is the SENT
       // count (see broadcastsRepo.list), delivered_rate is delivered/sent.
       templateName: b.template_name || '',
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
       deliveredRate: `${Number(b.delivered_rate || 0).toFixed(1)}%`,
       audience: b.contact_list_id ? 'Contact list' : b.segment_id ? 'Segment' : (state.tagsById[b.tag_id]?.name || 'Everyone'),
       skippedConsent: b.skipped_consent_count || 0,
-      // item 12 follow-up — kept separate from skippedConsent above: the
+      // item 12 follow-up - kept separate from skippedConsent above: the
       // two are different reasons a recipient never got sent to, and
       // showing one undifferentiated "N skipped" badge labeled as a
       // consent issue was actively wrong (not just vague) for this reason.
@@ -290,13 +290,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function refreshAutomationRules() {
     // Column names (title, trigger, action, status) already match the shape
-    // the renderer expects — no adapter needed.
+    // the renderer expects - no adapter needed.
     state.automationRules = await authFetch('/api/automation-rules');
   }
 
   async function refreshTemplates() {
     // Column names (name, category, body) already match the shape the
-    // renderer expects — no adapter needed.
+    // renderer expects - no adapter needed.
     state.templates = await authFetch('/api/templates');
   }
 
@@ -314,12 +314,12 @@ document.addEventListener('DOMContentLoaded', () => {
       authFetch('/api/automation-flows'),
       authFetch('/api/templates'),
       authFetch('/api/support-tickets'),
-      // item 5.5 — team roster (assign/@mention pickers) and canned
+      // item 5.5 - team roster (assign/@mention pickers) and canned
       // responses (composer autocomplete) both need to be available the
       // moment the Chat view opens, not fetched lazily per-chat.
       authFetch('/api/team-members'),
       authFetch('/api/canned-responses'),
-      // item 7 — attribute type DEFINITIONS (not per-contact values, those
+      // item 7 - attribute type DEFINITIONS (not per-contact values, those
       // are fetched per-chat in openActiveChat) needed to render the Chat
       // drawer's Attributes section for whichever contact is open.
       authFetch('/api/contact-attributes')
@@ -340,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showAuthView() {
     state.user = null;
-    // Clears whichever view hash the previous session left behind — a
+    // Clears whichever view hash the previous session left behind - a
     // fresh login (possibly a different account, on a shared browser)
     // shouldn't inherit "go straight to Templates" from someone else's
     // last session. enterApp reads the hash unconditionally, so this is
@@ -401,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loginPwdInput.setAttribute('type', type);
   });
 
-  // No WebSocket/SSE in v1 — short-interval polling while the chat view is
+  // No WebSocket/SSE in v1 - short-interval polling while the chat view is
   // open is the simplest correct way to surface inbound WhatsApp messages
   // and delivery-status changes that arrive via the Meta webhook server-side
   // (see server/src/routes/metaWebhook.js) without the user refreshing.
@@ -421,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastMessageAt = state.activeChatMessages[state.activeChatMessages.length - 1].sent_at;
             renderMessages(state.activeChatMessages);
           }
-          // Unconditional, not just on new messages — the window's
+          // Unconditional, not just on new messages - the window's
           // remaining-time countdown (and whether it just closed) changes
           // with the clock even when nothing new arrived.
           renderChatWindowStatus();
@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.chats = chats.map(adaptChat);
         renderChatList(state.chatTagFilter);
       } catch (_err) {
-        // Transient poll failure — don't spam a toast every 4s over it.
+        // Transient poll failure - don't spam a toast every 4s over it.
       }
     }, 4000);
   }
@@ -441,9 +441,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Sendability banner ("why can't my client send" gap) ---
   // A client whose WABA is blocked/limited by Meta used to see a completely
-  // normal app — the only person who could find out why was an admin
+  // normal app - the only person who could find out why was an admin
   // running a script. The data already exists on the wabas row (sendable,
-  // sendable_reason, health_status, probe_error_code — GET
+  // sendable_reason, health_status, probe_error_code - GET
   // /api/onboarding/whatsapp/status already returns it, no new Meta call
   // needed); this just renders it as plain English via the shared
   // server/src/utils/sendabilityMessages.js (also used by admin's
@@ -497,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Measures the banner's real rendered height (its text can wrap to more
   // than one line at narrow widths) into a CSS custom property index.css
-  // uses to reserve space for it — see index.css's #app-shell/.main-wrapper/
+  // uses to reserve space for it - see index.css's #app-shell/.main-wrapper/
   // .mobile-sidebar-toggle comments for why this can't just be a fixed
   // guessed pixel value.
   function updateSendabilityBannerLayout() {
@@ -517,13 +517,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const status = await authFetch('/api/onboarding/whatsapp/status');
       renderSendabilityBanner(status.connected ? status.waba : null);
     } catch (_err) {
-      // Transient poll failure — leave whatever was last shown standing
+      // Transient poll failure - leave whatever was last shown standing
       // rather than flicker a real banner off over a network blip.
     }
   }
 
   // sendabilityMonitorRunner.js refreshes the underlying data hourly (see
-  // its own STALE_AFTER_MS) — polling this every 5 minutes is plenty to
+  // its own STALE_AFTER_MS) - polling this every 5 minutes is plenty to
   // surface a change promptly without hammering the endpoint, and it runs
   // regardless of which view is open (unlike startPolling's chat-only poll),
   // since this banner is meant to be visible everywhere in the app.
@@ -537,15 +537,15 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSendabilityBanner(null);
   }
 
-  // item 5.5 (+ this follow-up) — deliberately narrow scope: hides/disables
+  // item 5.5 (+ this follow-up) - deliberately narrow scope: hides/disables
   // only the surfaces whose backing API an Agent's token is actually
   // rejected from. Not the broader gating initiative (that would also
   // cover Settings sub-tabs like Wallet/Billing/Developer/Webhook, which
-  // are owner-only for EVERY team role, not Agent-specific — flagged
+  // are owner-only for EVERY team role, not Agent-specific - flagged
   // separately, not done here since it's a different, larger scope than
   // "hide what Agent specifically can't reach"). Safe to call every time
   // enterApp runs, including on a plain owner session (Owner always sees
-  // everything — every check below is a no-op for actorRole 'Owner').
+  // everything - every check below is a no-op for actorRole 'Owner').
   //
   // Top-level nav items hidden for Agent, and why (matches item 1's real
   // route-level requireRole grants, not a guess):
@@ -553,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
   //   Template Library   -> /api/template-library is Admin/Manager only
   //   Automation         -> /api/automation-rules + /api/automation-flows are Admin/Manager only
   //   Analytics          -> /api/analytics is Admin/Manager only (not just the SLA sub-tab)
-  // Template itself stays visible — GET /api/templates is Agent-reachable
+  // Template itself stays visible - GET /api/templates is Agent-reachable
   // (an Agent needs to pick an approved template when the 24h window is
   // closed), only create/edit/delete are Admin/Manager, and those controls
   // already live inside the Template view itself, not the nav.
@@ -573,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // actor — item 5.5: { type: 'owner'|'team_member', role, id }. Defaults to
+  // actor - item 5.5: { type: 'owner'|'team_member', role, id }. Defaults to
   // an owner session so every pre-existing call site (nothing before this
   // pass ever passed a second argument) keeps working unchanged.
   async function enterApp(client, actor) {
@@ -585,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
     appShell.style.display = 'flex';
 
     // The sidebar account indicator was a hardcoded "Mohamed" left over from
-    // the original mockup — every client saw the same name/avatar regardless
+    // the original mockup - every client saw the same name/avatar regardless
     // of which account was actually logged in, which is exactly what made a
     // resumed/wrong session look like "a different account" instead of an
     // obvious, catchable mismatch. Same class of bug initialsFor's own
@@ -595,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const nameEl = profileItem.querySelector('.nav-text');
       const avatarEl = profileItem.querySelector('.avatar');
       // A team member sees their own name + role (there's no separate "who
-      // am I" indicator elsewhere), not the client account's name — that
+      // am I" indicator elsewhere), not the client account's name - that
       // would read as impersonating the owner.
       const label = state.actorType === 'team_member'
         ? `${client.name || 'Team member'} (${state.actorRole})`
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
       reportError(err);
     }
     // Restores whichever top-level view the URL hash names (kept in sync by
-    // switchView below) instead of always landing on Chat — a reload used to
+    // switchView below) instead of always landing on Chat - a reload used to
     // silently discard wherever the user actually was (Templates, Broadcasts,
     // etc.), which after the session-resume confirmation card already felt
     // like being logged out, this made it worse by also losing their place.
@@ -650,9 +650,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // item 5.5 — team-member login (PLAN.md item 1's other login surface).
+  // item 5.5 - team-member login (PLAN.md item 1's other login surface).
   // Reuses the SAME localStorage['client_token'] key as the owner flow, not
-  // a second key — authFetch already sends whatever's there with no
+  // a second key - authFetch already sends whatever's there with no
   // awareness of token type, so there's no reason to fork that mechanism;
   // only the resume/logout paths need to know which endpoint to re-validate
   // against, tracked via the small 'actor_type' key below.
@@ -676,7 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       localStorage.setItem('client_token', data.token);
       localStorage.setItem('actor_type', 'team_member');
-      // The login response only carries {id, name, role} — no email/avatar
+      // The login response only carries {id, name, role} - no email/avatar
       // seed exists for a team member the way the owner's own client row
       // provides one, so `client` here is just enough to satisfy enterApp's
       // shape, not a full profile.
@@ -703,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     showPrompt({
       title: 'Reset your password',
-      label: 'Enter your account email — we’ll send a reset link:',
+      label: 'Enter your account email - we’ll send a reset link:',
       placeholder: 'you@example.com',
       confirmLabel: 'Send reset link',
       onConfirm: async (email) => {
@@ -739,7 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Resumes a session on page load if a token is already stored (spec §3
   // step 7: don't force a returning user to re-type their password every
   // refresh). A reload must land the user straight back on the same page
-  // with no interruption — a "resume as {account}?" confirmation card was
+  // with no interruption - a "resume as {account}?" confirmation card was
   // tried here previously as an anti-mismatch safeguard, but from the
   // user's side a click-to-continue on every single reload reads exactly
   // like a logout, which is the opposite of the goal. Straight back to a
@@ -747,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     const token = localStorage.getItem('client_token');
     if (!token) return;
-    // item 5.5 — a team-member session needs its own re-validation endpoint
+    // item 5.5 - a team-member session needs its own re-validation endpoint
     // (GET /api/auth/team/me), since /api/auth/me is owner-only and would
     // 403 a team_member token. Defaults to 'owner' for a token stored
     // before this pass existed, or if the marker is ever missing/corrupted.
@@ -761,10 +761,10 @@ document.addEventListener('DOMContentLoaded', () => {
         await enterApp(client, { type: 'owner', role: 'Owner', id: client.id });
       }
     } catch (err) {
-      // Only clear the token on a genuine auth failure (a real 401 — already
+      // Only clear the token on a genuine auth failure (a real 401 - already
       // handled/logged by authFetch itself above). This used to clear it on
       // ANY failure, including a network error or the request simply timing
-      // out — both very possible on this very first request of the page
+      // out - both very possible on this very first request of the page
       // (a cold-started server, a slow connection), and both had nothing to
       // do with whether the token was actually still valid. That bug looked
       // exactly like "automatically logged out" on first load: the token
@@ -783,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Navigation Router ---
   const navItems = document.querySelectorAll('.nav-item');
   const viewContainers = document.querySelectorAll('.view-container');
-  // Every real top-level view a URL hash is allowed to name — derived from
+  // Every real top-level view a URL hash is allowed to name - derived from
   // the nav markup itself so this can't drift out of sync with it.
   const VALID_VIEWS = new Set(Array.from(navItems, (item) => item.dataset.view).filter(Boolean));
   let isProgrammaticHashChange = false;
@@ -792,7 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentView = targetView;
     // Keeps the URL hash in sync with whatever view is showing, so a reload
     // (or the browser's own back/forward) lands back here instead of always
-    // resetting to Chat — see enterApp's own comment for why this mattered.
+    // resetting to Chat - see enterApp's own comment for why this mattered.
     // The isProgrammaticHashChange guard on the hashchange listener below
     // stops this from re-triggering switchView on its own write.
     if (location.hash.slice(1) !== targetView) {
@@ -818,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (targetView === 'chat') {
       // Render whatever's cached immediately (no blank flash), then refresh
-      // from the server — state.chats is only otherwise updated by the
+      // from the server - state.chats is only otherwise updated by the
       // poller (startPolling), which is a no-op while any other view is
       // active, so a chat that arrived while the user was elsewhere never
       // shows up here until this explicit refetch.
@@ -834,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       // teamMembers/cannedResponses/contactAttributes only otherwise load
-      // once at session start (loadInitialData) — an agent's tab can stay
+      // once at session start (loadInitialData) - an agent's tab can stay
       // open on Chat all day while another admin invites someone, adds a
       // canned response, or defines a new attribute elsewhere. Each of
       // those Settings mutations already refreshes state.X for the tab
@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (targetView === 'automation') { setAutomationTab(automationView.tab); reloadAutomationWithState(); }
     if (targetView === 'template') {
-      // Same staleness fix — a template synced after login (e.g. right
+      // Same staleness fix - a template synced after login (e.g. right
       // after connecting a WhatsApp number, which pulls in existing
       // approved templates from Meta) never appeared here until a full page
       // reload, since state.templates was never refetched on view switch.
@@ -892,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (targetView === 'template-library') {
       // Curated reference content, not live per-client data (unlike
-      // chat/contacts above) — only changes when an admin re-runs
+      // chat/contacts above) - only changes when an admin re-runs
       // seedTemplateLibrary.js, so caching for the session avoids refetching
       // the same 36+ rows every time this view is opened.
       if (!state.libraryEntries.length) loadTemplateLibrary();
@@ -904,7 +904,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'analytics') renderMessageAnalytics();
     if (targetView === 'payments') renderPaymentsTable();
     // The Whatsapp sub-tab ships marked active by default (index.html) but
-    // previously only rendered real data on an explicit sub-nav click —
+    // previously only rendered real data on an explicit sub-nav click -
     // landing here from the main nav showed static placeholder markup
     // indefinitely. renderWhatsAppSettings itself no-ops safely if the
     // client hasn't clicked into a different sub-tab (its target selector
@@ -923,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Keyboard access (Enter/Space) for the role="button" nav items and the
-  // profile item — they're <a>/<div> without href, so not natively activatable.
+  // profile item - they're <a>/<div> without href, so not natively activatable.
   document.querySelectorAll('.nav-item[role="button"]').forEach((el) => {
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
@@ -931,12 +931,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Lets the browser's own back/forward buttons move between views too,
-  // now that switchView keeps the hash in sync — a real side benefit of the
+  // now that switchView keeps the hash in sync - a real side benefit of the
   // fix, not the main point of it. Ignores the hashchange switchView's own
   // `location.hash = ...` write fires (isProgrammaticHashChange), so this
   // never re-runs switchView on a change it just caused itself, and ignores
   // any change before the user is actually logged in (nothing to switch to
-  // yet — enterApp reads the hash directly once login/resume completes).
+  // yet - enterApp reads the hash directly once login/resume completes).
   window.addEventListener('hashchange', () => {
     if (isProgrammaticHashChange) { isProgrammaticHashChange = false; return; }
     if (!state.user) return;
@@ -950,7 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatEmptyPlaceholder = document.getElementById('chat-empty-placeholder');
   const chatActiveWorkspace = document.getElementById('chat-active-workspace');
 
-  // Mobile-only back button (chat-header, index.html) — returns to the chat
+  // Mobile-only back button (chat-header, index.html) - returns to the chat
   // list. Just removes the class openActiveChat sets; doesn't touch
   // state.activeChatId or the desktop inline display toggles, so reopening
   // the same chat (or the desktop layout) is unaffected.
@@ -1014,7 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // affordance instead since silently dropping a message is worse than
   // surfacing that it needs one click to resend. Both cases carry a
   // stacked-timeline tooltip (sent/delivered/read, or failed + reason) from
-  // messages.sent_at/delivered_at/read_at/failed_at — "if we have them": a
+  // messages.sent_at/delivered_at/read_at/failed_at - "if we have them": a
   // null column is just omitted, never guessed at.
   function statusBadge(m) {
     if (m.direction !== 'out') return '';
@@ -1040,17 +1040,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // A message bubble. `showMeta` is true only for the last message in its
-  // group (item 5 — time/ticks shown once, at the bottom of the group).
+  // group (item 5 - time/ticks shown once, at the bottom of the group).
   // Every bubble still gets a hover/tap tooltip with the full date+time
   // (item 3) via data-full-time, and a screen-reader-only <time> when the
   // visible one is suppressed, so grouping never costs accessibility.
   // source === 'whatsapp_app' means this outbound message is a Coexistence
-  // echo (routes/metaWebhook.js's handleMessageEchoes) — a reply the
+  // echo (routes/metaWebhook.js's handleMessageEchoes) - a reply the
   // business sent from their own phone via the WhatsApp Business app, which
   // this app never originated and never called Meta to send. Visually
   // distinguished so a client doesn't mistake it for something sent through
   // Wasi (it has no retry/status lifecycle the way a message this app sent
-  // does — statusBadge already only renders ticks for direction === 'out'
+  // does - statusBadge already only renders ticks for direction === 'out'
   // generally, which an echo also satisfies, but its status is always
   // hardcoded 'delivered' at insert, never 'pending'/'failed').
   function renderMessageBubble(m, showMeta) {
@@ -1070,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Interleaves date separators, the unread divider (if any), and grouped
   // message clusters into one flat list of render items. A date separator
-  // or the unread divider always breaks a group — WhatsApp never shows a
+  // or the unread divider always breaks a group - WhatsApp never shows a
   // continuous group spanning either.
   function buildMessageRenderItems(messages, dividerMessageId) {
     const items = [];
@@ -1118,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `<div class="msg-group msg-group-${item.direction === 'in' ? 'in' : 'out'}">${bubbles}</div>`;
   }
 
-  // unreadCount is chats.unread_count as of chat-open time — a GUESS about
+  // unreadCount is chats.unread_count as of chat-open time - a GUESS about
   // which currently-loaded message it corresponds to, not authoritative.
   // Any mismatch (more unread than inbound messages we actually have)
   // bails out to "no divider" rather than risk placing it at the wrong
@@ -1134,8 +1134,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // isInitialOpen distinguishes "just opened this chat" (compute the unread
-  // divider fresh, scroll to it or to the bottom) from every other call —
-  // a poll tick, a retry, a send — which must never recompute the divider
+  // divider fresh, scroll to it or to the bottom) from every other call -
+  // a poll tick, a retry, a send - which must never recompute the divider
   // (it stays put for the life of the open chat, per direct instruction)
   // and must never yank the reader's scroll position: it's restored as-is,
   // except when the reader was already at the bottom, where staying
@@ -1175,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Delegated once — renderMessages rebuilds the container's innerHTML on
+  // Delegated once - renderMessages rebuilds the container's innerHTML on
   // every poll tick, so a listener bound to an individual button would be
   // gone by the time the user clicks it.
   document.getElementById('chat-messages-container')?.addEventListener('click', async (e) => {
@@ -1219,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Mirrors messagingService.js's SESSION_WINDOW_MS / canSendFreeform exactly
-  // (24h since the last INBOUND message) — same client-side-mirror reasoning
+  // (24h since the last INBOUND message) - same client-side-mirror reasoning
   // as extractTemplateParams: no server module to require() from a
   // no-build-step page. GET /api/chats/:id/messages returns full history, no
   // limit (chatsRepo.listMessages), so this is safe to compute from
@@ -1245,7 +1245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Drives both the visible banner and whether plain text is even
-  // attemptable — the whole point being asked for here: an agent should
+  // attemptable - the whole point being asked for here: an agent should
   // never be able to type into a dead composer and think it sent. Nothing
   // previously surfaced this at all (README-level gap, not a bug fix).
   function renderChatWindowStatus() {
@@ -1258,21 +1258,21 @@ document.addEventListener('DOMContentLoaded', () => {
       const remaining = new Date(window_.closesAt).getTime() - Date.now();
       banner.style.display = '';
       banner.classList.add('is-open'); banner.classList.remove('is-closed');
-      banner.textContent = `Session window open — closes in ${formatDuration(remaining)}. Free-form text and templates both work.`;
+      banner.textContent = `Session window open - closes in ${formatDuration(remaining)}. Free-form text and templates both work.`;
       if (chatMessageInput) { chatMessageInput.disabled = false; chatMessageInput.placeholder = "Type a message or '/' for templates..."; }
       if (sendMsgBtn) sendMsgBtn.disabled = false;
     } else {
       banner.style.display = '';
       banner.classList.add('is-closed'); banner.classList.remove('is-open');
       banner.textContent = window_.lastInboundAt
-        ? 'Session window closed — free-form text will fail. Type / to send a template instead.'
-        : 'No inbound message yet from this contact — only a template can start the conversation.';
-      if (chatMessageInput) chatMessageInput.placeholder = "Window closed — type '/' to send a template";
+        ? 'Session window closed - free-form text will fail. Type / to send a template instead.'
+        : 'No inbound message yet from this contact - only a template can start the conversation.';
+      if (chatMessageInput) chatMessageInput.placeholder = "Window closed - type '/' to send a template";
       if (sendMsgBtn) sendMsgBtn.disabled = true;
     }
   }
 
-  // First letter of the first two words of a name — used to replace what
+  // First letter of the first two words of a name - used to replace what
   // was a hardcoded "AK" (Alex Kumar's initials) shown for every contact
   // regardless of their actual name.
   function initialsFor(name) {
@@ -1285,7 +1285,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openActiveChat(chat) {
     state.activeChatId = chat.id;
     // Snapshot the unread count and reset the divider before anything below
-    // (including the unread_count=0 PATCH further down) can touch either —
+    // (including the unread_count=0 PATCH further down) can touch either -
     // this is the one moment the "how many are unread" guess is taken; it's
     // never recomputed for the rest of this chat's open session.
     state.activeChatUnreadCountAtOpen = chat.count || 0;
@@ -1293,7 +1293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chatEmptyPlaceholder) chatEmptyPlaceholder.style.display = 'none';
     if (chatActiveWorkspace) chatActiveWorkspace.style.display = 'flex';
     // Mobile-only (<=640px, index.css): swaps the single visible panel from
-    // the chat list to the active conversation. No-op at desktop widths —
+    // the chat list to the active conversation. No-op at desktop widths -
     // nothing there reads this class.
     document.getElementById('view-chat')?.classList.add('chat-mobile-conversation-open');
     document.getElementById('view-chat')?.classList.remove('chat-drawer-open');
@@ -1310,11 +1310,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('drawer-contact-phone').innerText = chat.phone;
 
     // chat.tag is already resolved to the contact's real (single) tag name,
-    // or the '—' placeholder for untagged (see adaptChat) — a contact has
+    // or the '-' placeholder for untagged (see adaptChat) - a contact has
     // exactly one tag_id, never the two-badge "Lead" + "High Intent" pair
     // this used to hardcode for every contact regardless of reality.
     const headerTag = document.getElementById('active-chat-tag');
-    const hasTag = chat.tag && chat.tag !== '—';
+    const hasTag = chat.tag && chat.tag !== '-';
     headerTag.style.display = hasTag ? '' : 'none';
     headerTag.innerText = hasTag ? chat.tag : '';
     document.getElementById('drawer-contact-tags').style.display = '';
@@ -1324,7 +1324,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // The primary badge above and the multi-tag chips below read two different
     // tables (contacts.tag_id vs contact_tags), and migration 061 copied every
-    // primary tag into contact_tags — so the same tag would show twice. The
+    // primary tag into contact_tags - so the same tag would show twice. The
     // 'contact-tags-rendered' listener (below renderContactTagsInto) hides the
     // primary badge whenever that tag is already a chip.
     renderContactAttributesInto(document.getElementById('drawer-contact-attributes'), chat.contactId, () => state.activeChatId !== chat.id);
@@ -1337,7 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // chats.unread_count only ever increments server-side (an inbound
-    // message bumps it — chatsRepo.insertInbound) — nothing previously
+    // message bumps it - chatsRepo.insertInbound) - nothing previously
     // cleared it back to 0 on view, anywhere in this codebase. Update the
     // local badge immediately (chat.count is a live reference into
     // state.chats, see adaptChat), then persist so it stays cleared across
@@ -1348,14 +1348,14 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         await authFetch(`/api/chats/${chat.id}`, { method: 'PATCH', body: JSON.stringify({ unread_count: 0 }) });
       } catch (_err) {
-        // Non-fatal — the badge already cleared locally; next poll will
+        // Non-fatal - the badge already cleared locally; next poll will
         // just re-show the count if this write didn't stick.
       }
     }
 
     renderChatActionBar(chat);
     // Notes are lazy-loaded only if the panel is already open (a prior
-    // chat's session left it toggled on) — most chat-opens never touch
+    // chat's session left it toggled on) - most chat-opens never touch
     // notes, so this avoids a GET /:id/notes round trip on every single
     // chat click.
     document.getElementById('chat-notes-section').style.display = 'none';
@@ -1363,7 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ---------------------------------------------------------------
-     item 2/5.5 — assign/unassign/resolve/reopen action bar
+     item 2/5.5 - assign/unassign/resolve/reopen action bar
      --------------------------------------------------------------- */
   function renderChatActionBar(chat) {
     const statusBadge = document.getElementById('chat-status-badge');
@@ -1381,7 +1381,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Agent role: per PLAN.md item 2, may only assign a chat to THEMSELVES,
     // never resolve/reopen (Admin/Manager only per requireRole on those
-    // routes — matching that server-side gate here so an Agent doesn't see
+    // routes - matching that server-side gate here so an Agent doesn't see
     // controls that would just 403). The select itself stays usable for an
     // Agent so they can still claim an unassigned chat.
     const isAgent = state.actorRole === 'Agent';
@@ -1449,7 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------------------------------------------------------------
-     item 3/5.5 — internal notes with @mention
+     item 3/5.5 - internal notes with @mention
      --------------------------------------------------------------- */
   async function renderChatNotes() {
     const list = document.getElementById('chat-notes-list');
@@ -1477,12 +1477,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const section = document.getElementById('chat-notes-section');
     const nowVisible = section.style.display === 'none';
     section.style.display = nowVisible ? '' : 'none';
-    // Below 1280px the drawer is a sheet — reveal it so the notes are seen.
+    // Below 1280px the drawer is a sheet - reveal it so the notes are seen.
     if (nowVisible) setChatDrawerOpen(true);
     if (nowVisible) await renderChatNotes();
   });
 
-  // @mention autocomplete — same slash-picker mechanism templates already
+  // @mention autocomplete - same slash-picker mechanism templates already
   // use (see renderSlashPicker below), reused for team members instead of
   // templates since the interaction (type a trigger character, filter a
   // list, click/select to insert) is identical.
@@ -1540,19 +1540,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Per-contact custom attribute values (item 7) + additive multi-tags
-  // (item 8) — generalized (item 8.5) to render into ANY container/wrapper
+  // (item 8) - generalized (item 8.5) to render into ANY container/wrapper
   // for ANY contactId, not just the Chat drawer. Both the drawer
   // (openActiveChat, above) and the Contacts-view detail panel
   // (openContactDetailPanel, below) call these same two functions; neither
   // has its own copy of the fetch/render/save logic. `isStale()` is a
   // caller-supplied check (run after the async fetch returns) so a late
   // response from an abandoned chat-switch or panel-close never paints
-  // into what's now showing something else — each caller knows what
+  // into what's now showing something else - each caller knows what
   // "still relevant" means for its own surface (state.activeChatId for the
   // drawer, state.activeContactDetailId for the panel).
   //
   // attr.type picks the input kind (boolean -> select, so a user can't
-  // type "yes" and get a 400; date -> a real date picker) — real
+  // type "yes" and get a 400; date -> a real date picker) - real
   // validation still happens server-side (validateContactAttributeValue),
   // this just steers most users away from a value that would fail it.
   async function renderContactAttributesInto(container, contactId, isStale) {
@@ -1563,7 +1563,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!state.contactAttributes.length) {
-      container.innerHTML = '<span style="font-size:0.8rem;color:#9CA3AF;">No custom attributes defined yet — add one in Settings &gt; Attributes.</span>';
+      container.innerHTML = '<span style="font-size:0.8rem;color:#9CA3AF;">No custom attributes defined yet - add one in Settings &gt; Attributes.</span>';
       return;
     }
     container.innerHTML = '<span style="font-size:0.8rem;color:#9CA3AF;">Loading…</span>';
@@ -1581,7 +1581,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const current = valueByAttrId[attr.id] ?? '';
       const inputHtml = attr.type === 'boolean'
         ? `<select class="form-input contact-attr-input" data-attribute-id="${attr.id}" style="font-size:0.78rem; padding:4px 6px; height:auto;">
-             <option value=""${current === '' ? ' selected' : ''}>—</option>
+             <option value=""${current === '' ? ' selected' : ''}>-</option>
              <option value="true"${current === 'true' ? ' selected' : ''}>True</option>
              <option value="false"${current === 'false' ? ' selected' : ''}>False</option>
            </select>`
@@ -1596,7 +1596,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  // One delegated listener (not one per surface) — reads the target
+  // One delegated listener (not one per surface) - reads the target
   // contactId from the closest ancestor's data-contact-id, set above at
   // render time, so this works for every container that ever calls
   // renderContactAttributesInto, present or future.
@@ -1626,12 +1626,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Additive multi-tags — separate from the single primary tag
+  // Additive multi-tags - separate from the single primary tag
   // (contacts.tag_id, rendered directly from chat.tag/adaptContact
-  // wherever each surface shows it) — this section never touches it.
+  // wherever each surface shows it) - this section never touches it.
   // `wrapper` is the .contact-tags-wrapper element containing a
   // .contact-tags-chips container and a .contact-tags-select picker
-  // (index.html — both the Chat drawer and the Contacts detail panel use
+  // (index.html - both the Chat drawer and the Contacts detail panel use
   // this exact same shape).
   async function renderContactTagsInto(wrapper, contactId, isStale) {
     if (!wrapper) return;
@@ -1671,7 +1671,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Chat drawer only: hide the primary-tag badge (or the "No tag assigned"
-  // placeholder) when the chips below already cover it — see the note in the
+  // placeholder) when the chips below already cover it - see the note in the
   // chat-open render path. Display-only; neither table is touched.
   document.getElementById('drawer-contact-tags-wrapper')?.addEventListener('contact-tags-rendered', (e) => {
     const chat = (state.chats || []).find(c => c.id === state.activeChatId);
@@ -1682,7 +1682,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Two delegated listeners (remove-chip click, add-tag select change),
-  // each shared across every .contact-tags-wrapper — re-renders by finding
+  // each shared across every .contact-tags-wrapper - re-renders by finding
   // the SAME wrapper's chips/select again via closest(), no per-surface
   // wiring needed.
   document.addEventListener('click', async (e) => {
@@ -1717,13 +1717,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Contacts-view contact detail panel (item 8.5) ---
-  // The second caller of the two generalized functions above — opens on a
+  // The second caller of the two generalized functions above - opens on a
   // Contacts-table row click (see the delegated listener on
   // #contacts-table-body, wired alongside renderContacts), shows the same
   // tags/attributes sections the Chat drawer already has. No primary-tag
-  // (contacts.tag_id) UI here, by explicit decision — this panel only
+  // (contacts.tag_id) UI here, by explicit decision - this panel only
   // surfaces what items 7/8 already built.
-  // PLAN.md item 10 — Contact 360 activity timeline. Read-only; the
+  // PLAN.md item 10 - Contact 360 activity timeline. Read-only; the
   // endpoint already merges all 4 sources server-side (contactTimelineRepo.js),
   // this just labels each event type for display.
   const TIMELINE_EVENT_LABELS = {
@@ -1772,7 +1772,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : '<span>No activity yet.</span>';
   }
 
-  // Stage 5 — key/value summary at the top of the contact drawer; only
+  // Stage 5 - key/value summary at the top of the contact drawer; only
   // fields the contacts API already returns (no invented data).
   function renderContactSummary(contact) {
     const el = document.getElementById('contact-detail-summary');
@@ -1780,10 +1780,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const badge = OPT_IN_BADGE[contact.optInStatus] || OPT_IN_BADGE.unknown;
     const statusCls = String(contact.status || '').toLowerCase() === 'active' ? 'badge-success' : 'badge-neutral';
     el.innerHTML = `
-      <dt>Status</dt><dd><span class="badge ${statusCls}">${esc(contact.status || '—')}</span></dd>
+      <dt>Status</dt><dd><span class="badge ${statusCls}">${esc(contact.status || '-')}</span></dd>
       <dt>Consent</dt><dd><span class="badge ${badge.cls}">${esc(badge.label)}</span></dd>
-      <dt>Tag</dt><dd>${contact.tag && contact.tag !== '—' ? `<span class="tag-badge">${esc(contact.tag)}</span>` : '<span class="contacts-muted">—</span>'}</dd>
-      <dt>Added</dt><dd>${esc(contact.created || '—')}</dd>`;
+      <dt>Tag</dt><dd>${contact.tag && contact.tag !== '-' ? `<span class="tag-badge">${esc(contact.tag)}</span>` : '<span class="contacts-muted">-</span>'}</dd>
+      <dt>Added</dt><dd>${esc(contact.created || '-')}</dd>`;
   }
 
   function openContactDetailPanel(contactId) {
@@ -1802,12 +1802,12 @@ document.addEventListener('DOMContentLoaded', () => {
     renderContactTimeline(document.getElementById('contact-detail-timeline'), contactId, () => state.activeContactDetailId !== contactId);
   }
 
-  // Consent hardening Phase 2 — the detail panel's per-contact opt-in
+  // Consent hardening Phase 2 - the detail panel's per-contact opt-in
   // control. "Mark opted in" opens the same confirmation modal bulk opt-in
-  // uses (single id); "Mark opted out" is a plain yes/no confirm — opting
+  // uses (single id); "Mark opted out" is a plain yes/no confirm - opting
   // OUT doesn't need evidence of permission, it's the opposite action, so
   // the heavier statement-confirmation flow doesn't apply. An opted_out
-  // contact shows neither button as clickable — sticky opt-out
+  // contact shows neither button as clickable - sticky opt-out
   // (consentRepo.recordEvent, Phase 1) would refuse the request anyway;
   // this just doesn't let the user reach a doomed request in the first
   // place, with an explanation of why. Any role that can open this panel
@@ -1824,7 +1824,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canOptIn = state.actorRole !== 'Agent';
     let actionsHtml = '';
     if (contact.optInStatus === 'opted_out') {
-      actionsHtml = `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">Opted-out contacts can only opt back in themselves (e.g. replying START) — this can't be overridden here.</div>`;
+      actionsHtml = `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">Opted-out contacts can only opt back in themselves (e.g. replying START) - this can't be overridden here.</div>`;
     } else {
       if (contact.optInStatus !== 'opted_in' && canOptIn) {
         actionsHtml += `<button type="button" class="btn-secondary" style="margin-top:8px; margin-right:8px; padding:4px 12px; font-size:0.78rem;" id="contact-detail-mark-opted-in-btn">Mark opted in</button>`;
@@ -1874,7 +1874,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('contacts-table-body')?.addEventListener('click', (e) => {
-    // Consent hardening Phase 2 — checking a row's own selection checkbox
+    // Consent hardening Phase 2 - checking a row's own selection checkbox
     // must not also open the detail panel underneath it.
     if (e.target.closest('.contacts-row-checkbox')) return;
     const row = e.target.closest('tr[data-contact-id]');
@@ -1883,7 +1883,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // The shared [data-close-modal] handler (below, in --- Modals ---) only
-  // ever removes the 'open' class — it doesn't know about this panel's own
+  // ever removes the 'open' class - it doesn't know about this panel's own
   // staleness-guard state, so clearing activeContactDetailId needs its own
   // listener: without it, a fetch still in flight when the panel is closed
   // would find isStale() still false and paint into a hidden modal.
@@ -1892,9 +1892,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------------------------------------------------------------
-     New Conversation — the only way to originate a chat with a contact
+     New Conversation - the only way to originate a chat with a contact
      who's never messaged in. Two steps: pick a contact (or enter a new
-     number), then — only if the 24h session window isn't already open —
+     number), then - only if the 24h session window isn't already open -
      an approved template, handed off to the existing Send Chat Template
      modal for the actual params/preview/send. WhatsApp's Cloud API can't
      originate or re-open a conversation with free text, so the template
@@ -1955,7 +1955,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('new-conversation-new-number-continue');
     btn.disabled = true;
     try {
-      // opt_in_status is never set here — it defaults to 'unknown' at the
+      // opt_in_status is never set here - it defaults to 'unknown' at the
       // DB level (contacts table, migration 012_consent_tracking.js), the
       // same as every contact added via the Contacts view's Add Contact
       // form. That's what makes assertConsentForTemplate correctly refuse
@@ -1975,11 +1975,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Always goes through POST /api/chats with contact_id set — the backend
+  // Always goes through POST /api/chats with contact_id set - the backend
   // dedupes via findOrCreateByContact (server/src/routes/chats.js), so this
   // is safe to call for a contact who already has a chat: it returns that
   // same chat rather than creating a duplicate. Real message history is
-  // then fetched to compute the actual session-window state — never
+  // then fetched to compute the actual session-window state - never
   // inferred from "is this chat new or old", since an existing chat can be
   // just as cold as a brand-new one.
   async function proceedWithContact(contact) {
@@ -2006,7 +2006,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Window closed (or never opened) — a template is required. The chat
+      // Window closed (or never opened) - a template is required. The chat
       // is already open underneath (state.activeChatId is set), so once a
       // template is picked, the existing Send Chat Template modal sends
       // straight into it and refreshes this same view.
@@ -2054,13 +2054,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function sendCurrentMessage() {
     const text = chatMessageInput?.value.trim();
     if (!text || !state.activeChatId) return;
-    // Proactive, not just reactive — sendMsgBtn is already disabled when the
+    // Proactive, not just reactive - sendMsgBtn is already disabled when the
     // window is closed (renderChatWindowStatus), but Enter-to-send bypasses
     // a disabled button, and this is exactly the failure mode reported live:
     // a message that looked sent (input cleared optimistically below) but
     // never left, with only a toast that's easy to miss as the only sign.
     if (state.sessionWindowOpen === false) {
-      showToast('Session window is closed — use / to send a template instead.');
+      showToast('Session window is closed - use / to send a template instead.');
       return;
     }
     chatMessageInput.value = '';
@@ -2073,7 +2073,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatMessages();
     } catch (err) {
       // session_window_closed / waba_not_connected are real, explainable
-      // states (see server/src/services/messagingService.js) — surface the
+      // states (see server/src/services/messagingService.js) - surface the
       // server's message as-is rather than a generic "request failed".
       reportError(err);
       chatMessageInput.value = text; // give the draft back so it isn't lost
@@ -2104,11 +2104,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (slashPicker) slashPicker.style.display = 'none';
   }
 
-  // item 4/5.5 — canned responses share this exact picker with templates
+  // item 4/5.5 - canned responses share this exact picker with templates
   // (same trigger character, same filter-as-you-type interaction), listed
   // first since picking a canned response is a plain text insert (no modal),
   // the faster of the two paths. Matched against shortcut minus its leading
-  // '/' (chatMessageInput's value already has that stripped by the caller —
+  // '/' (chatMessageInput's value already has that stripped by the caller -
   // see the 'input' listener below), so typing "/ref" matches a "/refund"
   // shortcut the same way "/ship" would match a "shipping_update" template.
   function renderSlashPicker(filterText) {
@@ -2173,9 +2173,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (template) openSendTemplateModal(template);
   }
 
-  // Unlike a template (which opens a modal — variables/preview/send are a
+  // Unlike a template (which opens a modal - variables/preview/send are a
   // real multi-step flow), a canned response is a plain body of text with
-  // no variables — inserting it directly into the composer, still editable
+  // no variables - inserting it directly into the composer, still editable
   // before send, is the whole feature.
   function selectSlashCannedResponse(cannedId) {
     const canned = (state.cannedResponses || []).find(c => c.id === cannedId);
@@ -2202,27 +2202,27 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------------------------------------------------------------
-     Send Template modal — the actual send, reusing the exact backend
+     Send Template modal - the actual send, reusing the exact backend
      path (POST /api/chats/:id/messages, type: 'template') broadcasts
      and flow send_template nodes already use, so opt-in enforcement
      (assertConsentForTemplate in messagingService.sendChatMessage)
-     applies automatically — nothing here bypasses it, it can't be
+     applies automatically - nothing here bypasses it, it can't be
      bypassed from this layer since the check lives server-side.
      --------------------------------------------------------------- */
   let sendTemplateTarget = null; // the template object while this modal is open
   let sendTemplateHeaderMediaAssetId = null; // set once a new header file has been uploaded for this send
 
-  // Body params + (if TEXT) header params, deduped — mirrors
+  // Body params + (if TEXT) header params, deduped - mirrors
   // routes/broadcasts.js's requiredParamNames on the server for the same
   // template shape, but this is a one-off ad hoc send with values typed
   // directly, not a contact-field/static mapping like broadcasts use.
   function requiredParamsFor(template) {
     // Authentication templates have no custom body/header for Meta to scan
-    // placeholders out of (Meta generates that text itself) — the usual
+    // placeholders out of (Meta generates that text itself) - the usual
     // {{name}} extraction below always returns []. Found live 2026-11-04:
     // that left the Send modal showing "This template has no parameters"
     // with no input field at all, while the server (messagingService.js)
-    // unconditionally requires a code for this category — a real dead end,
+    // unconditionally requires a code for this category - a real dead end,
     // not just a cosmetic mismatch. 'code' is a fixed single param, not
     // extracted, since Authentication templates always need exactly one.
     if (template.category === 'Authentication') return ['code'];
@@ -2282,17 +2282,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Shared by the send-to-a-contact preview below AND the standalone
   // Templates-view preview (openTemplateChatPreview) AND the Create/Edit
-  // Template modal's own live preview (updateTemplatePreview) — one bubble
+  // Template modal's own live preview (updateTemplatePreview) - one bubble
   // renderer so all three can never drift into showing a template
   // differently from how it actually sends. header/body/footer text runs
   // through substituteTemplateParams so a {{param}} shows its real sample
   // value (or "[param]" if one isn't set yet) instead of the raw
   // placeholder syntax. headerMediaNote is optional context specific to
-  // the send flow ("will send with the file you chose above") — omitted
+  // the send flow ("will send with the file you chose above") - omitted
   // entirely for a read-only preview, where there's nothing to choose.
   function renderTemplateBubbleMarkup(t, values, headerMediaNote) {
     // Authentication templates store no body/header of their own (Meta
-    // generates that wording) — the generic rendering below would otherwise
+    // generates that wording) - the generic rendering below would otherwise
     // show a blank bubble. This approximates Meta's real auto-generated
     // text (a verification-code message + an auto-added Copy Code button)
     // so the preview isn't misleadingly empty; it's not Meta's exact
@@ -2307,7 +2307,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(t.header_content, values))}</div>`;
     } else if (MEDIA_HEADER_TYPES.includes(t.header_type)) {
       const label = `${t.header_type.charAt(0)}${t.header_type.slice(1).toLowerCase()} header`;
-      html += `<div class="template-preview-header">${headerMediaNote ? `${label} — ${headerMediaNote}` : label}</div>`;
+      html += `<div class="template-preview-header">${headerMediaNote ? `${label} - ${headerMediaNote}` : label}</div>`;
     }
     html += `<div>${escapeHtml(substituteTemplateParams(t.body || '', values))}</div>`;
     if (t.footer_text) {
@@ -2328,12 +2328,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const values = collectSendTemplateParamValues();
     const headerMediaNote = sendTemplateHeaderMediaAssetId
       ? 'will send with the file you chose above'
-      : 'will send with the approval sample — choose a file above to send something else';
+      : 'will send with the approval sample - choose a file above to send something else';
     bubble.innerHTML = renderTemplateBubbleMarkup(sendTemplateTarget, values, headerMediaNote);
   }
 
   // Read-only preview of an EXISTING template (Templates view's per-card
-  // preview button) — no params to fill in, just the template's own saved
+  // preview button) - no params to fill in, just the template's own saved
   // body_param_examples standing in for what a real send would fill.
   function openTemplateChatPreview(template) {
     document.getElementById('template-chat-preview-name').textContent = template.name;
@@ -2345,15 +2345,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Same split-by-component-type logic as
   // server/src/utils/templateParamMapping.js's buildTemplateComponents,
   // duplicated client-side for the same no-build-step reason as
-  // extractTemplateParams — a template's body and header params share the
+  // extractTemplateParams - a template's body and header params share the
   // same {{name}} syntax but Meta sends them as separate component types.
   function buildSendTemplateComponents(template, values) {
     // Authentication templates: messagingService.js reads the code off
     // `finalComponents.find(c => c.type === 'body')?.parameters?.[0]?.text`
-    // (positional, no parameter_name — that's a Marketing/Utility-only
+    // (positional, no parameter_name - that's a Marketing/Utility-only
     // concept) and re-emits it into both the body and the Copy Code button
     // itself server-side. This is the send-side half of requiredParamsFor's
-    // fix above — without it, the 'code' value collected from that input
+    // fix above - without it, the 'code' value collected from that input
     // field had nowhere to go.
     if (template.category === 'Authentication') {
       return [{ type: 'body', parameters: [{ type: 'text', text: values.code || '' }] }];
@@ -2380,10 +2380,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Uploaded immediately on choice (not deferred to submit) so a failed
-  // upload — bad file type, WhatsApp not connected — surfaces right away,
+  // upload - bad file type, WhatsApp not connected - surfaces right away,
   // not after the recipient/params are already filled in. Not picking a
   // file at all leaves sendTemplateHeaderMediaAssetId null, which sends
-  // headerMediaAssetId as undefined — the backend's existing fallback to
+  // headerMediaAssetId as undefined - the backend's existing fallback to
   // the template's approval-time sample (see mediaHeaderService.js).
   document.getElementById('send-chat-template-media-file')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -2396,7 +2396,7 @@ document.addEventListener('DOMContentLoaded', () => {
       form.append('file', file);
       const asset = await authFetch(`/api/templates/${sendTemplateTarget.id}/header-media`, { method: 'POST', body: form });
       sendTemplateHeaderMediaAssetId = asset.id;
-      status.textContent = `Ready — will send with "${file.name}".`;
+      status.textContent = `Ready - will send with "${file.name}".`;
     } catch (err) {
       status.textContent = `Upload failed: ${err.message}`;
     }
@@ -2410,7 +2410,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const values = collectSendTemplateParamValues();
     const missing = requiredParamsFor(sendTemplateTarget).filter(p => !values[p]);
     if (missing.length) {
-      setSendTemplateError(`Fill in every parameter before sending — missing: ${missing.join(', ')}.`);
+      setSendTemplateError(`Fill in every parameter before sending - missing: ${missing.join(', ')}.`);
       return;
     }
 
@@ -2431,7 +2431,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshActiveChatMessages();
       showToast('Template sent.');
     } catch (err) {
-      // Left open on failure, on purpose — assertConsentForTemplate's
+      // Left open on failure, on purpose - assertConsentForTemplate's
       // "not opted in" message, a session/plan-limit error, or a real Meta
       // rejection all need to be seen and acted on, not flashed in a toast
       // and lost. This is the exact class of failure the window-status
@@ -2493,20 +2493,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Chat attachment button is disabled in index.html (no upload backend
-  // exists) — used to insert a fake sent-message bubble here with no
+  // exists) - used to insert a fake sent-message bubble here with no
   // network call at all. Removed along with it, not left as dead code.
 
-  // item 2/5.5 — queue filter (status/assignedTo) is independent of, and
+  // item 2/5.5 - queue filter (status/assignedTo) is independent of, and
   // combines with, the pre-existing tag filter. Applied client-side against
   // the already-fetched state.chats (adaptChat now passes status/
-  // assignedTeamMemberId through — see that function) rather than
+  // assignedTeamMemberId through - see that function) rather than
   // refetching per filter change, matching this function's existing
   // client-side-tag-filter convention.
   function matchesQueueFilter(chat, queueFilter) {
     if (queueFilter === 'unassigned') return !chat.assignedTeamMemberId && chat.status !== 'resolved';
     if (queueFilter === 'mine') return chat.assignedTeamMemberId === state.actorId && chat.status !== 'resolved';
     if (queueFilter === 'resolved') return chat.status === 'resolved';
-    return chat.status !== 'resolved'; // 'all' — matches the pre-5.5 behavior of showing every chat, minus resolved noise
+    return chat.status !== 'resolved'; // 'all' - matches the pre-5.5 behavior of showing every chat, minus resolved noise
   }
 
   function chatListEmptyHtml(hasAnyChats, filtersActive) {
@@ -2646,7 +2646,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Contacts Table ---
-  // UI redesign Stage 5 — filters/pagination are client-side over the already
+  // UI redesign Stage 5 - filters/pagination are client-side over the already
   // loaded state.contacts (no API change). renderContacts() is the public
   // entry point (resets selection, as before); drawContacts() repaints the
   // current page without touching selection (used for paging).
@@ -2681,7 +2681,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function populateContactsTagFilter() {
     const select = document.getElementById('contacts-tag-filter');
     if (!select) return;
-    const names = Array.from(new Set(state.contacts.map((c) => c.tag).filter((t) => t && t !== '—'))).sort();
+    const names = Array.from(new Set(state.contacts.map((c) => c.tag).filter((t) => t && t !== '-'))).sort();
     if (contactsView.tag && !names.includes(contactsView.tag)) contactsView.tag = '';
     select.innerHTML = '<option value="">All tags</option>' +
       names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
@@ -2691,7 +2691,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderContacts() {
     if (!document.getElementById('contacts-table-body')) return;
 
-    // Consent hardening Phase 2 — a fresh contact list may not contain the
+    // Consent hardening Phase 2 - a fresh contact list may not contain the
     // same ids the previous one did, so selection is cleared on every real
     // re-render rather than carried forward stale.
     state.selectedContactIds.clear();
@@ -2770,7 +2770,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : '';
       const statusCls = String(c.status || '').toLowerCase() === 'active' ? 'badge-success' : 'badge-neutral';
       const checked = state.selectedContactIds.has(c.id) ? ' checked' : '';
-      // PLAN.md item 8.5 — data-contact-id makes the whole row open the
+      // PLAN.md item 8.5 - data-contact-id makes the whole row open the
       // contact detail panel (delegated click listener near
       // openContactDetailPanel, which ignores clicks on the checkbox so
       // selecting a row doesn't also open it).
@@ -2780,7 +2780,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td data-label="Name" class="contacts-name-td"><span class="contacts-name-cell"><span class="contacts-avatar" aria-hidden="true">${esc(contactInitials(c.name))}</span><span class="contacts-name">${esc(c.name)}</span></span></td>
           <td data-label="Phone" class="contacts-phone">${esc(c.phone)}</td>
           <td data-label="Status"><span class="badge ${statusCls}">${esc(c.status)}</span></td>
-          <td data-label="Tags">${c.tag && c.tag !== '—' ? `<span class="tag-badge">${esc(c.tag)}</span>` : '<span class="contacts-muted">—</span>'}</td>
+          <td data-label="Tags">${c.tag && c.tag !== '-' ? `<span class="tag-badge">${esc(c.tag)}</span>` : '<span class="contacts-muted">-</span>'}</td>
           <td data-label="Consent">
             <span class="contacts-consent"><span class="badge ${badge.cls}"${detail ? ` title="${esc(detail)}"` : ''}>${esc(badge.label)}</span>${detail ? `<span class="contacts-consent-detail">${esc(detail)}</span>` : ''}</span>
           </td>
@@ -2812,11 +2812,11 @@ document.addEventListener('DOMContentLoaded', () => {
     renderContacts();
   }
 
-  // Consent hardening Phase 2 — shows/hides the "N selected" + "Mark as
+  // Consent hardening Phase 2 - shows/hides the "N selected" + "Mark as
   // opted in" toolbar controls, and keeps the header select-all checkbox's
   // checked/indeterminate state honest against the actual per-row
   // selection. Owner/Admin/Manager only, matching the server's own
-  // requireRole gate on POST /api/contacts/bulk-consent — an Agent never
+  // requireRole gate on POST /api/contacts/bulk-consent - an Agent never
   // sees this button at all, rather than seeing it and hitting a 403.
   function updateContactsBulkToolbar() {
     const count = state.selectedContactIds.size;
@@ -2928,7 +2928,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Broadcasts Table ---
-  // UI redesign Stage 6 — summary tiles, search/status filter and pagination
+  // UI redesign Stage 6 - summary tiles, search/status filter and pagination
   // are all client-side over the already-loaded state.broadcasts (no API
   // change). Row markup keeps .broadcast-pause-btn/.broadcast-resume-btn/
   // .broadcast-view-btn and #broadcasts-table-body exactly as before.
@@ -3018,20 +3018,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     broadcastsTableBody.innerHTML = pageItems.map(b => {
       // Real bug, fixed: this used to show ONE combined "N skipped" badge,
-      // unconditionally labeled "not opted in for marketing" — wrong, not
+      // unconditionally labeled "not opted in for marketing" - wrong, not
       // just vague, whenever any of the N were actually item 12's Smart
       // Sending skips (a different, unrelated reason). Two separate
       // badges now, each shown only when its own count is nonzero, each
       // with an accurate reason.
       const badges = [];
       if (b.skippedConsent > 0) {
-        badges.push(`<span class="badge badge-warning" title="Contacts not opted in for marketing — skipped, not sent">${esc(b.skippedConsent)} consent</span>`);
+        badges.push(`<span class="badge badge-warning" title="Contacts not opted in for marketing - skipped, not sent">${esc(b.skippedConsent)} consent</span>`);
       }
       if (b.skippedSmartSending > 0) {
-        badges.push(`<span class="badge badge-info" title="Contacts already messaged by another campaign within this broadcast's Smart Sending window — skipped, not sent">${esc(b.skippedSmartSending)} smart sending</span>`);
+        badges.push(`<span class="badge badge-info" title="Contacts already messaged by another campaign within this broadcast's Smart Sending window - skipped, not sent">${esc(b.skippedSmartSending)} smart sending</span>`);
       }
-      const skippedCell = badges.length ? `<span class="campaigns-skipped">${badges.join('')}</span>` : '<span class="contacts-muted">—</span>';
-      // PLAN.md item 11 — pause/resume only makes sense for a broadcast
+      const skippedCell = badges.length ? `<span class="campaigns-skipped">${badges.join('')}</span>` : '<span class="contacts-muted">-</span>';
+      // PLAN.md item 11 - pause/resume only makes sense for a broadcast
       // actively Sending or already Paused; any other status (Completed,
       // Scheduled) gets no button here rather than a disabled one, since
       // routes/broadcasts.js's own 400 message already explains why for
@@ -3041,7 +3041,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : b.status === 'Paused'
           ? `<button type="button" class="btn-secondary btn-sm broadcast-resume-btn" data-broadcast-id="${esc(b.id)}" aria-label="Resume ${esc(b.title)}">Resume</button>`
           : '';
-      // PLAN.md item 28 — the per-recipient detail view. Available for
+      // PLAN.md item 28 - the per-recipient detail view. Available for
       // every status (unlike pause/resume, which only make sense mid-send)
       // since a Completed/Scheduled campaign's recipient list is just as
       // real and worth drilling into.
@@ -3121,7 +3121,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Broadcast detail (PLAN.md item 28) ---
-  // "Delivered" only ever means Meta reported it delivered — WhatsApp only
+  // "Delivered" only ever means Meta reported it delivered - WhatsApp only
   // sends a read receipt when the recipient has read receipts turned on, so
   // "delivered, not read" genuinely means "we don't know if they've read it,"
   // not "they haven't." Labels below say so explicitly rather than implying
@@ -3134,7 +3134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     read: 'badge-success', failed: 'badge-danger', skipped: 'badge-warning',
   };
 
-  let broadcastDetailState = null; // { id, meta, recipients } — set on open, cleared on close.
+  let broadcastDetailState = null; // { id, meta, recipients } - set on open, cleared on close.
 
   async function openBroadcastDetail(broadcastId) {
     const modal = document.getElementById('modal-broadcast-detail');
@@ -3165,10 +3165,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const audience = meta.contact_list_id ? 'Contact list' : meta.segment_id ? 'Segment' : (state.tagsById[meta.tag_id]?.name || 'Everyone');
     const metaItems = [
-      { label: 'Template', value: meta.template_name || '—' },
+      { label: 'Template', value: meta.template_name || '-' },
       { label: 'Audience', value: `${audience} (${meta.recipient_count.toLocaleString()})` },
       { label: 'Status', value: meta.status },
-      { label: 'Created', value: (meta.created_at || '').toString().slice(0, 16).replace('T', ' ') || '—' },
+      { label: 'Created', value: (meta.created_at || '').toString().slice(0, 16).replace('T', ' ') || '-' },
     ];
     document.getElementById('broadcast-detail-meta').innerHTML = metaItems.map((item) => `
       <div class="broadcast-meta-item">
@@ -3178,15 +3178,15 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
 
     // Layout/spacing only follows the AiSensy reference (large percentage,
-    // count beneath, a plain horizontal row) — colors stay this app's own
+    // count beneath, a plain horizontal row) - colors stay this app's own
     // neutral card style (--color-heading/--text-muted/--border-light),
     // never the reference's own palette.
     const total = meta.recipient_count || 0;
     const pct = (n) => (total > 0 ? `${Math.round((n / total) * 1000) / 10}%` : '0%');
     const buckets = [
       { key: 'sent', label: 'Sent', count: meta.sent_count },
-      { key: 'delivered', label: 'Delivered', count: meta.delivered_count, note: 'Only counts a real delivery receipt from Meta. A contact with read receipts off can still be "Delivered" forever — that\'s expected, not a failure to read.' },
-      { key: 'read', label: 'Read', count: meta.read_count, note: 'Only reported when the recipient has read receipts turned on — "Delivered but not Read" means unknown, not unread.' },
+      { key: 'delivered', label: 'Delivered', count: meta.delivered_count, note: 'Only counts a real delivery receipt from Meta. A contact with read receipts off can still be "Delivered" forever - that\'s expected, not a failure to read.' },
+      { key: 'read', label: 'Read', count: meta.read_count, note: 'Only reported when the recipient has read receipts turned on - "Delivered but not Read" means unknown, not unread.' },
       { key: 'failed', label: 'Failed', count: meta.failed_count },
       { key: 'skipped', label: 'Skipped', count: meta.skipped_count },
     ];
@@ -3231,12 +3231,12 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = rows.map((r) => {
       const badgeCls = BROADCAST_STATUS_BADGES[r.status] || 'badge-neutral';
       const label = BROADCAST_STATUS_LABELS[r.status] || r.status;
-      const when = r.at ? new Date(r.at).toLocaleString() : '—';
-      const reason = r.reason ? `<span title="${esc(r.reason)}">${esc(r.reason)}</span>` : '—';
+      const when = r.at ? new Date(r.at).toLocaleString() : '-';
+      const reason = r.reason ? `<span title="${esc(r.reason)}">${esc(r.reason)}</span>` : '-';
       return `
         <tr>
-          <td data-label="Name">${esc(r.name || '—')}</td>
-          <td data-label="Phone">${esc(r.phone || '—')}</td>
+          <td data-label="Name">${esc(r.name || '-')}</td>
+          <td data-label="Phone">${esc(r.phone || '-')}</td>
           <td data-label="Status"><span class="badge ${badgeCls}">${esc(label)}</span></td>
           <td data-label="When">${esc(when)}</td>
           <td data-label="Reason" class="broadcast-recipient-reason">${reason}</td>
@@ -3249,12 +3249,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('broadcast-detail-search')?.addEventListener('input', renderBroadcastDetailRecipients);
   document.getElementById('broadcast-detail-export-btn')?.addEventListener('click', async () => {
     if (!broadcastDetailState) return;
-    // Not a plain window.open/link — this app authenticates with a Bearer
+    // Not a plain window.open/link - this app authenticates with a Bearer
     // token from localStorage (authFetch), not a cookie, so a bare
     // navigation to this URL would carry no auth and 401. authFetch itself
     // can't be reused as-is either (it always calls res.json()), so this
     // fetches the CSV directly with the same Authorization header, then
-    // saves it via a throwaway object URL + <a download> — the standard way
+    // saves it via a throwaway object URL + <a download> - the standard way
     // to turn a fetched blob into a real file save with no server-side
     // signed-URL mechanism needed just for this one button.
     const statusFilter = document.getElementById('broadcast-detail-status-filter').value || 'failed';
@@ -3285,13 +3285,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Rules | Flows tabs share one header. Only fields the API already returns
   // are shown (rule: title/trigger/action/flow_id/status/created_at;
   // flow: name/status/updated_at). A flow's "trigger" is derived from the
-  // rule(s) that start it — a flow has no trigger column of its own.
+  // rule(s) that start it - a flow has no trigger column of its own.
   const automationView = { tab: 'rules', loadState: 'ready' };
 
   function formatAutomationDate(iso) {
-    if (!iso) return '—';
+    if (!iso) return '-';
     const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
   function automationStateRow(colspan, inner) {
@@ -3400,7 +3400,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Flows (step-list editor) ---
-  // Client-side mirror of flowEngine.js's LEGAL_EDGE_TYPES_BY_NODE_TYPE —
+  // Client-side mirror of flowEngine.js's LEGAL_EDGE_TYPES_BY_NODE_TYPE -
   // same duplication reasoning as extractTemplateParams above (no-build-step
   // page, can't require() the server module). The server re-validates on
   // POST .../edges regardless; this only drives which options the "When"
@@ -3454,13 +3454,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const triggers = state.automationRules.filter((r) => r.flow_id === f.id).map((r) => r.trigger).filter(Boolean);
       const triggerCell = triggers.length
         ? triggers.map((t) => `<span class="automation-trigger">${esc(t)}</span>`).join(' ')
-        : '<span class="contacts-muted" title="No rule starts this flow">—</span>';
+        : '<span class="contacts-muted" title="No rule starts this flow">-</span>';
       const status = String(f.status || '');
       return `
         <tr class="flow-card" data-flow-id="${esc(f.id)}" tabindex="0" aria-label="Open flow ${esc(f.name)}">
           <td data-label="Flow"><span class="automation-name" title="${esc(f.name)}">${esc(f.name)}</span></td>
           <td data-label="Trigger">${triggerCell}</td>
-          <td data-label="Status"><span class="badge ${FLOW_STATUS_BADGE[status] || 'badge-neutral'}">${esc(status ? status.charAt(0).toUpperCase() + status.slice(1) : '—')}</span></td>
+          <td data-label="Status"><span class="badge ${FLOW_STATUS_BADGE[status] || 'badge-neutral'}">${esc(status ? status.charAt(0).toUpperCase() + status.slice(1) : '-')}</span></td>
           <td data-label="Updated" class="automation-date">${esc(formatAutomationDate(f.updated_at))}</td>
           <td class="automation-col-actions" data-label="">
             <span class="automation-actions">
@@ -3488,7 +3488,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Shared by the flows-grid card delete button and the flow-editor modal's
-  // own Delete Flow button — same confirm copy, same endpoint, same
+  // own Delete Flow button - same confirm copy, same endpoint, same
   // "contacts currently in this flow exit it" warning either way.
   function confirmAndDeleteFlow(flowId, onDeleted) {
     const flow = state.flows.find(f => f.id === flowId) || (state.currentFlowGraph?.id === flowId ? state.currentFlowGraph : null);
@@ -3511,7 +3511,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function nodeConfigSummary(node) {
     const c = node.config || {};
     if (node.type === 'send_text') return escapeHtml(c.body || '');
-    if (node.type === 'send_interactive_buttons') return `${escapeHtml(c.body || '')} — buttons: ${(c.buttons || []).map(b => escapeHtml(b.title)).join(', ')}`;
+    if (node.type === 'send_interactive_buttons') return `${escapeHtml(c.body || '')} - buttons: ${(c.buttons || []).map(b => escapeHtml(b.title)).join(', ')}`;
     if (node.type === 'send_template') return `Template: ${escapeHtml(c.templateName || '')}`;
     if (node.type === 'delay') return `${c.duration_minutes ?? '?'} minute(s)`;
     if (node.type === 'action') {
@@ -3522,7 +3522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (node.type === 'capture_reply') {
       const attr = state.contactAttributes.find(a => a.id === c.attribute_id);
-      return `${escapeHtml(c.body || '')} — saves reply as: ${escapeHtml(attr?.name || 'no attribute selected')}`;
+      return `${escapeHtml(c.body || '')} - saves reply as: ${escapeHtml(attr?.name || 'no attribute selected')}`;
     }
     return '';
   }
@@ -3545,12 +3545,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Re-fetches the graph after a List-view mutation (add/delete node,
-  // add/delete/reorder edge, set entry) and re-renders the list in place —
+  // add/delete/reorder edge, set entry) and re-renders the list in place -
   // unlike openFlowEditor(), it never touches state.flowView or the
   // embedded Visual Editor iframe. These mutations are only ever
   // fired from controls that live inside the List view (hidden while the
   // Visual Editor tab is active), but their own await chain can still be
-  // in flight after the user switches tabs — calling openFlowEditor() from
+  // in flight after the user switches tabs - calling openFlowEditor() from
   // here used to snap the modal back to List (and reset the iframe)
   // out from under a tab switch made in that window, a real race caught by
   // this session's own Playwright pass.
@@ -3560,11 +3560,11 @@ document.addEventListener('DOMContentLoaded', () => {
     renderFlowEditor();
   }
 
-  // Shared by both the list and the canvas — a node's issues need to look
+  // Shared by both the list and the canvas - a node's issues need to look
   // identical (same text, same nodes flagged) in both places. The whole
   // point of putting issues on the canvas at all is that a graph which
   // hides the one real bug the spike found (an unrouted button) is worse
-  // than the list, not better — see the spike report.
+  // than the list, not better - see the spike report.
   function issuesByNodeMap(graph) {
     const map = {};
     (graph.issues || []).forEach(issue => {
@@ -3587,7 +3587,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleBtn = document.getElementById('bot-flow-editor-toggle-status-btn');
     toggleBtn.textContent = graph.status === 'active' ? 'Archive Flow' : 'Activate Flow';
     toggleBtn.className = graph.status === 'active' ? 'btn-secondary btn-sm btn-auto' : 'btn-primary btn-sm btn-auto';
-    // Only gate the draft/archived -> active direction — archiving an
+    // Only gate the draft/archived -> active direction - archiving an
     // already-active flow never fails validation, so it's never blocked
     // here. The server re-checks regardless (routes/automationFlows.js's
     // PATCH /:id) since this is a convenience, not the real enforcement.
@@ -3595,14 +3595,14 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleBtn.disabled = blocksActivation;
     toggleBtn.title = blocksActivation ? `Fix ${issues.length} issue${issues.length === 1 ? '' : 's'} before activating this flow.` : '';
     document.getElementById('bot-flow-editor-entry-label').textContent = graph.entry_node_id
-      ? `Entry node: ${findNode(graph.entry_node_id)?.type ? FLOW_NODE_TYPE_LABELS[findNode(graph.entry_node_id).type] : '—'}`
-      : 'No entry node yet — the first node you add becomes the entry point.';
+      ? `Entry node: ${findNode(graph.entry_node_id)?.type ? FLOW_NODE_TYPE_LABELS[findNode(graph.entry_node_id).type] : '-'}`
+      : 'No entry node yet - the first node you add becomes the entry point.';
 
     const banner = document.getElementById('bot-flow-editor-issues-banner');
     if (banner) {
       banner.innerHTML = issues.length
         ? `<div class="alert alert-danger flow-editor-issues" role="alert"><div>
-            <strong>${issues.length} issue${issues.length === 1 ? '' : 's'} found</strong> — these would fail or misbehave at runtime and block activating this flow.
+            <strong>${issues.length} issue${issues.length === 1 ? '' : 's'} found</strong> - these would fail or misbehave at runtime and block activating this flow.
             <ul class="flow-editor-issues-list">
               ${issues.map(i => `<li>${escapeHtml(i.message)}</li>`).join('')}
             </ul>
@@ -3621,7 +3621,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const edges = graph.edges.filter(e => e.from_node_id === node.id);
       const isEntry = node.id === graph.entry_node_id;
       const nodeIssues = issuesByNode[node.id] || [];
-      // Reordering only makes sense among non-'default' siblings — a
+      // Reordering only makes sense among non-'default' siblings - a
       // default edge always sorts last regardless of priority
       // (flowEdgesRepo.listForNode), so moving it up/down would be a no-op
       // control that does nothing, which is worse than not offering it.
@@ -3635,7 +3635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ` : '';
         return `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: #F8FAFC; border-radius: 6px; margin-top: 0.4rem; font-size: 0.8rem;">
-          <span>${FLOW_EDGE_TYPE_LABELS[e.condition_type] || e.condition_type}${e.condition_value ? ` "${escapeHtml(e.condition_value)}"` : ''} &rarr; ${escapeHtml(findNode(e.to_node_id) ? FLOW_NODE_TYPE_LABELS[findNode(e.to_node_id).type] : '—')}</span>
+          <span>${FLOW_EDGE_TYPE_LABELS[e.condition_type] || e.condition_type}${e.condition_value ? ` "${escapeHtml(e.condition_value)}"` : ''} &rarr; ${escapeHtml(findNode(e.to_node_id) ? FLOW_NODE_TYPE_LABELS[findNode(e.to_node_id).type] : '-')}</span>
           <span style="display: flex; align-items: center; gap: 4px;">
             ${moveButtons}
             <button type="button" class="delete-flow-edge-btn" data-edge-id="${e.id}" style="border: none; background: none; color: #DC2626; cursor: pointer; font-size: 0.75rem;">Remove</button>
@@ -3672,7 +3672,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // The Visual Editor tab embeds the real, fully-editable React Flow app
-  // (flow-editor/, same automation-flows API, same localStorage token —
+  // (flow-editor/, same automation-flows API, same localStorage token -
   // same origin, so no cross-origin auth issue) directly in this modal
   // instead of sending the user to a separate browser tab. Only (re)points
   // the iframe at a flow it isn't already showing, so switching tabs back
@@ -3687,7 +3687,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // The List view can go stale the moment the Visual Editor tab is used —
+  // The List view can go stale the moment the Visual Editor tab is used -
   // both read/write the same nodes/edges, but only through separate round
   // trips, so switching back to List needs a fresh fetch rather than
   // re-rendering whatever was in state.currentFlowGraph before the switch.
@@ -3698,7 +3698,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderFlowEditor();
     } catch (err) {
       // Most likely the flow was just deleted from inside the embedded
-      // editor — the postMessage handler below is already closing this
+      // editor - the postMessage handler below is already closing this
       // modal, so there's nothing useful to show here.
     }
   }
@@ -3735,7 +3735,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // The embedded editor posts back on its own deletions (of the whole
-  // flow) so this modal/list can react without polling — same-origin
+  // flow) so this modal/list can react without polling - same-origin
   // check since flow-editor/ is always served by this same Express app.
   window.addEventListener('message', (e) => {
     if (e.origin !== window.location.origin) return;
@@ -3769,7 +3769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="form-group"><label class="form-label">Button 1</label><input type="text" id="new-bot-flow-node-btn-1" class="form-input" maxlength="20" required /></div>
         <div class="form-group"><label class="form-label">Button 2 (optional)</label><input type="text" id="new-bot-flow-node-btn-2" class="form-input" maxlength="20" /></div>
         <div class="form-group"><label class="form-label">Button 3 (optional)</label><input type="text" id="new-bot-flow-node-btn-3" class="form-input" maxlength="20" /></div>
-        <div class="form-group"><label class="form-label">Timeout, minutes (optional — only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
+        <div class="form-group"><label class="form-label">Timeout, minutes (optional - only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
       `;
     } else if (type === 'send_template') {
       const options = state.templates.filter(t => t.status === 'approved').map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('');
@@ -3804,12 +3804,12 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="form-label">Save the reply as</label>
           ${state.contactAttributes.length
             ? `<select id="new-bot-flow-node-attribute-id" class="form-input" required><option value="">Choose an attribute…</option>${attrOptions}</select>`
-            : `<div style="font-size: 0.8rem; color: var(--text-muted);">No contact attributes exist yet — create one in Settings &gt; Contact Attributes first.</div>`}
+            : `<div style="font-size: 0.8rem; color: var(--text-muted);">No contact attributes exist yet - create one in Settings &gt; Contact Attributes first.</div>`}
         </div>
-        <div class="form-group"><label class="form-label">Timeout, minutes (optional — only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
+        <div class="form-group"><label class="form-label">Timeout, minutes (optional - only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
       `;
     } else {
-      container.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted);">Ends the flow — nothing further to configure.</div>';
+      container.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted);">Ends the flow - nothing further to configure.</div>';
     }
   }
 
@@ -3895,7 +3895,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       // Real bug, fixed: this config never included templateLanguage, so
       // flowEngine.js's executeSendTemplate always fell through to a
-      // hardcoded 'en_US' default — flowEngine.js now reads the template's
+      // hardcoded 'en_US' default - flowEngine.js now reads the template's
       // real language from its own stored record directly instead of
       // trusting this config field, so this is no longer load-bearing for
       // correctness there, but it's included anyway so the flow's saved
@@ -4038,9 +4038,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const status = t.status || 'pending';
       const statusLabel = TEMPLATE_STATUS_LABELS[status] || status;
       const badgeCls = TEMPLATE_STATUS_BADGE[status] || 'badge-neutral';
-      // Authentication templates have no author-written body — Meta
+      // Authentication templates have no author-written body - Meta
       // generates that text itself (see metaClient.js's
-      // buildAuthenticationPayload) — so t.body is null for these, not a
+      // buildAuthenticationPayload) - so t.body is null for these, not a
       // display bug to work around with a fallback string.
       const bodyPreview = t.category === 'Authentication'
         ? 'Meta-generated verification message (code delivery, expiration notice, security disclaimer).'
@@ -4050,11 +4050,11 @@ document.addEventListener('DOMContentLoaded', () => {
         : '';
       // orphaned_at: this row was previously confirmed to exist on Meta
       // (has a meta_template_id) but the last sync didn't find it there
-      // anymore — most likely deleted directly in Business Manager. Never
-      // deleted locally (see templateSyncService.js) — surfaced instead,
+      // anymore - most likely deleted directly in Business Manager. Never
+      // deleted locally (see templateSyncService.js) - surfaced instead,
       // so it doesn't just silently vanish from view with no explanation.
       const orphanedNote = t.orphaned_at
-        ? `<p class="template-rejection-reason">Not found on Meta as of the last sync — may have been deleted in WhatsApp Manager.</p>`
+        ? `<p class="template-rejection-reason">Not found on Meta as of the last sync - may have been deleted in WhatsApp Manager.</p>`
         : '';
 
       return `
@@ -4111,14 +4111,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Template Library (wasi-master-plan.md §2) ---
   // "Use this Template" reuses the EXISTING Create Template modal/submit
-  // path entirely (open-create-template-modal's own handler, above) — this
+  // path entirely (open-create-template-modal's own handler, above) - this
   // section only ever populates that form's fields and opens it; it never
   // POSTs to /api/templates itself. GET /api/template-library and
   // POST /api/template-library/:id/use (usage logging only) are the only
   // new endpoints this feature touches.
 
   // Meta template names must be lowercase/underscore only
-  // (messageTemplateCreateSchema's regex) and unique per client+language —
+  // (messageTemplateCreateSchema's regex) and unique per client+language -
   // this is a starting suggestion, not a guaranteed-unique final value; the
   // name field stays fully editable and a real collision surfaces the
   // existing 409 error same as any manually-typed name would.
@@ -4171,7 +4171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  // One section per industry, always visible (not gated behind a filter) —
+  // One section per industry, always visible (not gated behind a filter) -
   // each section names its industry and lists its own templates below it,
   // same layout for every industry. Category/use-case dropdowns still narrow
   // which cards show up within each section.
@@ -4210,13 +4210,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Below the tablet breakpoint the preview stacks under the list, off-screen
-  // after a card tap — bring it into view.
+  // after a card tap - bring it into view.
   function revealPreviewOnNarrow(panelId) {
     if (!window.matchMedia('(max-width: 900px)').matches) return;
     document.getElementById(panelId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // Cards are role=button divs — Enter/Space must select like a click.
+  // Cards are role=button divs - Enter/Space must select like a click.
   function onLibraryCardKeydown(e) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
@@ -4233,7 +4233,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Same WhatsApp-bubble preview markup/CSS as the Create Template modal's
-  // own preview (template-preview-frame/-bubble/-header/-footer/-buttons) —
+  // own preview (template-preview-frame/-bubble/-header/-footer/-buttons) -
   // reused as-is, not reimplemented, so a library preview and the modal's
   // preview of the same content always look identical.
   function renderLibraryPreview(entry) {
@@ -4272,7 +4272,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="template-preview-frame">
         <div class="msg-bubble msg-out template-preview-bubble" id="library-preview-bubble"></div>
       </div>
-      <p class="library-preview-note">Pre-vetted against Meta's policy — first-attempt approval rates are higher, but this is not a guarantee of approval. Review and customize before submitting.</p>
+      <p class="library-preview-note">Pre-vetted against Meta's policy - first-attempt approval rates are higher, but this is not a guarantee of approval. Review and customize before submitting.</p>
       <button type="button" class="btn-primary btn-block" id="use-library-template-btn">Use This Template</button>
     `;
     const bubble = document.getElementById('library-preview-bubble');
@@ -4299,15 +4299,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Meta Official Template Library (wasi-master-plan.md §2b) ---
-  // A second, clearly separate source from state.libraryEntries above —
+  // A second, clearly separate source from state.libraryEntries above -
   // never merged into the same array/grid (Phase 0 decision: conflating the
   // two would mislead a client about which templates still need to wait for
   // Meta's review). GET /api/template-library/meta already only returns
-  // zero-variable entries (server-side filter, routes/templateLibrary.js) —
+  // zero-variable entries (server-side filter, routes/templateLibrary.js) -
   // this UI doesn't need to re-check that itself.
   const LIBRARY_SOURCE_SUBTITLES = {
-    wasi: 'Pre-vetted, ready-to-customize WhatsApp templates by industry — checked against Meta\'s real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.',
-    meta: 'Meta\'s own official template catalog — fixed content, Utility category only, written and pre-approved by Meta itself. Using one skips the normal review wait entirely; you can only fill in a name and any button destinations, not the wording.',
+    wasi: 'Pre-vetted, ready-to-customize WhatsApp templates by industry - checked against Meta\'s real policy, first-attempt approval rates are higher, but nothing here is guaranteed approved. Pick one, adjust it, and submit it as your own.',
+    meta: 'Meta\'s own official template catalog - fixed content, Utility category only, written and pre-approved by Meta itself. Using one skips the normal review wait entirely; you can only fill in a name and any button destinations, not the wording.',
   };
 
   function switchLibrarySource(source) {
@@ -4411,7 +4411,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Same template-preview-bubble markup as everything else in this app
   // (renderTemplateBubbleMarkup, shared with the Create Template modal and
-  // the read-only per-card preview) — a small field-name adapter since this
+  // the read-only per-card preview) - a small field-name adapter since this
   // entry comes from meta_template_library_cache's own column names
   // (header_text/buttons_json), not message_templates'.
   function renderMetaLibraryPreview(entry) {
@@ -4432,7 +4432,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="template-preview-frame">
         <div class="msg-bubble msg-out template-preview-bubble" id="meta-library-preview-bubble"></div>
       </div>
-      <p class="library-preview-note">Written and pre-approved by Meta — skips the normal review wait entirely. Content can't be edited; only the name and button destinations below.</p>
+      <p class="library-preview-note">Written and pre-approved by Meta - skips the normal review wait entirely. Content can't be edited; only the name and button destinations below.</p>
       <button type="button" class="btn-primary btn-block" id="use-meta-library-template-btn">Use This Template</button>
     `;
     const bubble = document.getElementById('meta-library-preview-bubble');
@@ -4440,7 +4440,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('use-meta-library-template-btn')?.addEventListener('click', () => openUseMetaLibraryTemplateModal(entry));
   }
 
-  // Opens the narrow "Use Meta Official Template" modal (Phase 0 decision —
+  // Opens the narrow "Use Meta Official Template" modal (Phase 0 decision -
   // NOT the rich Create Template modal, since this content can't be edited).
   // One button-destination input per URL/PHONE_NUMBER button the entry has;
   // other button types (e.g. QUICK_REPLY) need no input, their text is fixed.
@@ -4460,14 +4460,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (b.type === 'URL') {
         return `
           <div class="form-group" style="margin-top:0.75rem;">
-            <label class="form-label">Button "${escapeHtml(b.text || 'Link')}" — your website URL</label>
+            <label class="form-label">Button "${escapeHtml(b.text || 'Link')}" - your website URL</label>
             <input type="text" class="form-input meta-use-button-input" data-button-index="${i}" data-button-type="URL" placeholder="https://your-site.example.com">
           </div>
         `;
       }
       return `
         <div class="form-group" style="margin-top:0.75rem;">
-          <label class="form-label">Button "${escapeHtml(b.text || 'Call')}" — your phone number</label>
+          <label class="form-label">Button "${escapeHtml(b.text || 'Call')}" - your phone number</label>
           <input type="text" class="form-input meta-use-button-input" data-button-index="${i}" data-button-type="PHONE_NUMBER" placeholder="+919876543210">
         </div>
       `;
@@ -4520,10 +4520,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Opens the EXISTING Create Template modal pre-filled from a library
-  // entry — mirrors open-create-template-modal's own reset/WABA-status/
+  // entry - mirrors open-create-template-modal's own reset/WABA-status/
   // gating sequence exactly, then fills in the fields a manual author would
   // have typed. Everything stays editable before submit; nothing here
-  // bypasses messageTemplateCreateSchema or validateTemplateText — the
+  // bypasses messageTemplateCreateSchema or validateTemplateText - the
   // actual POST /api/templates on submit is completely unchanged.
   async function useTemplateFromLibrary(entry) {
     document.getElementById('create-template-form')?.reset();
@@ -4555,7 +4555,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (entry.auth_options) {
       // The library's suggested defaults for this Authentication entry
       // (e.g. a shorter code-expiration window for a login OTP vs. account
-      // verification) — same fields the modal's own Authentication UI
+      // verification) - same fields the modal's own Authentication UI
       // already has, updateTemplateCategoryFields (triggered by
       // syncTemplateFormUI below) just shows/hides them, it doesn't reset
       // their values.
@@ -4575,7 +4575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     syncTemplateFormUI();
 
     // syncTemplateFormUI (above) already rendered one sample-value input per
-    // {{param}} detected in the body — fill them from the library's own
+    // {{param}} detected in the body - fill them from the library's own
     // sample values now that those inputs exist in the DOM.
     if (entry.category !== 'Authentication') {
       const samples = entry.sample_values_json || {};
@@ -4586,21 +4586,21 @@ document.addEventListener('DOMContentLoaded', () => {
       updateTemplatePreview();
     }
 
-    // Usage logging only — never blocks or fails opening the prefilled
+    // Usage logging only - never blocks or fails opening the prefilled
     // modal if it errors (e.g. a network blip), same "don't let analytics
     // break the actual feature" reasoning as the backend route itself.
     authFetch(`/api/template-library/${entry.id}/use`, { method: 'POST' }).catch(() => {});
   }
 
   // Opens the SAME Create Template modal pre-filled from an EXISTING
-  // template (Templates view's per-card edit button) — same prefill
+  // template (Templates view's per-card edit button) - same prefill
   // pattern as useTemplateFromLibrary above, but name/category/language get
   // disabled rather than left editable: routes/templates.js's PUT /:id
   // can't change any of the three (Meta's own edit endpoint doesn't accept
-  // them either — the template id already identifies all three). A media
+  // them either - the template id already identifies all three). A media
   // header (IMAGE/VIDEO/DOCUMENT) can't be changed via edit yet either
   // (that route's schema only accepts NONE/TEXT), so those options are
-  // disabled here regardless of WhatsApp connection status — unlike
+  // disabled here regardless of WhatsApp connection status - unlike
   // applyMediaHeaderGating's own gating, which is about connection, not
   // about edit-vs-create.
   async function openEditTemplateModal(template) {
@@ -4633,7 +4633,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (option) option.disabled = true;
     });
     // A template that already HAS a media header can't have its header
-    // touched at all in edit v1 (no re-upload path in this route) — lock
+    // touched at all in edit v1 (no re-upload path in this route) - lock
     // the whole dropdown, not just the other media options, so there's
     // nowhere to switch it to or from.
     headerSelect.disabled = MEDIA_HEADER_TYPES.includes(template.header_type);
@@ -4659,11 +4659,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (input) input.value = value;
       });
       // Re-checked after filling in the saved examples above, not just
-      // relying on syncTemplateFormUI's earlier call — that ran before
+      // relying on syncTemplateFormUI's earlier call - that ran before
       // these inputs had any value, so on its own it would have shown a
       // "missing sample value" warning for a template that actually has
-      // one, and — since setting .value directly doesn't fire an input
-      // event — nothing would ever have cleared it.
+      // one, and - since setting .value directly doesn't fire an input
+      // event - nothing would ever have cleared it.
       updateTemplateSubmitGating();
       updateTemplatePreview();
     }
@@ -4708,8 +4708,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- New Campaign Modal ---
   let newCampaignHeaderMediaAssetId = null; // set once a header file/asset has been chosen for this campaign
   let campaignContactLists = []; // fetched fresh each time the modal opens
-  let campaignSegments = []; // item 9 — same "fetched fresh each time the modal opens" pattern
-  let newCampaignMediaAssets = []; // the selected template's uploaded media assets — refreshed on template change, after an upload, and after promoting one to default
+  let campaignSegments = []; // item 9 - same "fetched fresh each time the modal opens" pattern
+  let newCampaignMediaAssets = []; // the selected template's uploaded media assets - refreshed on template change, after an upload, and after promoting one to default
 
   async function updateNewCampaignMediaField() {
     const templateName = document.getElementById('new-campaign-template').value;
@@ -4725,7 +4725,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // A plain broadcast only ever resolves a template's DEFAULT media
-  // (mediaHeaderService.resolveMediaId) — before this, the only way to give
+  // (mediaHeaderService.resolveMediaId) - before this, the only way to give
   // it one was to upload a brand new file every time, even when the
   // template already had real usable assets (e.g. synced in from Meta, or
   // uploaded earlier but never promoted). This lists every existing asset
@@ -4756,13 +4756,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // One row per {{param}} in the selected template's body/TEXT header, same
   // shape/behavior as the Bot Flow Editor's Send Template node
-  // (renderNewNodeTemplateParams/collectNewNodeConfig above) — ported here
+  // (renderNewNodeTemplateParams/collectNewNodeConfig above) - ported here
   // rather than shared as one function since the two live in different
   // modals with different surrounding markup, plus a third source option
   // (contact_attribute) this campaign modal supports and the flow node
-  // doesn't yet (broadcastParamMappingSchema/resolveParamValues only —
+  // doesn't yet (broadcastParamMappingSchema/resolveParamValues only -
   // see server/src/utils/validate.js and templateParamMapping.js).
-  // This is what routes/broadcasts.js's requiredParamNames check needs —
+  // This is what routes/broadcasts.js's requiredParamNames check needs -
   // without it, any template with a variable 400s with "has parameters
   // with no value source" (confirmed live).
   function renderNewCampaignParamMappings() {
@@ -4799,7 +4799,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Mirrors collectNewNodeConfig's send_template branch (app.js above) —
+  // Mirrors collectNewNodeConfig's send_template branch (app.js above) -
   // reads each .param-map-row back into broadcastParamMappingSchema's shape.
   // Returns null (with a toast) if a required static value is missing,
   // rather than letting an incomplete mapping reach the server as a 400.
@@ -4830,14 +4830,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectEl) return;
     selectEl.innerHTML = campaignContactLists.length
       ? campaignContactLists.map(l => `<option value="${l.id}">${escapeHtml(l.name)} (${l.member_count})</option>`).join('')
-      : '<option value="">No contact lists yet — import one below</option>';
+      : '<option value="">No contact lists yet - import one below</option>';
   }
 
   function populateSegmentSelect(selectEl) {
     if (!selectEl) return;
     selectEl.innerHTML = campaignSegments.length
       ? campaignSegments.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
-      : '<option value="">No segments yet — build one below</option>';
+      : '<option value="">No segments yet - build one below</option>';
   }
 
   function updateCampaignAudienceModeUI() {
@@ -4849,7 +4849,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Real-time messaging-tier status (build plan: broadcast preflight
-  // warning) — shown once when the modal opens, before any audience is even
+  // warning) - shown once when the modal opens, before any audience is even
   // picked, so a client sees "how much room is left today" up front rather
   // than only after Launch. Deliberately not a hard stop; see
   // routes/broadcasts.js's own comment on why this stays a warning only.
@@ -4862,14 +4862,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const status = await authFetch('/api/broadcasts/tier-status');
       campaignTierStatus = status;
       if (!status.tier) {
-        el.textContent = 'Messaging tier not checked yet — ask an admin to refresh it before a large campaign.';
+        el.textContent = 'Messaging tier not checked yet - ask an admin to refresh it before a large campaign.';
         return;
       }
       if (status.unlimited) {
-        el.textContent = `Messaging tier: ${status.tier} — no daily cap.`;
+        el.textContent = `Messaging tier: ${status.tier} - no daily cap.`;
         return;
       }
-      el.textContent = `Messaging tier: ${status.tier} (${status.capNumber.toLocaleString()} conversations/24h) — ~${status.remaining.toLocaleString()} remaining today. Estimate based on this app's own send history, not a live Meta count.`;
+      el.textContent = `Messaging tier: ${status.tier} (${status.capNumber.toLocaleString()} conversations/24h) - ~${status.remaining.toLocaleString()} remaining today. Estimate based on this app's own send history, not a live Meta count.`;
     } catch (err) {
       el.textContent = '';
     }
@@ -4920,7 +4920,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Segment builder (item 9) ---
   // Ops offered per field mirror utils/segmentFilter.js's server-side
   // validity exactly (tag/opt_in_status: eq only; attribute: depends on
-  // its real type) — this is a UI convenience so most users never hit the
+  // its real type) - this is a UI convenience so most users never hit the
   // server's 400 in the first place, not a substitute for it (the server
   // re-validates independently, same "flag while typing, server is still
   // authoritative" precedent as the Template modal's live validation).
@@ -5021,7 +5021,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('segment-combinator-and')?.addEventListener('change', debouncedPreviewSegment);
   document.getElementById('segment-combinator-or')?.addEventListener('change', debouncedPreviewSegment);
 
-  // Reads the builder's current DOM state into { combinator, conditions } —
+  // Reads the builder's current DOM state into { combinator, conditions } -
   // rows with no value chosen yet are simply skipped (not sent as
   // incomplete conditions), so a half-filled builder never 400s while
   // still being typed into.
@@ -5114,9 +5114,9 @@ document.addEventListener('DOMContentLoaded', () => {
       nameInput.value = '';
       fileInput.value = '';
       // report.errors can be non-empty (e.g. an ignored "tags" column) even
-      // when rejected is 0 — every row succeeded, but still worth showing.
+      // when rejected is 0 - every row succeeded, but still worth showing.
       const summary = report.rejected > 0
-        ? `Imported ${report.imported} of ${report.rows_in_file} rows — ${report.rejected} rejected`
+        ? `Imported ${report.imported} of ${report.rows_in_file} rows - ${report.rejected} rejected`
         : `Imported all ${report.imported} contacts into "${escapeHtml(name)}"`;
       status.style.color = (report.rejected > 0 || report.errors.length) ? '#B45309' : '#166534';
       status.textContent = report.errors.length
@@ -5138,7 +5138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCampaignContentStep();
   });
 
-  // Picking an existing asset instead of uploading a new one — either the
+  // Picking an existing asset instead of uploading a new one - either the
   // template's own default (blank option) or a specific non-default asset,
   // e.g. one a plain broadcast couldn't otherwise reach at all.
   document.getElementById('new-campaign-media-asset')?.addEventListener('change', (e) => {
@@ -5167,7 +5167,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Same immediate-upload-on-choice pattern as the chat send-template modal
-  // — a bad file surfaces before the campaign is launched, not after.
+  // - a bad file surfaces before the campaign is launched, not after.
   document.getElementById('new-campaign-media-file')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     const status = document.getElementById('new-campaign-media-status');
@@ -5181,7 +5181,7 @@ document.addEventListener('DOMContentLoaded', () => {
       form.append('file', file);
       const asset = await authFetch(`/api/templates/${template.id}/header-media`, { method: 'POST', body: form });
       newCampaignHeaderMediaAssetId = asset.id;
-      status.textContent = `Ready — will send with "${file.name}" instead of the approval sample.`;
+      status.textContent = `Ready - will send with "${file.name}" instead of the approval sample.`;
       // Refresh the picker so the just-uploaded file is selectable (and
       // promotable to default) without re-opening the modal.
       await refreshNewCampaignMediaAssets(template.id);
@@ -5205,7 +5205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return (state.templates || []).filter((t) => t.status === 'approved');
   }
 
-  // Only approved templates are offered — a campaign can only send an
+  // Only approved templates are offered - a campaign can only send an
   // approved template, so a pending/rejected one is never a valid pick.
   // When there is none, the blocker is shown up front (step 2) instead of the
   // user discovering it at Launch.
@@ -5224,7 +5224,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const detail = document.getElementById('campaign-template-blocker-detail');
       if (detail) {
         detail.textContent = total > 0
-          ? ` You have ${total} template${total === 1 ? '' : 's'}, but none are approved yet. Wait for Meta's review or submit a new one — campaigns can only send an approved WhatsApp template.`
+          ? ` You have ${total} template${total === 1 ? '' : 's'}, but none are approved yet. Wait for Meta's review or submit a new one - campaigns can only send an approved WhatsApp template.`
           : ' You have not created a template yet. Campaigns can only send an approved WhatsApp template.';
       }
     }
@@ -5272,7 +5272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (n === 2) {
       if (!document.getElementById('new-campaign-template').value) {
-        return { msg: 'Campaigns send via an approved template — you have none yet. Use "Go to Templates" to create one.', focus: 'campaign-go-templates-btn' };
+        return { msg: 'Campaigns send via an approved template - you have none yet. Use "Go to Templates" to create one.', focus: 'campaign-go-templates-btn' };
       }
     }
     return null;
@@ -5323,7 +5323,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audience = list ? `Contact list: ${list.name} (${Number(list.member_count).toLocaleString()} contacts)` : 'Contact list';
       if (list) listCount = Number(list.member_count);
     } else if (mode === 'segment') {
-      audience = `Segment: ${selectedOptionText('new-campaign-segment') || '—'}`;
+      audience = `Segment: ${selectedOptionText('new-campaign-segment') || '-'}`;
     } else {
       audience = `Tag: ${selectedOptionText('new-campaign-tag') || 'Everyone (all contacts)'}`;
     }
@@ -5352,10 +5352,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const tierText = (document.getElementById('campaign-tier-status')?.textContent || '').trim();
     if (tierText) alerts.push({ cls: 'alert-info', icon: 'gauge', text: tierText });
     if (listCount !== null && campaignTierStatus && campaignTierStatus.remaining !== null && campaignTierStatus.remaining !== undefined && listCount > campaignTierStatus.remaining) {
-      alerts.push({ cls: 'alert-warning', icon: 'alert-triangle', text: `This list has ${listCount.toLocaleString()} contacts but roughly ${Number(campaignTierStatus.remaining).toLocaleString()} conversations remain in your daily messaging tier — some sends could be rejected by WhatsApp. (Estimate, not a live Meta count.)` });
+      alerts.push({ cls: 'alert-warning', icon: 'alert-triangle', text: `This list has ${listCount.toLocaleString()} contacts but roughly ${Number(campaignTierStatus.remaining).toLocaleString()} conversations remain in your daily messaging tier - some sends could be rejected by WhatsApp. (Estimate, not a live Meta count.)` });
     }
     if (template && template.category === 'Marketing') {
-      alerts.push({ cls: 'alert-info', icon: 'shield-check', text: 'This is a Marketing template: only contacts who have opted in to marketing messages will receive it. Anyone else is skipped, not sent — you will see a warning after launch if most of the audience is not opted in.' });
+      alerts.push({ cls: 'alert-info', icon: 'shield-check', text: 'This is a Marketing template: only contacts who have opted in to marketing messages will receive it. Anyone else is skipped, not sent - you will see a warning after launch if most of the audience is not opted in.' });
     }
     warn.innerHTML = alerts.map((a) => `<div class="alert ${a.cls}"><i data-lucide="${a.icon}" class="icon-16"></i><div>${esc(a.text)}</div></div>`).join('');
     refreshIcons();
@@ -5395,7 +5395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const smartSendingValue = document.getElementById('new-campaign-smart-sending').value;
     if (!title) return;
     if (!templateName) {
-      showToast('Create a message template first — campaigns send via an approved template.');
+      showToast('Create a message template first - campaigns send via an approved template.');
       return;
     }
     if (isListMode && !contactListId) {
@@ -5439,7 +5439,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Sync from Meta ---
   // Manual counterpart to the automatic sync that runs once right after
-  // Embedded Signup (server/src/routes/onboarding.js) — for templates
+  // Embedded Signup (server/src/routes/onboarding.js) - for templates
   // approved/created on Meta's side after that point, or if the automatic
   // one failed silently (it's best-effort there so a Meta hiccup doesn't
   // fail the whole connect flow). Returns counts rather than a silent
@@ -5457,7 +5457,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result.inserted) parts.push(`${result.inserted} new`);
       if (result.updated) parts.push(`${result.updated} updated`);
       if (result.orphaned) parts.push(`${result.orphaned} no longer on Meta`);
-      showToast(parts.length ? `Synced: ${parts.join(', ')}.` : 'Synced — no changes.');
+      showToast(parts.length ? `Synced: ${parts.join(', ')}.` : 'Synced - no changes.');
     } catch (err) {
       reportError(err);
     } finally {
@@ -5467,7 +5467,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Preview / Edit / Delete — all three delegated on the grid container
+  // Preview / Edit / Delete - all three delegated on the grid container
   // since renderTemplates() rebuilds the card markup wholesale on every
   // call, which would drop a listener bound to an individual button.
   document.getElementById('templates-grid')?.addEventListener('click', async (e) => {
@@ -5524,7 +5524,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Create Template Modal (category-driven) ---
   // Static reference list of Meta's documented WhatsApp template language
-  // codes — not fetched from anywhere live, this codebase has no such
+  // codes - not fetched from anywhere live, this codebase has no such
   // endpoint. English (US) is first/default, matching what the backend
   // already defaults to (validate.js's messageTemplateCreateSchema).
   const TEMPLATE_LANGUAGES = [
@@ -5545,7 +5545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ['tr', 'Turkish'], ['uk', 'Ukrainian'], ['ur', 'Urdu'], ['uz', 'Uzbek'], ['vi', 'Vietnamese'], ['zu', 'Zulu'],
   ];
 
-  // Calls the REAL server/src/utils/templateParams.js — served raw as
+  // Calls the REAL server/src/utils/templateParams.js - served raw as
   // /templateParams.js (server/src/app.js) and loaded before this file
   // (index.html), so this is the exact same function
   // routes/templates.js's validateStandardTemplateFields runs at submit
@@ -5557,12 +5557,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return [...new Set(window.templateParams.extractPlaceholders(text).map((p) => p.name))];
   }
 
-  // Live "flag while typing" template validation — runs the FULL rule set
+  // Live "flag while typing" template validation - runs the FULL rule set
   // (malformed placeholders, numbered/mixed parameters, a variable at the
   // very start/end, the words-to-parameters ratio, and missing sample
   // values), not just the one rule (malformed placeholders) this modal
   // used to check live. Previously every other rule only surfaced after a
-  // failed submit, via the err.body.details toast — a client could type an
+  // failed submit, via the err.body.details toast - a client could type an
   // obviously-doomed template (e.g. "{{name}}" alone, or three variables in
   // six words) and get no feedback until Meta/the server rejected it.
   //
@@ -5577,10 +5577,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const errors = [...result.errors];
 
     // The words-to-parameters ratio rule is shown like every other warning
-    // here, but must never by itself block Submit/Save — unlike the other
+    // here, but must never by itself block Submit/Save - unlike the other
     // rules, it's an explicitly unofficial heuristic (templateParams.js's
     // own comment: calibrated against a small, real accept/reject sample,
-    // confirmed to over-flag real, already-Meta-approved content — 19 of
+    // confirmed to over-flag real, already-Meta-approved content - 19 of
     // 36 Template Library seed entries per this codebase's own tracked
     // gaps). Confirmed live: opening Edit on a real existing template
     // (invoice_document) that trips only this rule would otherwise disable
@@ -5593,22 +5593,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasBlockingError = errors.length > 0 && !isRatioOnly;
 
     // Mirrors validateStandardTemplateFields's own missing-sample-value
-    // check exactly (server/src/routes/templates.js) — same wording, same
+    // check exactly (server/src/routes/templates.js) - same wording, same
     // "only checked once the body text itself is otherwise valid" order,
     // so a client never sees this warning for a reason the body-text
-    // errors above already explain. Always a real, unambiguous rejection —
+    // errors above already explain. Always a real, unambiguous rejection -
     // no equivalent carve-out to the ratio rule's.
     if (result.valid && result.params.length > 0) {
       const samples = getTemplateSampleValues();
       const missing = result.params.filter((p) => !String(samples[p] || '').trim());
       if (missing.length > 0) {
-        errors.push(`Sample value required for: ${missing.join(', ')} — Meta rejects templates without one.`);
+        errors.push(`Sample value required for: ${missing.join(', ')} - Meta rejects templates without one.`);
         hasBlockingError = true;
       }
     }
 
     // A real, previously-rejected pattern (see templateParams.js's own
-    // comment) — an OTP/verification-code message submitted under the
+    // comment) - an OTP/verification-code message submitted under the
     // wrong category. Same non-blocking treatment as the ratio rule above:
     // this is a phrase-based heuristic, a false positive is possible (e.g.
     // a legitimate template mentioning an unrelated "code"), so it warns
@@ -5630,7 +5630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const warning = document.getElementById('template-header-warning');
     if (!field || !warning) return { hasErrors: false };
 
-    // Matches validateStandardTemplateFields's own gate exactly — a
+    // Matches validateStandardTemplateFields's own gate exactly - a
     // NONE/media header has no text for this rule set to apply to.
     if (typeSelect?.value !== 'TEXT') {
       warning.style.display = 'none';
@@ -5645,11 +5645,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Blocks submitting a template this modal's own live checks already know
-  // Meta (or the server, before ever reaching Meta) would reject — the
+  // Meta (or the server, before ever reaching Meta) would reject - the
   // direct fix for "the system doesn't flag anything until the template is
   // rejected." Authentication templates have no author-supplied body/header
   // at all (messageTemplateCreateSchema's own rule), so this never gates
-  // them — matches validateStandardTemplateFields's identical
+  // them - matches validateStandardTemplateFields's identical
   // `data.category !== 'Authentication'` exemption server-side.
   function updateTemplateSubmitGating() {
     const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
@@ -5679,13 +5679,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Surfaces the most specific reason available in a thrown authFetch error
-  // — prefers a structured `details` array of strings (this app's own
+  // - prefers a structured `details` array of strings (this app's own
   // validation failures: numbered params, missing samples, malformed
   // header, ...) over the generic top-level message, then falls back to a
   // singular `detail` string. The singular case matters for real upstream
-  // rejections that only ever carry one — e.g. routes/templates.js's
+  // rejections that only ever carry one - e.g. routes/templates.js's
   // `{ error: 'Meta rejected this template', detail: err.message }` on a
-  // real Meta-side 502 — which previously fell all the way through both
+  // real Meta-side 502 - which previously fell all the way through both
   // checks to the generic top-level `error` text, silently dropping the
   // actual reason Meta gave for the rejection.
   function extractApiErrorDetail(err) {
@@ -5742,16 +5742,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Button state lives in this array, not read back from the DOM each
-  // time — dynamically added/removed rows make DOM-as-source-of-truth
+  // time - dynamically added/removed rows make DOM-as-source-of-truth
   // fiddly, and this mirrors what actually gets submitted directly.
   let templateButtons = [];
 
-  // The Create Template modal doubles as the Edit Template modal — set
+  // The Create Template modal doubles as the Edit Template modal - set
   // whenever openEditTemplateModal opens it, cleared whenever the modal
   // opens fresh for a new template (open-create-template-modal's handler,
   // below) or a submit succeeds. The submit handler branches on this to
   // PUT instead of POST, and to send only the editable content fields
-  // (name/category/language are locked in edit mode — see
+  // (name/category/language are locked in edit mode - see
   // openEditTemplateModal's own comment for why).
   let editingTemplateId = null;
 
@@ -5824,14 +5824,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const MEDIA_HEADER_TYPES = ['IMAGE', 'VIDEO', 'DOCUMENT'];
   const MEDIA_HEADER_ACCEPT = { IMAGE: '.jpg,.jpeg,.png', VIDEO: '.mp4', DOCUMENT: '.pdf' };
-  const MEDIA_HEADER_HINT = { IMAGE: 'Max 5MB — JPEG or PNG.', VIDEO: 'Max 16MB — MP4.', DOCUMENT: 'Max 100MB — PDF.' };
+  const MEDIA_HEADER_HINT = { IMAGE: 'Max 5MB - JPEG or PNG.', VIDEO: 'Max 16MB - MP4.', DOCUMENT: 'Max 100MB - PDF.' };
 
-  // Mirrors routes/templates.js's own gate ("Connect WhatsApp first" — a
+  // Mirrors routes/templates.js's own gate ("Connect WhatsApp first" - a
   // media header has to upload to Meta immediately, both for the
   // creation-time example handle and the send-time media-id cache, so
   // there's nowhere to hold the file for later without a WABA). Previously
   // the dropdown offered IMAGE/VIDEO/DOCUMENT unconditionally and only the
-  // server enforced this, at actual submit time — a client without
+  // server enforced this, at actual submit time - a client without
   // WhatsApp connected could fill out the whole form, pick a file, and
   // only then discover it was never going to work.
   function applyMediaHeaderGating() {
@@ -5858,8 +5858,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
-  // Authentication's body isn't author-written — Meta generates it (see
-  // metaClient.js's buildAuthenticationPayload) — so this preview shows
+  // Authentication's body isn't author-written - Meta generates it (see
+  // metaClient.js's buildAuthenticationPayload) - so this preview shows
   // representative wording, not a live substitution of anything editable.
   function updateTemplatePreview() {
     const bubble = document.getElementById('template-preview-bubble');
@@ -5886,7 +5886,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(headerText, samples))}</div>`;
     } else if (MEDIA_HEADER_TYPES.includes(headerType)) {
       const file = document.getElementById('new-template-header-file').files[0];
-      const label = file ? file.name : `${headerType.charAt(0)}${headerType.slice(1).toLowerCase()} header — no file chosen yet`;
+      const label = file ? file.name : `${headerType.charAt(0)}${headerType.slice(1).toLowerCase()} header - no file chosen yet`;
       html += `<div class="template-preview-header">${escapeHtml(label)}</div>`;
     }
     const bodyPreview = substituteTemplateParams(body, samples).trim();
@@ -5915,7 +5915,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
-  // Undoes openEditTemplateModal's lock-fields-and-relabel treatment —
+  // Undoes openEditTemplateModal's lock-fields-and-relabel treatment -
   // called whenever the modal opens fresh for a brand-new template, and
   // after any submit (success or failure of a DIFFERENT kind than the ones
   // that keep the modal open), so a previous edit's disabled/relabeled
@@ -5935,11 +5935,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('open-create-template-modal')?.addEventListener('click', async () => {
     // Reset unconditionally on open, not just after a successful submit.
     // templateButtons/header-type/etc. previously only got cleared by
-    // e.target.reset() in the submit success path — so Cancel, closing the
+    // e.target.reset() in the submit success path - so Cancel, closing the
     // modal, or a FAILED submission all left stale state (a half-added
     // button, a header type with no text) sitting there for next time.
     // A later, otherwise-clean attempt would then fail against fields the
-    // user never even looked at, with no way to tell why — exactly what
+    // user never even looked at, with no way to tell why - exactly what
     // "trying to submit and it just says Validation failed" looks like
     // from the outside.
     document.getElementById('create-template-form')?.reset();
@@ -5947,7 +5947,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTemplateButtonsList();
     resetTemplateModalToCreateMode();
 
-    // Checked fresh on every open rather than cached in state long-term —
+    // Checked fresh on every open rather than cached in state long-term -
     // connecting/disconnecting WhatsApp is rare, but this keeps the gate
     // honest against whatever the client's actual current status is
     // instead of whatever it was the last time any part of the app asked.
@@ -6000,9 +6000,9 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const category = document.getElementById('new-template-category').value;
 
-    // Edit mode (openEditTemplateModal set this) — a completely separate
+    // Edit mode (openEditTemplateModal set this) - a completely separate
     // path from create below: no name/category/language (fixed once a
-    // template exists — see routes/templates.js's PUT /:id), no media
+    // template exists - see routes/templates.js's PUT /:id), no media
     // header support yet (that route's schema only accepts NONE/TEXT), so
     // this never needs the FormData/headerFile branch create's path does.
     if (editingTemplateId) {
@@ -6043,7 +6043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncTemplateFormUI();
         document.getElementById('modal-create-template')?.classList.remove('open');
         // Same category/content-mismatch signal the live warning above
-        // already showed — surfaced again here for whoever submitted
+        // already showed - surfaced again here for whoever submitted
         // despite it (or via a path that skipped the live check).
         showToast(result?.warnings?.[0] || 'Template updated and resubmitted to Meta for review.');
       } catch (err) {
@@ -6084,7 +6084,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const footer = document.getElementById('new-template-footer').value.trim();
       if (footer) payload.footer = footer;
       if (templateButtons.length > 0) {
-        // Only the field relevant to each button's type — templateButtonSchema's
+        // Only the field relevant to each button's type - templateButtonSchema's
         // url/phone_number are optional but, if present, non-empty (.min(1)),
         // so sending an empty '' placeholder for the irrelevant field on every
         // row (every button object here always carries all three properties)
@@ -6099,8 +6099,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // A media header sends the file as multipart, with the rest of the
-      // payload as a 'data' field (JSON-stringified — buttons/samples don't
-      // fit as flat form fields) — see routes/templates.js. authFetch skips
+      // payload as a 'data' field (JSON-stringified - buttons/samples don't
+      // fit as flat form fields) - see routes/templates.js. authFetch skips
       // its default JSON Content-Type for a FormData body so the browser
       // can set its own multipart boundary, same as the profile-picture
       // upload already relies on.
@@ -6124,7 +6124,7 @@ document.addEventListener('DOMContentLoaded', () => {
       syncTemplateFormUI();
       document.getElementById('modal-create-template')?.classList.remove('open');
       // Same category/content-mismatch signal the live warning above
-      // already showed — surfaced again here for whoever submitted
+      // already showed - surfaced again here for whoever submitted
       // despite it (or via a path that skipped the live check).
       if (result?.warnings?.[0]) showToast(result.warnings[0]);
     } catch (err) {
@@ -6192,7 +6192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       // Keeps state.teamMembers (the assign-picker/@mention-picker source
       // of truth in Chat) in sync with this table's own render, same fix
-      // as canned responses below — otherwise a newly-invited member never
+      // as canned responses below - otherwise a newly-invited member never
       // shows up in either picker until the next full session refresh.
       state.teamMembers = await authFetch('/api/team-members');
     } catch (err) {
@@ -6222,7 +6222,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name || !email) return;
 
     try {
-      // item 5.5 — found while building this: this used to only create the
+      // item 5.5 - found while building this: this used to only create the
       // roster row (POST /api/team-members) and show "Invite sent to..."
       // without ever actually sending anything. The real invite endpoint
       // (POST /api/team-members/:id/invite, item 1) needs the row's id
@@ -6302,7 +6302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById('attributes-table-body');
     if (!tbody) return;
     try {
-      // Same fix as renderTeamTable above — state.contactAttributes (the
+      // Same fix as renderTeamTable above - state.contactAttributes (the
       // Chat drawer's Attributes section, item 7) needs to see a
       // newly-defined attribute without waiting for a full session refresh.
       state.contactAttributes = await authFetch('/api/contact-attributes');
@@ -6397,12 +6397,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const { balance } = await authFetch('/api/wallet');
       balanceEl.textContent = '₹ ' + Number(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 });
     } catch (err) {
-      balanceEl.textContent = '—';
+      balanceEl.textContent = '-';
       reportError(err);
     }
   }
 
-  // Real GET /api/billing/subscription — was hardcoded fake "Pro Business
+  // Real GET /api/billing/subscription - was hardcoded fake "Pro Business
   // Plan" / Active regardless of whether the client had ever subscribed.
   const SUBSCRIPTION_STATUS_STYLE = {
     active: { cls: 'badge-success', label: 'Active' },
@@ -6450,7 +6450,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Real GET /api/billing/invoices — was a single hardcoded fake "Paid"
+  // Real GET /api/billing/invoices - was a single hardcoded fake "Paid"
   // invoice with a dead PDF link regardless of real billing history.
   const INVOICE_STATUS_STYLE = {
     paid: { cls: 'badge-success', label: 'Paid' },
@@ -6514,7 +6514,7 @@ document.addEventListener('DOMContentLoaded', () => {
         description: `Recharge ₹${amount}`,
         theme: { color: '#4AC959' },
         handler: async () => {
-          showToast('Payment received — updating balance…');
+          showToast('Payment received - updating balance…');
           setTimeout(renderWallet, 2000); // webhook lands asynchronously
         },
       });
@@ -6632,7 +6632,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Delegated — nodes are re-rendered on every change, so listeners attached
+  // Delegated - nodes are re-rendered on every change, so listeners attached
   // directly to them would be lost each time (same reasoning as this
   // codebase's other dynamically-rendered lists, e.g. broadcasts/contacts).
   document.getElementById('bot-flow-editor-nodes')?.addEventListener('click', async (e) => {
@@ -6645,7 +6645,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       if (moveEdgeBtn) {
         const edge = state.currentFlowGraph.edges.find(x => x.id === moveEdgeBtn.dataset.edgeId);
-        // Same filter as renderFlowEditor's reorderableEdges — the array is
+        // Same filter as renderFlowEditor's reorderableEdges - the array is
         // already in display/priority order (the API returns edges
         // pre-sorted per flowEdgesRepo's default-last/priority/created_at
         // ordering), so no client-side re-sort is needed here.
@@ -6669,13 +6669,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const nodeId = addEdgeBtn.dataset.nodeId;
         const node = findNode(nodeId);
         const otherNodes = state.currentFlowGraph.nodes.filter(n => n.id !== nodeId);
-        // A branch always needs a target — with only this one node in the
+        // A branch always needs a target - with only this one node in the
         // flow so far, "Go to node" would render as an empty <select> with
         // nothing to pick (reported live as a "checklist not showing up"
         // UI error). Catch it here with a clear message instead of opening
         // a modal with a broken-looking empty dropdown.
         if (otherNodes.length === 0) {
-          showToast('Add another node first — a branch needs somewhere to go.');
+          showToast('Add another node first - a branch needs somewhere to go.');
           return;
         }
         const legalTypes = FLOW_EDGE_TYPES_BY_NODE_TYPE[node.type] || [];
@@ -6706,7 +6706,7 @@ document.addEventListener('DOMContentLoaded', () => {
       label.textContent = 'Keyword (exact match, not case-sensitive)';
     } else {
       group.style.display = 'none';
-      // Hiding the field doesn't clear it — without this, a value typed for
+      // Hiding the field doesn't clear it - without this, a value typed for
       // a button_id/keyword edge earlier in the same modal session would
       // silently ride along on a later 'always'/'default'/'timeout' edge
       // (harmless functionally, since those condition_types never read
@@ -6723,7 +6723,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const conditionValue = document.getElementById('new-bot-flow-edge-condition-value').value.trim();
     const toNodeId = document.getElementById('new-bot-flow-edge-to-node').value;
 
-    // button_id edges must carry the button's stable id, not its title —
+    // button_id edges must carry the button's stable id, not its title -
     // resolve the typed title back to the id from the source node's config
     // (see flow_edges.condition_value's schema comment for why).
     let value = conditionValue;
@@ -6787,10 +6787,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Hub API Keys (Settings > Developer) ---
-  // The raw key value is never retrievable after creation — api_keys.key_hash
+  // The raw key value is never retrievable after creation - api_keys.key_hash
   // is a one-way hash (server/src/repositories/apiKeysRepo.js) and the
   // plaintext key is only ever shown once, in the response to the request
-  // that just created it (POST /api/api-keys, build plan Phase 4 — added
+  // that just created it (POST /api/api-keys, build plan Phase 4 - added
   // specifically so a client can self-serve a key named "Zapier" without
   // contacting support; see server/src/routes/apiKeys.js's module comment).
   function apiKeyStatusBadge(key) {
@@ -6871,7 +6871,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!valueEl) return;
     navigator.clipboard.writeText(valueEl.value)
       .then(() => showToast('API key copied to clipboard'))
-      .catch(() => showToast('Could not copy — clipboard permission denied'));
+      .catch(() => showToast('Could not copy - clipboard permission denied'));
   });
 
   document.getElementById('api-keys-table-body')?.addEventListener('click', async (e) => {
@@ -6911,11 +6911,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // "Connect to Claude" MCP config snippet — WASI_API_BASE_URL is this
+  // "Connect to Claude" MCP config snippet - WASI_API_BASE_URL is this
   // instance's own backend origin (same logic as API_BASE above: split
   // origin only in local dev, same-origin everywhere else), since that's
   // exactly the base URL an MCP server needs to reach this account's Hub
-  // API. The key value itself is deliberately left as a placeholder — see
+  // API. The key value itself is deliberately left as a placeholder - see
   // renderApiKeysManager's comment for why it can never be pre-filled here.
   function renderMcpConfigSnippet() {
     const el = document.getElementById('mcp-config-snippet');
@@ -6940,10 +6940,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     navigator.clipboard.writeText(el.textContent)
       .then(() => showToast('MCP config copied to clipboard'))
-      .catch(() => showToast('Could not copy — clipboard permission denied'));
+      .catch(() => showToast('Could not copy - clipboard permission denied'));
   });
 
-  // API Docs card (Settings > Developer) — a self-serve curl sample for a
+  // API Docs card (Settings > Developer) - a self-serve curl sample for a
   // client's own CRM/backend to call the Hub API directly, mirroring
   // crm-integration-guide.md's own example. client_id is pre-filled from the
   // logged-in account (safe, not a secret); the key itself is a placeholder,
@@ -6974,11 +6974,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     navigator.clipboard.writeText(el.textContent)
       .then(() => showToast('curl example copied to clipboard'))
-      .catch(() => showToast('Could not copy — clipboard permission denied'));
+      .catch(() => showToast('Could not copy - clipboard permission denied'));
   });
 
   // The raw secret is only ever held here, in memory, for the one render
-  // right after a create/regenerate response — never written into the
+  // right after a create/regenerate response - never written into the
   // #webhook-secret-display input's value (that field only ever shows the
   // masked form), so it can't leak via view-source/inspect element.
   function renderWebhookSecretField(webhook, revealedSecret) {
@@ -7005,9 +7005,9 @@ document.addEventListener('DOMContentLoaded', () => {
       copyBtn.onclick = () => {
         navigator.clipboard.writeText(revealedSecret)
           .then(() => showToast('Secret copied to clipboard'))
-          .catch(() => showToast('Could not copy — clipboard permission denied'));
+          .catch(() => showToast('Could not copy - clipboard permission denied'));
       };
-      hint.textContent = "New secret generated — copy it now, it won't be shown again.";
+      hint.textContent = "New secret generated - copy it now, it won't be shown again.";
     } else {
       copyBtn.hidden = true;
       hint.textContent = 'Only the last 4 characters are shown after generation. Regenerate to get a fresh copyable secret.';
@@ -7031,7 +7031,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function regenerateWebhookSecret() {
     showConfirm({
       title: 'Regenerate the webhook signing secret?',
-      body: 'The current secret will stop verifying immediately — update your endpoint with the new one before relying on it again.',
+      body: 'The current secret will stop verifying immediately - update your endpoint with the new one before relying on it again.',
       confirmLabel: 'Regenerate',
       onConfirm: async () => {
         try {
@@ -7051,7 +7051,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const saved = await authFetch('/api/client-webhook', { method: 'POST', body: JSON.stringify({ callback_url: url }) });
       // saved.secret is only present the very first time a secret is
-      // generated for this client — every later save/reload only returns
+      // generated for this client - every later save/reload only returns
       // the masked form (see server/src/routes/clientWebhook.js).
       renderWebhookSecretField(saved, saved.secret || null);
       showToast('Webhook settings saved');
@@ -7061,7 +7061,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Contacts Import CSV ---
-  // PLAN.md item 6 — reuses the campaign audience list's own
+  // PLAN.md item 6 - reuses the campaign audience list's own
   // pick-file/authFetch(FormData)/report-back pattern (see
   // import-campaign-list-btn above); no separate modal, since there's no
   // mapping step (name/phone columns only, same as that flow).
@@ -7081,7 +7081,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshContacts();
       renderContacts();
       // report.errors can be non-empty (e.g. an ignored "tags" column) even
-      // when failedCount is 0 — every row succeeded, but there's still
+      // when failedCount is 0 - every row succeeded, but there's still
       // something the user should see, not silently dropped either place.
       const summary = `Imported ${report.importedCount} contact${report.importedCount === 1 ? '' : 's'}` +
         (report.failedCount > 0 ? `, ${report.failedCount} rejected` : '') + '.';
@@ -7098,7 +7098,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Contacts Export CSV ---
-  // Real, not disabled — state.contacts is already loaded client-side, so
+  // Real, not disabled - state.contacts is already loaded client-side, so
   // this needed no backend work.
   function csvField(value) {
     const s = String(value ?? '');
@@ -7109,7 +7109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const header = ['Name', 'Phone', 'Tag', 'Status', 'Opt-In', 'Created'];
     const rows = state.contacts.map(c => [
-      c.name, c.phone, c.tag === '—' ? '' : c.tag, c.status, c.optInStatus, c.created,
+      c.name, c.phone, c.tag === '-' ? '' : c.tag, c.status, c.optInStatus, c.created,
     ].map(csvField).join(','));
     const csv = [header.join(','), ...rows].join('\r\n');
 
@@ -7152,7 +7152,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Reports: real data only ---
   // Table state helpers: skeleton while loading, an honest empty state, and
-  // an error with a retry — never a silent blank table.
+  // an error with a retry - never a silent blank table.
   function analyticsStateRow(cols, innerHtml) {
     return `<tr class="analytics-state-row"><td colspan="${cols}" class="analytics-state-cell">${innerHtml}</td></tr>`;
   }
@@ -7239,7 +7239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // item 5/5.5 — GET /api/analytics/sla is Admin/Manager only server-side;
+  // item 5/5.5 - GET /api/analytics/sla is Admin/Manager only server-side;
   // an Agent never sees this tab at all (applyRoleGating hides it), but if
   // they somehow land here directly the request just 403s and the table
   // shows the error with a retry.
@@ -7252,8 +7252,8 @@ document.addEventListener('DOMContentLoaded', () => {
       tbody.innerHTML = byTeamMember.length ? byTeamMember.map(r => `
         <tr>
           <td data-label="Team member" class="analytics-name">${esc(r.teamMemberName || 'Owner')}</td>
-          <td data-label="Avg. first response">${r.avgFirstResponseSeconds != null ? Math.round(r.avgFirstResponseSeconds / 60) + ' min' : '—'}</td>
-          <td data-label="Avg. resolution time">${r.avgResolutionSeconds != null ? Math.round(r.avgResolutionSeconds / 60) + ' min' : '—'}</td>
+          <td data-label="Avg. first response">${r.avgFirstResponseSeconds != null ? Math.round(r.avgFirstResponseSeconds / 60) + ' min' : '-'}</td>
+          <td data-label="Avg. resolution time">${r.avgResolutionSeconds != null ? Math.round(r.avgResolutionSeconds / 60) + ' min' : '-'}</td>
           <td data-label="Replies tracked">${esc(r.firstResponseCount)}</td>
         </tr>
       `).join('') : analyticsEmptyRow(4, 'No tracked replies yet', 'Response times appear once your team starts replying to chats.');
@@ -7278,7 +7278,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       secNavItems.forEach(i => i.classList.remove('active'));
       item.classList.add('active');
-      // At <=900px the nav is a horizontally scrolling row — keep the
+      // At <=900px the nav is a horizontally scrolling row - keep the
       // chosen entry in view.
       item.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 
@@ -7304,7 +7304,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Settings: WhatsApp channel connection status + connect/reconnect ---
-  // Uses the shared window.WasiEmbeddedSignup helper (embeddedSignup.js) —
+  // Uses the shared window.WasiEmbeddedSignup helper (embeddedSignup.js) -
   // the same Meta FB.login() flow the public onboarding wizard uses
   // (marketing/signup.js), so an already-signed-up client can (re)connect a
   // WABA from inside the app instead of only during initial signup.
@@ -7361,7 +7361,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const config = await authFetch('/api/onboarding/config');
         if (!config.configured) {
-          showToast('WhatsApp connection is not configured on this platform yet — contact your admin.');
+          showToast('WhatsApp connection is not configured on this platform yet - contact your admin.');
           return;
         }
         const { code, waba_id, phone_number_id, via_coexistence } = await window.WasiEmbeddedSignup.connect({
@@ -7370,7 +7370,7 @@ document.addEventListener('DOMContentLoaded', () => {
           onProgress: (message) => { btn.textContent = message; },
         });
         // Real progress instead of a silent "Finishing setup…" the whole
-        // time — 2026-09-08: server-side discovery (debug_token, phone
+        // time - 2026-09-08: server-side discovery (debug_token, phone
         // number enumeration, webhook subscription, registration, template
         // sync) is now the primary path and can genuinely take several
         // seconds, no longer just a fallback that rarely ran.
@@ -7378,7 +7378,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const serverProgressTimers = [
           setTimeout(() => { btn.textContent = 'Verifying your account with Meta…'; }, 3000),
           setTimeout(() => { btn.textContent = 'Finding your WhatsApp number…'; }, 8000),
-          setTimeout(() => { btn.textContent = 'Still working — almost done…'; }, 15000),
+          setTimeout(() => { btn.textContent = 'Still working - almost done…'; }, 15000),
         ];
         try {
           await authFetch('/api/onboarding/whatsapp/connect', {
@@ -7392,10 +7392,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('WhatsApp connected!');
         await renderWhatsAppSettings();
       } catch (err) {
-        // PLAN.md item 25, Part B — embeddedSignup.js marks this specific
+        // PLAN.md item 25, Part B - embeddedSignup.js marks this specific
         // race (FINISH arrived, the OAuth code never did) with err.incomplete
         // instead of a plain rejection. Record it as its own state rather
-        // than showing the same generic failure a real non-attempt would —
+        // than showing the same generic failure a real non-attempt would -
         // Meta really did link the account on its side.
         if (err.incomplete) {
           try {
@@ -7405,20 +7405,20 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             reportError(err);
           } catch (recordErr) {
-            // Fixed 2026-09-07 — this used to be console.error'd into
+            // Fixed 2026-09-07 - this used to be console.error'd into
             // silence. This is the worst case in the whole flow: Meta
-            // linked the account AND we failed to even record that fact —
+            // linked the account AND we failed to even record that fact -
             // if this is swallowed too, there is zero trace anywhere,
             // browser or server, exactly the failure class this item exists
-            // to close. showToast() auto-dismisses after 2.2s — nowhere
-            // near enough time to read and copy down a WABA ID — so this
+            // to close. showToast() auto-dismisses after 2.2s - nowhere
+            // near enough time to read and copy down a WABA ID - so this
             // uses the persistent error dialog (which has a Copy button for
             // exactly this), not a toast and no longer a native alert().
             console.error('Failed to record incomplete WhatsApp connection:', recordErr.message);
             showErrorDialog({
               title: 'WhatsApp linked, but not saved',
               message:
-                `Meta linked your WhatsApp account, but we also failed to record that on our end — nothing was saved automatically.\n\n` +
+                `Meta linked your WhatsApp account, but we also failed to record that on our end - nothing was saved automatically.\n\n` +
                 `Please contact support with this WhatsApp Business Account ID:\n\n${err.waba_id}`,
             });
           }
@@ -7426,12 +7426,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // onboarding.js's /whatsapp/connect always puts the SPECIFIC reason
         // in body.detail, with a generic body.error as the top-level
-        // summary (see that route's catch block) — authFetch's err.message
+        // summary (see that route's catch block) - authFetch's err.message
         // is only ever the generic one, so a real rejection (e.g. the
         // missing-phone_number_id case, 2026-09-05) used to show as a
         // content-free "WhatsApp connection failed" toast. reportError()
         // prefers err.body.detail over err.message for exactly this
-        // reason, and — being real embedded-signup guidance text — this is
+        // reason, and - being real embedded-signup guidance text - this is
         // routinely long enough to land in the error dialog, not a toast.
         reportError(err);
       } finally {
@@ -7443,12 +7443,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Fills the Profile / Message Link / Channel Settings inner tabs (Settings
   // > WhatsApp) with the real connected number's identity, or an honest
-  // "not connected" state — see renderWhatsAppSettings's header comment for
+  // "not connected" state - see renderWhatsAppSettings's header comment for
   // the bug this replaced (a permanently fake business name, phone number,
   // address, and email shown to every client regardless of what, if
   // anything, they'd actually connected). Meta's WhatsApp Business Profile
   // API (description/address/email/category/website links) isn't
-  // integrated — there's no backend for those fields, so they get an honest
+  // integrated - there's no backend for those fields, so they get an honest
   // note instead of a fake pre-filled form with no save handler behind it.
   function attrEscape(str) {
     return escapeHtml(str).replace(/"/g, '&quot;');
@@ -7472,7 +7472,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const name = waba.display_name || 'WhatsApp Business';
     const phone = waba.display_phone_number || null;
-    const phoneLabel = phone || `Phone ID ${waba.phone_number_id} (dialable number not available — reconnect to fetch it)`;
+    const phoneLabel = phone || `Phone ID ${waba.phone_number_id} (dialable number not available - reconnect to fetch it)`;
 
     if (profileEl) {
       profileEl.innerHTML = '<div class="settings-loading"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>';
@@ -7487,7 +7487,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="text" class="form-input" readonly value="https://wa.me/${attrEscape(phone.replace(/[^\d]/g, ''))}" />
           </div>
         `
-        : '<p class="settings-muted">Dialable phone number not available yet — reconnect this WhatsApp number to fetch it.</p>';
+        : '<p class="settings-muted">Dialable phone number not available yet - reconnect this WhatsApp number to fetch it.</p>';
     }
 
     if (settingsEl) {
@@ -7516,8 +7516,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const PROFILE_PICTURE_MAX_BYTES = 5 * 1024 * 1024;
 
   // Meta's GET returns "about" even when it's just whitespace (seen live:
-  // a single space) and omits address/description/email entirely — not as
-  // "" — when they're unset. Both collapse to the same thing here: trim,
+  // a single space) and omits address/description/email entirely - not as
+  // "" - when they're unset. Both collapse to the same thing here: trim,
   // then treat a falsy/blank result as not-set.
   function trimField(value) {
     return (value || '').trim();
@@ -7634,7 +7634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     saveBtn.addEventListener('click', async () => {
-      // Only ever include a field that actually changed AND is non-blank —
+      // Only ever include a field that actually changed AND is non-blank -
       // this is what makes "send only what changed, never wipe with blank"
       // true. Clearing a field to blank is deliberately not supported yet
       // (see the toast below) rather than silently sent as "" to Meta,
@@ -7652,7 +7652,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (!Object.keys(payload).length) {
-        if (clearedSomething) showToast("Clearing a field isn't supported yet — only changed or added values are saved.");
+        if (clearedSomething) showToast("Clearing a field isn't supported yet - only changed or added values are saved.");
         return;
       }
 
@@ -7672,7 +7672,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Replace picture — file input stays hidden, the visible button just
+    // Replace picture - file input stays hidden, the visible button just
     // triggers it. profile_picture_handle is never part of the Save-Changes
     // payload above; this is the only path that can ever set it, and only
     // once a real file has actually been chosen.
@@ -7689,7 +7689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       if (file.size > PROFILE_PICTURE_MAX_BYTES) {
-        showToast('Image is too large — max 5MB.');
+        showToast('Image is too large - max 5MB.');
         return;
       }
 
@@ -7724,7 +7724,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // open/close code: dialog semantics, focus moved in on open and restored on
   // close, a Tab focus trap, and Escape-to-close (via the modal's own close
   // button when it has one, so any cleanup it wires there still runs).
-  // Click-outside-to-close is deliberately NOT added — a stray click would
+  // Click-outside-to-close is deliberately NOT added - a stray click would
   // silently discard a half-filled form.
   const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   const modalReturnFocus = new WeakMap();
@@ -7806,7 +7806,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await onConfirm();
       } catch (err) {
         // The caller's own catch already shows a toast/inline error for a
-        // real failure — this modal still closes either way so the user
+        // real failure - this modal still closes either way so the user
         // isn't left stuck on it (matches admin's showConfirm exactly).
       } finally {
         newBtn.disabled = false;
@@ -7821,13 +7821,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-confirm')?.classList.remove('open');
   }
 
-  // Consent hardening Phase 2 — the one opt-in confirmation modal, shared by
+  // Consent hardening Phase 2 - the one opt-in confirmation modal, shared by
   // the Contacts-view bulk toolbar (many ids) and the contact detail panel's
-  // "Mark opted in" button (one id) — same statement, same method/note
+  // "Mark opted in" button (one id) - same statement, same method/note
   // fields, same POST /api/contacts/bulk-consent call either way; a
   // single-contact opt-in is just a bulk request with one id, not a
   // separate implementation. The statement text comes from
-  // window.consentStatement (consentStatement.js, served raw — see that
+  // window.consentStatement (consentStatement.js, served raw - see that
   // file's own module comment) so it can never drift from what the server
   // actually stores in consent_events.evidence.
   function openOptInConfirmModal(contactIds, { contactName } = {}) {
@@ -7849,7 +7849,7 @@ document.addEventListener('DOMContentLoaded', () => {
     noteInput.value = '';
 
     // Re-cloned so a previous open's click/change listeners never stack on
-    // top of this one — same precedent as showConfirm's own actionBtn
+    // top of this one - same precedent as showConfirm's own actionBtn
     // handling. Wired AFTER cloning so onchange lands on the element that's
     // actually still in the DOM.
     const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -7894,7 +7894,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // A prompt() replacement, not just a confirm() one: a single text input
-  // in the same modal, autofocused on open with Enter submitting — both
+  // in the same modal, autofocused on open with Enter submitting - both
   // required per direct instruction, since a prompt replacement without
   // them is a real downgrade from the native dialog it replaces. Empty
   // input on confirm is treated as a cancel, matching every call site's
@@ -7929,17 +7929,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Error dialog ---
   // Most caught errors are short and self-explanatory ("Contact not
   // found", a network timeout) and stay a toast. A real minority are long
-  // and/or structured — Meta's own rejection wording (routes/templates.js's
+  // and/or structured - Meta's own rejection wording (routes/templates.js's
   // `detail`, via describeMetaError), embedded-signup guidance
   // (embeddedSignup.js's onProgress strings), or a template-validation
-  // `details` array (templateParams.js) — and cramming those into an
+  // `details` array (templateParams.js) - and cramming those into an
   // auto-dismissing 2.2s toast is how a Meta error message ends up only
   // ever read off the Network tab. 100 chars is picked from this app's own
   // real error text, not guessed: today's short/generic toasts ("Session
   // expired, please log in again.", "Request timed out...") all run under
   // ~65 chars, while every real actionable single-reason message (a
   // template validation rule, an embedded-signup guidance string, a Meta
-  // rejection detail) runs 95-660+ chars — 100 sits cleanly in the gap
+  // rejection detail) runs 95-660+ chars - 100 sits cleanly in the gap
   // between those two clusters.
   const ERROR_DIALOG_LENGTH_THRESHOLD = 100;
 
@@ -7950,7 +7950,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // details is rendered as a real <ul>, not extractApiErrorDetail's
-  // join(' ') — losing that structure (numbered params + missing sample +
+  // join(' ') - losing that structure (numbered params + missing sample +
   // words-ratio all run together into one paragraph) is exactly why these
   // errors have been hard to read.
   function showErrorDialog({ title = 'Something went wrong', message, details }) {
@@ -7963,7 +7963,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Re-cloned on every open, same reason showConfirm re-clones its
-    // action button — a previous call's click listener must never stack.
+    // action button - a previous call's click listener must never stack.
     const copyBtn = document.getElementById('modal-error-dialog-copy-btn');
     const newCopyBtn = copyBtn.cloneNode(true);
     copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
@@ -7975,7 +7975,7 @@ document.addEventListener('DOMContentLoaded', () => {
         newCopyBtn.textContent = 'Copied!';
         setTimeout(() => { newCopyBtn.textContent = original; }, 1500);
       } catch (_err) {
-        showToast('Could not copy — clipboard permission denied');
+        showToast('Could not copy - clipboard permission denied');
       }
     });
 
@@ -7983,18 +7983,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // The single replacement for `showToast(err.message)` at every authFetch
-  // catch site — decides toast vs. dialog per-error instead of forcing
+  // catch site - decides toast vs. dialog per-error instead of forcing
   // every call site to. `err.body.error` (the short category Postgres/Zod
   // validation and Meta-rejection routes send, e.g. "Invalid template
   // body", "Meta rejected this template") becomes the dialog's title;
   // `err.body.detail` (a single long string, e.g. Meta's own rejection
   // wording) or `err.body.details` (an array of specific reasons) becomes
   // its body. A plain error with neither just shows err.message either way
-  // — same message, dialog or toast depending on its own length.
+  // - same message, dialog or toast depending on its own length.
   function reportError(err, { title } = {}) {
     // A chat-send failure carries the real Meta error code (see
     // server/src/routes/chats.js's metaErrorCode field, added alongside the
-    // sendability banner) — translate it to the exact same plain English
+    // sendability banner) - translate it to the exact same plain English
     // the banner and admin's client-detail view use, instead of Meta's raw
     // string, before falling through to the generic handling below.
     const metaErrorCode = err?.body && err.body.metaErrorCode != null ? err.body.metaErrorCode : null;

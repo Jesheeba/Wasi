@@ -12,10 +12,10 @@ const { requireRole } = require('../middleware/requireRole');
 const router = Router();
 
 router.get('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
-  // 'me' means "the caller's own actorId" — resolved here, not in the repo,
+  // 'me' means "the caller's own actorId" - resolved here, not in the repo,
   // so chatsRepo.list never needs to know what "me" means (PLAN.md item 2).
   // For an owner (actorType 'owner'), actorId is the client's own id, which
-  // will never match a real assigned_team_member_id — that's expected, not
+  // will never match a real assigned_team_member_id - that's expected, not
   // an error: an owner has nothing of their own to filter to, so this
   // returns an empty set rather than throwing.
   const assignedTo = req.query.assignedTo === 'me' ? req.actorId : req.query.assignedTo;
@@ -33,7 +33,7 @@ router.get('/:id', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async 
   res.json(chat);
 }));
 
-// contact_id routes through findOrCreateByContact — a blind create() here
+// contact_id routes through findOrCreateByContact - a blind create() here
 // would insert a second chat row for a contact who already has one (the
 // "New Conversation" flow in app.js calls this every time a contact is
 // picked, not just once, so this dedup is load-bearing, not defensive).
@@ -68,8 +68,8 @@ router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, 
 
 // PLAN.md item 2. requireRole gates the router-wide floor (Agent can reach
 // this route at all); the finer "self vs. someone else" distinction from
-// the plan's own matrix — an Agent may claim a chat for themselves, but
-// only Admin/Manager may hand it to someone else — is data-dependent, so it
+// the plan's own matrix - an Agent may claim a chat for themselves, but
+// only Admin/Manager may hand it to someone else - is data-dependent, so it
 // lives here as an explicit in-route check, not something requireRole's
 // static allow-list can express.
 router.post('/:id/assign', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
@@ -108,7 +108,7 @@ router.post('/:id/resolve', requireRole('Admin', 'Manager'), asyncHandler(async 
   const chat = await chatsRepo.update(req.db, req.clientId, req.params.id, { status: 'resolved' });
   if (!chat) return res.status(404).json({ error: 'Not found' });
 
-  // PLAN.md item 5 — resolution-latency tracking, same non-fatal pattern as
+  // PLAN.md item 5 - resolution-latency tracking, same non-fatal pattern as
   // the send handler above: resolving the chat is the real action, a lost
   // SLA row is an acceptable trade-off, a spurious 500 here is not.
   try {
@@ -130,7 +130,7 @@ router.post('/:id/reopen', requireRole('Admin', 'Manager'), asyncHandler(async (
   res.json(chat);
 }));
 
-// PLAN.md item 3 — internal-only notes, never sent to the customer, never
+// PLAN.md item 3 - internal-only notes, never sent to the customer, never
 // mixed into GET /:id/messages (a completely separate table, no relation
 // to `messages`).
 router.get('/:id/notes', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
@@ -147,7 +147,7 @@ router.post('/:id/notes', requireRole('Admin', 'Manager', 'Agent'), asyncHandler
   const { body, mentions } = chatNoteCreateSchema.parse(req.body);
 
   // Every mentioned id must actually belong to this client before it's
-  // written — same discipline as /:id/assign validating teamMemberId,
+  // written - same discipline as /:id/assign validating teamMemberId,
   // since mentioned_team_member_ids can't carry a real FK constraint
   // (Postgres has no FK-on-array-element).
   if (mentions && mentions.length > 0) {
@@ -163,7 +163,7 @@ router.post('/:id/notes', requireRole('Admin', 'Manager', 'Agent'), asyncHandler
   }
 
   // The owner (actorType 'owner') has no team_members row to attribute a
-  // note to — author stays null for them, resolved client-side/UI as "you".
+  // note to - author stays null for them, resolved client-side/UI as "you".
   const authorTeamMemberId = req.actorType === 'team_member' ? req.actorId : null;
   const note = await chatNotesRepo.create(req.db, req.clientId, req.params.id, { authorTeamMemberId, body, mentions });
   res.status(201).json(note);
@@ -177,7 +177,7 @@ router.get('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHandl
 }));
 
 // Real send: goes through messagingService (session-window check, Meta
-// Cloud API call, sent/failed bookkeeping) — this is not a DB-only insert.
+// Cloud API call, sent/failed bookkeeping) - this is not a DB-only insert.
 router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const chat = await chatsRepo.findById(req.db, req.clientId, req.params.id);
@@ -192,7 +192,7 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
   await chatsRepo.markAgentReplyNonFatal(req.db, req.clientId, chat.id);
   try {
     // Releases the tenant DB connection before the Meta call and reacquires
-    // one only for the result write — see messagingService.sendChatMessage's
+    // one only for the result write - see messagingService.sendChatMessage's
     // connectionHooks comment. Without this, the pool's one connection for
     // this request sits idle-in-transaction for the whole Meta round trip.
     const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, data, {
@@ -201,11 +201,11 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
     });
 
     // SLA first-response tracking (PLAN.md item 5) must never fail the send
-    // itself — the WhatsApp message has already gone out by this point; a
+    // itself - the WhatsApp message has already gone out by this point; a
     // lost analytics row is an acceptable trade-off, a spurious 500 on a
     // real successful send (risking a caller retry / double-send) is not.
     // Same non-fatal-logging pattern as templateLibrary.js's usage
-    // recording. Only ever attributes a team_member/owner reply — never
+    // recording. Only ever attributes a team_member/owner reply - never
     // automation/broadcast/Hub API, since requireRole above already
     // guarantees req.actorType is always 'team_member' or 'owner' here.
     try {
@@ -222,7 +222,7 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
     if (err instanceof messagingService.MessagingError) {
       const status = err.code === 'send_failed' ? 502 : 409;
       // metaErrorCode (Meta's raw numeric code, when this failure came from
-      // a real Graph API rejection — see messagingService.js's own
+      // a real Graph API rejection - see messagingService.js's own
       // err.metaError comment) lets the client translate this into the same
       // plain English the sendability banner uses (server/src/utils/
       // sendabilityMessages.js) instead of showing Meta's raw string.

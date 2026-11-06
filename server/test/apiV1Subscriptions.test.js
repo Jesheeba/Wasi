@@ -1,5 +1,5 @@
 // Zapier REST Hook subscribe/unsubscribe (build plan Phase 4, routes/
-// apiV1Subscriptions.js) — this is Hub API v1 surface, so it's authenticated
+// apiV1Subscriptions.js) - this is Hub API v1 surface, so it's authenticated
 // with a Bearer API key (requireApiKey), not a client JWT, same as every
 // other /api/v1/* route. Covers: subscribing registers a row that actually
 // receives a real forwarded message.received event through the existing
@@ -19,7 +19,7 @@ const wabasRepo = require('../src/repositories/wabasRepo');
 
 // metaWebhook.js's enqueueForwards now fires forwardRunner.attemptImmediately
 // on every row right after enqueue (fire-and-forget, not awaited by the
-// webhook request) — a real delivery attempt is already in flight the
+// webhook request) - a real delivery attempt is already in flight the
 // moment signedMetaPost's response comes back, so the test below waits for
 // that automatic attempt to land instead of manually calling deliverOne
 // itself, which would now double-deliver on top of it.

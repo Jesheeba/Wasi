@@ -1,27 +1,27 @@
-// Hub capability (build plan Phase 5) — lets other Sirah applications (GV
+// Hub capability (build plan Phase 5) - lets other Sirah applications (GV
 // Mart, Sirah CRM, RD Interlocks, Fortune Innovatives) send/receive through
 // Wasi's single Meta connection via a Wasi-issued, revocable API key,
 // instead of each holding its own Meta token. Two new tenant-scoped tables
 // (`api_keys`, `webhook_deliveries`) get the exact same treatment as every
-// other tenant table since migration 013_tenant_isolation.js — RLS enabled
-// and forced, granted to the restricted `wasi_app` role — even though (see
+// other tenant table since migration 013_tenant_isolation.js - RLS enabled
+// and forced, granted to the restricted `wasi_app` role - even though (see
 // server/src/middleware/requireApiKey.js's module comment) /api/v1/* always
 // runs on the privileged connection today, the same documented exception
 // wabas/admin/webhook/broadcastRunner already have. This is defense-in-depth
 // for whatever routes through wasi_app in the future, not exercised today.
 //
-// api_keys.key_hash is SHA-256, not bcrypt — deliberately different from
+// api_keys.key_hash is SHA-256, not bcrypt - deliberately different from
 // clients.password_hash. Bcrypt is for low-entropy human passwords and is
 // slow and salted by design, which also makes it unusable for an indexed
 // lookup-by-hash (every row would need a compare). A generated API key is
 // already high-entropy, so a fast, deterministic hash that supports
-// `where key_hash = $1` is the correct tool here — same reasoning
+// `where key_hash = $1` is the correct tool here - same reasoning
 // authTokensRepo already uses for reset/verification tokens.
 //
 // webhook_deliveries is the durable retry queue behind BOTH forward
 // targets: wabas.forward_to_url (a hub-connected consuming app) and the
 // pre-existing client_webhooks table (a client's own self-configured
-// integration webhook — see routes/metaWebhook.js's enqueueForwards).
+// integration webhook - see routes/metaWebhook.js's enqueueForwards).
 // client_webhooks itself is untouched by this migration; only its delivery
 // mechanism changed, from a fire-and-forget fetch with no retry to feeding
 // this same queue. forward_secret on wabas is treated with the same care
@@ -47,7 +47,7 @@ exports.up = (pgm) => {
   });
 
   // target_url/target_secret are snapshotted at enqueue time (not re-read
-  // from wabas at delivery time) so a queued delivery is self-contained —
+  // from wabas at delivery time) so a queued delivery is self-contained -
   // it survives forward_to_url changing or the wabas row disappearing
   // between enqueue and the runner's next tick.
   pgm.createTable('webhook_deliveries', {

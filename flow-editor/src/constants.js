@@ -1,8 +1,8 @@
 // Mirrors app.js's FLOW_EDGE_TYPES_BY_NODE_TYPE / FLOW_EDGE_TYPE_LABELS /
-// FLOW_NODE_TYPE_LABELS exactly — same reasoning as that file's own
+// FLOW_NODE_TYPE_LABELS exactly - same reasoning as that file's own
 // comment: the server re-validates on POST .../edges regardless, this only
 // drives what the UI offers so a legal-but-wrong-looking option is never
-// shown. Kept as a literal duplicate rather than a shared import — the two
+// shown. Kept as a literal duplicate rather than a shared import - the two
 // projects (this one and app.js) deliberately don't share a build step.
 export const FLOW_EDGE_TYPES_BY_NODE_TYPE = {
   send_interactive_buttons: ['button_id', 'keyword', 'default', 'timeout'],
@@ -42,7 +42,7 @@ export const NODE_TYPE_LABELS = {
   capture_reply: 'Capture Reply',
 };
 
-// Palette entries — one per creatable node shape. 'action' nodes carry a
+// Palette entries - one per creatable node shape. 'action' nodes carry a
 // config.kind (assign_tag/set_opt_in/human_handoff, see flowEngine.js's
 // executeAction); the palette exposes each kind as its own button so
 // picking one also fixes the kind, rather than a node-type dropdown

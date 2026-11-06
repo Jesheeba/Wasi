@@ -1,19 +1,19 @@
 // Real user-facing bug, fixed (Option B, per explicit review): tag-based
 // broadcast audience targeting (broadcastRecipientsRepo.createFromAudience)
-// used to match ONLY contacts.tag_id — but no contact-editing UI has ever
+// used to match ONLY contacts.tag_id - but no contact-editing UI has ever
 // written that column; items 8/8.5's multi-tag chip picker only writes the
 // separate, additive contact_tags table. A contact tagged VIP via that
 // picker silently matched zero recipients when "VIP" was picked as a
-// broadcast audience. Fixed with an OR, not a replacement — contacts.tag_id
+// broadcast audience. Fixed with an OR, not a replacement - contacts.tag_id
 // still has one real, live write path (the Automation Flow Builder's
 // "Assign Tag" action node, flowEngine.js), which this fix must not
 // regress. Verifies:
 // 1. A contact tagged ONLY via the additive contact_tags endpoint now
 //    matches a tag-based broadcast audience.
 // 2. A contact tagged ONLY via contacts.tag_id directly (simulating the
-//    flow builder's Assign Tag node) still matches — no regression.
+//    flow builder's Assign Tag node) still matches - no regression.
 // 3. A contact with neither still doesn't match.
-// 4. The OR is scoped per-tag, not "any tag" — a contact tagged X via one
+// 4. The OR is scoped per-tag, not "any tag" - a contact tagged X via one
 //    mechanism and Y via the other doesn't cross-match an audience of Y
 //    just because they have SOME tag somewhere.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -80,13 +80,13 @@ test('1. a contact tagged ONLY via the additive contact_tags endpoint (item 8\'s
   assert.equal(contactAfter.tag_id, null, 'sanity check: the additive picker must never have set the primary tag_id');
 
   const broadcast = await launchAudienceBroadcast(`${SUITE_PREFIX}camp1`, tag.id);
-  assert.equal(broadcast.recipient_count, 1, 'a contact_tags-only tag must now match — this is the exact bug that was reported');
+  assert.equal(broadcast.recipient_count, 1, 'a contact_tags-only tag must now match - this is the exact bug that was reported');
 
   const recipient = await pool.query('select 1 from broadcast_recipients where broadcast_id = $1 and contact_id = $2', [broadcast.id, contact.id]);
   assert.equal(recipient.rows.length, 1);
 });
 
-test('2. a contact tagged ONLY via contacts.tag_id directly (the flow builder\'s Assign Tag path) still matches — no regression', async () => {
+test('2. a contact tagged ONLY via contacts.tag_id directly (the flow builder\'s Assign Tag path) still matches - no regression', async () => {
   const tag = await createTag(`${SUITE_PREFIX}Flow_${Date.now()}`);
   const contact = await createContact(`${SUITE_PREFIX}PrimaryTagOnly`, `9171${String(Date.now()).slice(-8)}`);
   // Simulates flowEngine.js's assign_tag action (contactsRepo.update({tag_id})) directly.
@@ -104,7 +104,7 @@ test('3. a contact with neither does not match', async () => {
   assert.equal(broadcast.recipient_count, 0);
 });
 
-test('4. the match is scoped per-tag, not "has any tag" — tag_id=X and contact_tags=Y on different contacts don\'t cross-match', async () => {
+test('4. the match is scoped per-tag, not "has any tag" - tag_id=X and contact_tags=Y on different contacts don\'t cross-match', async () => {
   const tagX = await createTag(`${SUITE_PREFIX}X_${Date.now()}`);
   const tagY = await createTag(`${SUITE_PREFIX}Y_${Date.now()}`);
   const contactPrimaryX = await createContact(`${SUITE_PREFIX}HasX`, `9173${String(Date.now()).slice(-8)}`);

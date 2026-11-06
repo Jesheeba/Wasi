@@ -1,4 +1,4 @@
-// PLAN.md item 9 — AND/OR audience segment builder.
+// PLAN.md item 9 - AND/OR audience segment builder.
 async function list(db, clientId) {
   const { rows } = await db.query('select * from contact_segments where client_id = $1 order by created_at desc', [clientId]);
   return rows;

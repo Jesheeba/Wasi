@@ -1,14 +1,14 @@
 // Zapier REST Hook subscribe/unsubscribe (build plan Phase 4,
-// wasi-master-plan.md §3.1) — backs the Zapier app's "New WhatsApp Message
+// wasi-master-plan.md §3.1) - backs the Zapier app's "New WhatsApp Message
 // Received" trigger (zapier-app/triggers/newMessageReceived.js). Zapier
 // calls POST / when a user turns a Zap on (registering its own callback URL
 // to receive future events) and DELETE /:id when they turn it off. This
-// endpoint does no delivery itself — routes/metaWebhook.js's enqueueForwards
+// endpoint does no delivery itself - routes/metaWebhook.js's enqueueForwards
 // is what actually enqueues events to the row created here, using the exact
 // same webhook_deliveries queue + forwardRunner.js as every other forward
 // target (see migration 040_zapier_subscriptions.js's comment).
 //
-// Same requireApiKey + privileged `pool` shape as the rest of the Hub API —
+// Same requireApiKey + privileged `pool` shape as the rest of the Hub API -
 // the target_url a client's own Zap subscribes is scoped to req.clientId,
 // req.apiKeyId (from the bearer key that authenticated this request), never
 // a client-supplied id.
@@ -28,7 +28,7 @@ router.post('/', asyncHandler(async (req, res) => {
   const subscription = await zapierSubscriptionsRepo.create(pool, req.clientId, req.apiKeyId, target_url, event);
   // secret is returned once here, for the Zapier app to store alongside the
   // subscription id and verify the x-wasi-signature-256 header on each
-  // delivery — same "show once, hash/store only what's needed to verify
+  // delivery - same "show once, hash/store only what's needed to verify
   // later" shape as every other generated secret in this codebase.
   res.status(201).json(subscription);
 }));

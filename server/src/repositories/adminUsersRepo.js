@@ -29,7 +29,7 @@ async function updatePassword(id, password_hash) {
   await pool.query('update admin_users set password_hash = $2 where id = $1', [id, password_hash]);
 }
 
-// Session invalidation (password reset item 3) — called alongside every
+// Session invalidation (password reset item 3) - called alongside every
 // password write so every token issued before it stops verifying on the
 // very next request. Not folded into updatePassword() itself: a caller that
 // only ever wants the row's password changed, not its live sessions killed,

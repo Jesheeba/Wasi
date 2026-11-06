@@ -1,11 +1,11 @@
 // Curated content for the WhatsApp Template Message Library
-// (wasi-master-plan.md §2). Pure data — no DB access, no side effects —
+// (wasi-master-plan.md §2). Pure data - no DB access, no side effects -
 // imported by both seedTemplateLibrary.js (the actual seed script) and its
 // test (server/test/templateLibraryContent.test.js), so the exact same
 // content that gets inserted is what gets validated.
 //
-// SCOPE (Phase 2, this pass): 3 of the master plan's 8 minimum industries —
-// E-commerce, Healthcare, General/Other — ~12 templates each, 36 total.
+// SCOPE (Phase 2, this pass): 3 of the master plan's 8 minimum industries -
+// E-commerce, Healthcare, General/Other - ~12 templates each, 36 total.
 // Chosen because they're the industries the master plan itself gives the
 // most concrete use-case guidance for (E-commerce's explicit 9-item list;
 // Healthcare's "appointment reminder" example elsewhere in the plan) plus
@@ -13,22 +13,22 @@
 // Authentication entries in this batch. The remaining 5 industries
 // (Education, Finance, Travel, Automobile, Events & Webinars) are deferred
 // to a follow-up content batch using this exact same
-// data-array + preflight-validation pattern — see the Phase 2 completion
+// data-array + preflight-validation pattern - see the Phase 2 completion
 // report for the plan.
 //
 // Deliberately excluded from this batch: any header_type other than
 // 'NONE'/'TEXT'. An IMAGE/VIDEO/DOCUMENT header needs a real uploaded media
 // asset at Meta-submission time (routes/templates.js's multer upload path)
-// — the library has no mechanism to supply one, and building a shared
+// - the library has no mechanism to supply one, and building a shared
 // media-asset store for library content is out of scope for this phase
 // (see migration 036's comment).
 //
-// Every URL below is a placeholder domain (your-store.example.com etc.) —
+// Every URL below is a placeholder domain (your-store.example.com etc.) -
 // syntactically valid so it passes messageTemplateCreateSchema's
 // z.string().url(), but a client MUST replace it with their own real URL
 // before actually submitting to Meta. This is expected, not a bug: "Use
 // this Template" prefills into the existing, fully-editable Create
-// Template modal — nothing here is submitted as-is.
+// Template modal - nothing here is submitted as-is.
 
 const ECOMMERCE = [
   {
@@ -56,7 +56,7 @@ const ECOMMERCE = [
     category: 'Utility',
     title: 'Shipping Update',
     header: { type: 'TEXT', text: 'Your Order Has Shipped' },
-    body: 'Good news, {{customer_name}}! Your order {{order_id}} has just shipped and is now on its way to you. Expected delivery date: {{delivery_date}} — we hope you love it.',
+    body: 'Good news, {{customer_name}}! Your order {{order_id}} has just shipped and is now on its way to you. Expected delivery date: {{delivery_date}} - we hope you love it.',
     footer: null,
     buttons: [{ type: 'URL', text: 'Track Shipment', url: 'https://your-store.example.com/track' }],
     sample_values: { customer_name: 'Priya', order_id: '#4821', delivery_date: 'August 30' },
@@ -86,7 +86,7 @@ const ECOMMERCE = [
     category: 'Marketing',
     title: 'Back in Stock Alert',
     header: { type: 'TEXT', text: 'Back in Stock' },
-    body: 'Hi {{customer_name}}, good news — {{item_name}} is back in stock! Order now before it runs out again.',
+    body: 'Hi {{customer_name}}, good news - {{item_name}} is back in stock! Order now before it runs out again.',
     footer: 'Reply STOP to unsubscribe',
     buttons: [{ type: 'URL', text: 'Shop Now', url: 'https://your-store.example.com/shop' }],
     sample_values: { customer_name: 'Priya', item_name: 'Wireless Earbuds' },
@@ -136,7 +136,7 @@ const ECOMMERCE = [
     category: 'Marketing',
     title: 'Price Drop Alert',
     header: { type: 'TEXT', text: 'Price Drop!' },
-    body: 'Hi {{customer_name}}, good news — the price of {{item_name}} you were looking at just dropped to {{new_price}}. Grab it soon before the price changes again.',
+    body: 'Hi {{customer_name}}, good news - the price of {{item_name}} you were looking at just dropped to {{new_price}}. Grab it soon before the price changes again.',
     footer: 'Reply STOP to unsubscribe',
     buttons: [{ type: 'URL', text: 'View Item', url: 'https://your-store.example.com/item' }],
     sample_values: { customer_name: 'Priya', item_name: 'Wireless Earbuds', new_price: '₹2,499' },
@@ -281,12 +281,12 @@ const GENERAL = [
     use_case: 'account_verification_otp',
     category: 'Authentication',
     title: 'Account Verification Code',
-    // Authentication templates have no author-written body/header/footer —
+    // Authentication templates have no author-written body/header/footer -
     // Meta auto-generates the OTP message (metaClient.js's
     // buildAuthenticationPayload); this text is for the library's own
     // preview/browse UI only. "Use this Template" sets category to
     // 'Authentication' and deliberately does NOT prefill body/header/
-    // footer/buttons into the creation form — the existing modal's own
+    // footer/buttons into the creation form - the existing modal's own
     // Authentication-specific fields (codeExpirationMinutes, security
     // disclaimer, OTP button) take over from there.
     header: null,
@@ -332,7 +332,7 @@ const GENERAL = [
     category: 'Utility',
     title: 'Event Registration Confirmation',
     header: { type: 'TEXT', text: 'You’re Registered!' },
-    body: "Hi {{attendee_name}}, you're all set — you are confirmed for {{event_name}}, happening on {{event_date}}. We look forward to seeing you there in person.",
+    body: "Hi {{attendee_name}}, you're all set - you are confirmed for {{event_name}}, happening on {{event_date}}. We look forward to seeing you there in person.",
     footer: null,
     buttons: null,
     sample_values: { attendee_name: 'Ravi', event_name: 'Product Launch Meetup', event_date: 'September 12' },
@@ -342,7 +342,7 @@ const GENERAL = [
     category: 'Utility',
     title: 'Event Reminder',
     header: { type: 'TEXT', text: 'Event Reminder' },
-    body: "Hi {{attendee_name}}, this is just a quick reminder that {{event_name}} is coming up soon — it starts on {{event_date}} at {{event_time}}. We can't wait to see you there in person!",
+    body: "Hi {{attendee_name}}, this is just a quick reminder that {{event_name}} is coming up soon - it starts on {{event_date}} at {{event_time}}. We can't wait to see you there in person!",
     footer: null,
     buttons: null,
     sample_values: { attendee_name: 'Ravi', event_name: 'Product Launch Meetup', event_date: 'September 12', event_time: '6:00 PM' },

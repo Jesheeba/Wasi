@@ -1,15 +1,15 @@
-// Phase 6 Part B — schema support for the super-admin cross-tenant views
+// Phase 6 Part B - schema support for the super-admin cross-tenant views
 // (routes/superAdmin.js). Each addition here is consumed by a specific view
 // and populated by extending metaWebhook.js/messagingService.js in the same
-// commit — not speculative columns, each one backs a real field the spec
+// commit - not speculative columns, each one backs a real field the spec
 // asked for:
 //
 // - wabas.restriction_status: "restriction status" (health view). Populated
 //   by extending handleAccountUpdate, which currently only extracts
 //   quality_rating from the account_update payload.
 // - messages.meta_error_code: "failed sends with Meta error codes" (failures
-//   view). messages.error_reason (006_messaging.js) is free text only — no
-//   code — even though messagingService.js's catch blocks already have
+//   view). messages.error_reason (006_messaging.js) is free text only - no
+//   code - even though messagingService.js's catch blocks already have
 //   Meta's structured error (err.metaError, including its numeric `code`)
 //   and simply discard it before persisting. Threaded through
 //   chatsRepo.markFailed/updateStatusByMetaId in this same change.
@@ -21,7 +21,7 @@
 //   as a direct side benefit, the exact thing that was missing to report a
 //   webhook handler's duration outside of console.log during last session's
 //   production verification (metaWebhook.js:312-317 only ever logged it).
-//   One row per POST /webhooks/meta request. No RLS/wasi_app grant — same
+//   One row per POST /webhooks/meta request. No RLS/wasi_app grant - same
 //   treatment as audit_log/admin_users (013_tenant_isolation.js): platform-
 //   internal, privileged-connection-only, not tenant data.
 exports.up = (pgm) => {

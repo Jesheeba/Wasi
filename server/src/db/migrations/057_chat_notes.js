@@ -1,4 +1,4 @@
-// PLAN.md item 3 — internal notes with @mention. A per-chat note thread
+// PLAN.md item 3 - internal notes with @mention. A per-chat note thread
 // visible only to team members, never sent to the customer (no relation to
 // `messages`, which is the real WhatsApp conversation). Same tenant-table
 // treatment as every other client-scoped table (migration 013's pattern):
@@ -8,10 +8,10 @@
 // requirement) for two real reasons: the client account itself (the
 // "owner", not a team_members row at all) can author a note too, and a
 // team member who's later deleted shouldn't take their historical notes
-// with them — the note stays, attribution just clears.
+// with them - the note stays, attribution just clears.
 //
 // mentioned_team_member_ids is a plain uuid[], not FK-constrained (Postgres
-// can't FK an array column) — the write-time app-layer check (every id
+// can't FK an array column) - the write-time app-layer check (every id
 // really belongs to this client, before insert) is what enforces integrity
 // here, same discipline as item 2's assign endpoint validating teamMemberId
 // before writing it.
@@ -41,7 +41,7 @@ exports.up = (pgm) => {
 };
 
 exports.down = async (pgm) => {
-  // Same discipline as migrations 032/036/039/040's down()s — a real
+  // Same discipline as migrations 032/036/039/040's down()s - a real
   // client's team could have written real internal notes by the time a
   // rollback runs on this shared database; silently dropping them loses
   // real conversation context with no warning.

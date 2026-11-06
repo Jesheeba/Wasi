@@ -1,6 +1,6 @@
 // Local-only Postgres, no Docker/admin required. Used on machines where Docker
 // Desktop needs WSL2 that isn't installed. Prefer `npm run db:up` (Docker) when
-// available — this is the fallback documented in README.md.
+// available - this is the fallback documented in README.md.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const fs = require('fs');
 const path = require('path');
@@ -16,7 +16,7 @@ const pg = new EmbeddedPostgres({
 });
 
 async function main() {
-  // initialise() runs initdb, which fails on a non-empty data directory —
+  // initialise() runs initdb, which fails on a non-empty data directory -
   // only run it the first time (no PG_VERSION file yet means uninitialised).
   const alreadyInitialised = fs.existsSync(path.join(dataDir, 'PG_VERSION'));
   if (!alreadyInitialised) await pg.initialise();

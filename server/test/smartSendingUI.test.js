@@ -1,11 +1,11 @@
-// Real-browser coverage for PLAN.md item 12's frontend — the New Campaign
+// Real-browser coverage for PLAN.md item 12's frontend - the New Campaign
 // modal's Smart Sending dropdown. Backend correctness (the real
 // hasRecentSend check, the skip behavior) is broadcastSmartSending.test.js's
-// job; this covers what only a real browser can show — picking an option
+// job; this covers what only a real browser can show - picking an option
 // and launching actually persists smartSendingHours server-side.
 //
 // Same fixed-port-4000 + ALLOWED_ORIGINS override as templateLibraryUI.test.js
-// (the original precedent) — safe alongside any other file now that npm
+// (the original precedent) - safe alongside any other file now that npm
 // test forces --test-concurrency=1 (CLAUDE.md's Conventions section).
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 process.env.ALLOWED_ORIGINS = 'http://localhost:4000';

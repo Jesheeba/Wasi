@@ -18,7 +18,7 @@ async function findById(db, clientId, id) {
 
 // Consent enforcement (messagingService.sendChatMessage) looks up a
 // template's category by name to decide whether it's subject to the
-// opt-in gate — a template name is only unique per client, not globally.
+// opt-in gate - a template name is only unique per client, not globally.
 async function findByNameAndClient(db, clientId, name) {
   const { rows } = await db.query(
     'select * from message_templates where client_id = $1 and name = $2 order by created_at desc limit 1',
@@ -28,12 +28,12 @@ async function findByNameAndClient(db, clientId, name) {
 }
 
 // Meta scopes template uniqueness to (name, language) per WABA, not name
-// alone — a second submission under a (name, language) Meta already has
+// alone - a second submission under a (name, language) Meta already has
 // something for doesn't get cleanly rejected, it queues for review and can
 // sit unresolved far longer than normal (confirmed live: 20+ hours pending
 // against an already-approved same-name-and-language template). Used by
 // routes/templates.js to reject that case before ever calling Meta.
-// orphaned_at is null on purpose — an orphaned row is confirmed gone from
+// orphaned_at is null on purpose - an orphaned row is confirmed gone from
 // Meta (templateSyncService.js's reconcile no longer finds it there), so
 // its (name, language) slot is presumed free again. A rejected-but-not-
 // orphaned row still blocks: Meta's exact reuse behavior after a rejection
@@ -51,7 +51,7 @@ async function findActiveByNameAndLanguage(db, clientId, name, language) {
 }
 
 // language/header/footer/buttons/bodyParamExamples/auth fields added for
-// the template form rebuild (migration 020_template_rich_fields.js) — all
+// the template form rebuild (migration 020_template_rich_fields.js) - all
 // previously silently dropped here even when present upstream (language in
 // particular has had a DB column with a default since 006_messaging.js,
 // but nothing ever wrote a caller-chosen value into it until now).
@@ -84,7 +84,7 @@ async function create(db, {
   return rows[0];
 }
 
-// All templates across every tenant, joined with client identity — powers
+// All templates across every tenant, joined with client identity - powers
 // the admin Templates Review queue (spec §5 "Templates Review" row).
 // Admin-only, always the privileged connection.
 async function listAll(db, status) {
@@ -100,7 +100,7 @@ async function listAll(db, status) {
 }
 
 // Admin-only (status flips from the Templates Review queue) and the Meta
-// webhook (message_template_status_update) — always the privileged
+// webhook (message_template_status_update) - always the privileged
 // connection, no client_id known up front in the webhook case.
 async function updateStatus(db, id, status) {
   const { rows } = await db.query(
@@ -112,7 +112,7 @@ async function updateStatus(db, id, status) {
 
 // --- Template sync (services/templateSyncService.js) ---
 
-// A template found on Meta with no local row at all — full reconstruction
+// A template found on Meta with no local row at all - full reconstruction
 // from Meta's own data, since there's nothing local to preserve.
 async function createFromMetaSync(db, {
   client_id, meta_template_id, name, category, status, language, rejection_reason,
@@ -139,7 +139,7 @@ async function createFromMetaSync(db, {
 }
 
 // A template matched to an existing local row (by meta_template_id or,
-// for legacy/backfill rows, by name) — only the fields that can drift on
+// for legacy/backfill rows, by name) - only the fields that can drift on
 // Meta's side get refreshed; content fields (body/header/footer/buttons)
 // are left as this app already has them. meta_template_id backfills via
 // COALESCE rather than overwriting, so it's a no-op once already set.
@@ -159,7 +159,7 @@ async function updateFromMetaSync(db, id, { status, category, rejection_reason, 
   return rows[0] || null;
 }
 
-// Marks a local row as no longer found on Meta — never a delete. A local
+// Marks a local row as no longer found on Meta - never a delete. A local
 // draft never submitted (no meta_template_id) is never passed here; see
 // templateSyncService.js's reconcileTemplates for that guard.
 async function markOrphaned(db, id) {
@@ -170,12 +170,12 @@ async function markOrphaned(db, id) {
   return rows[0] || null;
 }
 
-// Applied after a successful Meta edit (routes/templates.js's PUT /:id) —
+// Applied after a successful Meta edit (routes/templates.js's PUT /:id) -
 // content fields only; name/category/language/meta_template_id never
 // change here (Meta's edit endpoint doesn't accept the first two either,
-// and the template id — the third — is exactly what identifies which
+// and the template id - the third - is exactly what identifies which
 // template got edited). status resets to 'pending' and rejection_reason
-// clears since an edit puts the template back into Meta review — this row
+// clears since an edit puts the template back into Meta review - this row
 // now describes the NEW pending content, even though the OLD approved
 // content is what's still actually sending on Meta's side until that
 // review resolves (Meta's behavior, not tracked as a separate state here).
@@ -207,7 +207,7 @@ async function updateContent(db, clientId, id, {
   return rows[0] || null;
 }
 
-// A real delete, unlike markOrphaned above — used by routes/templates.js's
+// A real delete, unlike markOrphaned above - used by routes/templates.js's
 // DELETE /:id, which deletes on Meta first (when the row was ever submitted
 // there) and only removes the local row after that succeeds or the template
 // was never on Meta to begin with. template_media_cache's FK to this table

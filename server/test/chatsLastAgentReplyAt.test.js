@@ -1,6 +1,6 @@
 // Unit 0.2 (docs/ai-agent/IMPLEMENTATION.md): chats.last_agent_reply_at.
 //
-// Stubs only — nothing here may reach a real database (this project has no
+// Stubs only - nothing here may reach a real database (this project has no
 // separate dev DB, and src/db/pool.js refuses any test that tries). Real
 // repo/service/route code runs against a recording fake `db`; collaborators
 // that would touch Meta or other tables are monkey-patched on their required

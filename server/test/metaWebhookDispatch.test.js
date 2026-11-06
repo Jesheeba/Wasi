@@ -1,12 +1,12 @@
 // Regression test for a real dispatch bug found during Phase 2 live
 // verification: Meta sends BOTH new inbound messages and delivery status
-// updates under field: "messages" — field name alone can't distinguish them.
+// updates under field: "messages" - field name alone can't distinguish them.
 // The old dispatch logic (`if field === 'messages' ... else if field ===
 // 'statuses'`) silently dropped every status-only delivery, since Meta never
 // actually sends field: "statuses" in practice. The fixture below is the
 // exact PAYLOAD SHAPE captured live (via ngrok's request inspector) for a
 // real send that failed with error 131047 (24h re-engagement window
-// closed) — with the waba_id/phone_number_id swapped for fake, dedicated
+// closed) - with the waba_id/phone_number_id swapped for fake, dedicated
 // test values (what's being tested is dispatch logic, not the specific real
 // WABA), tied to a disposable test client rather than the demo client that
 // Phase 2 live verification uses.
@@ -25,7 +25,7 @@ let baseUrl;
 let testClientId;
 let testMessageId;
 
-// Clearly fake, dedicated to this test file — not the real WABA (983390651411856)
+// Clearly fake, dedicated to this test file - not the real WABA (983390651411856)
 // Phase 2 is verifying against. wabas.waba_id is UNIQUE across the whole table,
 // so this also can't collide with the real one even if both existed at once.
 const TEST_WABA_ID = 'test_suite_dispatch_waba_id';
@@ -57,7 +57,7 @@ const REAL_STATUS_ONLY_PAYLOAD_SHAPE = {
           }],
         }],
       },
-      field: 'messages', // NOT "statuses" — this is the whole point of the fixture
+      field: 'messages', // NOT "statuses" - this is the whole point of the fixture
     }],
   }],
 };
@@ -88,7 +88,7 @@ before(async () => {
   });
 
   // Seed a message row as if it had actually been sent, so
-  // updateStatusByMetaId has a real row to flip — otherwise the assertion
+  // updateStatusByMetaId has a real row to flip - otherwise the assertion
   // below would pass even if dispatch were still broken (0 rows updated
   // looks the same as "nothing to update").
   const chat = await chatsRepo.create(pool, testClientId, {
@@ -102,7 +102,7 @@ before(async () => {
 });
 
 after(async () => {
-  // Cascade-deletes the wabas row, chat, and message this test created —
+  // Cascade-deletes the wabas row, chat, and message this test created -
   // dedicated client, so nothing to snapshot/restore.
   if (testClientId) await pool.query('delete from clients where id = $1', [testClientId]);
   await new Promise((resolve) => server.close(resolve));
@@ -125,7 +125,7 @@ test('field "messages" carrying only a statuses array is dispatched, not silentl
   assert.equal(rows[0].status, 'failed');
   assert.match(rows[0].error_reason, /Re-engagement message/);
   // migration 072_messages_status_timestamps.js: a status transition stamps
-  // its own column only — a 'failed' status must not also backfill
+  // its own column only - a 'failed' status must not also backfill
   // delivered_at/read_at, which this message never actually reached.
   assert.ok(rows[0].failed_at, 'failed_at should be stamped on a failed status transition');
   assert.equal(rows[0].delivered_at, null);
@@ -148,8 +148,8 @@ test('an actually-unhandled field does not silently 200 without a trace', async 
     headers: { 'Content-Type': 'application/json', 'x-hub-signature-256': signature },
     body,
   });
-  // Still 200 — Meta shouldn't get retried into a storm over an unknown
-  // field — but it must show up in the audit log so it's not silently lost.
+  // Still 200 - Meta shouldn't get retried into a storm over an unknown
+  // field - but it must show up in the audit log so it's not silently lost.
   assert.equal(res.status, 200);
 
   const { rows } = await pool.query(
@@ -161,12 +161,12 @@ test('an actually-unhandled field does not silently 200 without a trace', async 
 
 test('a payload with two changes, one of which fails to write, persists the successful one and returns non-200', async () => {
   // Same failure shape that caused the Sirah CRM incident referenced in
-  // wasi-build-plan.md: a write fails, the error gets caught (correctly —
+  // wasi-build-plan.md: a write fails, the error gets caught (correctly -
   // one bad change shouldn't abort the others), but the response must NOT
   // silently claim success, or Meta never retries and the failed change is
   // gone after its 7-day window. The "bad" change here has no `from` on its
   // message, so contactsRepo.upsertByPhone hits contacts.phone's real
-  // NOT NULL constraint — a genuine DB write failure, not a contrived
+  // NOT NULL constraint - a genuine DB write failure, not a contrived
   // JS-level error.
   const goodPhone = `919${Date.now()}`.slice(0, 12);
   const payload = {

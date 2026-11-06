@@ -33,7 +33,7 @@ router.get('/', (req, res) => {
 });
 
 // Meta signs every webhook delivery with an HMAC-SHA256 of the raw body,
-// keyed by the app secret — verifying this is what proves a payload actually
+// keyed by the app secret - verifying this is what proves a payload actually
 // came from Meta and wasn't forged by hitting this public URL directly.
 function verifySignature(rawBody, signatureHeader) {
   const secret = process.env.META_APP_SECRET;
@@ -47,7 +47,7 @@ function verifySignature(rawBody, signatureHeader) {
 
 // Enqueues one delivery per configured forward target for this waba's
 // client that has actually subscribed to this event, into the same
-// durable, retried queue (build plan Phase 5) — wabas.forward_to_url (a
+// durable, retried queue (build plan Phase 5) - wabas.forward_to_url (a
 // hub-connected consuming app) and client_webhooks.callback_url (the
 // client's own generic integration webhook, Settings > Webhook) are
 // independent, optional targets, and a client can have either, both, or
@@ -56,14 +56,14 @@ function verifySignature(rawBody, signatureHeader) {
 // with no retry for the client's own webhook.
 //
 // Event selection is explicit per target (migration
-// 015_explicit_forward_events.js), not implicit — each target declares
+// 015_explicit_forward_events.js), not implicit - each target declares
 // its own `events` array at configuration time (routes/clientWebhook.js,
 // routes/admin.js's hub-forward config) and only receives events it's
 // actually listed. This was a real gap in the initial unification: it
 // widened client_webhooks from message.received-only to silently
 // receiving all three event types with no way to opt out, which would
 // have been a breaking contract change for an existing subscriber (none
-// existed yet, confirmed live before this fix — but the next one would
+// existed yet, confirmed live before this fix - but the next one would
 // have hit it). Signed identically for both targets
 // (x-wasi-signature-256, HMAC-SHA256 of the JSON body), so nothing about
 // how a receiving app verifies a delivery changes based on which target
@@ -73,7 +73,7 @@ async function enqueueForwards(waba, event, payload) {
   // message.status, message_template_status_update, account_update) and every
   // target (hub forward_to_url, client_webhooks) gets them uniformly without
   // each handler assembling its own envelope fields. enqueued_at is when this
-  // event was received/enqueued, not when a delivery attempt fires — stable
+  // event was received/enqueued, not when a delivery attempt fires - stable
   // across forwardRunner.js's retries, not re-stamped per attempt. Named
   // enqueued_at rather than timestamp so it can't be confused with
   // message.received's own message.sent_at in the same payload.
@@ -111,9 +111,9 @@ async function enqueueForwards(waba, event, payload) {
   }
 
   // Zapier's "New WhatsApp Message Received" trigger (build plan Phase 4,
-  // wasi-master-plan.md §3.1) — unlike the two targets above, a client can
+  // wasi-master-plan.md §3.1) - unlike the two targets above, a client can
   // have several of these active at once (one per Zap), so this is a list,
-  // not a single lookup. Same enqueue call, same downstream queue/runner —
+  // not a single lookup. Same enqueue call, same downstream queue/runner -
   // Zapier's subscription is just a third source feeding it.
   let zapierSubscriptions;
   try {
@@ -137,7 +137,7 @@ async function enqueueForwards(waba, event, payload) {
 
 // New customer message: upsert the contact, find/open their chat, insert
 // (idempotent on Meta's message id), then let automation rules react.
-// Takes the resolved waba row (not just clientId) — build plan Phase 5's
+// Takes the resolved waba row (not just clientId) - build plan Phase 5's
 // hub forwarding needs waba.forward_to_url/forward_secret/id, which the
 // caller already has from wabasRepo.findByWabaId and shouldn't re-fetch.
 async function handleInboundMessages(waba, value) {
@@ -147,29 +147,29 @@ async function handleInboundMessages(waba, value) {
     const phone = msg.from;
     const name = contactInfo?.profile?.name || phone;
     // Free-form interactive button replies (see metaClient.sendInteractiveMessage)
-    // come back as msg.interactive.button_reply.{id,title} — title is what a
+    // come back as msg.interactive.button_reply.{id,title} - title is what a
     // human reads in the chat; id is the stable value the flow engine
     // branches on (routes/flowEngine.js), never re-derived from title here.
     const buttonReply = msg.interactive?.button_reply;
-    // A tap on a list-message row — msg.interactive.list_reply.{id,title,
+    // A tap on a list-message row - msg.interactive.list_reply.{id,title,
     // description}, Meta's other interactive reply shape alongside
     // button_reply above. Never received live yet (no metaClient function
-    // builds a list message to send in the first place — see
+    // builds a list message to send in the first place - see
     // metaClient.sendListMessage), so this is doc-shape, not
     // capture-verified the way button_reply now is; still routed the same
     // way rather than left as the old "[interactive]" fallback that
     // silently discarded id/title/description entirely.
     const listReply = msg.interactive?.list_reply;
-    // Template quick-reply clicks (type: "button") are a separate shape —
-    // msg.button.{text,payload} — from the flow-builder's own interactive
+    // Template quick-reply clicks (type: "button") are a separate shape -
+    // msg.button.{text,payload} - from the flow-builder's own interactive
     // buttons above. Reading .text here is what lets an automation rule's
     // trigger keyword match the button's label (e.g. "Received").
     const templateButtonText = msg.button?.text;
     const body = msg.text?.body || buttonReply?.title || listReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
 
-    // Forwarded verbatim alongside `body` in message.received (see below) —
+    // Forwarded verbatim alongside `body` in message.received (see below) -
     // body alone only ever carried the reply's title (e.g. "Yes"), never
-    // its id (e.g. "flow_test_yes") or, for a list row, its description —
+    // its id (e.g. "flow_test_yes") or, for a list row, its description -
     // the stable values a receiving CRM needs to route on programmatically
     // rather than parsing display text. null for a non-interactive message,
     // kept as an explicit field (not omitted) so a receiving CRM can always
@@ -208,7 +208,7 @@ async function handleInboundMessages(waba, value) {
 
     const contact = await contactsRepo.upsertByPhone(pool, clientId, { phone, name, wa_id: phone });
     const chat = await chatsRepo.findOrCreateByContact(pool, clientId, contact);
-    // PLAN.md item 14 — msg.referral (Meta's documented CTWA ad-click
+    // PLAN.md item 14 - msg.referral (Meta's documented CTWA ad-click
     // object, §6.2) is present only when this inbound message originated
     // from a Click-to-WhatsApp ad; undefined/absent for every organic
     // message. Parsing an already-arrived inbound webhook payload, not a
@@ -223,23 +223,23 @@ async function handleInboundMessages(waba, value) {
     if (inserted) {
       await usageRepo.incrementReceived(pool, clientId);
 
-      // Opt-out (build plan Phase 4) — recorded before automation runs, so
+      // Opt-out (build plan Phase 4) - recorded before automation runs, so
       // the consent_events row exists regardless of whatever a client's own
       // automation rules do with this same inbound message.
       //
       // Isolated for the same reason flowEngine.evaluate() below is: the
       // insert above is idempotent on meta_message_id, so an uncaught throw
       // here would 500 (Meta retries) but the retry's insert becomes a
-      // no-op, permanently skipping this whole block — including
-      // enqueueForwards — with no way to ever recover it. recordOptOutDurable
-      // never throws (consent hardening Phase 1 — see its own comment in
+      // no-op, permanently skipping this whole block - including
+      // enqueueForwards - with no way to ever recover it. recordOptOutDurable
+      // never throws (consent hardening Phase 1 - see its own comment in
       // consentRepo.js): it retries once, and on repeated failure writes a
       // durable fallback row and raises an alert instead of losing the
       // opt-out to a log line, which is what this used to do.
       if (isOptOutMessage(body)) {
         // phone passed explicitly (not just inside evidence) so
         // recordOptOutDurable's own last-resort log line is guaranteed to
-        // have it even if a future caller's evidence shape omits it —
+        // have it even if a future caller's evidence shape omits it -
         // see that function's own comment for why this can't rely on
         // evidence's contents.
         await consentRepo.recordOptOutDurable(clientId, contact.id, {
@@ -251,12 +251,12 @@ async function handleInboundMessages(waba, value) {
 
       // Isolated so a bug in a client's own automation rules can never
       // silently kill forwarding for this message: same idempotent-insert
-      // trap as the opt-out block above — an uncaught throw here would 500
+      // trap as the opt-out block above - an uncaught throw here would 500
       // and make Meta retry, but the retry's insert is a no-op, so
       // enqueueForwards below would never run again for this message. A
       // receiving CRM silently losing an inbound message is worse than one
       // client's automation rule silently not firing once, so this
-      // deliberately does NOT re-throw — do not "simplify" this away.
+      // deliberately does NOT re-throw - do not "simplify" this away.
       //
       // evaluateSafely never throws: it returns the outcome ({handled, how},
       // flowEngine.js's table), with a throw reported as how:'flow_error'.
@@ -265,7 +265,7 @@ async function handleInboundMessages(waba, value) {
       // is behaviourally identical to the try/catch it replaced.
       const flowOutcome = await flowEngine.evaluateSafely(pool, clientId, contact, chat, msg, body);
       if (flowOutcome.how === 'flow_error') {
-        console.error('metaWebhook: flowEngine.evaluate FAILED — forwarding continues regardless:', {
+        console.error('metaWebhook: flowEngine.evaluate FAILED - forwarding continues regardless:', {
           clientId, metaMessageId: msg.id, error: flowOutcome.error,
         });
       }
@@ -286,52 +286,52 @@ async function handleInboundMessages(waba, value) {
           clientId, conversationId: chat.id, inboundMessageId: inserted.id, flowOutcome,
         });
       } catch (err) {
-        console.error('metaWebhook: AI agent enqueue FAILED — forwarding continues regardless:', {
+        console.error('metaWebhook: AI agent enqueue FAILED - forwarding continues regardless:', {
           clientId, metaMessageId: msg.id, error: err.message,
         });
       }
 
       // This only enqueues; forwardRunner.js does the actual delivery
-      // attempt(s), on its own schedule, outside this request entirely —
+      // attempt(s), on its own schedule, outside this request entirely -
       // see its module comment for why that separation is load-bearing,
       // not just tidy.
       //
       // message_id is promoted out of `inserted` to match message.status
-      // forwards' top-level field of the same name (fix #2) — meta_message_id
+      // forwards' top-level field of the same name (fix #2) - meta_message_id
       // is the real WhatsApp id, id/client_id are Wasi-internal PKs a
       // receiving CRM has no use for and shouldn't see. status is dropped
-      // entirely (not renamed) — chatsRepo.insertInbound hardcodes it to
+      // entirely (not renamed) - chatsRepo.insertInbound hardcodes it to
       // 'delivered' for every inbound row (it's a DB-write confirmation, not
       // a real WhatsApp delivery status), so forwarding it would mislead a
       // CRM into reading it as one. message.status forwards (handleStatuses)
       // carry Meta's real, meaningful status and are untouched by this.
-      // direction is dropped too — always 'in' on this event type (only
+      // direction is dropped too - always 'in' on this event type (only
       // inbound messages reach this handler), so it's pure redundancy with
-      // the event name itself. error_reason/meta_error_code are dropped —
+      // the event name itself. error_reason/meta_error_code are dropped -
       // both columns are shared with outbound-send-failure rows in this same
       // messages table and are always null on an inbound row; forwarding
       // them here would just be two guaranteed-null fields. referral is
-      // dropped too — a real regression, caught by this file's own key-set
+      // dropped too - a real regression, caught by this file's own key-set
       // test (webhookForwarding.test.js:168): PLAN.md item 14 added
       // messages.referral, and without this exclusion it leaked into every
       // message.received delivery (as `referral: null` on every ordinary
       // message, not just CTWA-sourced ones), silently widening this
       // external wire contract. CTWA attribution was only ever meant to
       // land in item 14's own surfaces (the Contact 360 timeline, GET
-      // /api/analytics/ctwa) — a receiving CRM getting it via forwarding too
+      // /api/analytics/ctwa) - a receiving CRM getting it via forwarding too
       // is a real, separate scope decision, not a byproduct of adding a
       // column. See CLAUDE.md's webhook-contract note: every future
       // migration adding a `messages` column must be checked against this
       // destructure, since a new column's default behavior is to leak here
-      // silently — this exact test only caught it because someone happened
+      // silently - this exact test only caught it because someone happened
       // to write a key-set assertion, not because the destructure itself
       // guards against it. delivered_at/read_at/failed_at (migration
       // 072_messages_status_timestamps.js) are dropped for the same reason
-      // as error_reason/meta_error_code above — they're stamped by
+      // as error_reason/meta_error_code above - they're stamped by
       // chatsRepo.updateStatusByMetaId on an outbound message's delivery
       // lifecycle and are always null on an inbound row. meta_error_subcode
       // (073_messages_error_subcode.js) is dropped for the identical reason
-      // as meta_error_code itself — same table, same outbound-only column,
+      // as meta_error_code itself - same table, same outbound-only column,
       // always null here.
       const {
         id, client_id, chat_id: _chatId, meta_message_id, status: _hardcodedStatus,
@@ -339,11 +339,11 @@ async function handleInboundMessages(waba, value) {
         meta_error_subcode: _metaErrorSubcode,
         referral: _referral, delivered_at: _deliveredAt, read_at: _readAt, failed_at: _failedAt,
         // source (migration 080_messages_source.js) is dropped for the same
-        // reason as direction above — chatsRepo.insertInbound never sets it,
+        // reason as direction above - chatsRepo.insertInbound never sets it,
         // so it's always the column default ('api') on every inbound row,
         // pure redundancy with the event name itself. Real signal (an
         // echo's 'whatsapp_app') only ever appears on an OUTBOUND row from
-        // handleMessageEchoes, which this destructure never runs against —
+        // handleMessageEchoes, which this destructure never runs against -
         // per CLAUDE.md's own webhook-contract convention, this is a
         // deliberate exclusion decision, not a byproduct of adding the
         // column.
@@ -361,21 +361,21 @@ async function handleInboundMessages(waba, value) {
   }
 }
 
-// Coexistence echo ingestion (smb_message_echoes) — Phase 1, echo ingestion
+// Coexistence echo ingestion (smb_message_echoes) - Phase 1, echo ingestion
 // only (see CLAUDE.md/the handover for this build). Per Meta's docs the
 // array arrives under value.message_echoes (not value.messages), each entry
 // shaped like an inbound message object but representing something the
 // BUSINESS sent from their own phone (the WhatsApp Business app), which
-// this app never originated. `to` is the customer's number — the chat this
-// belongs to — `from` is the business's own number, unused here (the chat
+// this app never originated. `to` is the customer's number - the chat this
+// belongs to - `from` is the business's own number, unused here (the chat
 // is already scoped by waba/client, not by which of the business's own
 // numbers sent it).
 //
 // Mirrors handleInboundMessages' body-extraction shape so an echoed
 // interactive/button reply (a business rep tapping a quick-reply on their
 // own phone, in principle) still renders something readable, but an
-// unrecognized/unstructured type is explicitly logged here — never silently
-// dropped — since an echo predates any local record of what was sent, so
+// unrecognized/unstructured type is explicitly logged here - never silently
+// dropped - since an echo predates any local record of what was sent, so
 // there's no fallback source of truth for its content the way an outbound
 // send we originated would have (its own body is already in the DB before
 // Meta is ever called).
@@ -385,7 +385,7 @@ async function handleMessageEchoes(waba, value) {
   for (const echo of echoes) {
     const phone = echo.to || echo.recipient_id;
     if (!phone) {
-      console.warn('metaWebhook: smb_message_echoes entry with no `to`/`recipient_id` — cannot resolve a chat, skipping', { wabaId: waba.waba_id, echoId: echo.id });
+      console.warn('metaWebhook: smb_message_echoes entry with no `to`/`recipient_id` - cannot resolve a chat, skipping', { wabaId: waba.waba_id, echoId: echo.id });
       continue;
     }
 
@@ -394,7 +394,7 @@ async function handleMessageEchoes(waba, value) {
     const templateButtonText = echo.button?.text;
     const recognized = echo.text?.body || buttonReply?.title || listReply?.title || templateButtonText;
     if (recognized === undefined) {
-      console.warn('metaWebhook: smb_message_echoes entry with an unrecognized/unstructured type — storing best-effort, not dropping', {
+      console.warn('metaWebhook: smb_message_echoes entry with an unrecognized/unstructured type - storing best-effort, not dropping', {
         wabaId: waba.waba_id, echoId: echo.id, type: echo.type,
       });
     }
@@ -411,14 +411,14 @@ async function handleMessageEchoes(waba, value) {
 }
 
 // Delivery lifecycle for messages we sent: sent -> delivered -> read, or failed.
-// Takes the resolved waba row (not just clientId) — enqueueForwards below
+// Takes the resolved waba row (not just clientId) - enqueueForwards below
 // needs waba.forward_to_url/forward_events/id, same reasoning as
 // handleInboundMessages/handleTemplateStatusUpdate/handleAccountUpdate above.
 async function handleStatuses(waba, value) {
   for (const status of value.statuses || []) {
     const error = status.errors?.[0];
     await chatsRepo.updateStatusByMetaId(pool, waba.client_id, status.id, status.status, error?.title || null, error?.code || null);
-    // Wasi's own billing messages (payment_notifications) — a no-op for any
+    // Wasi's own billing messages (payment_notifications) - a no-op for any
     // message id that isn't one of ours. Never allowed to break the handler.
     try {
       await paymentNotificationsRepo.updateStatusByMetaId(status.id, status.status, error?.title || null);
@@ -426,7 +426,7 @@ async function handleStatuses(waba, value) {
       console.error('metaWebhook: payment_notifications status update failed:', err.message);
     }
 
-    // Meta redelivers on anything short of a fast 2xx — without this guard a
+    // Meta redelivers on anything short of a fast 2xx - without this guard a
     // redelivered status produces a second identical forward to the CRM.
     // Keyed on (meta_message_id, status), not just meta_message_id, so a
     // real sent -> delivered -> read progression still forwards each
@@ -444,11 +444,11 @@ async function handleStatuses(waba, value) {
   }
 }
 
-// Each handler returns true/false for whether it actually did something —
+// Each handler returns true/false for whether it actually did something -
 // an explicit boolean, not a truthy/falsy value inferred from a DB call's
 // return (pool.query() resolves to a result object either way, which would
 // make "did this handle the event" impossible to tell from the return value
-// alone). Takes the resolved waba row, not just its Meta waba_id — same
+// alone). Takes the resolved waba row, not just its Meta waba_id - same
 // reasoning as handleInboundMessages above.
 async function handleTemplateStatusUpdate(waba, value) {
   if (!value?.message_template_name) return false;
@@ -461,7 +461,7 @@ async function handleTemplateStatusUpdate(waba, value) {
     [String(value.event || '').toLowerCase() || 'pending', value.reason || null, value.message_template_name, waba.client_id]
   );
   // A consuming app needs to know when its own template is paused/rejected
-  // — it can't poll Meta itself, it only ever talks to Wasi.
+  // - it can't poll Meta itself, it only ever talks to Wasi.
   await enqueueForwards(waba, 'message_template_status_update', value);
   return true;
 }
@@ -469,7 +469,7 @@ async function handleTemplateStatusUpdate(waba, value) {
 async function handleAccountUpdate(waba, value) {
   if (!value?.phone_number) return false;
   // restriction_info/ban_info are Meta's documented field names for this
-  // payload, but — like the phone_number_quality_update etc. fields below —
+  // payload, but - like the phone_number_quality_update etc. fields below -
   // haven't been confirmed against a live example the way messages/statuses
   // have. Captured defensively (present -> stored as-is, absent -> cleared)
   // rather than guessed at more granularly; the full raw payload also
@@ -482,7 +482,7 @@ async function handleAccountUpdate(waba, value) {
       : null;
   // messaging_limit_tier: unlike restriction_info/ban_info above, this field
   // name IS documented in Meta's public Cloud API reference (see
-  // metaClient.js's getPhoneNumberDetails comment) — but whether Meta
+  // metaClient.js's getPhoneNumberDetails comment) - but whether Meta
   // actually includes it in a real account_update payload (vs. only on a
   // direct phone-number GET) has never been confirmed live, so it's read
   // defensively (present -> stored, absent -> left alone) same as every
@@ -502,7 +502,7 @@ async function handleAccountUpdate(waba, value) {
     action: 'account_update',
     target: `${waba.waba_id}: ${JSON.stringify(value).slice(0, 500)}`,
   });
-  // A consuming app needs to know when its own WABA is restricted — same
+  // A consuming app needs to know when its own WABA is restricted - same
   // reasoning as the template-status forward above.
   await enqueueForwards(waba, 'account_update', value);
   return true;
@@ -511,7 +511,7 @@ async function handleAccountUpdate(waba, value) {
 // message_template_quality_update, phone_number_quality_update, and
 // phone_number_name_update are recognized field names (so they don't fall
 // into the "unhandled" warning below), but their real payload shapes haven't
-// been verified against a live example the way messages/statuses now have —
+// been verified against a live example the way messages/statuses now have -
 // see the raw capture in server/test/metaWebhookDispatch.test.js for what
 // *is* verified. Rather than guess a DB update against an unconfirmed shape,
 // this records the full payload to the audit log so nothing is silently
@@ -527,7 +527,7 @@ async function handleUnmappedWabaEvent(field, entryId, value) {
 }
 
 // Fields Meta sends under a distinct field name (unlike messages/statuses,
-// which both arrive under field: "messages" — see below) — field-based
+// which both arrive under field: "messages" - see below) - field-based
 // dispatch is correct for these.
 const WABA_SCOPED_FIELD_HANDLERS = {
   message_template_status_update: handleTemplateStatusUpdate,
@@ -538,7 +538,7 @@ const WABA_SCOPED_FIELD_HANDLERS = {
 };
 
 router.post('/', asyncHandler(async (req, res) => {
-  // Server-side timing (hrtime, not wall-clock through any tunnel/proxy) —
+  // Server-side timing (hrtime, not wall-clock through any tunnel/proxy) -
   // Meta expects a 2xx within ~3s and treats slower as a failed delivery
   // (triggering retries), so this is a real operational budget to watch,
   // not just diagnostics. Logged unconditionally since this handler is low
@@ -553,12 +553,12 @@ router.post('/', asyncHandler(async (req, res) => {
   const entries = req.body?.entry || [];
   const fieldsSeen = [];
   // Genuine processing failure (a change we recognized and attempted, whose
-  // handler threw), not "we don't have a handler for this field" — those
+  // handler threw), not "we don't have a handler for this field" - those
   // are counted separately (see the `handled` warning below) and never
   // cause a non-200 response, since retrying a field we'll never process
   // just wastes Meta's retry budget for no benefit.
   let anyChangeFailed = false;
-  // Feeds meta_webhook_log below — Phase 6's "last successful webhook
+  // Feeds meta_webhook_log below - Phase 6's "last successful webhook
   // received per WABA" health check and the alerting engine's "sustained
   // non-200" check both read this table, not application logs.
   const wabaIdsTouched = new Set();
@@ -580,16 +580,16 @@ router.post('/', asyncHandler(async (req, res) => {
 
       try {
         // Meta sends BOTH new inbound messages and delivery status updates
-        // under field: "messages" — field name alone can't distinguish them
+        // under field: "messages" - field name alone can't distinguish them
         // (confirmed against a live payload: a status-only delivery still
         // arrives with field: "messages", not field: "statuses"). Content
         // decides what runs, and a single change can legitimately carry
         // both arrays at once, so these are independent checks, not
-        // if/else — process whichever is actually present.
+        // if/else - process whichever is actually present.
         //
         // Never for an echo field: the echo handler below tolerates an echo
         // whose array sits under `messages` (the payload shape is not
-        // confirmed against a live capture — as of 2026-10-03 production had never
+        // confirmed against a live capture - as of 2026-10-03 production had never
         // received a smb_message_echoes change, see docs/ai-agent/SPEC.md
         // decision 14), and without this guard
         // that same array also satisfied this branch, ingesting the
@@ -607,16 +607,16 @@ router.post('/', asyncHandler(async (req, res) => {
           await handleStatuses(waba, value);
           handled = true;
         }
-        // Coexistence echo ingestion — checked by value shape (same pattern
+        // Coexistence echo ingestion - checked by value shape (same pattern
         // as messages/statuses above: "field name alone can't distinguish
         // them"), not registered in WABA_SCOPED_FIELD_HANDLERS below on
-        // purpose — a field-keyed entry there would double-process this
+        // purpose - a field-keyed entry there would double-process this
         // same array whenever it's actually present, since this check
         // already runs first. `field` is still recorded into `fieldsSeen`
         // (below) regardless, so a real smb_message_echoes delivery whose
-        // array turns out to be shaped differently than Meta's docs say —
+        // array turns out to be shaped differently than Meta's docs say -
         // this codebase has been burned before by trusting an unconfirmed
-        // Meta payload shape, see handleUnmappedWabaEvent's own history —
+        // Meta payload shape, see handleUnmappedWabaEvent's own history -
         // still surfaces loudly via the "unhandled payload" warning instead
         // of silently vanishing.
         const echoList = value?.message_echoes || value?.smb_message_echoes || (field === 'smb_message_echoes' ? value?.messages : null);
@@ -626,10 +626,10 @@ router.post('/', asyncHandler(async (req, res) => {
         }
 
         // These fields, unlike messages/statuses, genuinely are distinct by
-        // name — field-based dispatch is correct here. Guarded on `waba`
+        // name - field-based dispatch is correct here. Guarded on `waba`
         // like the two branches above (previously handleTemplateStatusUpdate
         // ran even with waba === null, re-resolving client_id itself via a
-        // subquery that was a no-op when the waba didn't exist anyway — same
+        // subquery that was a no-op when the waba didn't exist anyway - same
         // real-world result, this is just explicit about it now that these
         // handlers need the full waba row for hub forwarding).
         const wabaScopedHandler = WABA_SCOPED_FIELD_HANDLERS[field];
@@ -639,13 +639,13 @@ router.post('/', asyncHandler(async (req, res) => {
 
         if (!handled) {
           console.warn(
-            `metaWebhook: unhandled payload — field="${field}", entry=${entry.id}, ` +
+            `metaWebhook: unhandled payload - field="${field}", entry=${entry.id}, ` +
             `value keys=[${Object.keys(value || {}).join(', ')}]`
           );
         }
       } catch (err) {
         // Deliberately DOES 500 the whole delivery, so Meta retries the
-        // entire payload — the asymmetry matters: inbound message inserts
+        // entire payload - the asymmetry matters: inbound message inserts
         // are idempotent on meta_message_id, so reprocessing an
         // already-succeeded change alongside the retry costs nothing, but
         // a write that fails and gets acknowledged with 200 is gone
@@ -654,7 +654,7 @@ router.post('/', asyncHandler(async (req, res) => {
         // caused the Sirah CRM incident referenced in wasi-build-plan.md.
         anyChangeFailed = true;
         failedFields.push(`${field}: ${err.message}`);
-        // Loud and structured on purpose — grep-able as "metaWebhook FAILURE"
+        // Loud and structured on purpose - grep-able as "metaWebhook FAILURE"
         // distinctly from the "unhandled payload" warning below, so this is
         // alertable later (see Phase 6 §6.1) rather than scrolling past in
         // a log nobody's watching.
@@ -679,10 +679,10 @@ router.post('/', asyncHandler(async (req, res) => {
   const budgetFlag = durationMs > 2000 ? ' NEAR/OVER META\'S ~3s BUDGET' : '';
   console.log(
     `metaWebhook: processed [${fieldsSeen.join(', ') || 'no changes'}] in ${durationMs.toFixed(1)}ms${budgetFlag}` +
-    (anyChangeFailed ? ' — FAILED, returning 500 for Meta to retry' : '')
+    (anyChangeFailed ? ' - FAILED, returning 500 for Meta to retry' : '')
   );
 
-  // Persisted, not just logged — see migration 018's module comment. A
+  // Persisted, not just logged - see migration 018's module comment. A
   // failure here would be ironic (an unmonitorable monitoring write) but
   // shouldn't fail the whole delivery, so it's caught and logged, not awaited
   // into the main failure path.
@@ -707,7 +707,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
 module.exports = router;
 // Exposed for stub-only unit tests (server/test/coexistenceEchoIngestion.test.js)
-// — everything else in this file is only reachable through a full HTTP
+// - everything else in this file is only reachable through a full HTTP
 // request with a valid Meta signature, which this specific handler's own
 // logic (ingestion shape/idempotency/contact-and-chat resolution) doesn't
 // need to exercise.

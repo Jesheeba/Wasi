@@ -6,7 +6,7 @@
 
 exports.up = (pgm) => {
   pgm.createTable('plans', {
-    id: { type: 'text', primaryKey: true }, // 'Starter' | 'Growth' | 'Scale' — matches subscriptions.plan values already in use
+    id: { type: 'text', primaryKey: true }, // 'Starter' | 'Growth' | 'Scale' - matches subscriptions.plan values already in use
     price_inr: { type: 'integer', notNull: true },
     conversation_limit: { type: 'integer' }, // null = unlimited (Scale)
   });

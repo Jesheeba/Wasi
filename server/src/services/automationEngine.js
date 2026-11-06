@@ -1,5 +1,5 @@
 // Kwick-parity automation: plain keyword-trigger rules, no AI/LLM involved
-// (matches app.js's existing automation_rules UI — title/trigger/action —
+// (matches app.js's existing automation_rules UI - title/trigger/action -
 // this is what actually makes those rules do something). Called by
 // flowEngine.js (routes/metaWebhook.js's actual entry point as of the flow
 // engine build) whenever there's no active flow for a contact, or a matched
@@ -10,7 +10,7 @@ const messagingService = require('../services/messagingService');
 
 // Only ever called from flowEngine.js, with the privileged `pool` as `db`
 // (see repositories/tagsRepo.js's module comment for the convention).
-// `contact` is required only for a flow-starting rule (flow_id set) — every
+// `contact` is required only for a flow-starting rule (flow_id set) - every
 // current caller already has it resolved, so it's not optional.
 //
 // Returns { handled, how } (see flowEngine.js's outcome table). A rule that
@@ -32,7 +32,7 @@ async function evaluate(db, clientId, chat, inboundBody, contact) {
       if (rule.flow_id) {
         // Lazy require: flowEngine.js requires this module at its own top
         // level (to fall back to it), so requiring flowEngine back at OUR
-        // top level would be a circular require resolved at load time —
+        // top level would be a circular require resolved at load time -
         // requiring it here, inside the function body, defers resolution
         // until both modules have already finished loading, which is safe.
         const flowEngine = require('./flowEngine');
@@ -50,14 +50,14 @@ async function evaluate(db, clientId, chat, inboundBody, contact) {
         // inactive or empty): nothing was done for the customer.
         return { handled: false, how: null };
       }
-      // The reply is itself a free-form text send — always legal here
+      // The reply is itself a free-form text send - always legal here
       // since we're running this right after the inbound message that
       // just reopened the 24h window.
       await messagingService.sendChatMessage(db, clientId, chat, { type: 'text', body: rule.action });
       return { handled: true, how: 'rule_text_reply' };
     } catch (err) {
       // Don't let one bad rule (e.g. WABA disconnected mid-flight) block
-      // ingestion of the message that triggered it — already committed.
+      // ingestion of the message that triggered it - already committed.
       console.error(`automation rule "${rule.title}" failed for chat ${chat.id}:`, err.message);
       return { handled: true, how: rule.flow_id ? 'rule_flow_start_failed' : 'rule_text_reply_failed' };
     }

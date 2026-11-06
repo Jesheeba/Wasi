@@ -5,7 +5,7 @@ function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
 }
 
-// Returns the raw token (goes in the emailed link, never stored) — only its
+// Returns the raw token (goes in the emailed link, never stored) - only its
 // hash is persisted, so a leaked database dump can't be used to reset an
 // account's password or forge email verification.
 async function create(subjectType, subjectId, purpose, ttlMinutes) {

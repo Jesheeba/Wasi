@@ -17,12 +17,12 @@ function verifySignature(rawBody, signature) {
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   const expectedBuf = Buffer.from(expected);
   const actualBuf = Buffer.from(signature);
-  // Length check before timingSafeEqual — it throws on mismatched buffer
+  // Length check before timingSafeEqual - it throws on mismatched buffer
   // lengths rather than returning false, which would otherwise turn a
   // malformed/truncated signature header into a 500 instead of the clean
   // 401 every other invalid signature gets. Mirrors metaWebhook.js's
   // verifySignature, which already guards this the same way (cherry-picked
-  // from the unmerged origin/gap-fixes-a-e branch — see CLAUDE.md Known Gaps
+  // from the unmerged origin/gap-fixes-a-e branch - see CLAUDE.md Known Gaps
   // for why only this fix, not that branch's bundled subscription-billing
   // code, was brought in: the latter calls invoicesRepo.createPaid, which
   // doesn't exist on master).
@@ -54,7 +54,7 @@ router.post('/', asyncHandler(async (req, res) => {
       }
       await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: subscription.client_id, action: event, target: orderId });
     }
-    // Same order id space, different table — an order is either a
+    // Same order id space, different table - an order is either a
     // subscription checkout (above) or a wallet recharge (this), never both,
     // so trying both updates and letting the non-matching one no-op is
     // simpler and just as correct as inspecting notes.purpose to branch.

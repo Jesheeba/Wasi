@@ -1,6 +1,6 @@
-// Every function takes `db` first — see tagsRepo.js's module comment for the
+// Every function takes `db` first - see tagsRepo.js's module comment for the
 // convention. findById/update explicitly select a column list that excludes
-// password_hash (no caller anywhere needs it back from these two — auth.js's
+// password_hash (no caller anywhere needs it back from these two - auth.js's
 // login/register paths use findByEmail instead, which does need it and stays
 // unrestricted) so they're safe to run under the restricted role even though
 // nothing routes them there today beyond onboarding.js's own-client-row read
@@ -23,7 +23,7 @@ async function findById(db, id) {
   return rows[0] || null;
 }
 
-// Pre-auth (login/register/forgot-password) — needs password_hash, so this
+// Pre-auth (login/register/forgot-password) - needs password_hash, so this
 // intentionally is NOT column-restricted. Only ever called with the
 // privileged pool, before req.clientId (and therefore req.db) exist.
 async function findByEmail(db, email) {
@@ -79,7 +79,7 @@ async function remove(db, id) {
   return rowCount > 0;
 }
 
-// Payment reminder runner (services/paymentReminderRunner.js) — every
+// Payment reminder runner (services/paymentReminderRunner.js) - every
 // currently-active client, so the runner can check today's date against
 // each one's own activated_at cycle anchor. Kept as a plain list rather
 // than a date-filtered query since "today matches this client's
@@ -90,7 +90,7 @@ async function listActive(db) {
   return rows;
 }
 
-// Same runner's other half — every client currently flagged unpaid, to
+// Same runner's other half - every client currently flagged unpaid, to
 // check the day-3-warning/day-5-suspend timeline against
 // payment_marked_unpaid_at. Scoped to status = 'active' here (not left to
 // the runner) since only a currently-active client can meaningfully be
@@ -102,7 +102,7 @@ async function listUnpaidActive(db) {
   return rows;
 }
 
-// Session invalidation (password reset item 3) — same reasoning as
+// Session invalidation (password reset item 3) - same reasoning as
 // adminUsersRepo.bumpTokenVersion: a separate call, not folded into
 // update(), so a caller changing password_hash is the one deciding to also
 // kill every live session, not an implicit side effect of update() itself.
@@ -110,7 +110,7 @@ async function bumpTokenVersion(db, id) {
   await db.query('update clients set token_version = token_version + 1 where id = $1', [id]);
 }
 
-// Dormant-client visibility — set on every successful owner login
+// Dormant-client visibility - set on every successful owner login
 // (routes/auth.js's POST /login), same naming/shape as
 // teamMembersRepo.touchLastLogin. Always called with the privileged pool
 // (login runs before req.clientId/req.db exist), same as findByEmail above.

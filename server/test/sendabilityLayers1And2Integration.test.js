@@ -1,4 +1,4 @@
-// Sendability monitoring, all three layers plus the combined verdict —
+// Sendability monitoring, all three layers plus the combined verdict -
 // INTEGRATION coverage. Built after a real 26-hour undetected outage (TNPSC
 // Mentors, 2026-09-18), and the first real check cycle's own finding that
 // the probe alone is not enough (GV Mart/Brainlit/RD Interlock Bricks
@@ -6,11 +6,11 @@
 // See migration 074/075/076_wabas_*.js and sendabilityMonitorRunner.js's
 // header comments for the full context.
 //
-// This file needs the real (shared dev/prod) database — it registers and
+// This file needs the real (shared dev/prod) database - it registers and
 // deletes a disposable test client, logs in as the demo admin, and exercises
 // the real HTTP routes end to end (admin's check-sendability route, GET
 // /api/admin/health, the audit_log rows actually landing). Run it
-// deliberately, when you want that coverage — it is not the file that proves
+// deliberately, when you want that coverage - it is not the file that proves
 // the load-bearing constraints (the combined verdict logic, the coalesce
 // protection, the probe's error.code classification). Those live in
 // sendabilityMonitorRunnerUnit.test.js, which needs no database or network
@@ -41,7 +41,7 @@ function authed(token) {
 }
 
 // Registration (Layer 1+2) is a GET to /{phone_number_id}?fields=...; the
-// probe (Layer 3) is a POST to /{phone_number_id}/messages — both URLs
+// probe (Layer 3) is a POST to /{phone_number_id}/messages - both URLs
 // contain TEST_PHONE_NUMBER_ID, so they're told apart by whether the URL
 // ends in /messages, not just by substring match.
 // `registration`/`probe` each independently: a plain object (success), or
@@ -81,7 +81,7 @@ async function setWabaRow(fields) {
   await wabasRepo.upsertForClient(testClientId, {
     waba_id: TEST_WABA_ID, phone_number_id: TEST_PHONE_NUMBER_ID, status: 'connected',
     access_token_encrypted: encrypt('fake-token-never-sent-to-meta'),
-    // Explicit resets every call — several tests below assert these
+    // Explicit resets every call - several tests below assert these
     // stay/become specific values, and upsertForClient only touches columns
     // it's passed.
     registration_is_on_biz_app: null, registration_code_verification_status: null,
@@ -119,7 +119,7 @@ before(async () => {
     body: JSON.stringify({ email: 'admin@wasi.local', password: require('./helpers/adminCredentials').ADMIN_PASSWORD }),
   }).then((r) => r.json());
   adminToken = adminLogin.token;
-  assert.ok(adminToken, 'demo admin login must succeed — run `npm run db:seed` first');
+  assert.ok(adminToken, 'demo admin login must succeed - run `npm run db:seed` first');
 });
 
 after(async () => {

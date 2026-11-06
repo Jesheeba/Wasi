@@ -1,4 +1,4 @@
-// Shared WABA-connection logic (PLAN.md item 25, 2026-09-07) — factored out
+// Shared WABA-connection logic (PLAN.md item 25, 2026-09-07) - factored out
 // of routes/onboarding.js so routes/admin.js's resolve-waba route (for the
 // needs_manual_resolution state) can complete a connection identically
 // instead of duplicating this logic. The only real difference between "a
@@ -12,7 +12,7 @@ const templateSyncService = require('./templateSyncService');
 const crypto = require('crypto');
 const { encrypt } = require('../utils/encryption');
 
-// Server-side WABA/phone discovery — the fallback for when Embedded
+// Server-side WABA/phone discovery - the fallback for when Embedded
 // Signup's postMessage didn't deliver waba_id and/or phone_number_id.
 // Meta's debug_token response is "ground truth when the postMessage never
 // arrived" (confirmed against Meta's own docs + an independently-
@@ -20,17 +20,17 @@ const { encrypt } = require('../utils/encryption');
 // whatsapp_business_management target_ids.
 //
 // This app's entire schema already assumes one meaningful WABA per client
-// (wabasRepo.findByClientId takes the most recent) — if discovery resolves
+// (wabasRepo.findByClientId takes the most recent) - if discovery resolves
 // to exactly one WABA and exactly one phone number, that matches the
 // popup-supplied case exactly. If more than one comes back for either, this
 // deliberately does NOT guess: no real client investigated this session had
 // more than one, and auto-picking "the first one" could silently connect
-// the wrong number for a business that has more than one WhatsApp line —
+// the wrong number for a business that has more than one WhatsApp line -
 // worse than surfacing it for manual resolution.
 //
 // knownWabaId is trusted as-is when the popup already supplied it (Meta's
 // own docs suggest waba_id is far more reliably present than
-// phone_number_id) — debug_token is only called when it's genuinely
+// phone_number_id) - debug_token is only called when it's genuinely
 // missing, not to cross-validate a value we already have.
 async function discoverWabaAndPhoneNumber({ accessToken, knownWabaId }) {
   const diagnostics = { knownWabaId: knownWabaId || null };
@@ -43,10 +43,10 @@ async function discoverWabaAndPhoneNumber({ accessToken, knownWabaId }) {
     diagnostics.wabaTargetIds = targetIds;
 
     if (targetIds.length === 0) {
-      throw new Error('Meta returned no WhatsApp Business Account for this authorization — debug_token had no whatsapp_business_management scope with any target_ids.');
+      throw new Error('Meta returned no WhatsApp Business Account for this authorization - debug_token had no whatsapp_business_management scope with any target_ids.');
     }
     if (targetIds.length > 1) {
-      // reason lives INSIDE diagnostics, not just as a sibling return field —
+      // reason lives INSIDE diagnostics, not just as a sibling return field -
       // diagnostics is the only part of this result that actually gets
       // persisted (wabas.connect_diagnostics). A sibling-only reason would
       // be visible in the audit_log text but invisible to the admin UI
@@ -73,10 +73,10 @@ async function discoverWabaAndPhoneNumber({ accessToken, knownWabaId }) {
   if (phoneNumbers.length > 1) {
     // Added 2026-09-07 (see CLAUDE.md Known Gaps): a WABA with more than one
     // number used to always defer to manual resolution, even when exactly
-    // one of them is unambiguously the Coexistence-connected one —
+    // one of them is unambiguously the Coexistence-connected one -
     // is_on_biz_app is Meta's own documented signal for "this number is
     // linked via the WhatsApp Business app." Only auto-resolves on a CLEAR
-    // single match; zero or more than one still defers, same as before —
+    // single match; zero or more than one still defers, same as before -
     // this must never guess between two genuinely ambiguous candidates
     // (see this function's own top comment on why guessing is worse than
     // surfacing it).
@@ -92,17 +92,17 @@ async function discoverWabaAndPhoneNumber({ accessToken, knownWabaId }) {
   return { wabaId, phoneNumberId: phoneNumbers[0].id, diagnostics };
 }
 
-// The shared tail of a successful connect — subscribe, conditionally
+// The shared tail of a successful connect - subscribe, conditionally
 // register, fetch details, persist 'connected', sync templates, bump client
 // status. `db` is whatever connection the caller has (req.db for the client
-// route, the privileged pool for the admin route) — matches
+// route, the privileged pool for the admin route) - matches
 // clientsRepo/templateSyncService's existing db-first-param convention,
 // both already called with either today.
 async function completeWabaConnection(db, clientId, { waba_id, phone_number_id, accessToken, via_coexistence }) {
   await metaClient.subscribeAppToWaba(waba_id, accessToken);
 
   // Coexistence-onboarded numbers are already registered on the WhatsApp
-  // Business app on the owner's phone — calling register-with-PIN again
+  // Business app on the owner's phone - calling register-with-PIN again
   // would re-register a number that's actively in use there. Plain
   // migration connects still need it: that's how an unregistered number
   // gets activated on the Cloud API in the first place. Same config_id
@@ -112,18 +112,18 @@ async function completeWabaConnection(db, clientId, { waba_id, phone_number_id, 
   // Found live 2026-09-08 (WABA 998094716164113, TNPSC Mentors, via admin
   // resolve-waba): the caller-supplied `via_coexistence` flag is a
   // BROWSER-REPORTED signal (from embeddedSignup.js's FINISH postMessage),
-  // and that signal has already proven unreliable twice this session — most
+  // and that signal has already proven unreliable twice this session - most
   // recently, phase 2's 5s grace window means FINISH now routinely never
   // arrives at all, so `via_coexistence` defaults to a guess (`true`) that
   // the caller can also override to `false` (admin.js's resolve route does
   // exactly this, since it has no FINISH to go on at all). Calling
   // registerPhoneNumber on a number Meta already has live on the WhatsApp
   // Business App fails with "Register endpoint is not available for SMB
-  // businesses" — confirmed live for this exact WABA (Meta: phone
+  // businesses" - confirmed live for this exact WABA (Meta: phone
   // +91 96777 79808, status Connected, marked "WhatsApp Business App").
   //
   // Fixed by checking Meta's own `is_on_biz_app` field for THIS phone
-  // number, right now, instead of trusting a stale/guessed browser flag —
+  // number, right now, instead of trusting a stale/guessed browser flag -
   // the same real-time signal `discoverWabaAndPhoneNumber` already uses to
   // disambiguate a multi-phone WABA. This is ground truth from Meta at the
   // moment of the decision, not a report of what happened in a browser
@@ -153,12 +153,12 @@ async function completeWabaConnection(db, clientId, { waba_id, phone_number_id, 
     status: 'connected',
   });
 
-  // Pulls in any templates that already exist on this WABA — Embedded
+  // Pulls in any templates that already exist on this WABA - Embedded
   // Signup connects an EXISTING number, it doesn't provision a fresh
   // one, so a client can easily already have approved templates on
   // Meta the moment they connect. Best-effort: a sync failure here
   // shouldn't fail the whole connect flow, since the WABA connection
-  // itself already succeeded — see templateSyncService.js.
+  // itself already succeeded - see templateSyncService.js.
   let templateSync = { inserted: 0, updated: 0, orphaned: 0 };
   try {
     templateSync = await templateSyncService.syncTemplates(db, clientId);

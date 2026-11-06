@@ -1,9 +1,9 @@
-// WhatsApp Template Message Library (wasi-master-plan.md §2) — browse/
+// WhatsApp Template Message Library (wasi-master-plan.md §2) - browse/
 // filter the curated library and log "Use this Template" activity. No
 // submission logic here at all: prefill happens entirely client-side
 // (root app.js copies a library entry's fields into the existing
 // Create-Template modal state) and the actual submission still goes
-// through routes/templates.js's POST / unchanged — this route never talks
+// through routes/templates.js's POST / unchanged - this route never talks
 // to Meta and never writes to message_templates.
 const { Router } = require('express');
 const { z } = require('zod');
@@ -34,9 +34,9 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 // Usage logging must never fail the client's actual "Use this Template"
-// action — a lost analytics row is fine, a broken prefill isn't — so it's
+// action - a lost analytics row is fine, a broken prefill isn't - so it's
 // awaited (req.db is a single shared transactional connection per request;
-// see tenantContext.js — a real fire-and-forget call here would just queue
+// see tenantContext.js - a real fire-and-forget call here would just queue
 // behind the response's own COMMIT anyway, with none of the usual
 // non-blocking benefit, only more room for a future edit to reorder it
 // into an actual race) and caught locally rather than left to fail the
@@ -58,7 +58,7 @@ router.post('/:id/use', asyncHandler(async (req, res) => {
 // --- Meta Official Template Library (wasi-master-plan.md §2b) ---
 // Distinct source from the routes above: Meta's OWN pre-approved catalog,
 // read-only, never editable. listCached defaults to zero-variable entries
-// only (Phase 0 decision — see migration 042's comment); this route never
+// only (Phase 0 decision - see migration 042's comment); this route never
 // widens that, matching what the client-facing UI is built to show.
 router.get('/meta', asyncHandler(async (req, res) => {
   const entries = await metaTemplateLibraryRepo.listCached(req.db);
@@ -84,21 +84,21 @@ const libraryButtonInputSchema = z.object({
 
 const useMetaLibraryTemplateSchema = z.object({
   name: z.string().min(1).max(512),
-  // Keyed by array order, matching the entry's own buttons_json order — the
+  // Keyed by array order, matching the entry's own buttons_json order - the
   // narrow modal (Phase 0 decision) only ever collects a destination per
   // button, never lets a client retype Meta's fixed button label/type.
   buttonInputs: z.array(libraryButtonInputSchema).optional(),
 });
 
 // Independent QA/Auditor finding: nothing checked buttonInputs' count/order/
-// type against the entry's own buttons_json before forwarding to Meta — a
+// type against the entry's own buttons_json before forwarding to Meta - a
 // client could submit 3 PHONE_NUMBER inputs against a zero-button entry and
 // it would reach Meta unvalidated (this app's own defense-in-depth gap, not
-// a security hole — Meta's API is still the real backstop, but every other
+// a security hole - Meta's API is still the real backstop, but every other
 // part of this flow re-validates server-side rather than trusting the
 // client). Only URL/PHONE_NUMBER buttons need an input (matches
 // app.js's openUseMetaLibraryTemplateModal, which only renders inputs for
-// those two types) — QUICK_REPLY etc. have no destination to override.
+// those two types) - QUICK_REPLY etc. have no destination to override.
 function validateButtonInputsMatchEntry(entry, buttonInputs) {
   const editableButtons = (entry.buttons_json || []).filter((b) => b.type === 'URL' || b.type === 'PHONE_NUMBER');
   const inputs = buttonInputs || [];
@@ -113,7 +113,7 @@ function validateButtonInputsMatchEntry(entry, buttonInputs) {
   return null;
 }
 
-// Submits a template FROM Meta's library — genuinely different from the
+// Submits a template FROM Meta's library - genuinely different from the
 // POST /:id/use above (Wasi's own curated library): that one only logs
 // usage and hands prefill data back to the client for the existing,
 // freely-editable Create Template modal; this one calls Meta directly
@@ -127,7 +127,7 @@ router.post('/meta/:id/use', asyncHandler(async (req, res) => {
 
   const entry = await metaTemplateLibraryRepo.findById(req.db, id);
   if (!entry) return res.status(404).json({ error: 'Not found' });
-  // Defense in depth against the id itself being stale/tampered — the
+  // Defense in depth against the id itself being stale/tampered - the
   // client-facing GET /meta above never returns a parameterized entry, so
   // this should be unreachable in normal use, but the actual constraint
   // (no positional-param substitution exists anywhere in this codebase)
@@ -139,7 +139,7 @@ router.post('/meta/:id/use', asyncHandler(async (req, res) => {
     });
   }
 
-  // Checked before validating the shape of what was submitted — whether
+  // Checked before validating the shape of what was submitted - whether
   // this client can even submit anything at all is a more fundamental gate
   // than whether their button inputs happen to match this entry.
   const waba = await wabasRepo.findByClientId(req.clientId);
@@ -153,7 +153,7 @@ router.post('/meta/:id/use', asyncHandler(async (req, res) => {
   }
 
   // Independent audit/QA finding: unlike routes/templates.js's POST / (see
-  // messageTemplatesRepo.findActiveByNameAndLanguage's own comment — Meta
+  // messageTemplatesRepo.findActiveByNameAndLanguage's own comment - Meta
   // doesn't cleanly reject a duplicate (name, language) submission, it
   // silently queues it for review, confirmed live to sit unresolved 20+
   // hours), this route had no equivalent pre-check at all. Same guard,
@@ -162,7 +162,7 @@ router.post('/meta/:id/use', asyncHandler(async (req, res) => {
   if (existing.length > 0) {
     return res.status(409).json({
       error: 'A template with this name and language already exists',
-      detail: 'Choose a different name, or check your existing templates — Meta won\'t cleanly reject a duplicate, it queues indefinitely.',
+      detail: 'Choose a different name, or check your existing templates - Meta won\'t cleanly reject a duplicate, it queues indefinitely.',
     });
   }
 
@@ -171,7 +171,7 @@ router.post('/meta/:id/use', asyncHandler(async (req, res) => {
     accessToken = decrypt(waba.access_token_encrypted);
   } catch (err) {
     return res.status(500).json({
-      error: 'Could not decrypt this WABA\'s access token — the request never reached Meta',
+      error: 'Could not decrypt this WABA\'s access token - the request never reached Meta',
       detail: 'SERVER_SECRET in this environment does not match the key that encrypted the stored token.',
     });
   }
@@ -195,12 +195,12 @@ router.post('/meta/:id/use', asyncHandler(async (req, res) => {
   // Independent audit finding: this previously stored the CACHED entry's
   // own example button destinations (e.g. Meta's catalog placeholder
   // "https://example.com/track") rather than what the client actually
-  // submitted — meaning the local record diverged from Meta's real approved
+  // submitted - meaning the local record diverged from Meta's real approved
   // content from the moment of creation, and a later edit (routes/templates.js
   // PUT /:id, which resubmits whatever's in this row) could silently revert
   // a real business URL back to Meta's placeholder. Now merges the entry's
   // own type/text (fixed, from Meta) with the client's real submitted
-  // destination for each URL/PHONE_NUMBER button — this row is what was
+  // destination for each URL/PHONE_NUMBER button - this row is what was
   // actually sent to Meta, not what the catalog happened to show as a
   // sample.
   let buttonInputIndex = 0;

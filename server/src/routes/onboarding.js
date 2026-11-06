@@ -12,7 +12,7 @@ const { wabaConnectSchema, wabaConnectIncompleteSchema, businessProfileUpdateSch
 
 const router = Router();
 
-// Memory storage, not disk — a profile picture is small (5MB cap enforced
+// Memory storage, not disk - a profile picture is small (5MB cap enforced
 // below, well under Node's default heap headroom) and this is a one-shot
 // forward-to-Meta, not something that needs to persist on our own disk
 // afterward.
@@ -24,7 +24,7 @@ const uploadProfilePicture = multer({
 });
 
 // Public-ish IDs the frontend needs to call FB.login() for Embedded Signup.
-// Not secrets — safe to expose to an authenticated client.
+// Not secrets - safe to expose to an authenticated client.
 router.get('/config', (req, res) => {
   res.json({
     appId: process.env.META_APP_ID || null,
@@ -53,7 +53,7 @@ router.get('/whatsapp/business-profile', asyncHandler(async (req, res) => {
     const accessToken = decrypt(waba.access_token_encrypted);
     const data = await metaClient.getBusinessProfile(waba.phone_number_id, accessToken);
     // Meta wraps the single profile object in a "data" array (one element,
-    // always — a WABA phone number has exactly one business profile).
+    // always - a WABA phone number has exactly one business profile).
     const profile = data?.data?.[0] || null;
     res.json({ connected: true, profile });
   } catch (err) {
@@ -63,10 +63,10 @@ router.get('/whatsapp/business-profile', asyncHandler(async (req, res) => {
 
 // Partial update. businessProfileUpdateSchema makes every field optional and
 // has no profile_picture_handle field at all (that's the separate endpoint
-// below) — so whatever survives req.body validation is exactly, and only,
+// below) - so whatever survives req.body validation is exactly, and only,
 // what the caller wants changed. Trimmed again + blank keys dropped here as
 // a server-side backstop even though the frontend is expected to have
-// already computed this same diff — this route is the last thing standing
+// already computed this same diff - this route is the last thing standing
 // between a stray empty string and overwriting real data on a live profile.
 router.post('/whatsapp/business-profile', asyncHandler(async (req, res) => {
   const parsed = businessProfileUpdateSchema.parse(req.body);
@@ -105,11 +105,11 @@ router.post('/whatsapp/business-profile', asyncHandler(async (req, res) => {
   }
 }));
 
-// Replace the profile picture — a single action from the caller's
+// Replace the profile picture - a single action from the caller's
 // perspective (pick a file, it's live), but internally: upload the bytes
 // via Meta's Resumable Upload API to get a handle, then immediately set
 // that handle as the profile's picture. Deliberately its own endpoint, not
-// a field on the POST above — that's what makes "never send
+// a field on the POST above - that's what makes "never send
 // profile_picture_handle unless a new file was actually chosen" true by
 // construction rather than by convention.
 router.post('/whatsapp/business-profile/picture', uploadProfilePicture.single('file'), asyncHandler(async (req, res) => {
@@ -156,25 +156,25 @@ router.post('/whatsapp/business-profile/picture', uploadProfilePicture.single('f
 // (not a crash) when META_APP_ID/SECRET aren't configured for this environment.
 router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
   // clientId comes from the JWT (requireClientAuth), never the body, so it's
-  // always known even if req.body fails validation entirely — this is what
+  // always known even if req.body fails validation entirely - this is what
   // makes a guaranteed audit trail possible below regardless of what broke.
   const clientId = req.clientId;
   let waba_id, phone_number_id, code, via_coexistence;
 
   try {
     // wabaConnectSchema.parse used to run OUTSIDE this try, before ANY
-    // write — found 2026-09-05: 4 real clients (a missing/malformed
+    // write - found 2026-09-05: 4 real clients (a missing/malformed
     // phone_number_id or, in principle, any other required field) failed
     // with literally zero trace anywhere, because a Zod throw here
     // propagated straight past this whole route with no audit_log entry and
     // no wabas row ever written. Moving it inside the try/catch below is
     // the actual fix for "this class of failure must never be silent
-    // again" — not just the phone_number_id case specifically, ANY
+    // again" - not just the phone_number_id case specifically, ANY
     // validation failure on this route now guarantees a write.
     ({ code, waba_id, phone_number_id, via_coexistence } = wabaConnectSchema.parse(req.body));
 
     // waba_id/phone_number_id can both be undefined here (see
-    // wabaConnectSchema's comment) — `|| null` so a real DB null lands in
+    // wabaConnectSchema's comment) - `|| null` so a real DB null lands in
     // the column instead of pg rejecting an undefined bound parameter. This
     // write must succeed regardless of whether either showed up, so a
     // genuine attempt is never invisible even before discovery runs below.
@@ -187,7 +187,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     const shortLivedToken = await metaClient.exchangeCodeForToken(code);
     const accessToken = await metaClient.exchangeForLongLivedToken(shortLivedToken);
 
-    // Server-side discovery (PLAN.md item 25, Part A) — only runs when the
+    // Server-side discovery (PLAN.md item 25, Part A) - only runs when the
     // popup didn't already supply both ids; when it did, this whole block
     // is skipped and behavior is byte-for-byte unchanged from before this
     // item. Wrapped so a discovery-mechanism failure itself (a transient
@@ -203,13 +203,13 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
       }
 
       if (discovery?.needsManualResolution) {
-        // Distinct status, not lumped into 'failed' — per your explicit
+        // Distinct status, not lumped into 'failed' - per your explicit
         // instruction, a recorded ambiguity nobody can see is the same
         // invisible-failure pattern already hit 4 times. Admin's Client
         // Detail page (see PLAN.md item 25 Part A) is what makes this
         // actually visible, not just present in the DB.
         //
-        // The access token is persisted here too, encrypted — not just the
+        // The access token is persisted here too, encrypted - not just the
         // diagnostics. Without this, admin resolving the ambiguity later
         // would have nothing to complete the connection with, and the
         // client would need to redo signup anyway even though Meta already
@@ -218,7 +218,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
         await wabasRepo.upsertForClient(clientId, {
           waba_id: discovery.wabaId || waba_id || null,
           status: 'needs_manual_resolution',
-          // Explicit JSON.stringify — pg does NOT auto-serialize a raw JS
+          // Explicit JSON.stringify - pg does NOT auto-serialize a raw JS
           // object/array for a jsonb column, it applies Postgres-array-
           // literal serialization instead, which Postgres then rejects as
           // invalid JSON. This exact mistake (documented in CLAUDE.md) once
@@ -230,7 +230,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
           actor_type: 'client',
           actor_id: clientId,
           action: 'whatsapp_connect_needs_manual_resolution',
-          target: `${clientId}: ${discovery.reason} — ${JSON.stringify(discovery.diagnostics)}`,
+          target: `${clientId}: ${discovery.reason} - ${JSON.stringify(discovery.diagnostics)}`,
         });
         return res.status(409).json({
           error: 'Your Meta Business account has more than one WhatsApp number or account, and we could not tell which one to connect automatically.',
@@ -246,8 +246,8 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     }
 
     // Found 2026-09-05, widened 2026-09-07 once discovery above was built:
-    // failing here — inside the try, so it hits the same catch block as
-    // every other connect failure — means this still gets a real
+    // failing here - inside the try, so it hits the same catch block as
+    // every other connect failure - means this still gets a real
     // wabas.status='failed' row, a real whatsapp_connect_failed audit_log
     // entry with this exact message, and a specific 502 back to the client,
     // instead of ever silently rejecting before the first write the way the
@@ -255,7 +255,7 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
     if (!waba_id || !phone_number_id) {
       throw new Error(
         `WhatsApp signup finished on Facebook's side, but Meta never sent a ${!waba_id ? 'WhatsApp Business Account' : 'phone number'} ID, and server-side discovery could not resolve it either (waba_id: ${waba_id || 'unknown'}). ` +
-        'This can happen on a Coexistence (QR code) connection — please try connecting again. If it keeps happening, contact support with this exact message.'
+        'This can happen on a Coexistence (QR code) connection - please try connecting again. If it keeps happening, contact support with this exact message.'
       );
     }
 
@@ -275,16 +275,16 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
   } catch (err) {
     // Guaranteed trail for EVERY failure this route can produce, including
     // one that happens before waba_id/phone_number_id are even known (a Zod
-    // validation failure) — this is the direct fix for "4 clients failed
+    // validation failure) - this is the direct fix for "4 clients failed
     // with zero trace," not scoped to the phone_number_id case alone. Zod's
     // own .message is a raw JSON dump of .issues; formatted here into
     // something a human reads in the audit log without decoding it.
     const isValidationError = err instanceof ZodError;
     const message = isValidationError
-      ? `Invalid request: ${err.issues.map((i) => `${i.path.join('.') || '(body)'} — ${i.message}`).join('; ')}`
+      ? `Invalid request: ${err.issues.map((i) => `${i.path.join('.') || '(body)'} - ${i.message}`).join('; ')}`
       : err.message;
 
-    // Best-effort, deliberately never allowed to throw past this point — a
+    // Best-effort, deliberately never allowed to throw past this point - a
     // request that failed validation may never have reached the first
     // upsertForClient call above, so this could be inserting the very first
     // wabas row for this client (upsertForClient handles that fine, scoped
@@ -309,10 +309,10 @@ router.post('/whatsapp/connect', asyncHandler(async (req, res) => {
   }
 }));
 
-// PLAN.md item 25, Part B — records the "Meta linked it, we never got the
+// PLAN.md item 25, Part B - records the "Meta linked it, we never got the
 // code" state embeddedSignup.js's connect() now distinguishes (see that
 // file's incompleteErr handling). Deliberately takes no `code` field at
-// all — there isn't one to send, and none is accepted, so this route is
+// all - there isn't one to send, and none is accepted, so this route is
 // structurally impossible to confuse with a real connect attempt. Nothing
 // downstream of this (token exchange, WABA subscription, phone
 // registration) can run without a code, so this can only ever record the

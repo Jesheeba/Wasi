@@ -10,13 +10,13 @@ const clientCreateSchema = z.object({
   // from name, the same way registerSchema's self-signup path does.
   tenant_slug: z.string().min(1).optional(),
   status: z.enum(['pending_setup', 'payment_confirmed', 'active', 'suspended']).optional(),
-  // Admin-created-client only. Never persisted as-is — routes/clients.js
+  // Admin-created-client only. Never persisted as-is - routes/clients.js
   // hashes it before it reaches clientsRepo.create, and it's deliberately
   // excluded from clientUpdateSchema below so it can't reach
   // clientsRepo.update's dynamic set-clause (there is no `password` column,
   // only `password_hash`).
   password: z.string().min(8).optional(),
-  // Onboarding context beyond the three fields above — all optional, so the
+  // Onboarding context beyond the three fields above - all optional, so the
   // minimal name/email/password flow keeps working unchanged. See migration
   // 035_client_onboarding_fields.js.
   contact_person_name: z.string().min(1).optional(),
@@ -64,7 +64,7 @@ const cannedResponseCreateSchema = z.object({
   body: z.string().min(1),
 });
 
-// Outbound sends only — inbound messages arrive exclusively via the Meta
+// Outbound sends only - inbound messages arrive exclusively via the Meta
 // webhook now (server/src/routes/metaWebhook.js), never through this route.
 const messageSendSchema = z.object({
   type: z.enum(['text', 'template']).default('text'),
@@ -108,23 +108,23 @@ const checkoutSchema = z.object({
 const wabaConnectSchema = z.object({
   code: z.string().min(1),
   // Deliberately optional, not required, widened 2026-09-07 (PLAN.md item
-  // 25, Part A) alongside phone_number_id below — server-side discovery
+  // 25, Part A) alongside phone_number_id below - server-side discovery
   // (routes/onboarding.js's discoverWabaAndPhoneNumber, via Meta's
   // debug_token/granular_scopes) can resolve a missing waba_id from the
   // access token itself, the same way it already resolves phone_number_id.
   waba_id: z.string().min(1).optional(),
-  // Deliberately optional, not required — found 2026-09-05: Meta's real
+  // Deliberately optional, not required - found 2026-09-05: Meta's real
   // Coexistence FINISH event doesn't always deliver phone_number_id to
   // embeddedSignup.js (see that file's header comment and CLAUDE.md Known
   // Gaps). A required field here meant Zod's own .parse() threw before the
   // route's first DB write ever ran, so 3 real clients' attempts left zero
-  // trace anywhere — no wabas row, no audit_log entry, nothing. The route
+  // trace anywhere - no wabas row, no audit_log entry, nothing. The route
   // below now always performs the initial "connecting" write regardless,
   // then explicitly checks for a missing phone_number_id itself and fails
   // through the same audited path every other connect failure already uses
-  // — a deliberate, visible rejection instead of a silent one.
+  // - a deliberate, visible rejection instead of a silent one.
   phone_number_id: z.string().min(1).optional(),
-  // Set by embeddedSignup.js from which FINISH_* event Meta actually fired —
+  // Set by embeddedSignup.js from which FINISH_* event Meta actually fired -
   // the one reliable signal for whether the business took the Coexistence
   // path (keeps their WhatsApp Business app) vs plain migration. Trusted as
   // sent, not re-derived here, since nothing else in this payload
@@ -132,7 +132,7 @@ const wabaConnectSchema = z.object({
   via_coexistence: z.boolean().optional().default(false),
 });
 
-// PLAN.md item 25, Part B — deliberately has no `code` field at all (and
+// PLAN.md item 25, Part B - deliberately has no `code` field at all (and
 // none is accepted if sent): this route only ever runs when embeddedSignup.js
 // has confirmed there isn't one to send, so the schema itself makes it
 // structurally impossible to confuse with a real connect attempt.
@@ -140,11 +140,11 @@ const wabaConnectIncompleteSchema = z.object({
   waba_id: z.string().min(1),
 });
 
-// PLAN.md item 25, Part A — admin picks a candidate WABA out of the
+// PLAN.md item 25, Part A - admin picks a candidate WABA out of the
 // connect_diagnostics a needs_manual_resolution row recorded (admin.js's
 // resolve-waba route). phoneNumberId is optional, not always known yet:
 // when the ambiguity was "multiple WABAs," admin has only picked a WABA so
-// far — phone numbers under it haven't been enumerated. The route
+// far - phone numbers under it haven't been enumerated. The route
 // enumerates them itself and either completes (exactly one) or returns a
 // fresh needs_manual_resolution response for a second round-trip once
 // admin also picks a phone number.
@@ -153,12 +153,12 @@ const resolveWabaSchema = z.object({
   phoneNumberId: z.string().min(1).optional(),
 });
 
-// Partial update, deliberately — every field is optional and the route
+// Partial update, deliberately - every field is optional and the route
 // forwards only whatever keys are actually present to Meta's POST
 // (messaging_product + whatever's here). Sending the full object on every
 // save would let an unset field (absent from a previous GET) overwrite real
 // data on the live profile with nothing. profile_picture_handle is NOT a
-// field here on purpose — the picture has its own endpoint/flow
+// field here on purpose - the picture has its own endpoint/flow
 // (routes/onboarding.js), so this schema can never carry it even by
 // accident. Limits are Meta's real documented ones, not placeholders.
 const businessProfileUpdateSchema = z.object({
@@ -174,13 +174,13 @@ const businessProfileUpdateSchema = z.object({
   websites: z.array(z.string().trim().url().max(256)).max(2).optional(),
 }).strict();
 
-// Where one template parameter's value comes from — 'contact_field' reads a
+// Where one template parameter's value comes from - 'contact_field' reads a
 // per-recipient value at send time (routes/broadcasts.js and
 // broadcastRunner.js are the two places that need to agree on the field
 // set; kept narrow to the two fields actually useful as message text,
 // rather than exposing every contacts column), 'contact_attribute' reads a
 // per-recipient custom attribute value (contact_attribute_values, resolved
-// at send time by broadcastRunner.js via templateParamMapping.js — see that
+// at send time by broadcastRunner.js via templateParamMapping.js - see that
 // file's own comment for the fallback-to-empty-on-failure guarantee), and
 // 'static' is fixed once at broadcast creation and used unchanged for every
 // recipient.
@@ -202,12 +202,12 @@ const broadcastParamMappingSchema = z.object({
 });
 
 // messages_per_minute is a soft, human-facing pacing knob, not a Meta
-// throughput protection — the real throughput ceiling (Cloud API's default
+// throughput protection - the real throughput ceiling (Cloud API's default
 // 80 messages/second per business phone number, confirmed via a live fetch
 // of developers.facebook.com during Phase 3 planning, wasi-master-plan.md
 // §8.3) is 4800/min, far above this field's 300 max. This exists so a
 // client can deliberately slow a campaign down further than the runner's
-// own defaults, e.g. to protect quality rating on a fresh/low-tier number —
+// own defaults, e.g. to protect quality rating on a fresh/low-tier number -
 // see migration 039_contact_lists.js's comment for why real-time Meta
 // tier detection itself is explicitly out of scope this phase.
 const pacingConfigSchema = z.object({
@@ -217,13 +217,13 @@ const pacingConfigSchema = z.object({
 const broadcastCreateSchema = z.object({
   title: z.string().min(1),
   tag_id: uuid.optional(),
-  // Alternative to tag_id (Phase 3, wasi-master-plan.md §8.3) — a
+  // Alternative to tag_id (Phase 3, wasi-master-plan.md §8.3) - a
   // CSV-imported or manually-created contact_lists audience. Mutually
   // exclusive with tag_id, enforced below and by the DB's own
   // broadcasts_audience_not_both CHECK constraint (migration 039) as a
   // second, storage-level guarantee.
   contact_list_id: uuid.optional(),
-  // PLAN.md item 9 — a third alternative audience source, mutually
+  // PLAN.md item 9 - a third alternative audience source, mutually
   // exclusive with both of the above (enforced below and by the DB's
   // broadcasts_audience_at_most_one CHECK, migration 051).
   segment_id: uuid.optional(),
@@ -231,7 +231,7 @@ const broadcastCreateSchema = z.object({
   scheduled_date: z.string().optional(),
   // Keyed by parameter name (e.g. "customer_name"). Coverage against the
   // chosen template's actual {{params}} is checked in routes/broadcasts.js,
-  // not here — this schema only validates the shape of whatever mappings
+  // not here - this schema only validates the shape of whatever mappings
   // were supplied, since it doesn't have the template's text to check
   // against.
   paramMappings: z.record(z.string(), broadcastParamMappingSchema).optional(),
@@ -240,7 +240,7 @@ const broadcastCreateSchema = z.object({
   // template's approval-time default sample. Omitted -> that default.
   headerMediaAssetId: uuid.optional(),
   pacingConfig: pacingConfigSchema,
-  // PLAN.md item 12 — Smart Sending. Omitted/undefined disables it, same
+  // PLAN.md item 12 - Smart Sending. Omitted/undefined disables it, same
   // nullable-means-off convention as pacing_config above.
   smartSendingHours: z.number().int().min(1).optional(),
 }).superRefine((val, ctx) => {
@@ -249,7 +249,7 @@ const broadcastCreateSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['segment_id'],
-      message: 'A broadcast targets its audience by tag, by contact list, OR by segment — not more than one.',
+      message: 'A broadcast targets its audience by tag, by contact list, OR by segment - not more than one.',
     });
   }
 });
@@ -258,7 +258,7 @@ const contactListCreateSchema = z.object({
   name: z.string().min(1),
 });
 
-// A rule either sends free text (action) or starts a flow (flow_id) — never
+// A rule either sends free text (action) or starts a flow (flow_id) - never
 // both, never neither. Mirrors migration 023's
 // automation_rules_action_xor_flow CHECK constraint at the validation
 // layer, so a bad request 400s with a clear message instead of reaching
@@ -294,11 +294,11 @@ const automationFlowUpdateSchema = z.object({
 
 const flowNodeCreateSchema = z.object({
   type: z.enum(['send_text', 'send_interactive_buttons', 'send_template', 'delay', 'action', 'end', 'capture_reply']),
-  // Shape depends on `type` — validated loosely here (any object) and left
+  // Shape depends on `type` - validated loosely here (any object) and left
   // to flowEngine.js's executeNode to interpret at send time (same
   // "loosely typed, interpreted by the engine" approach automation_rules'
   // action/trigger free-text fields already use, rather than a union
-  // schema per node type this early — Stage 6 is the first UI ever built
+  // schema per node type this early - Stage 6 is the first UI ever built
   // for this, so the config shape is still likely to shift).
   config: z.record(z.string(), z.any()).optional(),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
@@ -317,7 +317,7 @@ const flowEdgeCreateSchema = z.object({
   priority: z.number().int().optional(),
 });
 
-// Reordering only — see flowEdgesRepo.update's comment for why this is the
+// Reordering only - see flowEdgesRepo.update's comment for why this is the
 // one field editable in place rather than delete-and-recreate.
 const flowEdgeUpdateSchema = z.object({
   priority: z.number().int(),
@@ -331,12 +331,12 @@ const templateButtonSchema = z.object({
 });
 
 // Category-driven: Authentication's shape is fundamentally different from
-// Utility/Marketing's (Meta generates that body text, not the author — see
+// Utility/Marketing's (Meta generates that body text, not the author - see
 // metaClient.js's buildTemplateCreatePayload), so this can't be one flat
 // object with everything optional; the superRefine below enforces which
 // fields actually apply to which category, not just presence/type.
 //
-// header.type accepts IMAGE/VIDEO/DOCUMENT as of the media-header feature —
+// header.type accepts IMAGE/VIDEO/DOCUMENT as of the media-header feature -
 // routes/templates.js is the real authoritative boundary for the actual
 // upload requirement (a file is required for these three, checked there
 // since multer populates req.file outside this JSON-only schema).
@@ -348,7 +348,7 @@ const messageTemplateCreateSchema = z.object({
   // Utility/Marketing only.
   body: z.string().min(1).max(1024).optional(),
   // Meta requires a real example per named parameter, not just recommends
-  // one — see templateParams.js's defaultExampleFor comment for what this
+  // one - see templateParams.js's defaultExampleFor comment for what this
   // replaced (an auto-derived-from-the-name guess, never author-supplied).
   bodyParamExamples: z.record(z.string()).optional(),
   header: z.object({
@@ -367,7 +367,7 @@ const messageTemplateCreateSchema = z.object({
     if (data.body || data.header || data.footer || data.buttons) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Authentication templates cannot have a custom body, header, footer, or buttons — Meta generates that text automatically.',
+        message: 'Authentication templates cannot have a custom body, header, footer, or buttons - Meta generates that text automatically.',
       });
     }
     return;
@@ -383,7 +383,7 @@ const messageTemplateCreateSchema = z.object({
   // numbered {{1}} from a real named parameter (that distinction is
   // validateTemplateText's job), so doing the coverage check here produced
   // a confusing "sample value required for: 1" instead of the correct
-  // "numbered parameters aren't allowed" — and did it via a raw ZodError,
+  // "numbered parameters aren't allowed" - and did it via a raw ZodError,
   // bypassing the route's friendly {error, details: [string,...]} shape
   // entirely. routes/templates.js checks sample-value coverage itself,
   // after validateTemplateText has already confirmed the body's params are
@@ -405,22 +405,22 @@ const messageTemplateCreateSchema = z.object({
   }
 });
 
-// Editable subset of messageTemplateCreateSchema's fields — name/category/
+// Editable subset of messageTemplateCreateSchema's fields - name/category/
 // language are fixed once a template exists (routes/templates.js's
 // PUT /:id reads those three from the existing row instead; Meta's own
 // edit endpoint doesn't accept them either, since the template id already
-// identifies all three). header.type is narrowed to NONE/TEXT — a media
+// identifies all three). header.type is narrowed to NONE/TEXT - a media
 // header (IMAGE/VIDEO/DOCUMENT) can't be changed via edit yet, only via
 // delete + recreate, so this schema simply doesn't accept those values
 // rather than accepting and rejecting them deeper in the route.
 //
 // The button-count/url/phone-required checks below are duplicated from
-// messageTemplateCreateSchema's superRefine rather than shared — that
+// messageTemplateCreateSchema's superRefine rather than shared - that
 // schema is a ZodEffects (from its own .superRefine), which zod doesn't
 // allow calling .omit() on to build this narrower one. Category-branching
 // (Authentication has none of these fields) is enforced in the route
 // instead, where the existing template's real category is already known
-// — this schema alone can't tell which category a given PUT is for.
+// - this schema alone can't tell which category a given PUT is for.
 const messageTemplateUpdateSchema = z.object({
   body: z.string().min(1).max(1024).optional(),
   bodyParamExamples: z.record(z.string()).optional(),
@@ -487,7 +487,7 @@ const contactAttributeCreateSchema = z.object({
   type: z.enum(['text', 'number', 'date', 'boolean']).optional(),
 });
 
-// PLAN.md item 7 — the request body itself is always a plain string
+// PLAN.md item 7 - the request body itself is always a plain string
 // (matches contact_attribute_values.value's own text column); the
 // per-type format check (number/date/boolean) is a separate step in
 // routes/contacts.js run against the attribute's declared type, since that
@@ -517,15 +517,15 @@ function validateContactAttributeValue(type, value) {
   return validator(value);
 }
 
-// PLAN.md item 8 — multi-tag contacts.
+// PLAN.md item 8 - multi-tag contacts.
 const contactTagAddSchema = z.object({
   tagId: uuid,
 });
 
-// PLAN.md item 9 — AND/OR audience segment builder. Shape validation only;
+// PLAN.md item 9 - AND/OR audience segment builder. Shape validation only;
 // an 'attribute' condition's op/value are further checked against that
 // attribute's real declared type by utils/segmentFilter.js (the client
-// can't be trusted to state the type correctly), not here — this schema
+// can't be trusted to state the type correctly), not here - this schema
 // can't know a specific attributeId's type without a DB lookup.
 const segmentConditionSchema = z.discriminatedUnion('field', [
   z.object({ field: z.literal('tag'), op: z.literal('eq'), value: uuid }),
@@ -553,7 +553,7 @@ const walletRechargeSchema = z.object({
   amount_inr: z.number().int().positive(),
 });
 
-// events is required, not defaulted — see migration
+// events is required, not defaulted - see migration
 // 015_explicit_forward_events.js for why: a subscription that doesn't say
 // which events it wants isn't implicitly "all of them," it's invalid.
 const clientWebhookSchema = z.object({
@@ -567,7 +567,7 @@ const hubForwardConfigSchema = z.object({
 });
 
 // Blocks the single highest-value SSRF target with zero legitimate use case
-// (independent Auditor + QA both found target_url accepted this unguarded —
+// (independent Auditor + QA both found target_url accepted this unguarded -
 // the cloud-metadata endpoint on every major provider, reachable only from
 // inside that provider's own network, is how a real SSRF turns into stolen
 // instance credentials). Scoped narrowly to link-local (169.254.0.0/16,
@@ -575,13 +575,13 @@ const hubForwardConfigSchema = z.object({
 // (127.0.0.1, 10.x, 172.16-31.x, 192.168.x): this project's own webhook
 // forwarding test suite (webhookForwarding.test.js, apiV1Subscriptions.test.js)
 // deliberately targets local http.createServer instances on loopback to
-// capture and verify real deliveries — blocking those hosts here would
+// capture and verify real deliveries - blocking those hosts here would
 // break that established, legitimate test pattern with no config escape
 // hatch. Broader private-range blocking (env-gated, so tests can opt in)
-// is a real follow-up, not silently skipped — see CLAUDE.md Known Gaps.
+// is a real follow-up, not silently skipped - see CLAUDE.md Known Gaps.
 // The SAME gap exists on wabas.forward_to_url/client_webhooks' callback_url
 // (hubForwardConfigSchema/clientWebhookSchema above, both bare z.string().url()
-// with no host check) — pre-existing, inherited by this new schema rather
+// with no host check) - pre-existing, inherited by this new schema rather
 // than introduced by it, and out of this narrow fix's scope to also close.
 function isLinkLocalHost(url) {
   try {
@@ -594,7 +594,7 @@ function isLinkLocalHost(url) {
   }
 }
 
-// Zapier REST Hook subscribe (build plan Phase 4) — event is fixed to
+// Zapier REST Hook subscribe (build plan Phase 4) - event is fixed to
 // 'message.received' rather than reusing the full WEBHOOK_EVENT_TYPES enum:
 // that's the only trigger actually built (see wasi-master-plan.md §3.1's
 // single-trigger scope), and migration 040's own CHECK constraint agrees.
@@ -607,7 +607,7 @@ const zapierSubscribeSchema = z.object({
   event: z.enum(['message.received']).default('message.received'),
 });
 
-// Client self-serve API key creation (build plan Phase 4) — routes/
+// Client self-serve API key creation (build plan Phase 4) - routes/
 // apiKeys.js. app_name is the only input; everything else (the raw key
 // itself, key_hash) is generated server-side, same as admin.js's own
 // POST /api-keys.
@@ -622,7 +622,7 @@ const tagCreateSchema = z.object({
 });
 
 // A single reply button on an interactive send (apiMessageSendSchema below)
-// — id/title length caps match Meta's own documented limits for a button
+// - id/title length caps match Meta's own documented limits for a button
 // message (id up to 256 bytes, title up to 20 characters) so an oversized
 // request is rejected here with a clear message, not sent to Meta to fail
 // there with a less obvious error.
@@ -631,7 +631,7 @@ const interactiveButtonSchema = z.object({
   title: z.string().min(1).max(20),
 });
 
-// One row within a list message's section — id/title/description caps
+// One row within a list message's section - id/title/description caps
 // match Meta's own documented limits for a list message.
 const listRowSchema = z.object({
   id: z.string().min(1).max(200),
@@ -641,7 +641,7 @@ const listRowSchema = z.object({
 
 // A section groups rows under an optional title (up to 10 sections per
 // message, capped where `sections` is used below). Only a floor on row
-// count is enforced per section (at least 1) — the real Meta ceiling is 10
+// count is enforced per section (at least 1) - the real Meta ceiling is 10
 // rows TOTAL across every section combined, not 10 per section, which
 // can't be expressed as a per-item constraint here and is checked
 // separately in the cross-section refine below.
@@ -650,7 +650,7 @@ const listSectionSchema = z.object({
   rows: z.array(listRowSchema).min(1),
 });
 
-// Hub API send endpoint (build plan Phase 5) — client_id is required in the
+// Hub API send endpoint (build plan Phase 5) - client_id is required in the
 // body (not just resolved from the API key) as a defense-in-depth sanity
 // check: routes/apiV1Messages.js rejects the request if it doesn't match
 // the key's own client_id, catching a caller that's confused about which
@@ -665,21 +665,21 @@ const apiMessageSendSchema = z.object({
   // A media-header template only. The calling CRM's own document/image/video
   // for this one send (server/src/services/mediaHeaderService.js's
   // resolveMediaIdFromUrl fetches it, uploads it to Meta, and sends with the
-  // resulting id) — the alternative to first uploading through this app's UI.
+  // resulting id) - the alternative to first uploading through this app's UI.
   headerMediaUrl: z.string().url().startsWith('https://').optional(),
-  // interactive (type: 'interactive') only — two distinct Meta shapes
+  // interactive (type: 'interactive') only - two distinct Meta shapes
   // sharing this one type value, decided by which fields are present:
   // `buttons` -> interactive.type: "button" (metaClient.sendInteractiveMessage),
   // `sections` -> interactive.type: "list" (metaClient.sendListMessage). A
-  // request setting both is rejected below — never sent as a mixed/ambiguous
+  // request setting both is rejected below - never sent as a mixed/ambiguous
   // type. header/footer length caps (60 chars) and the 1024-char body cap
-  // (enforced below, not here — `body` is shared with text/template, which
+  // (enforced below, not here - `body` is shared with text/template, which
   // have different limits) match Meta's own documented limits for an
   // interactive message, list or button alike.
   header: z.string().min(1).max(60).optional(),
   footer: z.string().min(1).max(60).optional(),
   buttons: z.array(interactiveButtonSchema).min(1).max(3, 'WhatsApp allows at most 3 reply buttons per interactive message').optional(),
-  // List-message only — action.button in Meta's shape, the label on the
+  // List-message only - action.button in Meta's shape, the label on the
   // list-opening button itself (distinct from the reply `buttons` above).
   button: z.string().min(1).max(20).optional(),
   sections: z.array(listSectionSchema).min(1).max(10).optional(),
@@ -695,7 +695,7 @@ const apiMessageSendSchema = z.object({
   {
     message:
       "body is required for type 'text'; template is required for type 'template'; " +
-      "an interactive send needs either 1-3 buttons, or body+button+sections for a list — never both buttons and sections together",
+      "an interactive send needs either 1-3 buttons, or body+button+sections for a list - never both buttons and sections together",
   }
 ).refine(
   (data) => data.type !== 'interactive' || !data.body || data.body.length <= 1024,
@@ -706,14 +706,14 @@ const apiMessageSendSchema = z.object({
     const totalRows = data.sections.reduce((sum, s) => sum + s.rows.length, 0);
     return totalRows <= 10;
   },
-  // Deliberately a single combined-total message, not a per-section one —
+  // Deliberately a single combined-total message, not a per-section one -
   // this check is a sum across every section, so there is no one section to
   // blame in the error; see listSectionSchema's comment for why this can't
   // be a per-item schema constraint instead.
   { message: 'WhatsApp allows at most 10 rows total across all sections combined, not per section' }
 );
 
-// Deliberately its own schema, not part of contactUpdateSchema — consent
+// Deliberately its own schema, not part of contactUpdateSchema - consent
 // changes require a source (an explicit declaration, an inbound STOP, etc.)
 // and go through consentRepo.recordEvent so the change and its evidence are
 // always written together. See server/src/repositories/consentRepo.js.
@@ -723,17 +723,17 @@ const consentEventCreateSchema = z.object({
   evidence: z.record(z.any()).optional(),
 });
 
-// Consent hardening Phase 2 — bulk "Mark as opted in" in Contacts.
+// Consent hardening Phase 2 - bulk "Mark as opted in" in Contacts.
 // `confirmed: true` is a defense-in-depth literal assertion mirroring the
-// UI's own required-checkbox gate — a caller bypassing the UI (a script,
+// UI's own required-checkbox gate - a caller bypassing the UI (a script,
 // the Hub API in a future phase) still has to explicitly assert this, not
 // just send a bare list of ids. `method` is the consent-collection method
 // the client is attesting to, shown in the confirmation modal's dropdown;
 // `note` is optional free text, mainly meaningful for 'other'. Both are
 // stored verbatim in each row's consent_events.evidence, alongside the
-// exact statement text shown (see app.js's CONSENT_STATEMENT usage) — the
+// exact statement text shown (see app.js's CONSENT_STATEMENT usage) - the
 // route, not this schema, is what actually assembles that evidence object.
-// 20000 is a generous, not a tight, cap — this app's own no-pagination
+// 20000 is a generous, not a tight, cap - this app's own no-pagination
 // convention means a "select all" in the UI is the client's whole contact
 // list; the cap exists only to reject a truly pathological request.
 const CONSENT_METHODS = ['website_form', 'in_store', 'existing_customer_agreement', 'other'];
@@ -741,13 +741,13 @@ const bulkConsentOptInSchema = z.object({
   contactIds: z.array(uuid).min(1).max(20000),
   method: z.enum(CONSENT_METHODS),
   note: z.string().max(500).optional(),
-  confirmed: z.literal(true, { errorMap: () => ({ message: 'confirmed must be true — this endpoint requires an explicit consent confirmation, not just a list of contact ids' }) }),
+  confirmed: z.literal(true, { errorMap: () => ({ message: 'confirmed must be true - this endpoint requires an explicit consent confirmation, not just a list of contact ids' }) }),
 });
 
-// PLAN.md item 15 — Meta conversation pricing / cost calculator. category
+// PLAN.md item 15 - Meta conversation pricing / cost calculator. category
 // matches Meta's real conversation-category constants (uppercase,
-// including SERVICE — a conversation category, unlike a message template's
-// own category, which never includes SERVICE) — deliberately a separate
+// including SERVICE - a conversation category, unlike a message template's
+// own category, which never includes SERVICE) - deliberately a separate
 // enum from messageTemplateCreateSchema's Marketing/Utility/Authentication.
 const conversationPricingUpsertSchema = z.object({
   category: z.enum(['MARKETING', 'UTILITY', 'AUTHENTICATION', 'SERVICE']),
@@ -755,10 +755,10 @@ const conversationPricingUpsertSchema = z.object({
   rateInr: z.coerce.number().positive(),
 });
 
-// GET /api/analytics/cost-estimate — an explicit what-if calculator, not a
+// GET /api/analytics/cost-estimate - an explicit what-if calculator, not a
 // real cost breakdown: usage_logs.conversations_billed has no category or
 // country dimension (see CLAUDE.md's Known Gaps), so category/countryCode
-// are REQUIRED here — the caller states which single rate to apply against
+// are REQUIRED here - the caller states which single rate to apply against
 // the month's total billed count, rather than this endpoint guessing or
 // fabricating a per-category split with no real data behind it.
 const costEstimateQuerySchema = z.object({

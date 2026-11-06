@@ -1,13 +1,13 @@
 // Meta Official Template Library cache (wasi-master-plan.md §2b, migration
-// 042). Global reference content, not tenant data — same shape as
+// 042). Global reference content, not tenant data - same shape as
 // template_library, no client_id, no RLS.
 
-// listCached defaults to zero-variable entries only — Phase 0 decision:
+// listCached defaults to zero-variable entries only - Phase 0 decision:
 // v1 only surfaces library templates with no {{n}} placeholders, sidestepping
 // Wasi's named-params-only pipeline entirely (see migration 042's comment).
 // `includeParameterized` exists only for the admin status view (so an admin
 // can see the FULL cached catalog size, not just what v1 exposes to
-// clients) — routes/templateLibrary.js's client-facing GET /meta never
+// clients) - routes/templateLibrary.js's client-facing GET /meta never
 // passes it.
 async function listCached(db, { includeParameterized = false } = {}) {
   const { rows } = await db.query(
@@ -24,7 +24,7 @@ async function findById(db, id) {
 }
 
 // Upserts by meta_library_id (Meta's own real identity for a catalog
-// entry, not this table's uuid pk) — a re-refresh updates existing rows in
+// entry, not this table's uuid pk) - a re-refresh updates existing rows in
 // place rather than delete-then-reinsert, same "never orphan a foreign key
 // across a re-seed" reasoning as seedTemplateLibrary.js's own convention
 // (this table has no child rows yet, but the discipline is worth keeping
@@ -57,20 +57,20 @@ async function upsertBatch(db, entries) {
   return count;
 }
 
-// Independent Auditor/QA finding: upsertBatch alone only ever adds/updates —
+// Independent Auditor/QA finding: upsertBatch alone only ever adds/updates -
 // nothing removed a row whose meta_library_id no longer appears in a fresh
 // refresh, so a template Meta withdrew from its catalog stayed cached (and
 // client-offerable) forever. Called right after upsertBatch in
 // refreshNow() with the exact set of ids the latest fetch actually
 // returned; a row not in that set is gone from Meta's own catalog, so it's
-// removed here too — this table is a pure cache (its own down() comment:
+// removed here too - this table is a pure cache (its own down() comment:
 // "100% reproducible from a real Meta refresh call"), so deleting a stale
 // row loses nothing that matters.
 async function pruneMissing(db, currentMetaLibraryIds) {
   if (!currentMetaLibraryIds.length) {
     // An empty catalog response almost certainly means something went
     // wrong upstream (a transient Meta error returning no data), not that
-    // Meta genuinely has zero library templates — refuse to wipe the whole
+    // Meta genuinely has zero library templates - refuse to wipe the whole
     // cache on that ambiguous signal. A real "nothing to prune" case is
     // handled fine by the WHERE NOT IN clause below when the array isn't empty.
     return 0;

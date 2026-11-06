@@ -1,14 +1,14 @@
-// Sendability monitoring — pure unit coverage for the load-bearing
+// Sendability monitoring - pure unit coverage for the load-bearing
 // constraints the whole feature depends on:
 //   1. Layer 1 (registration) can never set wabas.sendable, no matter what
-//      it finds — only the probe (Layer 3) and the combined verdict may.
+//      it finds - only the probe (Layer 3) and the combined verdict may.
 //   2. The probe runs unconditionally, every check, regardless of what
 //      Layer 1/2 found or whether their own check even succeeded.
 //   3. The probe classifies on error.code, never HTTP status (verified by
 //      hand: Fortune/healthy = HTTP 404 code 132001, TNPSC/blocked = HTTP
-//      403 code 200 — both OAuthException).
+//      403 code 200 - both OAuthException).
 //   4. An unrecognized probe response sets sendable = null and records
-//      exactly what came back — never guessed.
+//      exactly what came back - never guessed.
 //   5. A probe that can't even reach Meta must not touch the sendable*
 //      columns at all.
 //   6. THE PROBE ALONE IS NOT ENOUGH (found live 2026-09-18, first real
@@ -18,26 +18,26 @@
 //      cannot see. The combined verdict (wabas.sendable, written by
 //      writeSendableVerdict/computeSendableVerdict) is false whenever
 //      health_status shows any entity BLOCKED, even when the raw probe
-//      result (wabas.probe_sendable) says true — see migration
+//      result (wabas.probe_sendable) says true - see migration
 //      076_wabas_sendable_verdict_split.js's header comment for the full
 //      writeup. Both signals are preserved distinctly; neither is lost.
 //   7. A registration/health fetch that fails, or that succeeds but omits
 //      health_status this one time, must never overwrite a previously
-//      good stored health_status with null — losing it would make
+//      good stored health_status with null - losing it would make
 //      "genuinely never checked" indistinguishable from "checked before,
 //      just not this time," and the combined verdict specifically depends
 //      on that distinction (a null health_status means sendable=null, an
 //      honest "unknown," never a guess).
 //
-// Needs NO real database and NO real network call — refreshOne accepts
+// Needs NO real database and NO real network call - refreshOne accepts
 // injected { db, metaClient, auditLogRepo } stand-ins (see
 // sendabilityMonitorRunner.js's own comment on why), so this runs anywhere,
 // any time, in milliseconds. It does not even load db/pool.js. The only
 // real dependency is utils/encryption.js's decrypt/encrypt, which are pure
-// local crypto against SERVER_SECRET — no DB, no network either.
+// local crypto against SERVER_SECRET - no DB, no network either.
 //
 // Real database/HTTP integration coverage lives separately in
-// sendabilityLayers1And2Integration.test.js — run that one deliberately,
+// sendabilityLayers1And2Integration.test.js - run that one deliberately,
 // when you want to exercise the shared dev/prod database.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const { test } = require('node:test');
@@ -52,7 +52,7 @@ const FAKE_WABA = {
   waba_id: 'fake-waba-id',
   phone_number_id: 'fake-phone-number-id',
   access_token_encrypted: encrypt('fake-token-never-sent-anywhere'),
-  // Previously-stored state a real row would carry between cycles —
+  // Previously-stored state a real row would carry between cycles -
   // several tests below rely on these to prove coalesce/carry-over behavior.
   registration_is_on_biz_app: null,
   registration_code_verification_status: null,
@@ -102,7 +102,7 @@ function makeFakeDb(initialWaba) {
 }
 
 // Records every call it receives; never touches the real metaClient module
-// or the network — this IS the stub. `registration` and `probe` are
+// or the network - this IS the stub. `registration` and `probe` are
 // controlled independently, since refreshOne now calls both unconditionally
 // regardless of the other's outcome.
 function makeFakeMetaClient({ registration, probe } = {}) {
@@ -135,7 +135,7 @@ function makeFakeAuditLogRepo() {
 }
 
 // --------------------------------------------------------------------
-// computeSendableVerdict — the core combining logic, tested directly and
+// computeSendableVerdict - the core combining logic, tested directly and
 // exhaustively, with zero I/O of any kind.
 // --------------------------------------------------------------------
 
@@ -173,13 +173,13 @@ test('computeSendableVerdict: LIMITED (not BLOCKED) does not flip sendable to fa
     probeSendable: true, probeReason: null,
     healthStatus: { entities: [{ entity_type: 'BUSINESS', can_send_message: 'LIMITED', errors: [{ error_code: 141010 }] }] },
   });
-  assert.equal(result.sendable, true, 'only BLOCKED counts — LIMITED is a real but lesser restriction the user explicitly excluded');
+  assert.equal(result.sendable, true, 'only BLOCKED counts - LIMITED is a real but lesser restriction the user explicitly excluded');
 });
 
 test('computeSendableVerdict: probe false -> sendable false, reason names Probe, health_status is irrelevant', () => {
   const result = sendabilityMonitorRunner.computeSendableVerdict({
     probeSendable: false, probeReason: '(#200) Permission denied',
-    healthStatus: { entities: [{ entity_type: 'WABA', can_send_message: 'AVAILABLE' }] }, // healthy — must not rescue a failing probe
+    healthStatus: { entities: [{ entity_type: 'WABA', can_send_message: 'AVAILABLE' }] }, // healthy - must not rescue a failing probe
   });
   assert.equal(result.sendable, false);
   assert.match(result.reason, /^Probe:/);
@@ -199,10 +199,10 @@ test('computeSendableVerdict: probe true but health_status is null (genuinely ne
 });
 
 // --------------------------------------------------------------------
-// refreshOne — the orchestration: both sub-checks, then the combined verdict.
+// refreshOne - the orchestration: both sub-checks, then the combined verdict.
 // --------------------------------------------------------------------
 
-test('refreshOne: the exact GV Mart shape — probe passes but health_status is BLOCKED — combined sendable is false while the raw probe result is preserved as true', async () => {
+test('refreshOne: the exact GV Mart shape - probe passes but health_status is BLOCKED - combined sendable is false while the raw probe result is preserved as true', async () => {
   const db = makeFakeDb(FAKE_WABA);
   const meta = makeFakeMetaClient({
     registration: {
@@ -219,12 +219,12 @@ test('refreshOne: the exact GV Mart shape — probe passes but health_status is 
   assert.match(result.verdict.reason, /^Health:/);
 
   const finalRow = db.row();
-  assert.equal(finalRow.probe_sendable, true, 'wabas.probe_sendable (raw) stays true — not overwritten');
-  assert.equal(finalRow.sendable, false, 'wabas.sendable (combined) is false — the honest, trustworthy answer');
+  assert.equal(finalRow.probe_sendable, true, 'wabas.probe_sendable (raw) stays true - not overwritten');
+  assert.equal(finalRow.sendable, false, 'wabas.sendable (combined) is false - the honest, trustworthy answer');
   assert.match(finalRow.sendable_reason, /141006/);
 });
 
-test('refreshOne: probe_* columns are the renamed ones — no write ever touches a column literally named sendable_error_code', async () => {
+test('refreshOne: probe_* columns are the renamed ones - no write ever touches a column literally named sendable_error_code', async () => {
   const db = makeFakeDb(FAKE_WABA);
   const meta = makeFakeMetaClient({
     registration: { is_on_biz_app: true, code_verification_status: 'VERIFIED', health_status: { entities: [] } },
@@ -236,13 +236,13 @@ test('refreshOne: probe_* columns are the renamed ones — no write ever touches
 
   const probeWrite = db.calls.find((c) => /probe_sendable/.test(c.sql));
   assert.ok(probeWrite);
-  assert.doesNotMatch(probeWrite.sql, /sendable_error_code/, 'the old pre-076 column name must never appear — it was renamed to probe_error_code');
+  assert.doesNotMatch(probeWrite.sql, /sendable_error_code/, 'the old pre-076 column name must never appear - it was renamed to probe_error_code');
   assert.match(probeWrite.sql, /probe_error_code/);
   assert.match(probeWrite.sql, /probe_error_data/);
 
   const verdictWrite = db.calls.find((c) => /update wabas set sendable = /.test(c.sql));
   assert.ok(verdictWrite);
-  assert.doesNotMatch(verdictWrite.sql, /error_code|error_data/, 'the combined verdict deliberately carries no error_code/error_data of its own — sendable_reason plus probe_error_code/health_status is enough, no duplication');
+  assert.doesNotMatch(verdictWrite.sql, /error_code|error_data/, 'the combined verdict deliberately carries no error_code/error_data of its own - sendable_reason plus probe_error_code/health_status is enough, no duplication');
 });
 
 test('refreshOne: a registration fetch that OMITS health_status this one time does not wipe a previously-good stored value, and the verdict uses the carried-over value', async () => {
@@ -264,7 +264,7 @@ test('refreshOne: a registration fetch that OMITS health_status this one time do
 
   const registrationWrite = db.calls.find((c) => /registration_is_on_biz_app/.test(c.sql));
   assert.match(registrationWrite.sql, /coalesce\(\$6, health_status\)/, 'the SQL itself must coalesce, not blindly overwrite, health_status');
-  assert.equal(registrationWrite.params[5], null, 'the raw param passed is null (Meta omitted it) — coalesce is what protects the stored value, not the JS layer pretending Meta sent something it did not');
+  assert.equal(registrationWrite.params[5], null, 'the raw param passed is null (Meta omitted it) - coalesce is what protects the stored value, not the JS layer pretending Meta sent something it did not');
 });
 
 test('refreshOne: registration check failing outright still lets the verdict use the last known-good health_status', async () => {
@@ -282,11 +282,11 @@ test('refreshOne: registration check failing outright still lets the verdict use
   const result = await sendabilityMonitorRunner.refreshOne(wabaWithPriorHealth, { db, metaClient: meta, auditLogRepo: audit });
 
   assert.equal(result.registration.ok, false);
-  assert.equal(result.verdict.sendable, true, 'the probe passed and the carried-over health_status has nothing BLOCKED — verdict must not be null just because THIS cycle\'s registration call happened to fail');
+  assert.equal(result.verdict.sendable, true, 'the probe passed and the carried-over health_status has nothing BLOCKED - verdict must not be null just because THIS cycle\'s registration call happened to fail');
 });
 
 test('refreshOne: probe passes and health_status has genuinely NEVER been checked -> combined verdict is null, not true', async () => {
-  const db = makeFakeDb(FAKE_WABA); // FAKE_WABA.health_status is null — never checked
+  const db = makeFakeDb(FAKE_WABA); // FAKE_WABA.health_status is null - never checked
   const meta = makeFakeMetaClient({
     registration: { is_on_biz_app: true, code_verification_status: 'VERIFIED' }, // still no health_status in this response either
     probe: { sendable: true, reason: null, code: null, errorData: null },
@@ -300,7 +300,7 @@ test('refreshOne: probe passes and health_status has genuinely NEVER been checke
   assert.match(result.verdict.reason, /never successfully checked/);
 });
 
-test('refreshOne: probe request failure (network/timeout) leaves the sendable verdict completely untouched — no write at all', async () => {
+test('refreshOne: probe request failure (network/timeout) leaves the sendable verdict completely untouched - no write at all', async () => {
   const db = makeFakeDb({ ...FAKE_WABA, sendable: true, sendable_reason: null }); // a prior good verdict on the row
   const meta = makeFakeMetaClient({
     registration: { is_on_biz_app: true, code_verification_status: 'VERIFIED' },
@@ -312,7 +312,7 @@ test('refreshOne: probe request failure (network/timeout) leaves the sendable ve
 
   assert.equal(result.verdict, null, 'writeSendableVerdict must not even attempt to compute a verdict when the probe never got a response');
   const verdictWrite = db.calls.find((c) => /update wabas set sendable = /.test(c.sql));
-  assert.equal(verdictWrite, undefined, 'no write to the sendable columns at all — a failed attempt is not evidence anything changed');
+  assert.equal(verdictWrite, undefined, 'no write to the sendable columns at all - a failed attempt is not evidence anything changed');
 });
 
 test('refreshOne: an unrecognized probe response still produces a combined verdict of null, and both audit actions fire', async () => {
@@ -394,7 +394,7 @@ test('refreshOne: a waba with no access token or phone_number_id is rejected bef
 });
 
 // --------------------------------------------------------------------
-// metaClient.probeSendability — the REAL classification code, not a
+// metaClient.probeSendability - the REAL classification code, not a
 // stand-in for it. global.fetch is stubbed (this codebase's established
 // convention), never a real network call, and still needs no database.
 // --------------------------------------------------------------------
@@ -420,7 +420,7 @@ test('metaClient.probeSendability: the exact Fortune (healthy) response verified
     }),
   }, async () => {
     const result = await metaClient.probeSendability('393354685298210', 'fake-token');
-    assert.equal(result.sendable, true, 'HTTP status (404) must not be the signal — code 132001 is');
+    assert.equal(result.sendable, true, 'HTTP status (404) must not be the signal - code 132001 is');
     assert.equal(result.code, null);
     assert.equal(result.reason, null);
   });
@@ -440,7 +440,7 @@ test('metaClient.probeSendability: the exact TNPSC (blocked) response verified b
     }),
   }, async () => {
     const result = await metaClient.probeSendability('1222704867593433', 'fake-token');
-    assert.equal(result.sendable, false, 'HTTP status (403) must not be the signal — code 200 is');
+    assert.equal(result.sendable, false, 'HTTP status (403) must not be the signal - code 200 is');
     assert.equal(result.code, 200);
     assert.match(result.reason, /necessary permission/);
   });

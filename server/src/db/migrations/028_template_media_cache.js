@@ -1,25 +1,25 @@
 // Media-header template support (creation + sending). Media headers
 // (IMAGE/VIDEO/DOCUMENT) are now a separate concern from header_type/
-// header_content, which stay as-is for TEXT headers — see migration
+// header_content, which stay as-is for TEXT headers - see migration
 // 020_template_rich_fields.js for why header_type was deliberately left
 // unconstrained: this is the "later" that comment referred to.
 //
 // template_media_cache is NOT a media library (no browsing, no reuse across
-// templates — that's explicitly out of scope, see the media-header
+// templates - that's explicitly out of scope, see the media-header
 // investigation report). It exists because sending a media-header template
 // requires a `media id` from Meta's standard Media API, distinct from the
-// `header_handle` used at template creation time (Resumable Upload API) —
+// `header_handle` used at template creation time (Resumable Upload API) -
 // and that media id expires after 30 days while a template can stay in use
 // indefinitely. One row per template caches the current media id; Meta
 // itself is the file store for refresh (services/mediaHeaderService.js
 // downloads the media back via GET /{media-id} before the 30-day window
-// closes and re-uploads it to mint a fresh id) — nothing here persists the
+// closes and re-uploads it to mint a fresh id) - nothing here persists the
 // original file bytes.
 exports.up = (pgm) => {
   pgm.createTable('template_media_cache', {
     id: { type: 'uuid', primaryKey: true, default: pgm.func('gen_random_uuid()') },
     client_id: { type: 'uuid', notNull: true, references: 'clients', onDelete: 'CASCADE' },
-    // One cached media id per template — a second resolve for the same
+    // One cached media id per template - a second resolve for the same
     // template updates this row rather than inserting another.
     template_id: { type: 'uuid', notNull: true, references: 'message_templates', onDelete: 'CASCADE', unique: true },
     media_id: { type: 'text', notNull: true },

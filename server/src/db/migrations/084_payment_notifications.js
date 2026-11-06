@@ -1,15 +1,15 @@
 // Audit trail for every WhatsApp message Wasi itself sends to one of its own
 // clients about billing (payment reminder, suspension warning, suspension
-// notice) — who it went to, when, and how far it got (sent -> delivered ->
+// notice) - who it went to, when, and how far it got (sent -> delivered ->
 // read, or failed and why). Before this, paymentReminderRunner/clientNotifier
 // recorded only a bare audit_log "reminder sent" line, written even when the
-// send itself failed, and never captured Meta's message id — so delivery and
+// send itself failed, and never captured Meta's message id - so delivery and
 // read receipts for these messages had nowhere to land.
 //
 // Platform-internal, privileged connection only (same treatment as
 // audit_log/alert_events): no RLS, no wasi_app grant. client_id is ON DELETE
 // SET NULL with a client_name/recipient_phone snapshot, so deleting a client
-// never erases the record that a reminder was sent to them — it is an audit
+// never erases the record that a reminder was sent to them - it is an audit
 // table, retention matters more than referential tidiness.
 exports.up = (pgm) => {
   pgm.createTable('payment_notifications', {

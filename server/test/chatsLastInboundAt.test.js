@@ -1,6 +1,6 @@
 // Unit 0.1 (docs/ai-agent/IMPLEMENTATION.md): chats.last_inbound_at.
 //
-// Stubs only — nothing here may reach a real database (this project has no
+// Stubs only - nothing here may reach a real database (this project has no
 // separate dev DB, and src/db/pool.js refuses any test that tries). The
 // repository functions take `db` as a parameter, so a recording fake stands
 // in for it. What these tests can and cannot prove:

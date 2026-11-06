@@ -3,7 +3,7 @@
 // counts read contact_tags only, so a contact with tag_id but no matching
 // contact_tags row was invisible to both.
 //
-// Stubs only — this project's DB guard refuses any test that reaches the real
+// Stubs only - this project's DB guard refuses any test that reaches the real
 // database (see utils/dbSafety.js). The real SQL was checked separately inside
 // a rolled-back transaction; this pins the statement shape so a refactor can't
 // silently drop the contact_tags write.

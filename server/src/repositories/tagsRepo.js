@@ -1,5 +1,5 @@
 // Every function takes `db` (a pg Pool or a checked-out, transaction-scoped
-// client) as its first argument — callers on a client-authenticated request
+// client) as its first argument - callers on a client-authenticated request
 // pass req.db (the restricted, RLS-scoped role set up by
 // server/src/middleware/tenantContext.js); admin/system/background callers
 // pass the privileged `pool` from ../db/pool directly.
@@ -21,7 +21,7 @@ async function create(db, clientId, { name, bg, color }) {
   return rows[0];
 }
 
-// PLAN.md item 8's CSV-import tag wiring — a CSV "tags" cell only ever
+// PLAN.md item 8's CSV-import tag wiring - a CSV "tags" cell only ever
 // carries names, so this is a race-safe find-or-create keyed on the real
 // tags_client_name_unique constraint (migration 003), same
 // INSERT...ON CONFLICT DO UPDATE-as-no-op pattern already established for

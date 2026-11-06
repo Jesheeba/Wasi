@@ -1,8 +1,8 @@
-// Follow-up to 036_template_library.js — adds the stable natural key
+// Follow-up to 036_template_library.js - adds the stable natural key
 // seedTemplateLibrary.js needs to be idempotently re-runnable the same way
 // db/seed.js already is (`on conflict (id) do update`). Without this, a
 // re-seed (e.g. adding/editing content) would have to either INSERT
-// duplicates or DELETE-then-INSERT — the latter would generate new row ids
+// duplicates or DELETE-then-INSERT - the latter would generate new row ids
 // each time, orphaning any template_library_usage row a real client had
 // already recorded against the old id despite ON DELETE CASCADE (the usage
 // row would simply vanish along with it). A unique (industry, use_case)

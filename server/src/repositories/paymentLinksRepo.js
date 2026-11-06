@@ -12,7 +12,7 @@ async function create(db, clientId, { title, amount_inr, razorpay_payment_link_i
   return rows[0];
 }
 
-// Razorpay-webhook-triggered — no client_id known up front (looked up by
+// Razorpay-webhook-triggered - no client_id known up front (looked up by
 // Razorpay's own link id), so this always runs on the privileged connection.
 async function markStatusByRazorpayId(db, razorpayPaymentLinkId, status) {
   const { rows } = await db.query(

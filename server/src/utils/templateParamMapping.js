@@ -1,16 +1,16 @@
 // Resolves a template's {{named}} parameters to real per-contact values.
-// Shared between broadcastRunner.js (the priority fix — a broadcast's
+// Shared between broadcastRunner.js (the priority fix - a broadcast's
 // param_mappings, set once at creation) and flowEngine.js (a send_template
-// node's config.paramMappings) — same mapping shape, same resolution rules,
+// node's config.paramMappings) - same mapping shape, same resolution rules,
 // so both places stay consistent rather than drifting into two slightly
 // different implementations.
 const metaClient = require('./metaClient');
 const { extractPlaceholders } = require('./templateParams');
 
-// Pure — no DB, no network (server/test/broadcastParamMapping.test.js).
+// Pure - no DB, no network (server/test/broadcastParamMapping.test.js).
 // `mappings` is { [paramName]: {source, field, attributeId, value} }, already
 // validated complete against the template wherever mappings are authored
-// (broadcast creation, flow node save) — this doesn't re-validate coverage,
+// (broadcast creation, flow node save) - this doesn't re-validate coverage,
 // it just resolves whatever's there. An unresolvable entry (unknown source,
 // a contact_field naming a field the contact doesn't have, or a
 // contact_attribute id with no value for this contact) falls back to ''
@@ -18,12 +18,12 @@ const { extractPlaceholders } = require('./templateParams');
 // message instead of failing the whole batch.
 //
 // `attributeValuesByAttributeId` ({ [attributeId]: value }) is optional and
-// defaults to {} — broadcastRunner.js is the only caller that passes it
+// defaults to {} - broadcastRunner.js is the only caller that passes it
 // (fetched per-recipient, only when the broadcast actually uses a
 // contact_attribute mapping; see its own comment for the fetch-failure
 // fallback). flowEngine.js's call site doesn't pass it, so a
 // contact_attribute mapping on a flow's send_template node resolves to ''
-// today, same as any other unresolvable case — flows don't need this
+// today, same as any other unresolvable case - flows don't need this
 // capability yet, this just keeps that call site working unchanged.
 function resolveParamValues(mappings, contact, attributeValuesByAttributeId = {}) {
   const resolved = {};
@@ -39,7 +39,7 @@ function resolveParamValues(mappings, contact, attributeValuesByAttributeId = {}
   return resolved;
 }
 
-// Splits resolved param values into body vs header components — a
+// Splits resolved param values into body vs header components - a
 // template's body and header params are both named parameters in the same
 // {{name}} syntax, but Meta sends them as separate component types
 // (metaClient.buildNamedBodyComponents / buildNamedHeaderComponents).
