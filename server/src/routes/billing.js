@@ -4,36 +4,9 @@ const invoicesRepo = require('../repositories/invoicesRepo');
 const plansRepo = require('../repositories/plansRepo');
 const razorpayClient = require('../utils/razorpayClient');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { checkoutSchema, couponCheckSchema } = require('../utils/validate');
+const { checkoutSchema } = require('../utils/validate');
 
 const router = Router();
-
-// Single source of truth for coupon pricing - used by both the live preview
-// (POST /coupon, called while the client types the code in) and the actual
-// checkout below, so the two can never disagree about the price. Hardcoded
-// here rather than a coupons table: one promo code, no admin UI requested to
-// manage others yet - add a table if/when a second coupon or an expiry is needed.
-const COUPONS = {
-  WASIMR10: { amountInr: 1 },
-};
-
-function resolveCouponAmount(planRow, couponCode) {
-  const code = (couponCode || '').trim().toUpperCase();
-  if (!code) return { amountInr: planRow.price_inr, couponApplied: null };
-  const coupon = COUPONS[code];
-  if (!coupon) return { amountInr: null, couponApplied: null };
-  return { amountInr: coupon.amountInr, couponApplied: code };
-}
-
-router.post('/coupon', asyncHandler(async (req, res) => {
-  const { plan, couponCode } = couponCheckSchema.parse(req.body);
-  const planRow = await plansRepo.findById(plan);
-  if (!planRow) return res.status(400).json({ error: `Unknown plan: ${plan}` });
-
-  const { amountInr, couponApplied } = resolveCouponAmount(planRow, couponCode);
-  if (!couponApplied) return res.status(400).json({ error: 'Invalid coupon code.' });
-  res.json({ couponApplied, amountInr, originalAmountInr: planRow.price_inr });
-}));
 
 router.get('/plans', asyncHandler(async (req, res) => {
   res.json(await plansRepo.list());
@@ -49,21 +22,16 @@ router.get('/invoices', asyncHandler(async (req, res) => {
 }));
 
 router.post('/checkout', asyncHandler(async (req, res) => {
-  const { plan, couponCode } = checkoutSchema.parse(req.body);
+  const { plan } = checkoutSchema.parse(req.body);
   const planRow = await plansRepo.findById(plan);
   if (!planRow) return res.status(400).json({ error: `Unknown plan: ${plan}` });
-
-  const { amountInr, couponApplied } = resolveCouponAmount(planRow, couponCode);
-  if (couponCode && !couponApplied) {
-    return res.status(400).json({ error: 'Invalid coupon code.' });
-  }
-  const amountInPaise = amountInr * 100;
+  const amountInPaise = planRow.price_inr * 100;
 
   try {
     const order = await razorpayClient.createOrder({
       amountInPaise,
       receipt: `client_${req.clientId}_${plan}`,
-      notes: { client_id: req.clientId, plan, ...(couponApplied ? { coupon: couponApplied } : {}) },
+      notes: { client_id: req.clientId, plan },
     });
 
     const subscription = await subscriptionsRepo.create(req.db, {
@@ -77,7 +45,7 @@ router.post('/checkout', asyncHandler(async (req, res) => {
       client_id: req.clientId,
       subscription_id: subscription.id,
       plan,
-      amount_inr: amountInr,
+      amount_inr: planRow.price_inr,
       razorpay_order_id: order.id,
     });
 
@@ -87,7 +55,6 @@ router.post('/checkout', asyncHandler(async (req, res) => {
       amount: order.amount,
       currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID || null,
-      couponApplied,
     });
   } catch (err) {
     res.status(502).json({

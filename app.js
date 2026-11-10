@@ -6454,40 +6454,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // just had no UI calling it. Same Checkout.js widget pattern as the
   // wallet recharge handler above.
   let selectedPlanId = null;
-  let appliedCouponCode = null; // server-confirmed, never trust the input alone
-
-  function renderPlanPrice(el, planRow) {
-    const original = `₹${esc(Number(planRow.price_inr).toLocaleString('en-IN'))}`;
-    if (appliedCouponCode && el.dataset.planId === selectedPlanId) {
-      el.innerHTML = `<span style="text-decoration: line-through; color: var(--text-muted); font-weight: 500;">${original}</span> ₹1<small>/mo</small>`;
-    } else {
-      el.innerHTML = `${original}<small>/mo</small>`;
-    }
-  }
-
-  function resetCouponUi() {
-    appliedCouponCode = null;
-    const status = document.getElementById('choose-plan-coupon-status');
-    if (status) status.textContent = '';
-    document.querySelectorAll('#choose-plan-options .plan-option-price').forEach(priceEl => {
-      const plan = currentPlansForModal.find(p => p.id === priceEl.closest('.plan-option').dataset.planId);
-      if (plan) renderPlanPrice(priceEl, plan);
-    });
-  }
-
-  let currentPlansForModal = [];
 
   function openChoosePlanModal(plans, currentPlanId) {
     selectedPlanId = null;
-    appliedCouponCode = null;
-    currentPlansForModal = plans;
     const optionsEl = document.getElementById('choose-plan-options');
     const confirmBtn = document.getElementById('choose-plan-confirm-btn');
-    const couponInput = document.getElementById('choose-plan-coupon-input');
-    const couponStatus = document.getElementById('choose-plan-coupon-status');
     confirmBtn.disabled = true;
-    if (couponInput) couponInput.value = '';
-    if (couponStatus) couponStatus.textContent = '';
     optionsEl.innerHTML = `<div class="plan-option-grid">${plans.map(p => {
       const limitText = p.conversation_limit == null ? 'Unlimited conversations/mo' : `${Number(p.conversation_limit).toLocaleString('en-IN')} conversations/mo`;
       return `
@@ -6505,43 +6477,17 @@ document.addEventListener('DOMContentLoaded', () => {
         el.classList.add('selected');
         selectedPlanId = el.dataset.planId;
         confirmBtn.disabled = false;
-        resetCouponUi(); // a coupon applied for a different plan shouldn't silently carry over
       });
     });
     document.getElementById('modal-choose-plan')?.classList.add('open');
   }
-
-  // Coupon preview - validated server-side (POST /api/billing/coupon, the
-  // same lookup checkout itself uses) so the price shown here can never
-  // drift from what's actually charged. Must be applied before Pay &
-  // Subscribe is clicked.
-  document.getElementById('choose-plan-coupon-apply-btn')?.addEventListener('click', async () => {
-    const input = document.getElementById('choose-plan-coupon-input');
-    const status = document.getElementById('choose-plan-coupon-status');
-    const code = input.value.trim();
-    if (!selectedPlanId) { status.textContent = 'Select a plan first.'; return; }
-    if (!code) return;
-    try {
-      const result = await authFetch('/api/billing/coupon', { method: 'POST', body: JSON.stringify({ plan: selectedPlanId, couponCode: code }) });
-      appliedCouponCode = result.couponApplied;
-      status.innerHTML = `<span style="color: var(--color-primary-700, #15803D);">Coupon applied - ₹${esc(result.amountInr)}/mo instead of ₹${esc(result.originalAmountInr)}.</span>`;
-      const priceEl = document.querySelector(`.plan-option[data-plan-id="${CSS.escape(selectedPlanId)}"] .plan-option-price`);
-      const plan = currentPlansForModal.find(p => p.id === selectedPlanId);
-      if (priceEl && plan) renderPlanPrice(priceEl, plan);
-    } catch (err) {
-      appliedCouponCode = null;
-      status.innerHTML = `<span style="color: #B91C1C;">${escapeHtml(err.message || 'Invalid coupon code.')}</span>`;
-    }
-  });
 
   document.getElementById('choose-plan-confirm-btn')?.addEventListener('click', async (e) => {
     if (!selectedPlanId) return;
     const btn = e.target;
     btn.disabled = true;
     try {
-      const body = { plan: selectedPlanId };
-      if (appliedCouponCode) body.couponCode = appliedCouponCode;
-      const order = await authFetch('/api/billing/checkout', { method: 'POST', body: JSON.stringify(body) });
+      const order = await authFetch('/api/billing/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlanId }) });
       document.getElementById('modal-choose-plan')?.classList.remove('open');
 
       if (!order.keyId) {
@@ -6556,7 +6502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         amount: order.amount,
         currency: order.currency,
         name: 'Wasi CRM',
-        description: `${selectedPlanId} plan subscription${order.couponApplied ? ` (coupon ${order.couponApplied})` : ''}`,
+        description: `${selectedPlanId} plan subscription`,
         theme: { color: '#4AC959' },
         handler: async () => {
           showToast('Payment received - updating subscription…');

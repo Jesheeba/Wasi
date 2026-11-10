@@ -103,12 +103,6 @@ const resetPasswordSchema = z.object({
 
 const checkoutSchema = z.object({
   plan: z.enum(['Starter', 'Growth', 'Scale']),
-  couponCode: z.string().trim().min(1).max(40).optional(),
-});
-
-const couponCheckSchema = z.object({
-  plan: z.enum(['Starter', 'Growth', 'Scale']),
-  couponCode: z.string().trim().min(1).max(40),
 });
 
 const wabaConnectSchema = z.object({
@@ -792,7 +786,6 @@ module.exports = {
   forgotPasswordSchema,
   resetPasswordSchema,
   checkoutSchema,
-  couponCheckSchema,
   wabaConnectSchema,
   wabaConnectIncompleteSchema,
   resolveWabaSchema,
