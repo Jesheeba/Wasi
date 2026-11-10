@@ -2070,6 +2070,20 @@
     </div>
   </div>
 
+  <div id="modal-choose-plan" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Choose a Plan</h3>
+        <button class="close-modal-btn" data-close-modal="modal-choose-plan"><i data-lucide="x"></i></button>
+      </div>
+      <div id="choose-plan-options" class="settings-loading"><span class="skeleton settings-skeleton-line"></span></div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <button type="button" class="btn-secondary" data-close-modal="modal-choose-plan">Cancel</button>
+        <button type="button" id="choose-plan-confirm-btn" class="btn-primary" style="width: auto; padding: 0 20px;" disabled>Pay &amp; Subscribe</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-create-rule" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">

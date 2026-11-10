@@ -6441,14 +6441,81 @@ document.addEventListener('DOMContentLoaded', () => {
           <div><button class="btn-primary btn-auto" id="upgrade-subscription-btn">Change Plan</button></div>
         `;
       }
-      document.getElementById('upgrade-subscription-btn')?.addEventListener('click', () => {
-        showToast('Redirecting to plan upgrade...');
-      });
+      document.getElementById('upgrade-subscription-btn')?.addEventListener('click', () => openChoosePlanModal(plans, subscription?.plan));
     } catch (err) {
       container.innerHTML = `<div class="settings-error"><span>${escapeHtml(err.message)}</span><button type="button" class="btn-secondary btn-sm" id="subscription-load-retry">Try again</button></div>`;
       document.getElementById('subscription-load-retry')?.addEventListener('click', renderSubscriptionTab);
     }
   }
+
+  // Choose a Plan modal - was previously just a stub toast
+  // ("Redirecting to plan upgrade...") with no actual plan picker anywhere
+  // in the app; POST /api/billing/checkout already existed and worked, it
+  // just had no UI calling it. Same Checkout.js widget pattern as the
+  // wallet recharge handler above.
+  let selectedPlanId = null;
+
+  function openChoosePlanModal(plans, currentPlanId) {
+    selectedPlanId = null;
+    const optionsEl = document.getElementById('choose-plan-options');
+    const confirmBtn = document.getElementById('choose-plan-confirm-btn');
+    confirmBtn.disabled = true;
+    optionsEl.innerHTML = `<div class="plan-option-grid">${plans.map(p => {
+      const limitText = p.conversation_limit == null ? 'Unlimited conversations/mo' : `${Number(p.conversation_limit).toLocaleString('en-IN')} conversations/mo`;
+      return `
+        <label class="plan-option" data-plan-id="${escapeHtml(p.id)}">
+          <div class="plan-option-main"><span class="radio"></span><div>
+            <div class="plan-option-name">${escapeHtml(p.id)}${p.id === currentPlanId ? ' (current)' : ''}</div>
+            <div class="plan-option-desc">${esc(limitText)}</div>
+          </div></div>
+          <div class="plan-option-price">₹${esc(Number(p.price_inr).toLocaleString('en-IN'))}<small>/mo</small></div>
+        </label>`;
+    }).join('')}</div>`;
+    optionsEl.querySelectorAll('.plan-option').forEach(el => {
+      el.addEventListener('click', () => {
+        optionsEl.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedPlanId = el.dataset.planId;
+        confirmBtn.disabled = false;
+      });
+    });
+    document.getElementById('modal-choose-plan')?.classList.add('open');
+  }
+
+  document.getElementById('choose-plan-confirm-btn')?.addEventListener('click', async (e) => {
+    if (!selectedPlanId) return;
+    const btn = e.target;
+    btn.disabled = true;
+    try {
+      const order = await authFetch('/api/billing/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlanId }) });
+      document.getElementById('modal-choose-plan')?.classList.remove('open');
+
+      if (!order.keyId) {
+        showToast('Payment isn’t configured on this platform yet.');
+        return;
+      }
+
+      await loadScriptOnce('https://checkout.razorpay.com/v1/checkout.js');
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        order_id: order.razorpayOrderId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Wasi CRM',
+        description: `${selectedPlanId} plan subscription`,
+        theme: { color: '#4AC959' },
+        handler: async () => {
+          showToast('Payment received - updating subscription…');
+          setTimeout(renderSubscriptionTab, 2000); // webhook lands asynchronously
+        },
+      });
+      rzp.open();
+    } catch (err) {
+      reportError(err);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // Real GET /api/billing/invoices - was a single hardcoded fake "Paid"
   // invoice with a dead PDF link regardless of real billing history.
