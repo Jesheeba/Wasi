@@ -461,11 +461,49 @@ async function handleTemplateStatusUpdate(waba, value) {
   // value.reason is only present on a rejection; on any other transition
   // (e.g. a later approval of a since-corrected template) this correctly
   // clears a stale rejection_reason from a previous cycle.
-  await pool.query(
-    `update message_templates set status = $1, rejection_reason = $2, updated_at = now()
-     where name = $3 and client_id = $4`,
-    [String(value.event || '').toLowerCase() || 'pending', value.reason || null, value.message_template_name, waba.client_id]
-  );
+  const status = String(value.event || '').toLowerCase() || 'pending';
+  const reason = value.reason || null;
+  // Matched to name alone (no language/id) until 2026-11-11: Meta scopes a
+  // template to (name, language) per WABA (messageTemplatesRepo.js's own
+  // findActiveByNameAndLanguage comment), so a client with the same name in
+  // two languages had a status change to ONE language variant overwrite
+  // every row sharing that name, client-wide - a real bug, not a timing
+  // issue, found while investigating a client's template showing "approved"
+  // locally while still pending/rejected on Meta. message_template_id (this
+  // payload's id for the exact template version) is Meta's documented field
+  // name and the most precise match available - prefer it when present.
+  // message_template_language is Meta's documented field for this event too,
+  // confirmed against Meta's Cloud API webhook reference, and is the next
+  // best match. Only fall back to name-alone (the old, unsafe behavior) if
+  // neither is present, and log it so a real occurrence is visible.
+  let result;
+  if (value.message_template_id) {
+    result = await pool.query(
+      `update message_templates set status = $1, rejection_reason = $2, updated_at = now()
+       where meta_template_id = $3 and client_id = $4`,
+      [status, reason, String(value.message_template_id), waba.client_id]
+    );
+  }
+  if (!result || result.rowCount === 0) {
+    if (value.message_template_language) {
+      result = await pool.query(
+        `update message_templates set status = $1, rejection_reason = $2, updated_at = now()
+         where name = $3 and language = $4 and client_id = $5`,
+        [status, reason, value.message_template_name, value.message_template_language, waba.client_id]
+      );
+    }
+  }
+  if (!result || result.rowCount === 0) {
+    console.error(
+      'metaWebhook: message_template_status_update had no message_template_id/message_template_language match, falling back to name-only (unsafe for multi-language templates):',
+      value.message_template_name,
+    );
+    await pool.query(
+      `update message_templates set status = $1, rejection_reason = $2, updated_at = now()
+       where name = $3 and client_id = $4`,
+      [status, reason, value.message_template_name, waba.client_id]
+    );
+  }
   // A consuming app needs to know when its own template is paused/rejected
   // - it can't poll Meta itself, it only ever talks to Wasi.
   await enqueueForwards(waba, 'message_template_status_update', value);
