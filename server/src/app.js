@@ -231,6 +231,7 @@ function createApp() {
   app.get('/design-system.css', (req, res) => res.sendFile(path.join(REPO_ROOT, 'design-system.css')));
   app.get('/app.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'app.js')));
   app.get('/embeddedSignup.js', (req, res) => res.sendFile(path.join(REPO_ROOT, 'embeddedSignup.js')));
+  app.use('/img', express.static(path.join(REPO_ROOT, 'img')));
   // Served as-is from its real location (server/src/utils/, not a
   // frontend-owned file) so the Create/Edit Template modal's live "flag
   // while typing" validation (app.js) runs the EXACT same functions
