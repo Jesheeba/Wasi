@@ -81,16 +81,48 @@ async function remove(db, clientId, id) {
   return rowCount > 0;
 }
 
+// Admin's "Hub API Activity" card (GET /api/admin/clients/:id) - every
+// outbound message actually sent through one of this client's own API keys,
+// newest first. Deliberately NOT every outbound message (that's what the
+// inbox is for) - this answers "what has this client's own integrations
+// been sending", which is the thing migration 090 exists to make visible.
+async function listRecentApiSends(db, clientId, limit = 20) {
+  const { rows } = await db.query(
+    `select m.id, m.body, m.status, m.sent_at, m.error_reason, m.meta_error_code,
+            ak.app_name as sent_via_app, c.phone as contact_phone
+     from messages m
+     join chats c on c.id = m.chat_id
+     join api_keys ak on ak.id = m.api_key_id
+     where m.client_id = $1 and m.api_key_id is not null
+     order by m.sent_at desc
+     limit $2`,
+    [clientId, limit]
+  );
+  return rows;
+}
+
+// sent_via_app (migration 090's api_key_id, left-joined to api_keys.app_name)
+// - null for anything not sent through the Hub API. Added so the inbox can
+// show "Sent via <app>" instead of this being visible only by correlating
+// timestamps by hand (see 090_messages_api_key_id.js's header comment).
 async function listMessages(db, clientId, chatId, { since } = {}) {
   if (since) {
     const { rows } = await db.query(
-      'select * from messages where client_id = $1 and chat_id = $2 and sent_at > $3 order by sent_at asc',
+      `select m.*, ak.app_name as sent_via_app
+       from messages m
+       left join api_keys ak on ak.id = m.api_key_id
+       where m.client_id = $1 and m.chat_id = $2 and m.sent_at > $3
+       order by m.sent_at asc`,
       [clientId, chatId, since]
     );
     return rows;
   }
   const { rows } = await db.query(
-    'select * from messages where client_id = $1 and chat_id = $2 order by sent_at asc',
+    `select m.*, ak.app_name as sent_via_app
+     from messages m
+     left join api_keys ak on ak.id = m.api_key_id
+     where m.client_id = $1 and m.chat_id = $2
+     order by m.sent_at asc`,
     [clientId, chatId]
   );
   return rows;
@@ -143,12 +175,15 @@ async function findLastInboundMessage(db, clientId, chatId) {
 
 // Inserts the outbound row before the Cloud API call resolves (status
 // 'pending'); messagingService updates it to sent/failed right after.
-async function insertOutboundPending(db, clientId, chatId, body) {
+// apiKeyId (migration 090) is null for every non-Hub-API send (the inbox
+// reply route, flows, broadcasts, clientNotifier) - only
+// routes/apiV1Messages.js passes its caller's own req.apiKeyId.
+async function insertOutboundPending(db, clientId, chatId, body, apiKeyId = null) {
   const { rows } = await db.query(
-    `insert into messages (chat_id, client_id, direction, body, status)
-     values ($1, $2, 'out', $3, 'pending')
+    `insert into messages (chat_id, client_id, direction, body, status, api_key_id)
+     values ($1, $2, 'out', $3, 'pending', $4)
      returning *`,
-    [chatId, clientId, body]
+    [chatId, clientId, body, apiKeyId]
   );
   await db.query(`update chats set last_message_at = now() where client_id = $1 and id = $2`, [clientId, chatId]);
   return rows[0];
@@ -436,6 +471,7 @@ module.exports = {
   update,
   remove,
   listMessages,
+  listRecentApiSends,
   findMessageById,
   findMessageByIdForClient,
   lastInboundAt,

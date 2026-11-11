@@ -1056,8 +1056,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderMessageBubble(m, showMeta) {
     const bodyHtml = m.body.replace(/</g, '&lt;');
     const isEcho = m.source === 'whatsapp_app';
+    const sentViaAppHtml = m.sent_via_app
+      ? `<span class="msg-api-label" title="Sent by your own app/integration using a Wasi API key">🔌 via ${escapeHtml(m.sent_via_app)}</span>`
+      : '';
     const metaHtml = showMeta
-      ? `<div class="msg-time">${isEcho ? '<span class="msg-echo-label" title="Sent from the WhatsApp Business app on your phone, not through Wasi">📱 Sent from phone</span>' : ''}<time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
+      ? `<div class="msg-time">${isEcho ? '<span class="msg-echo-label" title="Sent from the WhatsApp Business app on your phone, not through Wasi">📱 Sent from phone</span>' : sentViaAppHtml}<time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
       : `<time class="sr-only" datetime="${m.sent_at}">${fullTimeLabel(m.sent_at)}</time>`;
     return `
       <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}${isEcho ? ' msg-echo' : ''}" data-message-id="${m.id}" data-full-time="${escapeAttr(fullTimeLabel(m.sent_at))}" tabindex="0">

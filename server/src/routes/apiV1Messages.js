@@ -108,6 +108,10 @@ router.post('/', asyncHandler(async (req, res) => {
       buttons: data.buttons,
       button: data.button,
       sections: data.sections,
+      // Attribution (migration 090) - which of the client's own API keys
+      // made this call, so the client dashboard and admin panel can show
+      // "sent via <app_name>" instead of nothing at all.
+      apiKeyId: req.apiKeyId,
     });
     res.status(201).json(message);
   } catch (err) {

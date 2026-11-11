@@ -1350,7 +1350,7 @@ function clientDetailAttention(client, waba) {
 }
 
 function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
-  const { client, subscription, waba, templates, auditTrail } = detail;
+  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity } = detail;
   const flags = clientDetailAttention(client, waba);
 
   const statusOptionsHtml = CLIENT_STATUS_OPTIONS.map((s) =>
@@ -1577,6 +1577,37 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       `).join('')
     : `<div class="empty-state"><i data-lucide="scroll-text" class="empty-icon"></i><div class="empty-title">No activity yet</div><div>No audit trail entries for this client yet.</div></div>`;
 
+  // Hub API Activity - which of this client's own API keys actually sent
+  // what, and when. Before this, the only way to answer "which app sent
+  // this message" was correlating messages.sent_at against
+  // api_keys.last_used_at by hand (see migration
+  // 090_messages_api_key_id.js's header comment for the real investigation
+  // that surfaced this gap).
+  const apiKeysHtml = (apiKeys && apiKeys.length)
+    ? apiKeys.map((k) => `
+        <div class="audit-item">
+          <div class="audit-actor-icon"><i data-lucide="key" class="icon-14"></i></div>
+          <div class="audit-item-body">
+            <div class="audit-item-action">${esc(k.app_name)} ${k.revoked_at ? '<span class="cell-secondary">(revoked)</span>' : ''}</div>
+            <div class="audit-item-target">Last used: ${k.last_used_at ? formatDateTime(k.last_used_at) : 'Never'}</div>
+          </div>
+        </div>
+      `).join('')
+    : `<div class="empty-state"><i data-lucide="key" class="empty-icon"></i><div class="empty-title">No API keys</div><div>This client has not created a Hub API key yet.</div></div>`;
+
+  const hubApiActivityHtml = (hubApiActivity && hubApiActivity.length)
+    ? hubApiActivity.map((m) => `
+        <div class="audit-item">
+          <div class="audit-actor-icon"><i data-lucide="send" class="icon-14"></i></div>
+          <div class="audit-item-body">
+            <div class="audit-item-action">${esc(m.sent_via_app)} <span class="cell-secondary">&rarr; ${esc(m.contact_phone || 'unknown')}</span></div>
+            <div class="audit-item-target">${esc(m.body || '')} <span class="cell-secondary">(${esc(m.status)}${m.error_reason ? `: ${esc(m.error_reason)}` : ''})</span></div>
+            <div class="audit-item-time">${formatDateTime(m.sent_at)}</div>
+          </div>
+        </div>
+      `).join('')
+    : `<div class="empty-state"><i data-lucide="send" class="empty-icon"></i><div class="empty-title">No Hub API sends</div><div>None of this client's API keys have sent a message yet.</div></div>`;
+
   const tabDefs = [
     ['overview', 'Overview', ''],
     ['billing', 'Billing & Service', flags.billing ? ' <span class="tab-flag" title="Needs attention" aria-label="Needs attention">!</span>' : ''],
@@ -1661,6 +1692,16 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
     </div>
 
     <div class="tab-panel" role="tabpanel" id="panel-client-activity" aria-labelledby="tab-client-activity" data-panel="activity" hidden>
+      <div class="detail-grid">
+        <div class="detail-card">
+          <h2 class="detail-card-title">API Keys</h2>
+          ${apiKeysHtml}
+        </div>
+        <div class="detail-card">
+          <h2 class="detail-card-title">Hub API Activity</h2>
+          ${hubApiActivityHtml}
+        </div>
+      </div>
       <div class="detail-card">
         <h2 class="detail-card-title">Audit Trail</h2>
         ${auditHtml}

@@ -1181,7 +1181,8 @@ body {
   border: 1px dashed var(--color-primary-300, #c7d2fe);
 }
 
-.msg-echo-label {
+.msg-echo-label,
+.msg-api-label {
   font-style: italic;
   white-space: nowrap;
 }

@@ -106,7 +106,7 @@ async function assertWithinPlanLimit(db, clientId) {
 // connection right before the Meta network call below and reacquire()
 // opens a fresh one only for the final result write, so a slow Meta response
 // never pins a connection the pool's other concurrent requests need.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl }, connectionHooks = {}) {
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, apiKeyId }, connectionHooks = {}) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window - send a template message instead.',
@@ -174,7 +174,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     finalComponents = [headerComponent, ...finalComponents.filter((c) => c.type !== 'header')];
   }
 
-  const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody);
+  const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody, apiKeyId || null);
 
   if (connectionHooks.release) await connectionHooks.release();
 

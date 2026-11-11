@@ -11,6 +11,7 @@ const auditLogRepo = require('../repositories/auditLogRepo');
 const adminUsersRepo = require('../repositories/adminUsersRepo');
 const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRepo');
 const apiKeysRepo = require('../repositories/apiKeysRepo');
+const chatsRepo = require('../repositories/chatsRepo');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
 const paymentNotificationsRepo = require('../repositories/paymentNotificationsRepo');
@@ -97,16 +98,23 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
   const client = await clientsRepo.findById(pool, id);
   if (!client) return res.status(404).json({ error: 'Not found' });
 
-  const [subscription, waba, templates, auditTrail] = await Promise.all([
+  const [subscription, waba, templates, auditTrail, apiKeys, hubApiActivity] = await Promise.all([
     subscriptionsRepo.findByClientId(pool, id),
     wabasRepo.findByClientId(id),
     messageTemplatesRepo.listByClientId(pool, id),
     auditLogRepo.list({ clientId: id, limit: 50 }),
+    apiKeysRepo.listByClientId(pool, id),
+    // Which of this client's own API keys actually sent what, and when -
+    // previously the only way to answer this was correlating
+    // messages.sent_at against api_keys.last_used_at by hand (see migration
+    // 090_messages_api_key_id.js's header comment for the real investigation
+    // that surfaced this gap, 2026-11-11).
+    chatsRepo.listRecentApiSends(pool, id, 20),
   ]);
 
   const { password_hash, ...safeClient } = client;
 
-  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail });
+  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail, apiKeys, hubApiActivity });
 }));
 
 // --- Manual retry: re-pull phone number status from Meta for a connected WABA ---

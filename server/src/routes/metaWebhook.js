@@ -348,6 +348,12 @@ async function handleInboundMessages(waba, value) {
         // deliberate exclusion decision, not a byproduct of adding the
         // column.
         source: _source,
+        // api_key_id (migration 090_messages_api_key_id.js) - internal
+        // attribution only (which Hub API key sent an outbound message);
+        // always null on an inbound row anyway, but excluded on principle
+        // per this file's own webhook-contract convention rather than
+        // relying on that.
+        api_key_id: _apiKeyId,
         ...forwardableMessage
       } = inserted;
       await enqueueForwards(waba, 'message.received', {
