@@ -267,6 +267,13 @@ body {
 .detail-row:last-child { border-bottom: none; }
 .detail-row-label { color: var(--text-muted); flex-shrink: 0; }
 .detail-row-value { color: var(--text); font-weight: 500; text-align: right; word-break: break-word; min-width: 0; }
+/* A badge's shared rule (design-system.css) is white-space:nowrap, correct
+   for short statuses (Approved, Pending) everywhere else it's used - but
+   Settings' Secret Hygiene card uses a long sentence as the badge text
+   ("Still default - rotate before real deploy"), which clipped past the
+   narrow 3-up detail-card's edge instead of wrapping. Scoped to this
+   container only, not a global badge change. */
+.detail-row-value .badge { white-space: normal; text-align: left; }
 .detail-row-inline { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; }
 .detail-sub { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
 .detail-sub-title { font-weight: 600; font-size: var(--fs-label); margin-bottom: 0.35rem; }
