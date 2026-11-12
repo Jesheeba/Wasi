@@ -80,6 +80,17 @@
 
   --sidebar-width: 240px;
   --header-height: 52px; /* V1 decision 6 */
+
+  /* ---- WhatsApp-native components (Component Specs §16, PROPOSED IMPROVEMENT) ---- */
+  --wa-wallpaper: #EDE6DB;
+  --wa-bubble: #FFFFFF;
+  --wa-bubble-out: #D9FDD3; /* frame value, token VERIFY per spec */
+  --wa-ink: #111B21;
+  --wa-muted: #667781;
+  --wa-link: #027EB5;
+  --wa-tick-read: #53BDEB;
+  --wa-variable-bg: #E5F5E8;
+  --wa-variable-ink: #0B5D1E;
 }
 
 :focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 2px; }

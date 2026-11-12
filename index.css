@@ -1157,6 +1157,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* V1 Component Specs §16 (PROPOSED IMPROVEMENT): WhatsApp-native wallpaper
+     with a subtle dot pattern, CSS-only (no new image asset/dependency). */
+  background-color: var(--wa-wallpaper);
+  background-image: radial-gradient(rgba(17, 27, 33, 0.06) 1px, transparent 1px);
+  background-size: 16px 16px;
 }
 
 .msg-bubble {
@@ -1170,16 +1175,16 @@ body {
 
 .msg-in {
   align-self: flex-start;
-  background: white;
+  background: var(--wa-bubble, white);
   border: 1px solid var(--border-light);
-  color: var(--text-main);
+  color: var(--wa-ink, var(--text-main));
   border-top-left-radius: 2px;
 }
 
 .msg-out {
   align-self: flex-end;
-  background: var(--color-primary-100);
-  color: var(--color-primary-900);
+  background: var(--wa-bubble-out, var(--color-primary-100)); /* V1 Component Specs §16 */
+  color: var(--wa-ink, var(--color-primary-900));
   border-top-right-radius: 2px;
 }
 
@@ -1217,7 +1222,7 @@ body {
   font-weight: 600;
 }
 .msg-status[data-status="read"] {
-  color: #34b7f1;
+  color: var(--wa-tick-read, #34b7f1); /* V1 Component Specs §16 */
 }
 
 /* item 5 - message grouping: consecutive same-direction messages within
