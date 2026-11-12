@@ -1271,6 +1271,7 @@
                     <div><strong>Base URL:</strong> <code class="inline-code" id="api-docs-base-url">…</code></div>
                     <div><strong>Endpoint:</strong> <code class="inline-code">POST /api/v1/messages</code></div>
                     <div><strong>Auth header:</strong> <code class="inline-code">Authorization: Bearer &lt;api_key&gt;</code></div>
+                    <div id="api-docs-waba-id-row"><strong>WABA ID:</strong> <code class="inline-code" id="api-docs-waba-id">…</code> <span class="form-hint">sent as <code>data.waba_id</code> on every forwarded webhook event</span></div>
                   </div>
                   <p class="settings-help">Example request (template message):</p>
                   <div class="code-block-wrapper">
@@ -1397,6 +1398,13 @@
                   <div class="form-group">
                     <label class="form-label" for="webhook-url-input">Webhook URL</label>
                     <input type="url" class="form-input" id="webhook-url-input" placeholder="https://your-server.example.com/webhook" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Events to send</label>
+                    <fieldset id="webhook-events-fieldset" class="hub-event-list" style="border:none; padding:0;">
+                      <legend class="sr-only">Events to send to your endpoint</legend>
+                    </fieldset>
+                    <div class="form-hint">Pick at least one. Only the events you check here are sent to your URL.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="webhook-secret-display">Signing secret (verify the <code>x-wasi-signature-256</code> header with this)</label>

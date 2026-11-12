@@ -2827,6 +2827,8 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .settings-icon-btn { padding: 0 12px; flex-shrink: 0; }
 .settings-tag-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .settings-tag-list .empty-state { width: 100%; }
+.hub-event-list { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.4rem 0 0; }
+.hub-event-label { display: flex; align-items: center; gap: 0.4rem; font-size: var(--fs-body); }
 .settings-tag-list .tag-badge { font-size: var(--fs-body); padding: 6px 14px; }
 .settings-loading { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-2) 0; }
 .settings-skeleton-line { height: 14px; width: 100%; max-width: 320px; }

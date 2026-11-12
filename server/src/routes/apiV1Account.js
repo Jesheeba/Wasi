@@ -32,6 +32,13 @@ router.get('/', asyncHandler(async (req, res) => {
     status: waba.status,
     display_name: waba.display_name || null,
     phone_number_id: waba.phone_number_id || null,
+    // Meta's own id for the connected WhatsApp Business Account - not a
+    // secret (unlike access_token_encrypted/forward_secret, still excluded
+    // above), and already stamped onto every forwarded webhook event
+    // (routes/metaWebhook.js's enqueueForwards) - exposing it here lets an
+    // integrator look it up ahead of time instead of only discovering it
+    // off the first webhook delivery.
+    waba_id: waba.waba_id || null,
     quality_rating: waba.quality_rating || null,
     verified_at: waba.verified_at || null,
   });

@@ -97,6 +97,7 @@ test('get_account_status: reflects a connected WABA\'s status and quality rating
     assert.equal(data.status, 'connected');
     assert.equal(data.quality_rating, 'GREEN');
     assert.equal(data.display_name, 'Test Business');
+    assert.equal(data.waba_id, `${SUITE_PREFIX}waba`);
   } finally {
     await wabasRepo.upsertForClient(testClientId, { status: 'disconnected' });
   }

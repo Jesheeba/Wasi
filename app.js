@@ -7072,7 +7072,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // crm-integration-guide.md's own example. client_id is pre-filled from the
   // logged-in account (safe, not a secret); the key itself is a placeholder,
   // same reasoning as renderMcpConfigSnippet above.
-  function renderApiDocsSnippet() {
+  async function renderApiDocsSnippet() {
     const baseUrlEl = document.getElementById('api-docs-base-url');
     const curlEl = document.getElementById('api-docs-curl-snippet');
     if (!curlEl) return;
@@ -7091,6 +7091,23 @@ document.addEventListener('DOMContentLoaded', () => {
       `    "params": { "1": "Priya", "2": "#4821" }`,
       `  }'`,
     ].join('\n');
+
+    // WABA ID isn't a secret, Meta's own id for the connected WhatsApp
+    // Business Account - not returned by /api/v1/account (deliberately,
+    // see apiV1Account.js's comment) but needed by an integrator wiring up
+    // webhook routing ahead of time, since it's stamped onto every
+    // forwarded event (routes/metaWebhook.js's enqueueForwards). Previously
+    // only visible from the admin panel's Client Detail page - a real gap.
+    const wabaIdEl = document.getElementById('api-docs-waba-id');
+    if (wabaIdEl) {
+      wabaIdEl.textContent = 'Loading…';
+      try {
+        const status = await authFetch('/api/onboarding/whatsapp/status');
+        wabaIdEl.textContent = status?.waba?.waba_id || 'Not connected yet';
+      } catch (err) {
+        wabaIdEl.textContent = 'Unavailable';
+      }
+    }
   }
 
   document.getElementById('copy-api-docs-curl-btn')?.addEventListener('click', () => {
@@ -7138,6 +7155,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Mirrors server/src/utils/webhookEvents.js's WEBHOOK_EVENT_TYPES - no
+  // endpoint exposes this list, so it's kept in sync by hand (same approach
+  // admin/app.js's HUB_FORWARD_EVENTS already takes); the server's zod
+  // schema is the actual source of truth and will reject anything else.
+  const CLIENT_WEBHOOK_EVENTS = [
+    { value: 'message.received', label: 'Message received (a customer’s reply)' },
+    { value: 'message.status', label: 'Message status (sent / delivered / read / failed)' },
+    { value: 'message_template_status_update', label: 'Template status update (approved / rejected)' },
+    { value: 'account_update', label: 'Account update' },
+  ];
+
+  function renderWebhookEventsFieldset(checkedEvents) {
+    const fieldset = document.getElementById('webhook-events-fieldset');
+    if (!fieldset) return;
+    // Default to every event checked on first setup (no saved config yet) -
+    // the alternative, defaulting to none, is what produced the "events:
+    // Required" save failure this fieldset exists to fix.
+    const checked = checkedEvents && checkedEvents.length ? checkedEvents : CLIENT_WEBHOOK_EVENTS.map((e) => e.value);
+    fieldset.innerHTML = CLIENT_WEBHOOK_EVENTS.map((e) => `
+      <label class="hub-event-label">
+        <input type="checkbox" data-webhook-event value="${esc(e.value)}" ${checked.includes(e.value) ? 'checked' : ''}>
+        <span>${esc(e.label)}</span>
+      </label>
+    `).join('');
+  }
+
   async function renderClientWebhook() {
     const urlInput = document.getElementById('webhook-url-input');
     if (!urlInput) return;
@@ -7146,6 +7189,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (webhook) {
         urlInput.value = webhook.callback_url || '';
         renderWebhookSecretField(webhook, null);
+        renderWebhookEventsFieldset(webhook.events || []);
+      } else {
+        renderWebhookEventsFieldset([]);
       }
     } catch (err) {
       reportError(err);
@@ -7172,12 +7218,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('save-webhook-btn')?.addEventListener('click', async () => {
     const url = document.getElementById('webhook-url-input')?.value.trim();
     if (!url) return showToast('Enter a webhook URL first.');
+    const events = [...document.querySelectorAll('#webhook-events-fieldset input[data-webhook-event]:checked')].map((el) => el.value);
+    if (!events.length) return showToast('Pick at least one event to send.');
     try {
-      const saved = await authFetch('/api/client-webhook', { method: 'POST', body: JSON.stringify({ callback_url: url }) });
+      const saved = await authFetch('/api/client-webhook', { method: 'POST', body: JSON.stringify({ callback_url: url, events }) });
       // saved.secret is only present the very first time a secret is
       // generated for this client - every later save/reload only returns
       // the masked form (see server/src/routes/clientWebhook.js).
       renderWebhookSecretField(saved, saved.secret || null);
+      renderWebhookEventsFieldset(saved.events || events);
       showToast('Webhook settings saved');
     } catch (err) {
       reportError(err);
