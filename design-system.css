@@ -17,7 +17,12 @@
    admin.css and marketing.css depend on. */
 
 /* ------------------------------------------------------------------ base */
-body { font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif; } /* V1 decision 1 */
+/* No body font-family override here on purpose: this file loads on all
+   3 surfaces (index.html, admin/index.html, every marketing/*.html), and
+   decision 1 (Inter-first) is CRM/Admin only - index.css already carries
+   it. marketing.css deliberately keeps Poppins-first (module brief: "the
+   live site uses Poppins... "); overriding it here would have silently
+   applied the CRM's font choice to Marketing too. */
 
 /* One visible keyboard-focus style everywhere. V1 decision 4: solid 2px
    brand-dark, not the brand green (too low-contrast as an outline colour). */
