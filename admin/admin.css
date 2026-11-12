@@ -56,8 +56,9 @@ body {
 .admin-logo-mark svg { width: 32px; height: 32px; }
 
 /* --------------------------------------------------------- sidebar */
+/* V1 decision 13: light warm sidebar (was dark forest green with white text) */
 .sidebar-logo-icon { color: #4AC959; }
-.sidebar-logo-text { color: #fff; font-weight: 700; font-size: 1.05rem; }
+.sidebar-logo-text { color: var(--color-dark, #143518); font-weight: 700; font-size: 1.05rem; }
 
 .sidebar-profile {
   display: flex;
@@ -68,8 +69,8 @@ body {
 }
 .sidebar-avatar { width: 30px; height: 30px; font-size: 0.8rem; background: #4AC959; color: #0E2916; flex-shrink: 0; }
 .sidebar-profile-text { min-width: 0; }
-.sidebar-profile-name { color: #fff; font-weight: 600; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-profile-role { color: rgba(255, 255, 255, 0.55); font-size: 0.72rem; text-transform: capitalize; }
+.sidebar-profile-name { color: var(--text-main, #1F2937); font-weight: 600; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-profile-role { color: var(--text-muted, #6B7280); font-size: 0.72rem; text-transform: capitalize; }
 
 /* ------------------------------------------------- alerts / banners
    Legacy class names kept (dozens of JS call sites), restyled onto the

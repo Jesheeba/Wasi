@@ -15,18 +15,18 @@
   --color-primary-900: #1F5425;
   --color-dark: #143518;
   --color-heading: #304742;
-  --bg-app: #F6F9F6;
+  --bg-app: #FFFFFF; /* V1 decision 2 (was #F6F9F6) */
   --bg-card: #FFFFFF;
   --text-main: #1F2937;
   --text-muted: #6B7280;
   --border-light: #E5E7EB;
   --border-tertiary: #E2E8F0;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.04);
+  --shadow-card: none; /* V1 decision 8 (was a soft drop shadow) */
   --shadow-login: 0 50px 100px rgba(0, 0, 0, 0.08);
-  --sidebar-width: 250px;
+  --sidebar-width: 240px; /* V1 decision 5 (was 250px, conflicted with breakpoints.css) */
   --sidebar-collapsed-width: 72px;
-  --header-height: 64px;
+  --header-height: 52px; /* V1 decision 6 (was 64px) */
   /* Set from JS (app.js's updateSendabilityBannerLayout) to the persistent
      sendability banner's real rendered height, or 0px when it's hidden -
      never hardcoded, since wrapped banner text at narrow widths changes it.
@@ -43,7 +43,7 @@
 }
 
 body {
-  font-family: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif; /* V1 decision 1: Inter is UI font, Poppins is wordmark/display fallback */
   background-color: var(--bg-app);
   color: var(--text-main);
   height: 100vh;
@@ -298,11 +298,11 @@ body {
   }
 }
 
-/* Navigation Sidebar - Dark Forest Green Theme matching app.kwic.in */
+/* Navigation Sidebar - V1 decision 13: light warm sidebar (was dark forest green) */
 .sidebar {
   width: var(--sidebar-width);
-  background: #0E2916;
-  border-right: 1px solid #163B20;
+  background: var(--bg-sidebar, #F4F5F2);
+  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -319,7 +319,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 1.25rem;
-  border-bottom: 1px solid #163B20;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .logo-container {
@@ -343,7 +343,7 @@ body {
   gap: 12px;
   padding: 9px 14px;
   border-radius: 10px;
-  color: #C2D8C7;
+  color: var(--text-muted);
   font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
@@ -352,13 +352,13 @@ body {
 }
 
 .nav-item:hover {
-  background-color: #173E21;
-  color: #FFFFFF;
+  background-color: #E8EAE4;
+  color: var(--text-main);
 }
 
 .nav-item.active {
-  background-color: #1B4E28;
-  color: #4AC959;
+  background-color: var(--color-primary-50);
+  color: var(--color-dark);
   font-weight: 600;
 }
 
@@ -370,7 +370,7 @@ body {
 
 .sidebar-bottom {
   padding: 0.75rem;
-  border-top: 1px solid #163B20;
+  border-top: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2916,7 +2916,7 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
    that shared file ever fails to load. */
 .nav-group-label {
   padding: var(--sp-4) var(--sp-4) var(--sp-1); font-size: 0.6875rem; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint);
 }
 .sidebar.collapsed .nav-group-label { display: none; }
 

@@ -29,11 +29,14 @@
   --brand-hover: #43B751;
   --brand-soft: #EDFAEE;
   --brand-dark: #143518;
-  --bg-app: #F6F9F6;
+  --bg-app: #FFFFFF; /* V1 decision 2: warm neutral white canvas (was #F6F9F6) */
   --bg-card: #FFFFFF;
   --bg-subtle: #F9FAFB;
+  --bg-sidebar: #F4F5F2; /* V1 decision 13: light warm sidebar (was dark forest green) */
+  --bg-muted: #F0F1ED;
   --border: #E5E7EB;
   --border-strong: #D1D5DB;
+  --border-control: #8F949D; /* V1 decision 3: 3.05:1 control border */
   --text: #1F2937;
   --text-muted: #6B7280;
   --text-faint: #9CA3AF;
@@ -73,7 +76,10 @@
   --z-modal: 100;
   --z-toast: 200;
 
-  --focus-ring: 0 0 0 3px rgba(74, 201, 89, 0.35);
+  --focus-ring: 0 0 0 2px #143518; /* V1 decision 4: solid 2px, not a soft glow */
 
   --sidebar-width: 240px;
+  --header-height: 52px; /* V1 decision 6 */
 }
+
+:focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 2px; }
