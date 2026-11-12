@@ -18,13 +18,13 @@
   --wf-red: #B91C1C;
   --wf-red-soft: #FEF2F2;
   --wf-red-border: #FCA5A5;
-  --wf-focus-ring: 0 0 0 3px rgba(74, 201, 89, 0.35);
+  --wf-focus-ring: 0 0 0 2px var(--wf-accent-dark); /* V1 decision 4: solid 2px, not a soft glow */
 }
 
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Poppins', -apple-system, 'Segoe UI', sans-serif; color: var(--wf-text); background: var(--wf-bg); -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font-family: inherit; }
-button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent); outline-offset: 2px; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent-dark); outline-offset: 2px; }
 
 .wf-loading { padding: 24px; font-size: 14px; color: var(--wf-text-muted); }
 .wf-error { color: var(--wf-red); }
