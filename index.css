@@ -418,7 +418,31 @@ body {
   display: none;
 }
 
-@media (max-width: 900px) {
+/* Tablet (641-900px): a persistent 72px icon-only rail - V1 decision 7.
+   Reuses the existing .sidebar.collapsed layout rules (desktop's manual
+   collapse toggle), just forced on by width instead of a class, so this
+   needs no JS: the rail is a normal flex sibling of .main-wrapper, not an
+   off-canvas overlay, and the hamburger/backdrop stay hidden at this width. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+  .sidebar .nav-text,
+  .sidebar .nav-group-label,
+  .sidebar-profile-text,
+  .logo-container span {
+    display: none;
+  }
+  .sidebar .nav-item {
+    justify-content: center;
+    padding: 12px;
+  }
+}
+
+/* Mobile (<=640px): the existing off-canvas drawer overlay - EXISTING,
+   unchanged behaviour (previously fired at <=900px; now scoped to the
+   actual mobile breakpoint so 641-900px can be the icon rail above). */
+@media (max-width: 640px) {
   .mobile-sidebar-toggle {
     display: inline-flex;
   }

@@ -17,11 +17,12 @@
    admin.css and marketing.css depend on. */
 
 /* ------------------------------------------------------------------ base */
-body { font-family: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+body { font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif; } /* V1 decision 1 */
 
-/* One visible keyboard-focus style everywhere. */
+/* One visible keyboard-focus style everywhere. V1 decision 4: solid 2px
+   brand-dark, not the brand green (too low-contrast as an outline colour). */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-dark);
   outline-offset: 2px;
 }
 .form-input:focus-visible,
@@ -97,7 +98,7 @@ textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .data-table td { font-size: var(--fs-body); }
 .data-table tbody tr:hover td { background: var(--bg-subtle); }
 .data-table tr.clickable-row, .data-table tr[tabindex] { cursor: pointer; }
-.data-table tr[tabindex]:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.data-table tr[tabindex]:focus-visible { outline: 2px solid var(--brand-dark); outline-offset: -2px; }
 
 .table-toolbar {
   display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
@@ -251,12 +252,14 @@ textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .menu-item.danger { color: var(--danger); }
 
 /* ----------------------------------------------------- nav group labels */
+/* V1 decision 13: light warm sidebar, so this needs a dark-on-light colour
+   now, not the white-on-dark it was written for. */
 .nav-group-label {
   padding: var(--sp-4) var(--sp-4) var(--sp-1); font-size: 0.6875rem; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint);
 }
 .sidebar.collapsed .nav-group-label { display: none; }
-.nav-item:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.nav-item:focus-visible { outline: 2px solid var(--brand-dark); outline-offset: -2px; }
 
 /* Use the dynamic viewport unit where supported so mobile browser toolbars
    don't clip the app (index.css uses 100vh). */
