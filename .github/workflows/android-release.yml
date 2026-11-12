@@ -1,0 +1,94 @@
+name: Android Release Build
+
+# Builds a signed Android App Bundle (.aab) for the Wasi app.
+#
+# This does NOT need to run on every commit to app.js/index.html/etc - the app's
+# WebView points at the live production server (see mobile/capacitor.config.json),
+# so ordinary content/feature changes to the CRM go live the moment they're
+# deployed, with no new Play Store release at all.
+#
+# Run this workflow only when the native shell itself needs to change:
+# app icon, splash screen, permissions, target SDK version bump, or the very
+# first release. Trigger it manually from the Actions tab (workflow_dispatch),
+# or by pushing a tag like "mobile-v2".
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionCode:
+        description: "Android versionCode (integer, must increase each release)"
+        required: true
+      versionName:
+        description: "Android versionName (e.g. 1.1.0)"
+        required: true
+  push:
+    tags:
+      - "mobile-v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/release.keystore
+
+      - name: Set version code/name
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          sed -i "s/versionCode .*/versionCode ${{ inputs.versionCode }}/" android/app/build.gradle
+          sed -i "s/versionName .*/versionName \"${{ inputs.versionName }}\"/" android/app/build.gradle
+
+      - name: Build signed release AAB
+        env:
+          ANDROID_KEYSTORE_PATH: release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasi-release-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+
+      # Optional: automatically push the build to Play Console's Internal testing
+      # track. Requires a Google Play service account (see
+      # mobile/PLAY_STORE_SETUP.md, step 6) and its JSON key saved as the
+      # PLAY_SERVICE_ACCOUNT_JSON secret. Commented out until that's set up -
+      # uncomment once the service account exists and has API access granted
+      # in Play Console > Setup > API access.
+      # - name: Upload to Play Console (internal track)
+      #   uses: r0adkll/upload-google-play@v1
+      #   with:
+      #     serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      #     packageName: in.sirahdigital.wasi
+      #     releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
+      #     track: internal
+      #     status: completed

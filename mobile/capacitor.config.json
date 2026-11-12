@@ -1,0 +1,29 @@
+{
+  "appId": "in.sirahdigital.wasi",
+  "appName": "Wasi",
+  "webDir": "www",
+  "server": {
+    "url": "https://wasi.sirahagents.com",
+    "cleartext": false,
+    "allowNavigation": [
+      "wasi.sirahagents.com",
+      "*.wasi.sirahagents.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#0B1C17",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0B1C17"
+    }
+  }
+}
