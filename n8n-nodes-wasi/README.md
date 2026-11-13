@@ -25,6 +25,23 @@ This has no credential-sharing step either — n8n credentials aren't portable a
 instances via a plain workflow export, so the config values live as plain fields on
 the **Wasi Config** node instead; the client edits them once after import.
 
+### Quick test: `wasi-send-template-test.json`
+
+A smaller, focused version of the above for testing one thing: sending a template
+message. Import it the same way (**Workflows → Import from File**). It has 4 nodes:
+
+1. **When clicking 'Test workflow'** — the manual trigger
+2. **Wasi Config** — paste Base URL / API Key / Client ID
+3. **List Templates (find a real template name)** — `GET /api/v1/templates`, run
+   this first to see your real template names, languages, and approval status
+4. **Send Template Message** — `POST /api/v1/messages`, edit the `to` phone number
+   and `template` name (and `params` if the template has variables) to match a real
+   approved template from step 3, then run it
+
+A template must already be synced locally in Wasi (`POST /api/templates/sync`, or
+just open the Templates view in the CRM once) before step 4 will find it —
+otherwise it 404s with `template_not_found`.
+
 ## Resources and operations
 
 | Resource | Operations |
