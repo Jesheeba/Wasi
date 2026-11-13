@@ -6,6 +6,25 @@ contacts/conversations, and register webhook subscriptions, from inside any n8n
 workflow. Wraps the same 12 Hub API endpoints the `mcp-server/` package in the Wasi
 repo exposes as MCP tools, as n8n actions instead.
 
+## No-install alternative: `wasi-n8n-hub-api-examples.json`
+
+If a client doesn't want to install a community node at all (no SSH/filesystem access
+to their n8n instance, or it's n8n Cloud, which blocks community packages entirely),
+send them [`wasi-n8n-hub-api-examples.json`](wasi-n8n-hub-api-examples.json) instead.
+It's a plain n8n workflow — import it via **Workflows → Import from File** — built
+entirely from n8n's own built-in HTTP Request node, so there is nothing to install.
+It has:
+
+- one **Wasi Config** node where they paste their Base URL, API Key, and Client ID
+  once
+- one HTTP Request node per Hub API action (the same 12 covered by the node package),
+  pre-filled with the right method/URL/auth header/body shape, ready to copy into
+  their own workflows or run directly from **Test workflow**
+
+This has no credential-sharing step either — n8n credentials aren't portable across
+instances via a plain workflow export, so the config values live as plain fields on
+the **Wasi Config** node instead; the client edits them once after import.
+
 ## Resources and operations
 
 | Resource | Operations |

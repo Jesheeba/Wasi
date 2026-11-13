@@ -1,0 +1,502 @@
+{
+  "name": "Wasi - Hub API examples",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b75ae654-43dd-4b78-a400-f005d02e199a",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc86e3d5-ed1e-46f6-b750-3059bc21c558",
+              "name": "baseUrl",
+              "value": "https://your-wasi-domain.example",
+              "type": "string"
+            },
+            {
+              "id": "65c27fb8-204d-4728-bf20-a4d8669d9c83",
+              "name": "apiKey",
+              "value": "PASTE_YOUR_WASI_HUB_API_KEY_HERE",
+              "type": "string"
+            },
+            {
+              "id": "fd9ec55c-5623-4dad-88b4-adeefb3ddfc8",
+              "name": "clientId",
+              "value": "PASTE_YOUR_WASI_CLIENT_ID_HERE",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6e531b33-270a-4954-a7f0-5c1fa2459b81",
+      "name": "Wasi Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/account",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dc1a5856-5cb4-4b79-b5c9-1d883917f702",
+      "name": "Account - Get Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/account/rate-limit",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "459023ad-8ac2-44b1-9c8f-3bff64d510c4",
+      "name": "Account - Get Rate Limit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": ""
+            },
+            {
+              "name": "phone",
+              "value": ""
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        }
+      },
+      "id": "418c0e71-b3c7-4b96-8d09-5f42b4d7018e",
+      "name": "Contact - Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/conversations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        }
+      },
+      "id": "8e8131ce-4f88-4e8d-ba06-146b04d3e1f9",
+      "name": "Conversation - List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/conversations/PASTE_CONVERSATION_ID/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "id": "74732d1d-f328-4fad-9001-913afb471a7b",
+      "name": "Conversation - Get Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ client_id: $('Wasi Config').item.json.clientId, to: '919999999999', type: 'text', body: 'Hello from n8n' }) }}"
+      },
+      "id": "7a88cf19-b420-4fbd-a0e8-819ea01aa404",
+      "name": "Message - Send Text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ client_id: $('Wasi Config').item.json.clientId, to: '919999999999', type: 'template', template: 'YOUR_TEMPLATE_NAME', params: { name: 'Priya' } }) }}"
+      },
+      "id": "f6daab3f-bf67-4498-80fc-5b8a02ef7041",
+      "name": "Message - Send Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/messages/PASTE_MESSAGE_ID/status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0a5ab7eb-1e22-4824-8811-ef6caa0bb7a7",
+      "name": "Message - Get Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        980
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/templates",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1959c854-9fae-40e8-9053-47ac91796ed4",
+      "name": "Template - List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/templates/PASTE_TEMPLATE_ID",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0a3c9b0c-5052-4a66-99ac-9315450a038b",
+      "name": "Template - Get",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/templates",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: 'order_update', category: 'Utility', language: 'en_US', body: 'Hi {{1}}, your order is on its way.', bodyParamExamples: { '1': 'Priya' } }) }}"
+      },
+      "id": "0322c1e4-2e42-4cd8-ba71-d688beff04da",
+      "name": "Template - Create",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/subscriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ target_url: 'PASTE_YOUR_CALLBACK_URL', event: 'message.received' }) }}"
+      },
+      "id": "805dd108-f207-4611-907e-775cd079604b",
+      "name": "Webhook Subscription - Subscribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $('Wasi Config').item.json.baseUrl }}/api/v1/subscriptions/PASTE_SUBSCRIPTION_ID",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Wasi Config').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8871b3a8-471b-4275-8cc8-92c5d681299a",
+      "name": "Webhook Subscription - Unsubscribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        1680
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Wasi Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wasi Config": {
+      "main": [
+        [
+          {
+            "node": "Account - Get Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Account - Get Rate Limit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Contact - Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Conversation - List",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Conversation - Get Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message - Send Text",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message - Send Template",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message - Get Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Template - List",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Template - Get",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Template - Create",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Subscription - Subscribe",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Subscription - Unsubscribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": null
+  }
+}
