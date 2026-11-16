@@ -12,6 +12,12 @@ has zero references to `CAROUSEL` anywhere, and `messageTemplateCreateSchema`
 template submitted earlier this session is a correct but ordinary
 single-card Marketing template — not what the screenshot showed.
 
+## Live verification (2026-11-16)
+Unlike limited-time-offer-templates (which needed 3 rounds of real-Meta
+fixes), the user manually created and submitted a real carousel template
+through the deployed app and confirmed it worked - no undocumented Meta
+requirement surfaced this time. No code changes needed.
+
 ## Scope decision (confirming before implementing)
 Corrected against Meta's own "Media card carousel templates" doc
 (fetched 2026-11-16, Graph API v27.0) - two corrections to the original
