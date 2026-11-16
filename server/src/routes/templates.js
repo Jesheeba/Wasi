@@ -44,6 +44,15 @@ const uploadHeaderMedia = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MEDIA_HEADER_LIMITS.DOCUMENT.maxBytes },
 });
+// Carousel templates (build-docs/features/carousel-templates.md) need up
+// to 10 card files alongside (never together with) the single headerFile
+// a non-carousel media-header template uses - one multer config handles
+// both shapes via .fields(), POST / only (the other upload routes in this
+// file are single-asset, unrelated to template creation).
+const uploadTemplateMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MEDIA_HEADER_LIMITS.DOCUMENT.maxBytes },
+}).fields([{ name: 'headerFile', maxCount: 1 }, { name: 'cardFiles', maxCount: 10 }]);
 
 router.get('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
@@ -123,9 +132,11 @@ router.post('/sync', requireRole('Admin', 'Manager'), asyncHandler(async (req, r
 // payload as a 'data' form field (JSON.stringify'd, since a template's
 // buttons/bodyParamExamples don't fit as flat multipart fields) alongside
 // the file - see app.js's createTemplate submit handler.
-router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('headerFile'), asyncHandler(async (req, res) => {
+router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHandler(async (req, res) => {
+  const headerFile = req.files?.headerFile?.[0];
+  const cardFiles = req.files?.cardFiles || [];
   let rawBody = req.body;
-  if (req.file) {
+  if (headerFile || cardFiles.length > 0) {
     try {
       rawBody = JSON.parse(req.body.data || '{}');
     } catch (err) {
@@ -134,6 +145,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
   }
   const data = messageTemplateCreateSchema.parse(rawBody);
   const isMediaHeader = mediaHeaderService.isMediaHeaderType(data.header?.type);
+  const isCarousel = Array.isArray(data.cards);
 
   // Validated up front, regardless of WABA connection state, so a bad body
   // or header never gets silently saved as 'pending' without telling the
@@ -146,36 +158,64 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
 
     if (isMediaHeader) {
       const limits = MEDIA_HEADER_LIMITS[data.header.type];
-      if (!req.file) {
+      if (!headerFile) {
         return res.status(400).json({ error: 'Missing header media', detail: `An ${data.header.type.toLowerCase()} file is required for this header type.` });
       }
-      const mimeType = limits.mimeTypes[req.file.mimetype];
+      const mimeType = limits.mimeTypes[headerFile.mimetype];
       if (!mimeType) {
         return res.status(400).json({
           error: 'Unsupported file type',
           detail: `${data.header.type} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
         });
       }
-      if (req.file.size > limits.maxBytes) {
+      if (headerFile.size > limits.maxBytes) {
         return res.status(400).json({
           error: 'File too large',
           detail: `${data.header.type} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
         });
       }
     }
+
+    if (isCarousel) {
+      if (cardFiles.length !== data.cards.length) {
+        return res.status(400).json({
+          error: 'Missing card media',
+          detail: `This carousel has ${data.cards.length} card(s) but ${cardFiles.length} file(s) were uploaded - exactly one file per card, in the same order, is required.`,
+        });
+      }
+      for (let i = 0; i < data.cards.length; i++) {
+        const limits = MEDIA_HEADER_LIMITS[data.cards[i].headerType];
+        const mimeType = limits.mimeTypes[cardFiles[i].mimetype];
+        if (!mimeType) {
+          return res.status(400).json({
+            error: 'Unsupported file type',
+            detail: `Card ${i + 1}: ${data.cards[i].headerType} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
+          });
+        }
+        if (cardFiles[i].size > limits.maxBytes) {
+          return res.status(400).json({
+            error: 'File too large',
+            detail: `Card ${i + 1}: ${data.cards[i].headerType} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
+          });
+        }
+      }
+    }
   }
 
   const waba = await wabasRepo.findByClientId(req.clientId);
 
-  if (isMediaHeader && (!waba || waba.status !== 'connected' || !waba.access_token_encrypted)) {
+  if ((isMediaHeader || isCarousel) && (!waba || waba.status !== 'connected' || !waba.access_token_encrypted)) {
     return res.status(400).json({
       error: 'Connect WhatsApp first',
-      detail: 'An image, video, or document header needs to be uploaded to your connected WhatsApp number - connect WhatsApp before creating this template.',
+      detail: isCarousel
+        ? 'A carousel template\'s card images/videos need to be uploaded to your connected WhatsApp number - connect WhatsApp before creating this template.'
+        : 'An image, video, or document header needs to be uploaded to your connected WhatsApp number - connect WhatsApp before creating this template.',
     });
   }
 
   let metaTemplateId = null;
   let seededMedia = null; // { mediaId, filename } - set once the standard Media API upload succeeds
+  let seededCardMedia = null; // [{ mediaId, filename }, ...] - one per card, same order as data.cards
 
   if (waba && waba.status === 'connected' && waba.access_token_encrypted) {
     // Checked first, before touching the access token at all - a pure
@@ -230,7 +270,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
       if (!process.env.META_APP_ID) {
         return res.status(502).json({ error: 'META_APP_ID is not configured for this environment' });
       }
-      const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[req.file.mimetype];
+      const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[headerFile.mimetype];
       try {
         // Two separate Meta uploads from the same bytes, both required, both
         // done now - never deferred (handle lifetime is undocumented, see
@@ -240,18 +280,51 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
         // resolved and cached now so day-one sending works without a second
         // round of uploads.
         const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
-          fileName: req.file.originalname || data.header.type.toLowerCase(),
-          fileLength: req.file.size,
+          fileName: headerFile.originalname || data.header.type.toLowerCase(),
+          fileLength: headerFile.size,
           fileType: mimeType,
         });
-        const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, req.file.buffer);
+        const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, headerFile.buffer);
         if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
         data.header.handle = uploadedHandle.h;
 
-        const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, req.file.buffer, mimeType, req.file.originalname);
-        seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (req.file.originalname || null) : null };
+        const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, headerFile.buffer, mimeType, headerFile.originalname);
+        seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (headerFile.originalname || null) : null };
       } catch (err) {
         return res.status(502).json({ error: 'Could not upload header media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
+      }
+    }
+
+    // Carousel (build-docs/features/carousel-templates.md) - same
+    // two-upload-per-file dance as the single header above, just looped
+    // per card. Stops (and returns) at the first failure, before
+    // createMessageTemplate is ever called - no local row gets created
+    // for a template Meta never received a complete card set for (no
+    // partial-cards state is ever persisted).
+    if (isCarousel) {
+      if (!process.env.META_APP_ID) {
+        return res.status(502).json({ error: 'META_APP_ID is not configured for this environment' });
+      }
+      seededCardMedia = [];
+      for (let i = 0; i < data.cards.length; i++) {
+        const card = data.cards[i];
+        const file = cardFiles[i];
+        const mimeType = MEDIA_HEADER_LIMITS[card.headerType].mimeTypes[file.mimetype];
+        try {
+          const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
+            fileName: file.originalname || card.headerType.toLowerCase(),
+            fileLength: file.size,
+            fileType: mimeType,
+          });
+          const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, file.buffer);
+          if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
+          card.headerHandle = uploadedHandle.h;
+
+          const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, file.buffer, mimeType, file.originalname);
+          seededCardMedia.push({ mediaId: uploadedMedia.id, filename: null });
+        } catch (err) {
+          return res.status(502).json({ error: `Could not upload card ${i + 1}'s media to Meta`, detail: describeMetaError(err), metaError: err.metaError || undefined });
+        }
       }
     }
 
@@ -288,6 +361,11 @@ router.post('/', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('head
 
   if (seededMedia) {
     await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, seededMedia);
+  }
+  if (seededCardMedia) {
+    for (let i = 0; i < seededCardMedia.length; i++) {
+      await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, { ...seededCardMedia[i], cardIndex: i });
+    }
   }
 
   // Non-blocking - the CRM's own Create/Edit modal already shows this live

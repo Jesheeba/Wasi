@@ -2100,6 +2100,21 @@ body {
   background: var(--bg-subtle, #f0fdf4);
 }
 
+.template-preview-carousel {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  overflow-x: auto;
+}
+
+.template-preview-card {
+  flex: 0 0 160px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.78rem;
+}
+
 .modal-overlay.open .modal-box {
   transform: translateY(0);
 }

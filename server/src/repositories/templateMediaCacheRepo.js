@@ -1,9 +1,13 @@
 // The default/fallback row only - is_default (migration 030) is what makes
 // this safe now that a template can have other, non-default asset rows too.
-async function findByTemplateId(db, clientId, templateId) {
+// cardIndex (migration 093, carousel templates) is null for a normal
+// template's own top-level media (unchanged meaning) or a card's position
+// for a carousel template - `is not distinct from` because plain `=` never
+// matches NULL against NULL.
+async function findByTemplateId(db, clientId, templateId, cardIndex = null) {
   const { rows } = await db.query(
-    'select * from template_media_cache where client_id = $1 and template_id = $2 and is_default',
-    [clientId, templateId]
+    'select * from template_media_cache where client_id = $1 and template_id = $2 and is_default and card_index is not distinct from $3',
+    [clientId, templateId, cardIndex]
   );
   return rows[0] || null;
 }
@@ -33,14 +37,19 @@ async function findByTemplateId(db, clientId, templateId) {
 // still have no default row at all - not a template genuinely "synced in
 // from Meta" as first suspected. The correct partial-index conflict
 // target names the column(s) and repeats the index's own WHERE predicate.
-async function upsert(db, clientId, templateId, { mediaId, filename }) {
+// cardIndex (migration 093) - null for a normal template's single default
+// (unchanged behavior), a card's position for a carousel template. The
+// conflict target matches migration 093's replacement index exactly
+// (template_id, coalesce(card_index, -1)) where is_default - the plain
+// (template_id) target this used before 093 no longer exists.
+async function upsert(db, clientId, templateId, { mediaId, filename, cardIndex }) {
   const { rows } = await db.query(
-    `insert into template_media_cache (client_id, template_id, media_id, filename, resolved_at, is_default)
-     values ($1, $2, $3, $4, now(), true)
-     on conflict (template_id) where is_default do update
+    `insert into template_media_cache (client_id, template_id, media_id, filename, resolved_at, is_default, card_index)
+     values ($1, $2, $3, $4, now(), true, $5)
+     on conflict (template_id, coalesce(card_index, -1)) where is_default do update
        set media_id = excluded.media_id, filename = excluded.filename, resolved_at = now()
      returning *`,
-    [clientId, templateId, mediaId, filename || null]
+    [clientId, templateId, mediaId, filename || null, cardIndex ?? null]
   );
   return rows[0];
 }
@@ -81,16 +90,21 @@ async function listByTemplateId(db, clientId, templateId) {
 // this action. Existence is checked BEFORE demoting anything, so a bad
 // assetId is a no-op (returns null) rather than leaving the template with
 // no default row at all.
+// Demotion is scoped to the SAME card_index as the asset being promoted
+// (migration 093) - promoting card 1's new default must never touch card
+// 0's, which is a completely independent slot. `is not distinct from`
+// again because a plain `=` can't match card_index = NULL against itself.
 async function setDefault(db, clientId, templateId, assetId) {
   const { rows: existing } = await db.query(
-    'select 1 from template_media_cache where client_id = $1 and id = $2 and template_id = $3',
+    'select card_index from template_media_cache where client_id = $1 and id = $2 and template_id = $3',
     [clientId, assetId, templateId]
   );
   if (existing.length === 0) return null;
+  const cardIndex = existing[0].card_index;
 
   await db.query(
-    'update template_media_cache set is_default = false where client_id = $1 and template_id = $2 and is_default',
-    [clientId, templateId]
+    'update template_media_cache set is_default = false where client_id = $1 and template_id = $2 and is_default and card_index is not distinct from $3',
+    [clientId, templateId, cardIndex]
   );
   const { rows } = await db.query(
     'update template_media_cache set is_default = true where client_id = $1 and id = $2 returning *',
@@ -102,12 +116,12 @@ async function setDefault(db, clientId, templateId, assetId) {
 // A new non-default asset - one row per upload, never collapsed into an
 // existing one, since a template can now hold many send-time alternatives to
 // its approval sample (see migration 030's comment).
-async function insertAsset(db, clientId, templateId, { mediaId, filename }) {
+async function insertAsset(db, clientId, templateId, { mediaId, filename, cardIndex }) {
   const { rows } = await db.query(
-    `insert into template_media_cache (client_id, template_id, media_id, filename, resolved_at, is_default)
-     values ($1, $2, $3, $4, now(), false)
+    `insert into template_media_cache (client_id, template_id, media_id, filename, resolved_at, is_default, card_index)
+     values ($1, $2, $3, $4, now(), false, $5)
      returning *`,
-    [clientId, templateId, mediaId, filename || null]
+    [clientId, templateId, mediaId, filename || null, cardIndex ?? null]
   );
   return rows[0];
 }

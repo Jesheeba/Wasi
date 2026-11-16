@@ -173,6 +173,32 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     const headerComponent = mediaHeaderService.buildMediaHeaderComponent(template.header_type, resolved.mediaId, resolved.filename);
     finalComponents = [headerComponent, ...finalComponents.filter((c) => c.type !== 'header')];
   }
+  // Carousel (build-docs/features/carousel-templates.md) - needs one
+  // resolved media id PER CARD, unlike the single-header case above.
+  // None of this app's card bodies/buttons carry variables (out of this
+  // feature's scope - static text/buttons only), so only each card's
+  // header component is dynamic enough to need sending; Meta renders the
+  // rest from the approved template itself, same as a static button on
+  // any other template never needs its own send-time component.
+  if (type === 'template' && template?.cards) {
+    let resolvedCards;
+    try {
+      resolvedCards = await mediaHeaderService.resolveCarouselMediaIds(db, clientId, waba, accessToken, template);
+    } catch (err) {
+      if (err instanceof mediaHeaderService.MediaResolutionError) {
+        throw new MessagingError(err.message, 'media_resolution_failed');
+      }
+      throw err;
+    }
+    const carouselComponent = {
+      type: 'carousel',
+      cards: template.cards.map((card, i) => ({
+        card_index: i,
+        components: [mediaHeaderService.buildMediaHeaderComponent(card.headerType, resolvedCards[i].mediaId, resolvedCards[i].filename)],
+      })),
+    };
+    finalComponents = [...finalComponents.filter((c) => c.type !== 'carousel'), carouselComponent];
+  }
   // Limited-Time-Offer (build-docs/features/limited-time-offer-templates.md).
   // The offer's text/has_expiration are fixed at template-creation time
   // (metaClient.buildUtilityMarketingPayload), but Meta requires the actual

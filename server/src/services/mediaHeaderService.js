@@ -60,10 +60,14 @@ class MediaResolutionError extends Error {}
 // send - a chat message, a broadcast, a flow node - instead of the
 // template's approval-time default. Omitted, this resolves the default
 // exactly as before.
-async function resolveMediaId(db, clientId, waba, accessToken, template, assetId) {
+// cardIndex (optional, carousel templates - migration 093): which card's
+// default media to resolve, instead of the template's own (null-card_index)
+// default. Ignored when assetId is given - a specific asset id is already
+// unambiguous about which card it belongs to.
+async function resolveMediaId(db, clientId, waba, accessToken, template, assetId, cardIndex = null) {
   const cached = assetId
     ? await templateMediaCacheRepo.findAssetById(db, clientId, assetId)
-    : await templateMediaCacheRepo.findByTemplateId(db, clientId, template.id);
+    : await templateMediaCacheRepo.findByTemplateId(db, clientId, template.id, cardIndex);
   if (!cached) {
     if (assetId) {
       throw new MediaResolutionError(
@@ -78,17 +82,19 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
     // one asset exists, and was found to actively mislead someone
     // troubleshooting a template that already has usable media, just none
     // marked as the default.
-    const others = await templateMediaCacheRepo.listByTemplateId(db, clientId, template.id);
+    const others = (await templateMediaCacheRepo.listByTemplateId(db, clientId, template.id))
+      .filter((a) => a.card_index === cardIndex);
+    const label = cardIndex !== null ? `card ${cardIndex + 1} of "${template.name}"` : `"${template.name}"`;
     if (others.length > 0) {
       const list = others.map((a) => `"${a.filename || a.media_id}"`).join(', ');
       throw new MediaResolutionError(
-        `"${template.name}" has no default header media set, so a plain send/broadcast has nothing to use. ` +
-        `${others.length} uploaded file${others.length > 1 ? 's' : ''} already exist for this template (${list}) - ` +
+        `${label} has no default header media set, so a plain send/broadcast has nothing to use. ` +
+        `${others.length} uploaded file${others.length > 1 ? 's' : ''} already exist (${list}) - ` +
         `set one as the default, or point this send at one of them directly.`
       );
     }
     throw new MediaResolutionError(
-      `"${template.name}"'s header media was never uploaded through this app - upload it before this can be sent.`
+      `${label}'s header media was never uploaded through this app - upload it before this can be sent.`
     );
   }
 
@@ -105,7 +111,7 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
     );
     const updated = assetId
       ? await templateMediaCacheRepo.updateAsset(db, clientId, assetId, { mediaId: uploaded.id, filename: cached.filename })
-      : await templateMediaCacheRepo.upsert(db, clientId, template.id, { mediaId: uploaded.id, filename: cached.filename });
+      : await templateMediaCacheRepo.upsert(db, clientId, template.id, { mediaId: uploaded.id, filename: cached.filename, cardIndex });
     return { mediaId: updated.media_id, filename: updated.filename };
   } catch (err) {
     // Refresh failing means the cached id itself is at or past 30 days and
@@ -117,6 +123,22 @@ async function resolveMediaId(db, clientId, waba, accessToken, template, assetId
       `"${template.name}"'s header media could not be refreshed - its copy on Meta's side has likely expired. Re-upload the header media for this template before it can be sent. (${err.message})`
     );
   }
+}
+
+// Carousel templates (build-docs/features/carousel-templates.md) need one
+// resolved media id PER CARD, not the single id every other media-header
+// template needs - this loops resolveMediaId per card index rather than
+// duplicating its cache/refresh logic. Card media isn't resolvable by URL
+// (no resolveMediaIdFromUrl equivalent) or by a specific non-default
+// asset id yet - out of scope for this feature's first build, same as a
+// plain single-header template's own headerMediaAssetId support took a
+// separate later pass to add.
+async function resolveCarouselMediaIds(db, clientId, waba, accessToken, template) {
+  const resolved = [];
+  for (let i = 0; i < template.cards.length; i++) {
+    resolved.push(await resolveMediaId(db, clientId, waba, accessToken, template, undefined, i));
+  }
+  return resolved;
 }
 
 function ipv4ToInt(ip) {
@@ -250,6 +272,7 @@ function buildMediaHeaderComponent(headerType, mediaId, filename) {
 module.exports = {
   isMediaHeaderType,
   resolveMediaId,
+  resolveCarouselMediaIds,
   resolveMediaIdFromUrl,
   buildMediaHeaderComponent,
   MediaResolutionError,

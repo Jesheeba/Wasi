@@ -59,19 +59,24 @@ async function create(db, {
   client_id, name, category, status, body,
   language, header, footer, buttons, bodyParamExamples,
   codeExpirationMinutes, addSecurityDisclaimer, otpButtonType,
-  limitedTimeOffer,
+  limitedTimeOffer, cards,
   meta_template_id,
 }) {
   const authOptions = category === 'Authentication'
     ? { codeExpirationMinutes, addSecurityDisclaimer, otpButtonType }
     : null;
+  // headerHandle (routes/templates.js mutates each card with one, the
+  // Resumable Upload API's one-time handle for Meta's creation call) is
+  // transient and never stored - only headerType/bodyText/buttons are the
+  // template's real, durable shape.
+  const storedCards = cards ? cards.map(({ headerType, bodyText, buttons: cardButtons }) => ({ headerType, bodyText, buttons: cardButtons })) : null;
   const { rows } = await db.query(
     `insert into message_templates (
        client_id, name, category, status, body, language,
        header_type, header_content, footer_text, buttons, body_param_examples, auth_options,
-       meta_template_id, limited_time_offer
+       meta_template_id, limited_time_offer, cards
      )
-     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12, $13, $14)
+     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12, $13, $14, $15)
      returning *`,
     [
       client_id, name, category, status, body || null, language,
@@ -81,6 +86,7 @@ async function create(db, {
       authOptions ? JSON.stringify(authOptions) : null,
       meta_template_id || null,
       limitedTimeOffer ? JSON.stringify(limitedTimeOffer) : null,
+      storedCards ? JSON.stringify(storedCards) : null,
     ]
   );
   return rows[0];
@@ -118,14 +124,14 @@ async function updateStatus(db, id, status) {
 // from Meta's own data, since there's nothing local to preserve.
 async function createFromMetaSync(db, {
   client_id, meta_template_id, name, category, status, language, rejection_reason,
-  body, bodyParamExamples, headerType, headerContent, footerText, buttons,
+  body, bodyParamExamples, headerType, headerContent, footerText, buttons, cards,
 }) {
   const { rows } = await db.query(
     `insert into message_templates (
        client_id, meta_template_id, name, category, status, language, rejection_reason,
-       body, body_param_examples, header_type, header_content, footer_text, buttons
+       body, body_param_examples, header_type, header_content, footer_text, buttons, cards
      )
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      returning *`,
     [
       client_id, meta_template_id, name, category, status, language || 'en_US', rejection_reason || null,
@@ -135,6 +141,7 @@ async function createFromMetaSync(db, {
       headerContent || null,
       footerText || null,
       buttons ? JSON.stringify(buttons) : null,
+      cards ? JSON.stringify(cards) : null,
     ]
   );
   return rows[0];

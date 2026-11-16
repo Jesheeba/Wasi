@@ -2444,6 +2444,15 @@ document.addEventListener('DOMContentLoaded', () => {
         `<div class="template-preview-button">${icon[b.type] || ''} ${escapeHtml(b.text || '')}</div>`
       ).join('')}</div>`;
     }
+    if (Array.isArray(t.cards) && t.cards.length > 0) {
+      html += `<div class="template-preview-carousel">${t.cards.map((card) => `
+        <div class="template-preview-card">
+          <div class="template-preview-header">${card.headerType.charAt(0)}${card.headerType.slice(1).toLowerCase()} card</div>
+          ${card.bodyText ? `<div>${escapeHtml(card.bodyText)}</div>` : ''}
+          ${card.buttons?.length ? `<div class="template-preview-buttons"><div class="template-preview-button">&#128279; ${escapeHtml(card.buttons[0].text || '')}</div></div>` : ''}
+        </div>
+      `).join('')}</div>`;
+    }
     return html;
   }
 
@@ -5830,9 +5839,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const bodyState = updateTemplateBodyValidation();
     const headerState = updateTemplateHeaderValidation();
     const buttonsState = updateTemplateButtonsValidation();
-    const hasErrors = bodyState.hasErrors || headerState.hasErrors || buttonsState.hasErrors;
+    let hasErrors = bodyState.hasErrors || headerState.hasErrors || buttonsState.hasErrors;
+
+    // Carousel (build-docs/features/carousel-templates.md) - client-side
+    // pre-check of Meta's own real constraints, so a bad card set never
+    // even reaches the server's superRefine. 2-10 cards, every card has a
+    // file chosen, and a button's text/url are both-or-neither per card.
+    if (document.getElementById('new-template-carousel-enabled')?.checked) {
+      const validCardCount = templateCards.length >= 2 && templateCards.length <= 10;
+      const everyCardHasFile = templateCards.every((c) => c.file);
+      const buttonFieldsConsistent = templateCards.every((c) => Boolean(c.buttonText) === Boolean(c.buttonUrl));
+      if (!validCardCount || !everyCardHasFile || !buttonFieldsConsistent) hasErrors = true;
+    }
+
     submitBtn.disabled = hasErrors;
-    submitBtn.title = hasErrors ? 'Fix the highlighted body/header/button issues above before submitting.' : '';
+    submitBtn.title = hasErrors ? 'Fix the highlighted body/header/button/card issues above before submitting.' : '';
   }
 
   function substituteTemplateParams(text, samples) {
@@ -6064,6 +6085,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('new-template-lto-enabled').checked = false;
       updateTemplateLtoFields();
     }
+    // Carousel is Marketing-only too (build-docs/features/
+    // carousel-templates.md) - same reasoning as LTO above.
+    const carouselGroup = document.getElementById('template-carousel-group');
+    if (carouselGroup) carouselGroup.style.display = category === 'Marketing' ? '' : 'none';
+    if (category !== 'Marketing') {
+      document.getElementById('new-template-carousel-enabled').checked = false;
+      updateTemplateCarouselFields();
+    }
     updateTemplatePreview();
   }
 
@@ -6084,6 +6113,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const footerInput = document.getElementById('new-template-footer');
     footerInput.disabled = enabled;
     if (enabled) footerInput.value = '';
+    // Also mutually exclusive with carousel (build-docs/features/
+    // carousel-templates.md) - no documented interaction, not attempted.
+    const carouselCheckbox = document.getElementById('new-template-carousel-enabled');
+    if (carouselCheckbox) {
+      carouselCheckbox.disabled = enabled;
+      if (enabled && carouselCheckbox.checked) {
+        carouselCheckbox.checked = false;
+        updateTemplateCarouselFields();
+      }
+    }
+    updateTemplatePreview();
+  }
+
+  // Mutually exclusive with header, footer, AND limited-time-offer - a
+  // carousel template takes the header's visual slot (same reasoning as
+  // LTO) and Meta's own examples never show a footer alongside one.
+  function updateTemplateCarouselFields() {
+    const enabled = document.getElementById('new-template-carousel-enabled').checked;
+    document.getElementById('template-carousel-fields').style.display = enabled ? '' : 'none';
+    const headerSelect = document.getElementById('new-template-header-type');
+    headerSelect.disabled = enabled;
+    if (enabled) {
+      headerSelect.value = 'NONE';
+      updateTemplateHeaderField();
+    }
+    const footerInput = document.getElementById('new-template-footer');
+    footerInput.disabled = enabled;
+    if (enabled) footerInput.value = '';
+    const ltoCheckbox = document.getElementById('new-template-lto-enabled');
+    if (ltoCheckbox) {
+      ltoCheckbox.disabled = enabled;
+      if (enabled && ltoCheckbox.checked) {
+        ltoCheckbox.checked = false;
+        updateTemplateLtoFields();
+      }
+    }
+    if (enabled && templateCards.length === 0) {
+      addTemplateCard();
+      addTemplateCard();
+    } else if (!enabled) {
+      templateCards = [];
+      renderTemplateCardsList();
+    }
     updateTemplatePreview();
   }
 
@@ -6171,12 +6243,22 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `<div class="template-preview-lto">&#127873; ${escapeHtml(offerText || '(offer text)')}${hasExpiration ? ' &middot; expires in...' : ''}</div>
         <div class="template-preview-buttons"><div class="template-preview-button">&#128203; Copy Code</div><div class="template-preview-button">&#128279; Shop Now</div></div>`;
     }
+    if (document.getElementById('new-template-carousel-enabled')?.checked) {
+      html += `<div class="template-preview-carousel">${templateCards.map((card) => `
+        <div class="template-preview-card">
+          <div class="template-preview-header">${card.file ? escapeHtml(card.file.name) : `${card.headerType.charAt(0)}${card.headerType.slice(1).toLowerCase()} - no file chosen yet`}</div>
+          ${card.bodyText ? `<div>${escapeHtml(card.bodyText)}</div>` : ''}
+          ${card.buttonText ? `<div class="template-preview-buttons"><div class="template-preview-button">&#128279; ${escapeHtml(card.buttonText)}</div></div>` : ''}
+        </div>
+      `).join('')}</div>`;
+    }
     bubble.innerHTML = html;
   }
 
   function syncTemplateFormUI() {
     updateTemplateCategoryFields();
     updateTemplateLtoFields();
+    updateTemplateCarouselFields();
     updateTemplateHeaderField();
     renderTemplateSampleInputs();
     const body = document.getElementById('new-template-body').value;
@@ -6199,6 +6281,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-template-language').disabled = false;
     document.getElementById('new-template-header-type').disabled = false;
     document.getElementById('new-template-footer').disabled = false;
+    const ltoCheckbox = document.getElementById('new-template-lto-enabled');
+    if (ltoCheckbox) ltoCheckbox.disabled = false;
+    const carouselCheckbox = document.getElementById('new-template-carousel-enabled');
+    if (carouselCheckbox) carouselCheckbox.disabled = false;
     const modalTitle = document.querySelector('#modal-create-template .modal-title');
     if (modalTitle) modalTitle.textContent = 'Create Template';
     const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
@@ -6218,6 +6304,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('create-template-form')?.reset();
     templateButtons = [];
     renderTemplateButtonsList();
+    templateCards = [];
+    renderTemplateCardsList();
     resetTemplateModalToCreateMode();
 
     // Checked fresh on every open rather than cached in state long-term -
@@ -6251,6 +6339,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('new-template-lto-text')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-lto-code')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-lto-url')?.addEventListener('input', updateTemplatePreview);
+  document.getElementById('new-template-carousel-enabled')?.addEventListener('change', updateTemplateCarouselFields);
+  document.getElementById('template-add-card-btn')?.addEventListener('click', addTemplateCard);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
     updateTemplateSubmitGating();
     updateTemplatePreview();
@@ -6338,6 +6428,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const payload = { name, category, language };
     let headerFile = null;
+    let cardFiles = [];
 
     if (category === 'Authentication') {
       const expiration = document.getElementById('new-template-auth-expiration').value;
@@ -6391,39 +6482,65 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         payload.header = { type: 'NONE' };
       }
+      if (category === 'Marketing' && document.getElementById('new-template-carousel-enabled').checked) {
+        if (templateCards.length < 2 || templateCards.length > 10) {
+          showToast('A carousel needs 2-10 cards.');
+          return;
+        }
+        if (templateCards.some((c) => !c.file)) {
+          showToast('Choose a file for every card before submitting.');
+          return;
+        }
+        if (templateCards.some((c) => Boolean(c.buttonText) !== Boolean(c.buttonUrl))) {
+          showToast('Every card with a button needs both button text and a URL (or neither).');
+          return;
+        }
+        payload.cards = templateCards.map((c) => ({
+          headerType: c.headerType,
+          bodyText: c.bodyText || undefined,
+          buttons: c.buttonText ? [{ type: 'URL', text: c.buttonText, url: c.buttonUrl }] : undefined,
+        }));
+        cardFiles = templateCards.map((c) => c.file);
+        payload.header = { type: 'NONE' };
+      }
     }
 
-    const restoreSubmit = withSubmitLoading(e.target, headerFile ? 'Uploading & submitting…' : 'Submitting…');
+    const hasFiles = Boolean(headerFile) || cardFiles.length > 0;
+    const restoreSubmit = withSubmitLoading(e.target, hasFiles ? 'Uploading & submitting…' : 'Submitting…');
     try {
-      // A media header sends the file as multipart, with the rest of the
-      // payload as a 'data' field (JSON-stringified - buttons/samples don't
-      // fit as flat form fields) - see routes/templates.js. authFetch skips
-      // its default JSON Content-Type for a FormData body so the browser
-      // can set its own multipart boundary, same as the profile-picture
-      // upload already relies on.
-      const requestBody = headerFile
+      // A media header (or carousel cards) sends the file(s) as multipart,
+      // with the rest of the payload as a 'data' field (JSON-stringified -
+      // buttons/samples don't fit as flat form fields) - see
+      // routes/templates.js. authFetch skips its default JSON Content-Type
+      // for a FormData body so the browser can set its own multipart
+      // boundary, same as the profile-picture upload already relies on.
+      const requestBody = hasFiles
         ? (() => {
             const form = new FormData();
             form.append('data', JSON.stringify(payload));
-            form.append('headerFile', headerFile);
+            if (headerFile) form.append('headerFile', headerFile);
+            cardFiles.forEach((f) => form.append('cardFiles', f));
             return form;
           })()
         : JSON.stringify(payload);
       const result = await authFetch('/api/templates', {
         method: 'POST',
         body: requestBody,
-        // A media header (routes/templates.js) makes 3 sequential Meta
-        // calls - createUploadSession/uploadFileBytes/uploadMedia - before
-        // template creation even starts, same reasoning as the embedded
-        // signup's 90s override above. The default 45s (authFetch) was
-        // timing out on a DOCUMENT header's upload mid-flight.
-        ...(headerFile ? { timeoutMs: 90_000 } : {}),
+        // A media header (or carousel cards) makes several sequential
+        // Meta calls - createUploadSession/uploadFileBytes/uploadMedia,
+        // once per file - before template creation even starts, same
+        // reasoning as the embedded signup's 90s override elsewhere. The
+        // default 45s (authFetch) was timing out on a DOCUMENT header's
+        // upload mid-flight, and a multi-card carousel is slower still.
+        ...(hasFiles ? { timeoutMs: 90_000 } : {}),
       });
       await refreshTemplates();
       renderTemplates();
       e.target.reset();
       templateButtons = [];
       renderTemplateButtonsList();
+      templateCards = [];
+      renderTemplateCardsList();
       syncTemplateFormUI();
       document.getElementById('modal-create-template')?.classList.remove('open');
       // Same category/content-mismatch signal the live warning above

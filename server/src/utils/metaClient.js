@@ -608,9 +608,23 @@ function buildTemplateCreatePayload(templateData) {
   return buildUtilityMarketingPayload(templateData);
 }
 
-function buildUtilityMarketingPayload({ name, category, language = 'en_US', body, bodyParamExamples, header, footer, buttons, limitedTimeOffer }) {
+function buildUtilityMarketingPayload({ name, category, language = 'en_US', body, bodyParamExamples, header, footer, buttons, limitedTimeOffer, cards }) {
   const bodyValidation = validateTemplateText(body, { label: 'Body' });
   if (!bodyValidation.valid) throw new TemplateValidationError(bodyValidation.errors);
+
+  // Carousel templates (build-docs/features/carousel-templates.md) are a
+  // genuinely separate shape per Meta's own "Media card carousel
+  // templates" doc, not a variant of the header/body/footer/buttons
+  // shape below: lowercase component type strings (confirmed in Meta's
+  // own examples - "type": "body"/"carousel", not "BODY"/"CAROUSEL"),
+  // and no top-level header/footer/buttons at all (validate.js's
+  // superRefine already rejects those alongside cards - this is the
+  // payload-building side of that same rule). Built and returned
+  // separately rather than folded into the branches below, which stay
+  // exactly as they were for every other (non-carousel) template.
+  if (cards) {
+    return buildCarouselPayload({ name, category, language, body, bodyParamExamples, cards });
+  }
 
   const components = [];
 
@@ -710,6 +724,57 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
   const payload = { name, category: category.toUpperCase(), language, components };
   // Omitted entirely for a template with no variables - Meta defaults to
   // "positional" when absent, which is irrelevant with zero parameters.
+  if (bodyValidation.paramFormat === 'named') payload.parameter_format = 'named';
+  return payload;
+}
+
+// Carousel templates - see buildUtilityMarketingPayload's own comment for
+// why this is a separate function rather than another branch inside that
+// one. Each card's `headerHandle` must already be resolved (the Resumable
+// Upload API handle, same as a single media header - routes/templates.js
+// resolves one per card before this is ever called); defensive, not
+// reachable through the normal route, same treatment as the single-header
+// `header.handle` check above.
+function buildCarouselPayload({ name, category, language, body, bodyParamExamples, cards }) {
+  const bodyValidation = validateTemplateText(body, { label: 'Body' });
+  if (!bodyValidation.valid) throw new TemplateValidationError(bodyValidation.errors);
+
+  const bodyComponent = { type: 'body', text: body };
+  if (bodyValidation.params.length > 0) {
+    bodyComponent.example = {
+      body_text: [bodyValidation.params.map((param_name) =>
+        (bodyParamExamples && bodyParamExamples[param_name]) || defaultExampleFor(param_name)
+      )],
+    };
+  }
+
+  const cardComponents = cards.map((card) => {
+    if (!card.headerHandle) {
+      throw new TemplateValidationError([`Card header type "${card.headerType}" requires an uploaded media handle.`]);
+    }
+    const components = [
+      { type: 'header', format: card.headerType, example: { header_handle: [card.headerHandle] } },
+    ];
+    if (card.bodyText) components.push({ type: 'body', text: card.bodyText });
+    if (card.buttons && card.buttons.length > 0) {
+      components.push({
+        type: 'buttons',
+        buttons: card.buttons.map((b) => {
+          if (b.type === 'URL') return { type: 'url', text: b.text, url: b.url };
+          if (b.type === 'PHONE_NUMBER') return { type: 'phone_number', text: b.text, phone_number: b.phone_number };
+          return { type: 'quick_reply', text: b.text };
+        }),
+      });
+    }
+    return { components };
+  });
+
+  const payload = {
+    name,
+    category: category.toUpperCase(),
+    language,
+    components: [bodyComponent, { type: 'carousel', cards: cardComponents }],
+  };
   if (bodyValidation.paramFormat === 'named') payload.parameter_format = 'named';
   return payload;
 }
@@ -917,6 +982,13 @@ async function deleteMessageTemplate(wabaId, accessToken, name, hsmId) {
 // with no variables legitimately has none).
 function parseTemplateComponents(components) {
   const list = Array.isArray(components) ? components : [];
+  // Case-insensitive match - every other component type here is uppercase
+  // in both what this app submits and what Meta echoes back, but carousel
+  // templates are the one feature whose create-time shape is documented
+  // lowercase (build-docs/features/carousel-templates.md); GET's actual
+  // casing for a synced-in carousel is unconfirmed, so this doesn't assume
+  // either case.
+  const carouselComponent = list.find((c) => String(c.type).toUpperCase() === 'CAROUSEL');
   const bodyComponent = list.find((c) => c.type === 'BODY');
   const headerComponent = list.find((c) => c.type === 'HEADER');
   const footerComponent = list.find((c) => c.type === 'FOOTER');
@@ -956,6 +1028,27 @@ function parseTemplateComponents(components) {
     }));
   }
 
+  // Best-effort, text/buttons only - no media id (a synced-in carousel has
+  // no cached media at all until someone uploads real assets per card,
+  // same gap/fix pattern templateMediaAssets.test.js already covers for a
+  // single media header).
+  let cards = null;
+  if (carouselComponent?.cards?.length) {
+    cards = carouselComponent.cards.map((card) => {
+      const cardComponents = Array.isArray(card.components) ? card.components : [];
+      const cardHeader = cardComponents.find((c) => String(c.type).toUpperCase() === 'HEADER');
+      const cardBody = cardComponents.find((c) => String(c.type).toUpperCase() === 'BODY');
+      const cardButtons = cardComponents.find((c) => String(c.type).toUpperCase() === 'BUTTONS');
+      return {
+        headerType: String(cardHeader?.format || 'IMAGE').toUpperCase(),
+        bodyText: cardBody?.text || null,
+        buttons: cardButtons?.buttons?.length
+          ? cardButtons.buttons.map((b) => ({ type: String(b.type).toUpperCase(), text: b.text || null, url: b.url || null, phone_number: b.phone_number || null }))
+          : null,
+      };
+    });
+  }
+
   return {
     body: bodyComponent?.text || null,
     bodyParamExamples: Object.keys(bodyParamExamples).length > 0 ? bodyParamExamples : null,
@@ -963,6 +1056,7 @@ function parseTemplateComponents(components) {
     headerContent,
     footerText: footerComponent?.text || null,
     buttons,
+    cards,
   };
 }
 

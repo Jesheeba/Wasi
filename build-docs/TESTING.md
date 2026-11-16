@@ -1,5 +1,63 @@
 # Testing
 
+## carousel-templates
+`server/test/carouselTemplates.test.js` - real DB writes through a
+disposable test client (same pattern as `limitedTimeOfferTemplates.test.js`);
+every Meta call (createUploadSession/uploadFileBytes/uploadMedia per card +
+message_templates) stubbed. Mapped to the feature doc's acceptance criteria:
+
+| Test | Criterion |
+|---|---|
+| 1-card carousel rejected locally (400) | #2 |
+| Mismatched card button shapes across cards rejected locally (400) | #2 |
+| Non-Marketing category rejected locally (400) | #2 |
+| Header alongside a carousel rejected locally (400) | #2 |
+| Card file count must match card count (400), no Meta call | #2 |
+| Valid 2-card carousel submits with the documented lowercase `body`/`carousel`/`header`/`buttons` shape (not this app's usual uppercase); one media upload per card; local row stores `cards` with no transient `headerHandle`; one default media asset cached per `card_index` | #1 |
+| Sending resolves one media id per card and sends a `carousel` component with per-card `card_index` + header | #3 |
+
+Result: 7/7 pass. Regression: re-ran the full template/broadcast/consent
+impact map (`limitedTimeOfferTemplates`, `templateEdit`,
+`templateMediaAssets`, `templateSync`, `templateLibrary`,
+`templateCategoryMismatchWarning`, `templateLanguageHardcodeFixes`,
+`consentTracking`, `consentHardeningPhase1/2`, `optInKeywordPhase4`,
+`apiV1AuthenticationTemplateSend`, `broadcastRetry`, `broadcastPacing`,
+`broadcastSmartSending`) - 111/111 pass, all pre-existing ones unaffected.
+
+**Known gap, documented not hidden**: `POST /:id/header-media` (uploading
+a NEW media asset to an existing template after creation) is not yet
+card-aware - only the creation-time per-card upload path works. A
+carousel template's card media can only be set at creation; re-uploading
+a card's image later needs a future pass, same two-pass history this
+app's single-header media-asset feature itself had (`templateMediaAssets.test.js`'s
+whole premise). Not a blocker for the acceptance criteria above - just
+not built yet.
+
+**Frontend scope note**: the create-modal's per-card editor supports one
+optional URL button per card (not the full QUICK_REPLY/PHONE_NUMBER mix
+Meta allows) - matches the common "image + text + link" pattern from the
+reference screenshot, deliberately simpler than building two full button
+editors for a first pass.
+
+## fix(cross-tab-tenant-isolation)
+`server/test/crossTabTenantIsolation.test.js` - real browser (Playwright),
+two tabs sharing one context/storage, against `wasi-test-postgres`
+(port 5433), served on port 4005 with `page.route` redirecting app.js's
+hardcoded `:4000` API calls (port 4000 was already held by the user's own
+locally-running dev server, left untouched per project convention).
+
+| Test | Criterion |
+|---|---|
+| Tab A open on account A; tab B (auto-resumes A via shared storage) logs out and into account B | Tab A gets forced back to the login screen, never renders B's data under A's chrome |
+| Tab B performing the switch | stays logged in as B, unaffected |
+| Tab B re-authenticates as the SAME account with a fresh token (no logout) | Tab A is NOT kicked out - decoded tenant id still matches |
+
+2/2 pass. `confirmPromptGroup23.test.js` (the other test that also
+hardcodes port 4000) could not be re-run in this session for the same
+pre-existing port-4000 collision already documented in the
+limited-time-offer-templates entry above - unrelated to this change, no
+diff on that file.
+
 ## client-suspension-paywall
 `server/test/clientSuspensionPaywall.test.js` - stubs only (no DB), same
 discipline as `sessionInvalidation.test.js`. Mapped to the feature doc's

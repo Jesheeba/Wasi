@@ -13,30 +13,47 @@ template submitted earlier this session is a correct but ordinary
 single-card Marketing template — not what the screenshot showed.
 
 ## Scope decision (confirming before implementing)
-Meta's real constraints, which this feature must enforce, not loosen:
-- 2–10 cards per carousel, all cards **same header type** (all IMAGE or all
-  VIDEO — no DOCUMENT, no mixing, no TEXT/NONE header on a card).
-- Every card must have the **same number of buttons**, and every button at
-  a given position across cards must be the **same type** (Meta rejects a
-  mismatch). Only `QUICK_REPLY` and `URL` allowed on a card (no
-  `PHONE_NUMBER` on cards — that's a top-level-only button type).
-- The top-level template keeps its own plain `BODY` (and optionally
-  `FOOTER`) component, same as today — the carousel is an *additional*
-  component after it, not a replacement.
-- Category: Marketing or Utility only (Meta does not support Carousel for
-  Authentication) — this app's existing category enum already excludes
-  that combination at the schema level once added.
-- Once approved, a carousel template **cannot be edited** via Meta's API at
-  all (not just header, the whole thing) — only delete + recreate. This is
-  stricter than the existing single-card edit path
-  (`messageTemplateUpdateSchema` already excludes media headers from edit;
-  carousel excludes everything).
+Corrected against Meta's own "Media card carousel templates" doc
+(fetched 2026-11-16, Graph API v27.0) - two corrections to the original
+draft of this section below:
+- **Marketing category only** - Meta does not support carousel cards on
+  Utility templates at all (the original draft said "Marketing or
+  Utility," which was wrong).
+- **Component type strings are lowercase** at create time for this
+  specific feature (`"type": "body"`, `"type": "carousel"`, nested cards'
+  `"header"`/"body"`/`"buttons"`) - unlike this app's existing
+  `buildUtilityMarketingPayload`, which uses uppercase (`HEADER`/`BODY`/
+  `FOOTER`/`BUTTONS`) for every other template type and has worked that
+  way in production for years. Carousel gets its own lowercase branch,
+  not a case change to the existing one. (Confirmed separately, live,
+  for Limited-Time-Offer: Meta's create-time casing is inconsistent
+  across newer template features - LTO's own `LIMITED_TIME_OFFER`
+  component type is uppercase at create time but lowercase
+  `limited_time_offer` at send time. Carousel's doc shows lowercase at
+  BOTH create and send time - followed as documented, verified against
+  the live API same as LTO was, fixing anything the docs got wrong.)
+- 2–10 cards per carousel. Per card: header is `image` or `video` only
+  (no document, no text, no none). Body text is optional per card, but
+  "if any card includes a card body text, then all cards must include
+  one" - and if present, capped at 160 chars (separate from the
+  top-level body's 1024). Buttons: up to 2 per card, any mix of
+  `quick_reply`/`url`/`phone_number` - but "all cards defined on a
+  template must have the same components," so every card needs the
+  same button count/types/order as every other card.
+- The top-level template still has its own plain `BODY` component (same
+  as today, max 1024). Meta's own examples never show a top-level
+  HEADER or FOOTER alongside carousel - not explicitly forbidden in the
+  text, but absent from every example, so this app treats both as
+  disallowed-with-carousel (matching the LTO precedent's own header/
+  footer exclusions) until a real submission says otherwise.
+- Once approved, a carousel template **cannot be edited** via Meta's API
+  at all (not just header, the whole thing) — only delete + recreate.
 
-**Needs your confirmation**: should editing be blocked entirely for a
-carousel template in the UI (matching Meta's real restriction), or should
-the edit button simply not appear for `header_type/cards`-based rows? I'd
-default to: no edit button at all for a carousel row, only "Duplicate as
-new" + delete — simpler than a half-working edit screen that Meta rejects.
+**Resolved (2026-11-16)**: show the Edit button for a carousel row but
+disable it, with a tooltip/explanation that Meta doesn't support editing
+a carousel template (delete + recreate only) - consistent with every
+other template type always showing Edit, rather than a carousel row
+being visually different for no apparent reason.
 
 ## Architecture
 
