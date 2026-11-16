@@ -2093,6 +2093,11 @@ body {
 .modal-subtitle { margin-top: 4px; font-size: var(--fs-body); color: var(--text-muted); font-weight: 400; }
 .modal-header:has(.modal-subtitle) { align-items: flex-start; }
 
+/* Shared footer for every simple create/edit modal - was 13 separate
+   copies of the identical inline style attribute across the app (Add
+   Contact, New Ticket, Create Payment Link, Save Tag, etc.). */
+.modal-footer { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-5); }
+
 /* Create Automation Rule - redesigned structure (not a colour swap): two
    clearly separated sections (Trigger / Action) joined by a small "causes
    -> happens" connector, so the rule's own logic reads at a glance instead

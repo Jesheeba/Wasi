@@ -1542,9 +1542,9 @@
           <label class="form-label">Phone Number</label>
           <input type="text" id="new-contact-phone" class="form-input" placeholder="+91 9876543210" required />
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-contact">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Contact</button>
+          <button type="submit" class="btn-primary btn-auto">Save Contact</button>
         </div>
       </form>
     </div>
@@ -1573,9 +1573,9 @@
           <label class="form-label">Message</label>
           <textarea id="new-ticket-message" class="form-input" rows="4" placeholder="Describe the issue…" required></textarea>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-ticket">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Submit Ticket</button>
+          <button type="submit" class="btn-primary btn-auto">Submit Ticket</button>
         </div>
       </form>
     </div>
@@ -1889,9 +1889,9 @@
           </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-template">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Submit for Approval</button>
+          <button type="submit" class="btn-primary btn-auto">Submit for Approval</button>
         </div>
       </form>
     </div>
@@ -1961,9 +1961,9 @@
           <label class="form-label">Color</label>
           <input type="color" id="new-tag-color" class="form-input" style="height: 42px; padding: 4px;" value="#4AC959" />
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-tag">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Tag</button>
+          <button type="submit" class="btn-primary btn-auto">Save Tag</button>
         </div>
       </form>
     </div>
@@ -1985,9 +1985,9 @@
           <label class="form-label">Message</label>
           <textarea id="new-canned-body" class="form-input" style="min-height: 90px;" placeholder="Your refund has been processed." required></textarea>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-canned-response">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save</button>
+          <button type="submit" class="btn-primary btn-auto">Save</button>
         </div>
       </form>
     </div>
@@ -2016,9 +2016,9 @@
             <option value="Admin">Admin</option>
           </select>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-invite-member">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Send Invite</button>
+          <button type="submit" class="btn-primary btn-auto">Send Invite</button>
         </div>
       </form>
     </div>
@@ -2051,9 +2051,9 @@
           <label class="form-label">Description</label>
           <input type="text" id="new-attribute-description" class="form-input" />
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-attribute">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Attribute</button>
+          <button type="submit" class="btn-primary btn-auto">Save Attribute</button>
         </div>
       </form>
     </div>
@@ -2081,9 +2081,9 @@
             <option value="WhatsApp Pay">WhatsApp Pay</option>
           </select>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-payment">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Generate Link</button>
+          <button type="submit" class="btn-primary btn-auto">Generate Link</button>
         </div>
       </form>
     </div>
@@ -2100,9 +2100,9 @@
           <label class="form-label">Amount (₹)</label>
           <input type="number" id="recharge-amount" class="form-input" min="1" step="1" placeholder="e.g. 1000" required />
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-recharge-wallet">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Add Balance</button>
+          <button type="submit" class="btn-primary btn-auto">Add Balance</button>
         </div>
       </form>
     </div>
@@ -2123,9 +2123,9 @@
         </div>
         <div id="choose-plan-coupon-status" class="channel-meta" style="margin-top: 6px;"></div>
       </div>
-      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+      <div class="modal-footer">
         <button type="button" class="btn-secondary" data-close-modal="modal-choose-plan">Cancel</button>
-        <button type="button" id="choose-plan-confirm-btn" class="btn-primary" style="width: auto; padding: 0 20px;" disabled>Pay &amp; Subscribe</button>
+        <button type="button" id="choose-plan-confirm-btn" class="btn-primary btn-auto" disabled>Pay &amp; Subscribe</button>
       </div>
     </div>
   </div>
@@ -2216,9 +2216,9 @@
           <label class="form-label">Flow Name</label>
           <input type="text" id="new-bot-flow-name" class="form-input" placeholder="e.g. Order Support" required />
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-bot-flow">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Create & Edit</button>
+          <button type="submit" class="btn-primary btn-auto">Create & Edit</button>
         </div>
       </form>
     </div>
@@ -2282,9 +2282,9 @@
           </select>
         </div>
         <div id="new-bot-flow-node-config-fields"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-bot-flow-node">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Add Node</button>
+          <button type="submit" class="btn-primary btn-auto">Add Node</button>
         </div>
       </form>
     </div>
@@ -2310,9 +2310,9 @@
           <label class="form-label">Go to node</label>
           <select id="new-bot-flow-edge-to-node" class="form-input"></select>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+        <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-bot-flow-edge">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Add Branch</button>
+          <button type="submit" class="btn-primary btn-auto">Add Branch</button>
         </div>
       </form>
     </div>
