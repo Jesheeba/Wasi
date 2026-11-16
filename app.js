@@ -6123,6 +6123,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('create-template-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const category = document.getElementById('new-template-category').value;
+    // Nothing in this handler disabled the submit button or changed its
+    // label while the request was in flight - for a media-header template
+    // (up to 90s now, see authFetch's timeoutMs below) the modal just sat
+    // there unchanged, indistinguishable from being stuck, and nothing
+    // stopped a second click from firing a duplicate submission. Reset in
+    // both branches' finally so an early validation `return` below (name/
+    // body/file missing) never leaves the button permanently disabled.
+    const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
+    const submitBtnOriginalText = submitBtn?.textContent;
 
     // Edit mode (openEditTemplateModal set this) - a completely separate
     // path from create below: no name/category/language (fixed once a
@@ -6156,6 +6165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
       try {
         const result = await authFetch(`/api/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(payload) });
         await refreshTemplates();
@@ -6172,6 +6182,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(result?.warnings?.[0] || 'Template updated and resubmitted to Meta for review.');
       } catch (err) {
         reportError(err);
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnOriginalText; }
       }
       return;
     }
@@ -6237,6 +6249,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = headerFile ? 'Uploading & submitting…' : 'Submitting…'; }
     try {
       // A media header sends the file as multipart, with the rest of the
       // payload as a 'data' field (JSON-stringified - buttons/samples don't
@@ -6275,6 +6288,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result?.warnings?.[0]) showToast(result.warnings[0]);
     } catch (err) {
       reportError(err);
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnOriginalText; }
     }
   });
 
