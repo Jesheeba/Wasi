@@ -2238,13 +2238,16 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .chat-queue-tabs::-webkit-scrollbar { display: none; }
+/* Approved Chat reference: unselected queue tabs are plain text, no pill -
+   only the active one gets a bordered white pill with dark text (not the
+   solid dark-green fill this used to have). */
 .queue-tab-btn {
   font: inherit; font-size: 0.75rem; font-weight: 500; padding: 5px 12px; border-radius: var(--r-pill);
-  border: 1px solid var(--border); background: #fff; color: var(--neutral); cursor: pointer; white-space: nowrap;
+  border: 1px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; white-space: nowrap;
   min-height: 36px;
 }
-.queue-tab-btn:hover { border-color: var(--border-strong); color: var(--text); }
-.queue-tab-btn.active { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; font-weight: 600; }
+.queue-tab-btn:hover { color: var(--text); }
+.queue-tab-btn.active { background: #fff; border-color: var(--border); color: var(--text); font-weight: 600; }
 
 .chat-list { min-height: 0; }
 .chat-item {
