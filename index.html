@@ -1292,11 +1292,34 @@
               <div id="sec-view-developer" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
                   <div class="page-header-text">
-                    <h2 class="page-title">Developer / API</h2>
-                    <p class="page-subtitle">API keys, AI-assistant access and integration docs</p>
+                    <h2 class="page-title">Developer Hub</h2>
+                    <p class="page-subtitle">Manage your API credentials, configure webhooks, and explore integration docs.</p>
                   </div>
                 </div>
 
+                <!-- Quick Guide: jumps straight to the matching tab/card below,
+                     rather than linking out to pages this app doesn't have. -->
+                <div class="profile-form-card settings-card-wide dev-hub-quick-guide">
+                  <h3 class="settings-card-title">Quick Guide</h3>
+                  <p class="settings-help">Manage your API credentials, configure webhooks, and explore documentation.</p>
+                  <div class="dev-hub-quick-links">
+                    <button type="button" class="dev-hub-quick-link" data-dev-hub-jump="apikeys"><i data-lucide="book-open" class="icon-16"></i> API Keys Documentation</button>
+                    <button type="button" class="dev-hub-quick-link" id="dev-hub-quick-link-webhooks"><i data-lucide="book-open" class="icon-16"></i> Webhook Documentation</button>
+                    <button type="button" class="dev-hub-quick-link" data-dev-hub-jump="docs"><i data-lucide="book-open" class="icon-16"></i> Documentation</button>
+                  </div>
+                </div>
+
+                <div class="tabs inner-tabs-list" role="tablist" aria-label="Developer Hub">
+                  <button type="button" class="tab inner-tab-btn active" role="tab" aria-selected="true" data-inner-tab="dev-apikeys">API Keys</button>
+                  <!-- Not an .inner-tab-btn on purpose: this one navigates to the
+                       separate Webhook settings page (see jumpToWebhookSettings in
+                       app.js) rather than switching a panel within this view, so it
+                       must not be swept up by the generic .inner-tab-btn handler. -->
+                  <button type="button" class="tab" role="tab" aria-selected="false" id="dev-hub-tab-webhooks">Webhooks</button>
+                  <button type="button" class="tab inner-tab-btn" role="tab" aria-selected="false" tabindex="-1" data-inner-tab="dev-docs">Documentation</button>
+                </div>
+
+                <div id="inner-tab-dev-apikeys" class="inner-tab-panel active" role="tabpanel">
                 <div class="profile-form-card settings-card-wide">
                   <h3 class="settings-card-title">API keys</h3>
                   <p class="settings-help">
@@ -1362,7 +1385,7 @@
                   </ul>
                 </div>
 
-                <div class="profile-form-card settings-card-wide">
+                <div class="profile-form-card settings-card-wide" id="api-integration-guide-card">
                   <h3 class="settings-card-title"><i data-lucide="book-open" class="icon-16"></i> Full API integration guide</h3>
                   <div class="settings-guide">
                     <div class="settings-guide-item">
@@ -1403,6 +1426,35 @@
                       </p>
                     </div>
                   </div>
+                </div>
+                </div>
+
+                <div id="inner-tab-dev-docs" class="inner-tab-panel" role="tabpanel">
+                  <div class="dev-hub-docs-grid">
+                    <div class="profile-form-card dev-hub-doc-card">
+                      <i data-lucide="code-2" class="icon-24"></i>
+                      <h3 class="settings-card-title">Webhook Reference Docs</h3>
+                      <p class="settings-help">Guide to configuring and managing your webhook. Covers the events you can subscribe to, their payloads, and verifying request authenticity.</p>
+                      <button type="button" class="btn-secondary btn-sm" id="dev-hub-doc-link-webhooks"><i data-lucide="book-open" class="icon-14"></i> Read Documentation</button>
+                    </div>
+                    <div class="profile-form-card dev-hub-doc-card">
+                      <i data-lucide="file-text" class="icon-24"></i>
+                      <h3 class="settings-card-title">API Reference Docs</h3>
+                      <p class="settings-help">Detailed reference for the Hub API: endpoints, request/response shapes, authentication, rate limits, and error handling.</p>
+                      <button type="button" class="btn-secondary btn-sm" id="dev-hub-doc-link-api"><i data-lucide="book-open" class="icon-14"></i> Read Documentation</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="dev-hub-support-banner">
+                  <div class="dev-hub-support-banner-left">
+                    <i data-lucide="message-square" class="icon-24"></i>
+                    <div>
+                      <div class="dev-hub-support-banner-title">Need specific implementation help?</div>
+                      <div class="dev-hub-support-banner-text">Our team can help with your integration issues - raise a support ticket and we'll get back to you.</div>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-primary btn-auto" id="dev-hub-chat-support-btn">Chat with Support</button>
                 </div>
               </div>
 

@@ -3112,6 +3112,28 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .settings-list { margin: 0; padding-left: 1.1rem; font-size: var(--fs-label); color: var(--text-muted); line-height: 1.6; }
 .settings-guide { display: flex; flex-direction: column; gap: var(--sp-4); font-size: var(--fs-label); color: var(--text); line-height: 1.6; }
 .settings-guide-item p { margin: 4px 0 0; color: var(--text-muted); }
+
+/* ---- Developer Hub ---- */
+.dev-hub-quick-guide { display: flex; flex-direction: column; gap: var(--sp-2); }
+.dev-hub-quick-links { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-top: var(--sp-2); }
+.dev-hub-quick-link {
+  display: flex; align-items: center; gap: var(--sp-2);
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: var(--fs-label); color: var(--brand-dark); font-weight: 500;
+}
+.dev-hub-quick-link:hover { text-decoration: underline; }
+.dev-hub-docs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-4); max-width: 760px; }
+.dev-hub-doc-card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+.dev-hub-doc-card > i { color: var(--brand-dark); }
+.dev-hub-support-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+  flex-wrap: wrap; max-width: 760px; margin-top: var(--sp-4);
+  background: var(--brand-dark); color: #fff;
+  border-radius: var(--r-lg); padding: var(--sp-4);
+}
+.dev-hub-support-banner-left { display: flex; align-items: center; gap: var(--sp-3); }
+.dev-hub-support-banner-title { font-weight: 600; }
+.dev-hub-support-banner-text { font-size: var(--fs-label); opacity: 0.85; margin-top: 2px; }
 .settings-guide-item .settings-list { margin-top: 4px; }
 .settings-guide a { color: var(--info); }
 .inline-code, .settings-guide code, .settings-list code, .settings-help code {

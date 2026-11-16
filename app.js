@@ -8260,6 +8260,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // --- Developer Hub (sec-view-developer) ---
+  // "Webhooks" isn't one of this view's own .inner-tab-panel's (the real
+  // webhook settings - URL/events/secret - live in the separate
+  // sec-view-webhook, with renderClientWebhook() wired to that nav item's
+  // click, not this one) - so this jumps to that existing sidebar entry
+  // instead of duplicating its ids/logic into a second panel.
+  function jumpToWebhookSettings() {
+    document.querySelector('.sec-nav-item[data-sec-view="webhook"]')?.click();
+  }
+  document.getElementById('dev-hub-tab-webhooks')?.addEventListener('click', jumpToWebhookSettings);
+  document.getElementById('dev-hub-quick-link-webhooks')?.addEventListener('click', jumpToWebhookSettings);
+  document.getElementById('dev-hub-doc-link-webhooks')?.addEventListener('click', jumpToWebhookSettings);
+
+  // The Quick Guide's other two links reuse the existing generic
+  // .inner-tab-btn click handler ("WhatsApp Channel Inner Tabs" below)
+  // by simulating a click on the real tab button, rather than
+  // duplicating that tab-switch logic here.
+  document.querySelectorAll('[data-dev-hub-jump]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelector(`.inner-tab-btn[data-inner-tab="dev-${btn.dataset.devHubJump}"]`)?.click();
+    });
+  });
+
+  // "API Reference Docs" lives inside the API Keys tab's own existing
+  // "Full API integration guide" card, not a separate panel - switch to
+  // that tab, then scroll the card into view.
+  document.getElementById('dev-hub-doc-link-api')?.addEventListener('click', () => {
+    document.querySelector('.inner-tab-btn[data-inner-tab="dev-apikeys"]')?.click();
+    document.getElementById('api-integration-guide-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  document.getElementById('dev-hub-chat-support-btn')?.addEventListener('click', () => {
+    document.getElementById('open-create-ticket-modal')?.click();
+  });
+
   // --- Settings: WhatsApp channel connection status + connect/reconnect ---
   // Uses the shared window.WasiEmbeddedSignup helper (embeddedSignup.js) -
   // the same Meta FB.login() flow the public onboarding wizard uses
