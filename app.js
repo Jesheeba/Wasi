@@ -447,6 +447,23 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(dismiss, type === 'error' ? 6000 : 2800);
   }
 
+  // Shared by every form-submit handler below - none of them disabled
+  // their submit button or showed any "in progress" state while the
+  // request was in flight, so a slow request (or one that genuinely hangs)
+  // looked identical to nothing happening at all: the user would click
+  // again, stacking duplicate requests, and only see an error toast long
+  // after the clicks that actually caused it. Call at the top of a submit
+  // handler (after any early-return validation, so an invalid form never
+  // gets stuck disabled) and call the returned function in a `finally`.
+  function withSubmitLoading(form, label) {
+    const btn = form?.querySelector('button[type="submit"]');
+    if (!btn) return () => {};
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label;
+    return () => { btn.disabled = false; btn.textContent = original; };
+  }
+
   // --- Auth Handlers ---
   const authView = document.getElementById('auth-view');
   const appShell = document.getElementById('app-shell');
@@ -694,8 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    const submitBtn = loginForm.querySelector('button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
+    const restoreSubmit = withSubmitLoading(loginForm, 'Logging in…');
 
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -712,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     } finally {
-      if (submitBtn) submitBtn.disabled = false;
+      restoreSubmit();
     }
   });
 
@@ -728,8 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tenantSlug = document.getElementById('team-login-tenant-slug').value.trim();
     const email = document.getElementById('team-login-email').value.trim();
     const password = document.getElementById('team-login-password').value;
-    const submitBtn = teamLoginForm.querySelector('button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
+    const restoreSubmit = withSubmitLoading(teamLoginForm, 'Logging in…');
 
     try {
       const res = await fetch(`${API_BASE}/api/auth/team/login`, {
@@ -751,7 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     } finally {
-      if (submitBtn) submitBtn.disabled = false;
+      restoreSubmit();
     }
   });
 
@@ -5490,6 +5505,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ? Date.now() + Number(document.getElementById('new-campaign-lto-hours').value) * 3600000
       : undefined;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Launching…');
     try {
       const created = await authFetch('/api/broadcasts', {
         method: 'POST',
@@ -5516,6 +5532,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6123,15 +6141,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('create-template-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const category = document.getElementById('new-template-category').value;
-    // Nothing in this handler disabled the submit button or changed its
-    // label while the request was in flight - for a media-header template
-    // (up to 90s now, see authFetch's timeoutMs below) the modal just sat
-    // there unchanged, indistinguishable from being stuck, and nothing
-    // stopped a second click from firing a duplicate submission. Reset in
-    // both branches' finally so an early validation `return` below (name/
-    // body/file missing) never leaves the button permanently disabled.
-    const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
-    const submitBtnOriginalText = submitBtn?.textContent;
 
     // Edit mode (openEditTemplateModal set this) - a completely separate
     // path from create below: no name/category/language (fixed once a
@@ -6165,7 +6174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+      const restoreSubmit = withSubmitLoading(e.target, 'Submitting…');
       try {
         const result = await authFetch(`/api/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(payload) });
         await refreshTemplates();
@@ -6183,7 +6192,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         reportError(err);
       } finally {
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnOriginalText; }
+        restoreSubmit();
       }
       return;
     }
@@ -6249,7 +6258,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = headerFile ? 'Uploading & submitting…' : 'Submitting…'; }
+    const restoreSubmit = withSubmitLoading(e.target, headerFile ? 'Uploading & submitting…' : 'Submitting…');
     try {
       // A media header sends the file as multipart, with the rest of the
       // payload as a 'data' field (JSON-stringified - buttons/samples don't
@@ -6289,7 +6298,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     } finally {
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnOriginalText; }
+      restoreSubmit();
     }
   });
 
@@ -6304,6 +6313,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const message = document.getElementById('new-ticket-message').value.trim();
     if (!subject || !message) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Submitting…');
     try {
       await authFetch('/api/support-tickets', {
         method: 'POST',
@@ -6316,6 +6326,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Support ticket submitted.');
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6330,6 +6342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const color = document.getElementById('new-tag-color').value;
     if (!name) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
       await authFetch('/api/tags', {
         method: 'POST',
@@ -6340,6 +6353,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
       return;
+    } finally {
+      restoreSubmit();
     }
 
     e.target.reset();
@@ -6382,6 +6397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = document.getElementById('new-member-role').value;
     if (!name || !email) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Inviting…');
     try {
       // item 5.5 - found while building this: this used to only create the
       // roster row (POST /api/team-members) and show "Invite sent to..."
@@ -6397,6 +6413,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Invite sent to ' + email);
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6447,12 +6465,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const shortcut = document.getElementById('new-canned-shortcut').value.trim();
     const body = document.getElementById('new-canned-body').value.trim();
     if (!shortcut || !body) return;
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
       await authFetch('/api/canned-responses', { method: 'POST', body: JSON.stringify({ shortcut, body }) });
       await renderCannedResponsesTable();
     } catch (err) {
       reportError(err);
       return;
+    } finally {
+      restoreSubmit();
     }
     e.target.reset();
     document.getElementById('modal-add-canned-response')?.classList.remove('open');
@@ -6490,6 +6511,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const type = document.getElementById('new-attribute-type').value;
     if (!name) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
       await authFetch('/api/contact-attributes', { method: 'POST', body: JSON.stringify({ name, type }) });
       await renderAttributesTable();
@@ -6498,6 +6520,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Attribute added');
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6525,6 +6549,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const amount = Math.round(parseFloat(document.getElementById('new-payment-amount').value));
     if (!customer || !amount) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Creating…');
     try {
       const link = await authFetch('/api/payment-links', {
         method: 'POST',
@@ -6536,6 +6561,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(link.url ? `Payment link created: ${link.url}` : 'Payment link created');
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6773,8 +6800,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const amount = Math.round(parseFloat(document.getElementById('recharge-amount').value));
     if (!amount) return;
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
+    const restoreSubmit = withSubmitLoading(e.target, 'Processing…');
 
     try {
       const order = await authFetch('/api/wallet/recharge', { method: 'POST', body: JSON.stringify({ amount_inr: amount }) });
@@ -6804,7 +6830,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       reportError(err);
     } finally {
-      if (submitBtn) submitBtn.disabled = false;
+      restoreSubmit();
     }
   });
 
@@ -6834,6 +6860,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (kind === 'flow' && !body.flow_id) { showToast('Create a flow first, then pick it here.'); return; }
     if (kind !== 'flow' && !body.action) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Creating…');
     try {
       await authFetch('/api/automation-rules', {
         method: 'POST',
@@ -6847,6 +6874,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-create-rule')?.classList.remove('open');
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6859,6 +6888,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const name = document.getElementById('new-bot-flow-name').value.trim();
     if (!name) return;
+    const restoreSubmit = withSubmitLoading(e.target, 'Creating…');
     try {
       const flow = await authFetch('/api/automation-flows', { method: 'POST', body: JSON.stringify({ name }) });
       await refreshFlows();
@@ -6868,6 +6898,8 @@ document.addEventListener('DOMContentLoaded', () => {
       openFlowEditor(flow.id);
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -6901,6 +6933,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const type = document.getElementById('new-bot-flow-node-type').value;
     const config = collectNewNodeConfig(type);
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
       await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/nodes`, {
         method: 'POST',
@@ -6911,6 +6944,8 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshFlows();
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -7016,6 +7051,7 @@ document.addEventListener('DOMContentLoaded', () => {
       value = match.id;
     }
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
       await authFetch(`/api/automation-flows/${state.currentFlowGraph.id}/edges`, {
         method: 'POST',
@@ -7028,6 +7064,8 @@ document.addEventListener('DOMContentLoaded', () => {
       await refreshCurrentFlowGraph();
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
@@ -8371,6 +8409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const phone = document.getElementById('new-contact-phone').value.trim();
     if (!name || !phone) return;
 
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
       await authFetch('/api/contacts', { method: 'POST', body: JSON.stringify({ name, phone }) });
       await refreshContacts();
@@ -8379,6 +8418,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-add-contact')?.classList.remove('open');
     } catch (err) {
       reportError(err);
+    } finally {
+      restoreSubmit();
     }
   });
 
