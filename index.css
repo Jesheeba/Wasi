@@ -2746,19 +2746,19 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .library-preview-card { padding: var(--sp-4); }
 
 /* Segmented-control tab strip (Component Specs' "segmented control"): a
-   grey track with the active item as a white pill - the approved
-   references show this for Template Library's source switch AND
-   Automation's Rules/Flows switch, not the underline-tab treatment used
-   elsewhere (Analytics' own reference keeps underline tabs - untouched). */
-.library-tabs, .automation-tabs {
+   grey track with the active item as a white pill. Checked against each
+   module's own approved reference directly (not assumed from one
+   screen): Template Library, Automation AND Analytics all use this
+   treatment, not underline tabs. */
+.library-tabs, .automation-tabs, .analytics-tabs {
   display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-muted);
   border-radius: 9px; border-bottom: none; margin-bottom: var(--sp-4); flex-shrink: 0;
 }
-.library-tabs .tab, .automation-tabs .tab {
+.library-tabs .tab, .automation-tabs .tab, .analytics-tabs .tab {
   padding: 6px 14px; border-radius: 7px; font-size: var(--fs-label);
   border-bottom: none; margin-bottom: 0;
 }
-.library-tabs .tab[aria-selected="true"], .automation-tabs .tab[aria-selected="true"] {
+.library-tabs .tab[aria-selected="true"], .automation-tabs .tab[aria-selected="true"], .analytics-tabs .tab[aria-selected="true"] {
   background: var(--bg-card); color: var(--text); font-weight: 600;
 }
 
