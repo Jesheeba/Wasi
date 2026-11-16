@@ -33,13 +33,30 @@ const { pool } = require('../db/pool');
 // deliberately untouched, a separate decision.
 const DEFAULT_STATEMENT_TIMEOUT_MS = 15000;
 
+// The 4 statements below used to run as 4 separate awaited round trips -
+// real added latency on every single tenant request, paid again for each
+// of loadInitialData's 11 parallel calls on login, especially over a
+// remote pooler connection. node-postgres sends a plain string with no
+// param array through the simple query protocol, which Postgres allows to
+// hold several ;-separated statements - so all 4 go out as ONE round trip
+// instead of 4. $1 can't be used here (the extended protocol it requires
+// doesn't support multi-statement text), so clientId is interpolated
+// directly - safe only because it's validated as a UUID first, not because
+// it's trusted input.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function acquireTenantConnection(clientId) {
+  if (!UUID_RE.test(clientId)) {
+    throw new Error('Invalid client id');
+  }
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL ROLE wasi_app');
-    await client.query(`select set_config('app.current_client_id', $1, true)`, [clientId]);
-    await client.query(`set local statement_timeout = '${DEFAULT_STATEMENT_TIMEOUT_MS}ms'`);
+    await client.query(`
+      BEGIN;
+      SET LOCAL ROLE wasi_app;
+      SELECT set_config('app.current_client_id', '${clientId}', true);
+      SET LOCAL statement_timeout = '${DEFAULT_STATEMENT_TIMEOUT_MS}ms';
+    `);
   } catch (err) {
     client.release();
     throw err;
