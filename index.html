@@ -2130,39 +2130,67 @@
     </div>
   </div>
 
+  <!-- Redesigned (structure, not just colour) - three clearly separated
+       sections (Rule / Trigger / Action) joined by a visual "causes ->
+       happens" connector, instead of five stacked plain inputs. Every
+       field id, the kind-select's show/hide behaviour, and the submit
+       handler in app.js are unchanged - this only reorganises markup
+       around them. -->
   <div id="modal-create-rule" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box modal-box-wide rule-form-modal" role="dialog" aria-modal="true" aria-labelledby="create-rule-title">
       <div class="modal-header">
-        <h3 class="modal-title">Create Automation Rule</h3>
-        <button class="close-modal-btn" data-close-modal="modal-create-rule"><i data-lucide="x"></i></button>
+        <div>
+          <h3 class="modal-title" id="create-rule-title">Create Automation Rule</h3>
+          <p class="modal-subtitle">Watch for a keyword in an incoming message, then reply or start a flow automatically.</p>
+        </div>
+        <button class="close-modal-btn" data-close-modal="modal-create-rule" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
       <form id="create-rule-form">
-        <div class="form-group">
-          <label class="form-label">Rule Title</label>
-          <input type="text" id="new-rule-title" class="form-input" placeholder="e.g. Out of Office Reply" required />
+        <div class="rule-form-section">
+          <div class="rule-form-section-eyebrow">Rule</div>
+          <div class="form-group">
+            <label class="form-label" for="new-rule-title">Rule title</label>
+            <input type="text" id="new-rule-title" class="form-input" placeholder="e.g. Out of Office Reply" required />
+            <div class="form-hint">Shown in the Automation list - not sent to the customer.</div>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Trigger</label>
-          <input type="text" id="new-rule-trigger" class="form-input" placeholder='e.g. hours' required />
+
+        <div class="rule-form-section">
+          <div class="rule-form-section-eyebrow">1 &middot; Trigger</div>
+          <div class="form-group">
+            <label class="form-label" for="new-rule-trigger">When a message contains this keyword</label>
+            <input type="text" id="new-rule-trigger" class="form-input" placeholder="e.g. hours" required />
+            <div class="form-hint">Matches anywhere in the customer's message, not case-sensitive.</div>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">What happens when this matches?</label>
-          <select id="new-rule-kind" class="form-input">
-            <option value="text">Send a text reply</option>
-            <option value="flow">Start a flow</option>
-          </select>
+
+        <div class="rule-form-connector" aria-hidden="true">
+          <span class="rule-form-connector-line"></span>
+          <i data-lucide="arrow-down" class="icon-14"></i>
         </div>
-        <div class="form-group" id="new-rule-action-group">
-          <label class="form-label">Action</label>
-          <input type="text" id="new-rule-action" class="form-input" placeholder="e.g. Send Business Hours Template" />
+
+        <div class="rule-form-section">
+          <div class="rule-form-section-eyebrow">2 &middot; Action</div>
+          <div class="form-group">
+            <label class="form-label" for="new-rule-kind">What happens when this matches</label>
+            <select id="new-rule-kind" class="form-input">
+              <option value="text">Send a text reply</option>
+              <option value="flow">Start a flow</option>
+            </select>
+          </div>
+          <div class="form-group" id="new-rule-action-group">
+            <label class="form-label" for="new-rule-action">Reply text</label>
+            <input type="text" id="new-rule-action" class="form-input" placeholder="e.g. Send Business Hours Template" />
+          </div>
+          <div class="form-group" id="new-rule-flow-group" style="display: none;">
+            <label class="form-label" for="new-rule-flow-id">Flow to start</label>
+            <select id="new-rule-flow-id" class="form-input"></select>
+          </div>
         </div>
-        <div class="form-group" id="new-rule-flow-group" style="display: none;">
-          <label class="form-label">Flow</label>
-          <select id="new-rule-flow-id" class="form-input"></select>
-        </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+
+        <div class="rule-form-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-rule">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto; padding: 0 20px;">Save Rule</button>
+          <button type="submit" class="btn-primary btn-auto">Save Rule</button>
         </div>
       </form>
     </div>
