@@ -2722,10 +2722,46 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .template-skeleton .skeleton { height: 12px; }
 
 /* Library */
-.library-tabs, .automation-tabs { margin-bottom: var(--sp-4); flex-shrink: 0; }
+.automation-tabs { margin-bottom: var(--sp-4); flex-shrink: 0; }
 .library-filters { margin-bottom: var(--sp-4); }
+.library-filters .table-toolbar { padding: 0; border-bottom: none; }
 .library-list-card { padding: var(--sp-4); }
 .library-preview-card { padding: var(--sp-4); }
+
+/* Template Library (UI redesign continuation): the approved reference uses
+   a grey-track segmented control for the Wasi Curated/Meta Official source
+   switch (Component Specs' "segmented control"), not the underline tabs
+   used elsewhere (Analytics, Automation) - scoped to .library-tabs only so
+   those other, already-verified tab strips are untouched. */
+.library-tabs {
+  display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-muted);
+  border-radius: 9px; border-bottom: none; margin-bottom: var(--sp-4); flex-shrink: 0;
+}
+.library-tabs .tab {
+  padding: 6px 14px; border-radius: 7px; font-size: var(--fs-label);
+  border-bottom: none; margin-bottom: 0;
+}
+.library-tabs .tab[aria-selected="true"] {
+  background: var(--bg-card); color: var(--text); font-weight: 600;
+}
+
+/* The left list reads as flat rows (name + category/industry), not a card
+   grid - the reference shows a simple divided list with a live preview
+   panel beside it. Industry-section grouping itself is kept (an already
+   approved, deliberate product decision - CLAUDE.md), only each section's
+   own items go from a 2-up card grid to single-column rows. */
+.library-list-card .templates-grid { display: block; padding: 0; }
+.library-list-card .library-template-card {
+  display: flex; flex-direction: row; align-items: center; gap: var(--sp-3);
+  border: none; border-radius: 0; border-bottom: 1px solid var(--border);
+  padding: var(--sp-3) var(--sp-2); box-shadow: none; text-align: left;
+}
+.library-list-card .library-template-card:last-child { border-bottom: none; }
+.library-list-card .library-template-card.selected { background: var(--brand-soft); }
+.library-list-card .library-template-card .template-card-main { flex: 1; min-width: 0; }
+.library-list-card .library-template-card .template-card-body { display: none; }
+.library-list-card .template-card-head { margin-bottom: 0; justify-content: flex-start; }
+.library-list-card .template-card-meta { flex-shrink: 0; }
 .library-preview-empty { color: var(--text-muted); font-size: var(--fs-label); margin: 0; }
 .library-preview-title { margin: 0 0 var(--sp-3); font-size: var(--fs-card); font-weight: 600; }
 .library-preview-note { font-size: var(--fs-caption); color: var(--text-muted); margin: var(--sp-3) 0 var(--sp-2); }
