@@ -1471,27 +1471,38 @@
                   </div>
                 </div>
                 <div class="profile-form-card settings-card-narrow">
-                  <div class="form-group">
-                    <label class="form-label" for="webhook-url-input">Webhook URL</label>
-                    <input type="url" class="form-input" id="webhook-url-input" placeholder="https://your-server.example.com/webhook" />
+                  <div class="form-section">
+                    <div class="form-section-eyebrow">1 · Endpoint</div>
+                    <div class="form-group">
+                      <label class="form-label" for="webhook-url-input">Webhook URL</label>
+                      <input type="url" class="form-input" id="webhook-url-input" placeholder="https://your-server.example.com/webhook" />
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label class="form-label">Events to send</label>
-                    <fieldset id="webhook-events-fieldset" class="hub-event-list" style="border:none; padding:0;">
+
+                  <div class="form-section-connector" aria-hidden="true"><span class="form-section-connector-line"></span><i data-lucide="arrow-down" class="icon-14"></i></div>
+
+                  <div class="form-section">
+                    <div class="form-section-eyebrow">2 · Events to send</div>
+                    <fieldset id="webhook-events-fieldset" class="hub-event-list webhook-events-fieldset">
                       <legend class="sr-only">Events to send to your endpoint</legend>
                     </fieldset>
                     <div class="form-hint">Pick at least one. Only the events you check here are sent to your URL.</div>
                   </div>
-                  <div class="form-group">
-                    <label class="form-label" for="webhook-secret-display">Signing secret (verify the <code>x-wasi-signature-256</code> header with this)</label>
-                    <div class="settings-inline-row">
-                      <input type="text" class="form-input settings-mono" id="webhook-secret-display" readonly value="Save a URL to generate one" />
-                      <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="copy-webhook-secret-btn" aria-label="Copy signing secret" hidden><i data-lucide="copy"></i></button>
-                      <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="regenerate-webhook-secret-btn" title="Regenerate secret" aria-label="Regenerate signing secret" hidden><i data-lucide="refresh-cw"></i></button>
+
+                  <div class="form-section">
+                    <div class="form-section-eyebrow">3 · Signing secret</div>
+                    <div class="form-group">
+                      <label class="form-label" for="webhook-secret-display">Verify the <code>x-wasi-signature-256</code> header with this</label>
+                      <div class="settings-inline-row">
+                        <input type="text" class="form-input settings-mono" id="webhook-secret-display" readonly value="Save a URL to generate one" />
+                        <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="copy-webhook-secret-btn" aria-label="Copy signing secret" hidden><i data-lucide="copy"></i></button>
+                        <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="regenerate-webhook-secret-btn" title="Regenerate secret" aria-label="Regenerate signing secret" hidden><i data-lucide="refresh-cw"></i></button>
+                      </div>
+                      <div id="webhook-secret-hint" class="form-hint"></div>
                     </div>
-                    <div id="webhook-secret-hint" class="form-hint"></div>
                   </div>
-                  <div><button class="btn-primary btn-auto" id="save-webhook-btn">Save Webhook</button></div>
+
+                  <div class="settings-inline-row"><button class="btn-primary btn-auto" id="save-webhook-btn">Save Webhook</button></div>
                 </div>
               </div>
 
@@ -1694,6 +1705,20 @@
             <input type="file" class="form-input" id="new-campaign-media-file" aria-label="Upload header file" />
             <div id="new-campaign-media-status" class="form-hint campaign-gap-top-sm" role="status" aria-live="polite"></div>
           </div>
+          <!-- Only shown for a Limited-Time-Offer template with an
+               expiration - one fixed deadline for the whole campaign, set
+               once here and sent for every recipient
+               (build-docs/features/limited-time-offer-templates.md). -->
+          <div id="new-campaign-lto" style="display:none;" class="form-group">
+            <label class="form-label" for="new-campaign-lto-hours">Offer expires in</label>
+            <select class="form-input" id="new-campaign-lto-hours">
+              <option value="1">1 hour</option>
+              <option value="6">6 hours</option>
+              <option value="24" selected>24 hours</option>
+              <option value="72">3 days</option>
+              <option value="168">7 days</option>
+            </select>
+          </div>
           <!-- Per-{{variable}} value source, one row per template parameter -
                see app.js's renderNewCampaignParamMappings/collectNewCampaignParamMappings. -->
           <div id="new-campaign-param-mappings" class="form-group"></div>
@@ -1852,6 +1877,24 @@
             <input type="file" id="new-template-header-file" class="form-input template-conditional-field" style="display:none; margin-top: 8px;" />
             <div id="template-header-media-hint" class="form-hint" style="display:none;"></div>
             <div id="template-header-warning" class="template-inline-warning" style="display:none;"></div>
+          </div>
+
+          <!-- Marketing-only (build-docs/features/limited-time-offer-templates.md).
+               Mutually exclusive with the header above - Meta renders the
+               offer strip in the header's visual slot, so enabling this
+               disables the header select rather than letting both be set. -->
+          <div class="form-group" id="template-lto-group" style="display:none;">
+            <div class="template-checkbox-row">
+              <input type="checkbox" id="new-template-lto-enabled" />
+              <label class="form-label" for="new-template-lto-enabled">This is a Limited-Time-Offer (coupon/countdown strip)</label>
+            </div>
+            <div id="template-lto-fields" style="display:none; margin-top: 8px;">
+              <input type="text" id="new-template-lto-text" class="form-input" maxlength="16" placeholder="e.g. Use code 25OFF (max 16 chars)" />
+              <div class="template-checkbox-row" style="margin-top: 8px;">
+                <input type="checkbox" id="new-template-lto-expiration" checked />
+                <label class="form-label" for="new-template-lto-expiration">Show a countdown (expiry set at send time)</label>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -2396,6 +2439,20 @@
         <div id="send-chat-template-media-status" style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;"></div>
       </div>
       <div id="send-chat-template-params"></div>
+      <!-- Only shown for a Limited-Time-Offer template with an expiration
+           (build-docs/features/limited-time-offer-templates.md) - Meta
+           requires a fresh expiry on every send, not baked into the
+           template itself. -->
+      <div id="send-chat-template-lto" style="display:none;" class="form-group">
+        <label class="form-label">Offer expires in</label>
+        <select class="form-input" id="send-chat-template-lto-hours">
+          <option value="1">1 hour</option>
+          <option value="6">6 hours</option>
+          <option value="24" selected>24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">7 days</option>
+        </select>
+      </div>
       <div class="form-group">
         <label class="form-label">Preview</label>
         <div class="template-preview-frame">

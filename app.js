@@ -2322,6 +2322,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaFileInput.value = '';
     mediaStatus.textContent = '';
     mediaField.style.display = MEDIA_HEADER_TYPES.includes(template.header_type) ? '' : 'none';
+    document.getElementById('send-chat-template-lto').style.display = template.limited_time_offer?.hasExpiration ? '' : 'none';
 
     const params = requiredParamsFor(template);
     const paramsContainer = document.getElementById('send-chat-template-params');
@@ -2495,6 +2496,9 @@ document.addEventListener('DOMContentLoaded', () => {
           templateLanguage: sendTemplateTarget.language,
           templateComponents: buildSendTemplateComponents(sendTemplateTarget, values),
           headerMediaAssetId: sendTemplateHeaderMediaAssetId || undefined,
+          limitedTimeOfferExpirationMs: sendTemplateTarget.limited_time_offer?.hasExpiration
+            ? Date.now() + Number(document.getElementById('send-chat-template-lto-hours').value) * 3600000
+            : undefined,
         }),
       });
       document.getElementById('modal-send-chat-template')?.classList.remove('open');
@@ -5205,6 +5209,9 @@ document.addEventListener('DOMContentLoaded', () => {
     renderNewCampaignParamMappings();
     updateCampaignTemplatePreview();
     updateCampaignContentStep();
+    const templateName = document.getElementById('new-campaign-template').value;
+    const template = state.templates.find(t => t.name === templateName);
+    document.getElementById('new-campaign-lto').style.display = template?.limited_time_offer?.hasExpiration ? '' : 'none';
   });
 
   // Picking an existing asset instead of uploading a new one - either the
@@ -5478,6 +5485,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const paramMappings = collectNewCampaignParamMappings();
     if (paramMappings === null) return; // collectNewCampaignParamMappings already toasted why
 
+    const selectedTemplate = state.templates.find(t => t.name === templateName);
+    const limitedTimeOfferExpirationMs = selectedTemplate?.limited_time_offer?.hasExpiration
+      ? Date.now() + Number(document.getElementById('new-campaign-lto-hours').value) * 3600000
+      : undefined;
+
     try {
       const created = await authFetch('/api/broadcasts', {
         method: 'POST',
@@ -5487,6 +5499,7 @@ document.addEventListener('DOMContentLoaded', () => {
           headerMediaAssetId: newCampaignHeaderMediaAssetId || undefined,
           pacingConfig: paceValue ? { messages_per_minute: Number(paceValue) } : undefined,
           smartSendingHours: smartSendingValue ? Number(smartSendingValue) : undefined,
+          limitedTimeOfferExpirationMs,
         })
       });
       await refreshBroadcasts();
@@ -5888,6 +5901,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const isAuth = category === 'Authentication';
     document.getElementById('template-fields-standard').style.display = isAuth ? 'none' : '';
     document.getElementById('template-fields-auth').style.display = isAuth ? '' : 'none';
+    // Limited-Time-Offer is Marketing-only (build-docs/features/
+    // limited-time-offer-templates.md) - leaving the group visible for
+    // Utility/Authentication would let someone check it and then hit a
+    // server-side rejection with no local hint why.
+    const ltoGroup = document.getElementById('template-lto-group');
+    if (ltoGroup) ltoGroup.style.display = category === 'Marketing' ? '' : 'none';
+    if (category !== 'Marketing') {
+      document.getElementById('new-template-lto-enabled').checked = false;
+      updateTemplateLtoFields();
+    }
+    updateTemplatePreview();
+  }
+
+  // Mutually exclusive with the header field - enabling the offer strip
+  // disables (and resets) the header select rather than letting both be
+  // submitted, matching the server's own superRefine rule in validate.js.
+  function updateTemplateLtoFields() {
+    const enabled = document.getElementById('new-template-lto-enabled').checked;
+    document.getElementById('template-lto-fields').style.display = enabled ? '' : 'none';
+    const headerSelect = document.getElementById('new-template-header-type');
+    headerSelect.disabled = enabled;
+    if (enabled) {
+      headerSelect.value = 'NONE';
+      updateTemplateHeaderField();
+    }
     updateTemplatePreview();
   }
 
@@ -5969,11 +6007,17 @@ document.addEventListener('DOMContentLoaded', () => {
         `<div class="template-preview-button">${icon[b.type]} ${escapeHtml(b.text || '(button text)')}</div>`
       ).join('')}</div>`;
     }
+    if (document.getElementById('new-template-lto-enabled')?.checked) {
+      const offerText = document.getElementById('new-template-lto-text').value.trim();
+      const hasExpiration = document.getElementById('new-template-lto-expiration').checked;
+      html += `<div class="template-preview-lto">&#127873; ${escapeHtml(offerText || '(offer text)')}${hasExpiration ? ' &middot; expires in... <span class="template-preview-button">Copy Code</span>' : ' <span class="template-preview-button">Copy Code</span>'}</div>`;
+    }
     bubble.innerHTML = html;
   }
 
   function syncTemplateFormUI() {
     updateTemplateCategoryFields();
+    updateTemplateLtoFields();
     updateTemplateHeaderField();
     renderTemplateSampleInputs();
     const body = document.getElementById('new-template-body').value;
@@ -6043,6 +6087,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   });
   document.getElementById('new-template-header-file')?.addEventListener('change', updateTemplatePreview);
+  document.getElementById('new-template-lto-enabled')?.addEventListener('change', updateTemplateLtoFields);
+  document.getElementById('new-template-lto-text')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
     updateTemplateSubmitGating();
     updateTemplatePreview();
@@ -6163,6 +6209,18 @@ document.addEventListener('DOMContentLoaded', () => {
           if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
           return { type: 'QUICK_REPLY', text: b.text };
         });
+      }
+      if (category === 'Marketing' && document.getElementById('new-template-lto-enabled').checked) {
+        const offerText = document.getElementById('new-template-lto-text').value.trim();
+        if (!offerText) {
+          showToast('Enter the offer text (e.g. "Use code 25OFF") before submitting.');
+          return;
+        }
+        payload.limitedTimeOffer = {
+          text: offerText,
+          hasExpiration: document.getElementById('new-template-lto-expiration').checked,
+        };
+        payload.header = { type: 'NONE' };
       }
     }
 
@@ -7795,51 +7853,59 @@ document.addEventListener('DOMContentLoaded', () => {
     container.innerHTML = `
       <div class="profile-workspace-grid">
         <div class="profile-form-card">
-          <div class="form-group">
-            <label class="form-label">About</label>
-            <input type="text" class="form-input" id="bp-about" placeholder="Not set" maxlength="139" value="${attrEscape(original.about)}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Business Description</label>
-            <textarea class="form-input" id="bp-description" style="height: 100px; padding: 10px; line-height: 1.4;" placeholder="Not set" maxlength="512">${escapeHtml(original.description)}</textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Business address</label>
-            <input type="text" class="form-input" id="bp-address" placeholder="Not set" maxlength="256" value="${attrEscape(original.address)}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-input" id="bp-email" placeholder="Not set" maxlength="128" value="${attrEscape(original.email)}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Business Category</label>
-            <select class="form-input" id="bp-vertical">
-              ${BUSINESS_PROFILE_VERTICALS.map(([val, label]) => `<option value="${val}" ${val === original.vertical ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Websites (up to 2)</label>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <input type="text" class="form-input" id="bp-website-0" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[0] || '')}" />
-              <input type="text" class="form-input" id="bp-website-1" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[1] || '')}" />
+          <div class="form-section">
+            <div class="form-section-eyebrow">About</div>
+            <div class="form-group">
+              <label class="form-label">About</label>
+              <input type="text" class="form-input" id="bp-about" placeholder="Not set" maxlength="139" value="${attrEscape(original.about)}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Business Description</label>
+              <textarea class="form-input bp-description-input" id="bp-description" placeholder="Not set" maxlength="512">${escapeHtml(original.description)}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Business Category</label>
+              <select class="form-input" id="bp-vertical">
+                ${BUSINESS_PROFILE_VERTICALS.map(([val, label]) => `<option value="${val}" ${val === original.vertical ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+              </select>
             </div>
           </div>
+
+          <div class="form-section">
+            <div class="form-section-eyebrow">Contact &amp; links</div>
+            <div class="form-group">
+              <label class="form-label">Business address</label>
+              <input type="text" class="form-input" id="bp-address" placeholder="Not set" maxlength="256" value="${attrEscape(original.address)}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="bp-email" placeholder="Not set" maxlength="128" value="${attrEscape(original.email)}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Websites (up to 2)</label>
+              <div class="bp-website-list">
+                <input type="text" class="form-input" id="bp-website-0" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[0] || '')}" />
+                <input type="text" class="form-input" id="bp-website-1" placeholder="https://example.com" maxlength="256" value="${attrEscape(original.websites[1] || '')}" />
+              </div>
+            </div>
+          </div>
+
           <div class="settings-inline-row"><button type="button" class="btn-primary btn-auto" id="bp-save-btn" disabled>Save Changes</button>
           <span id="bp-save-status" class="form-hint" role="status"></span></div>
         </div>
 
         <div class="whatsapp-preview-card">
-          <div id="bp-picture-wrap" style="width: 64px; height: 64px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--color-primary-100);">
+          <div id="bp-picture-wrap" class="bp-picture-wrap">
             ${pictureUrl
-              ? `<img src="${attrEscape(pictureUrl)}" alt="Profile picture" style="width:100%;height:100%;object-fit:cover;" />`
-              : `<span style="font-weight:700;color:var(--color-primary-900);">${escapeHtml(initialsFor(name))}</span>`}
+              ? `<img src="${attrEscape(pictureUrl)}" alt="Profile picture" class="bp-picture-img" />`
+              : `<span class="bp-picture-initials">${escapeHtml(initialsFor(name))}</span>`}
           </div>
-          <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">${escapeHtml(name)}</div>
-          <div style="font-size: 0.85rem; font-weight: 600; color: #4B5563; margin-top: 2px;">${escapeHtml(phoneLabel)}</div>
-          <div style="font-size: 0.75rem; color: #9CA3AF; margin-top: 6px;">${pictureUrl ? 'A profile picture is already set.' : 'No profile picture set.'}</div>
-          <button type="button" class="btn-secondary btn-auto" id="bp-replace-picture-btn" style="margin-top: 10px;">Replace picture</button>
-          <input type="file" id="bp-picture-file-input" accept="image/jpeg,image/png" style="display:none;" />
-          <div id="bp-picture-status" style="font-size: 0.75rem; color: #6B7280; margin-top: 6px;"></div>
+          <div class="bp-preview-name">${escapeHtml(name)}</div>
+          <div class="bp-preview-phone">${escapeHtml(phoneLabel)}</div>
+          <div class="bp-preview-hint">${pictureUrl ? 'A profile picture is already set.' : 'No profile picture set.'}</div>
+          <button type="button" class="btn-secondary btn-auto bp-replace-picture-btn" id="bp-replace-picture-btn">Replace picture</button>
+          <input type="file" id="bp-picture-file-input" accept="image/jpeg,image/png" hidden />
+          <div id="bp-picture-status" class="bp-picture-status"></div>
         </div>
       </div>
     `;
