@@ -58,6 +58,41 @@ router.get('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (re
   res.json(await messageTemplatesRepo.listByClientId(req.db, req.clientId));
 }));
 
+// Checked live, before submission - a button/LTO/carousel-card URL that's
+// malformed or dead was previously only ever discovered after the full
+// Meta round trip (create a template, wait for the real 502), which is
+// slow to iterate on. This is a cheap pre-flight: format (reused from
+// mediaHeaderService's SSRF guard - this route fetches a CRM-author-
+// supplied URL on the author's own behalf, same risk class as
+// resolveMediaIdFromUrl) + an actual live reachability check, reported
+// as a non-blocking signal the UI shows next to the field - never a hard
+// submit block, since a real site can legitimately reject a bot HEAD/GET
+// (anti-scraping, auth walls) while still being a perfectly valid button
+// destination for a human tapping it in WhatsApp.
+router.get('/verify-url', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  const rawUrl = String(req.query.url || '');
+  let parsed;
+  try {
+    parsed = await mediaHeaderService.assertPublicHttpsUrl(rawUrl);
+  } catch (err) {
+    return res.json({ reachable: false, error: err.message });
+  }
+
+  // HEAD first (cheapest - no body transferred), falling back to GET for
+  // a server that rejects HEAD outright (common misconfiguration, not a
+  // real signal the URL is bad) - this app only needs to know a response
+  // arrived, never the body, so a GET here still doesn't read it.
+  for (const method of ['HEAD', 'GET']) {
+    try {
+      const response = await fetch(parsed, { method, redirect: 'follow', signal: AbortSignal.timeout(6000) });
+      if (response.ok) return res.json({ reachable: true, status: response.status });
+      if (method === 'GET') return res.json({ reachable: false, status: response.status, error: `Responded with ${response.status} ${response.statusText}` });
+    } catch (err) {
+      if (method === 'GET') return res.json({ reachable: false, error: err.name === 'TimeoutError' ? 'Timed out after 6s' : err.message });
+    }
+  }
+}));
+
 // Shared between POST / (create) and PUT /:id (edit) - the same body/
 // sample-value/header-text rules apply to a brand-new template and an
 // edited one. Media-header file checks stay in POST only: PUT's own schema

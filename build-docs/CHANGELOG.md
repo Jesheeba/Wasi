@@ -1,5 +1,21 @@
 # Changelog
 
+## fix(templates): verify button/shop-link URLs before submission
+Reported directly: discovering a dead/malformed button URL only after the
+full Meta submission round trip (create, wait, 502) was too slow to
+iterate on. New `GET /api/templates/verify-url` - format check (reused
+SSRF guard, same risk class as the existing `resolveMediaIdFromUrl`) +
+a real HEAD request (falls back to GET if HEAD is rejected), 6s timeout.
+Wired to blur on the LTO shop-link field and every carousel card's button
+URL: shows "✓ Link reachable" or a warning inline, in seconds. Deliberately
+non-blocking (never disables Submit) - a real site can legitimately reject
+a bot's check (anti-scraping, auth walls) while still working fine for a
+human tapping the button in WhatsApp.
+
+Files: `server/src/routes/templates.js`, `app.js`, `index.html`.
+Tests: `server/test/verifyTemplateUrl.test.js` (6/6 pass); 37/37 on the
+carousel/LTO/templateEdit/templateMediaAssets regression.
+
 ## carousel-templates
 Added Meta's multi-card swipeable Carousel template (the exact format from
 the user's original competitor screenshot) - zero `CAROUSEL` support

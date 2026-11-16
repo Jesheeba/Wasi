@@ -6060,6 +6060,37 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplateSubmitGating();
   }
 
+  // Shared by the LTO shop-link field and every carousel card's button-url
+  // field - a cheap format+liveness pre-check (GET /api/templates/verify-url)
+  // so a bad URL is caught in seconds on blur, not after the full Meta
+  // submission round trip. Non-blocking signal only (never disables
+  // Submit) - a real site can legitimately reject a bot's check (anti-
+  // scraping, auth walls) while still being a perfectly valid destination
+  // for a human tapping the button in WhatsApp.
+  let urlVerifyRequestId = 0;
+  async function verifyUrlField(url, statusEl) {
+    if (!statusEl) return;
+    const trimmed = (url || '').trim();
+    if (!trimmed) { statusEl.textContent = ''; return; }
+    const requestId = ++urlVerifyRequestId;
+    statusEl.textContent = 'Checking link…';
+    statusEl.style.color = 'var(--text-muted)';
+    try {
+      const result = await authFetch(`/api/templates/verify-url?url=${encodeURIComponent(trimmed)}`);
+      if (requestId !== urlVerifyRequestId) return; // a newer check superseded this one
+      if (result.reachable) {
+        statusEl.textContent = '✓ Link reachable';
+        statusEl.style.color = 'var(--color-primary-700, #166534)';
+      } else {
+        statusEl.textContent = `⚠ ${result.error || 'Link did not respond'}`;
+        statusEl.style.color = '#B45309';
+      }
+    } catch (err) {
+      if (requestId !== urlVerifyRequestId) return;
+      statusEl.textContent = '';
+    }
+  }
+
   function renderTemplateCardsList() {
     const container = document.getElementById('template-cards-list');
     if (!container) return;
@@ -6078,6 +6109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <input type="text" class="form-input" data-card-field="bodyText" data-index="${i}" placeholder="Card text (optional, max 160 chars)" maxlength="160" value="${escapeHtml(card.bodyText || '')}" />
         <input type="text" class="form-input" data-card-field="buttonText" data-index="${i}" placeholder="Button text (optional, e.g. Read more)" maxlength="25" value="${escapeHtml(card.buttonText || '')}" />
         <input type="text" class="form-input" data-card-field="buttonUrl" data-index="${i}" placeholder="https://... (required if button text is set)" value="${escapeHtml(card.buttonUrl || '')}" />
+        <span class="form-hint-inline" data-card-url-status="${i}"></span>
       </div>
     `).join('');
     refreshIcons();
@@ -6091,6 +6123,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTemplatePreview();
         updateTemplateSubmitGating();
       });
+      // Live reachability check on blur, not every keystroke - a full
+      // submission to Meta previously took the full round trip (minutes)
+      // just to discover a dead/malformed link; this catches it in
+      // seconds, before the author ever hits Submit.
+      if (input.dataset.cardField === 'buttonUrl') {
+        input.addEventListener('blur', (e) => {
+          const i = Number(e.target.dataset.index);
+          verifyUrlField(e.target.value, container.querySelector(`[data-card-url-status="${i}"]`));
+        });
+      }
     });
     container.querySelectorAll('[data-remove-card]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -6416,6 +6458,11 @@ document.addEventListener('DOMContentLoaded', () => {
     templateCards = [];
     renderTemplateCardsList();
     resetTemplateModalToCreateMode();
+    // form.reset() clears input values but not a plain <span>'s text -
+    // without this, a stale "✓ Link reachable" from a previous template's
+    // URL would still show for the new, blank one.
+    const ltoUrlStatus = document.getElementById('new-template-lto-url-status');
+    if (ltoUrlStatus) ltoUrlStatus.textContent = '';
 
     // Checked fresh on every open rather than cached in state long-term -
     // connecting/disconnecting WhatsApp is rare, but this keeps the gate
@@ -6457,6 +6504,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('new-template-lto-text')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-lto-code')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-lto-url')?.addEventListener('input', updateTemplatePreview);
+  document.getElementById('new-template-lto-url')?.addEventListener('blur', (e) => {
+    verifyUrlField(e.target.value, document.getElementById('new-template-lto-url-status'));
+  });
   document.getElementById('new-template-carousel-enabled')?.addEventListener('change', updateTemplateCarouselFields);
   document.getElementById('template-add-card-btn')?.addEventListener('click', addTemplateCard);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
