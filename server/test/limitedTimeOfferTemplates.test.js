@@ -98,7 +98,7 @@ test('POST /api/templates: a limited-time offer alongside a non-NONE header is r
   }
 });
 
-test('POST /api/templates: offer text over 16 characters is rejected locally (400)', async () => {
+test('POST /api/templates: offer text over 15 characters is rejected locally (400)', async () => {
   const res = await fetch(`${baseUrl}/api/templates`, {
     method: 'POST', headers: authed(clientToken),
     body: JSON.stringify({
@@ -108,6 +108,27 @@ test('POST /api/templates: offer text over 16 characters is rejected locally (40
     }),
   });
   assert.equal(res.status, 400);
+});
+
+test('POST /api/templates: a limited-time offer alongside a footer is rejected locally (400), no Meta call made', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).includes('graph.facebook.com')) throw new Error('must not call Meta - rejected before that point');
+    return originalFetch(url, options);
+  };
+  try {
+    const res = await fetch(`${baseUrl}/api/templates`, {
+      method: 'POST', headers: authed(clientToken),
+      body: JSON.stringify({
+        name: `${SUITE_PREFIX}lto_with_footer`, category: 'Marketing', language: 'en_US',
+        body: 'Flash sale this weekend!', footer: 'Reply STOP to unsubscribe',
+        limitedTimeOffer: { text: '25OFF', hasExpiration: true },
+      }),
+    });
+    assert.equal(res.status, 400);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test('POST /api/templates: a limited-time offer on a non-Marketing category is rejected locally (400)', async () => {
@@ -147,6 +168,14 @@ test('POST /api/templates: a valid Marketing + limited-time-offer template (no h
     assert.deepEqual(
       createRequestBody.components.find((c) => c.type === 'LIMITED_TIME_OFFER'),
       { type: 'LIMITED_TIME_OFFER', limited_time_offer: { text: '25OFF', has_expiration: true } }
+    );
+    // Confirmed live against Meta (2026-11-16): a COPY_CODE button at
+    // index 0 is REQUIRED alongside LIMITED_TIME_OFFER, not optional -
+    // Meta rejects the template otherwise ("COPY_CODE is required at
+    // index 0 when Limited Time Offer is present").
+    assert.deepEqual(
+      createRequestBody.components.find((c) => c.type === 'BUTTONS'),
+      { type: 'BUTTONS', buttons: [{ type: 'COPY_CODE', example: '25OFF' }] }
     );
 
     const fromDb = await messageTemplatesRepo.findById(pool, testClientId, template.id);
@@ -212,6 +241,12 @@ test('sending a limited-time-offer template with hasExpiration requires limitedT
     assert.deepEqual(
       sendRequests[0].template.components.find((c) => c.type === 'limited_time_offer'),
       { type: 'limited_time_offer', parameters: [{ type: 'limited_time_offer', limited_time_offer: { expiration_time_ms: expiry } }] }
+    );
+    // Confirmed live against Meta (2026-11-16): the copy_code button
+    // component is required at send time too, alongside limited_time_offer.
+    assert.deepEqual(
+      sendRequests[0].template.components.find((c) => c.type === 'button' && c.sub_type === 'copy_code'),
+      { type: 'button', sub_type: 'copy_code', index: '0', parameters: [{ type: 'coupon_code', coupon_code: '25OFF' }] }
     );
 
     void chat; // only needed to ensure the chat/contact exist for the send

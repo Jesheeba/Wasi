@@ -189,11 +189,18 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
       );
     }
     finalComponents = [
-      ...finalComponents.filter((c) => c.type !== 'limited_time_offer'),
+      ...finalComponents.filter((c) => c.type !== 'limited_time_offer' && !(c.type === 'button' && c.sub_type === 'copy_code')),
       // Number(): a bigint column (broadcasts.limited_time_offer_expiration_ms)
       // comes back from pg as a string, not a number - Meta's API expects a
       // numeric timestamp either way.
       { type: 'limited_time_offer', parameters: [{ type: 'limited_time_offer', limited_time_offer: { expiration_time_ms: Number(limitedTimeOfferExpirationMs) } }] },
+      // Required alongside limited_time_offer at send time too (confirmed
+      // against Meta's docs) - the coupon_code parameter is dynamic per
+      // send, same as expiration_time_ms, even though this app always
+      // reuses the template's own fixed offer text rather than offering a
+      // per-send-different code (no UI for that - out of this feature's
+      // scope).
+      { type: 'button', sub_type: 'copy_code', index: '0', parameters: [{ type: 'coupon_code', coupon_code: template.limited_time_offer.text }] },
     ];
   }
 

@@ -380,8 +380,15 @@ const messageTemplateCreateSchema = z.object({
   // visual slot), enforced below rather than at the type level since
   // "NONE or absent" is the only valid combination and that's easiest to
   // express as a superRefine check against the already-parsed header.
+  // Reused as both the offer-strip text AND the auto-added COPY_CODE
+  // button's example (metaClient.js's buildUtilityMarketingPayload) - capped
+  // at 15, not Meta's own 16-char limit for the strip text itself, because
+  // the button's example has the stricter 15-char cap and this one field
+  // has to satisfy both (confirmed live against Meta: "COPY_CODE is
+  // required at index 0 when Limited Time Offer is present" - not optional,
+  // not author-configurable separately).
   limitedTimeOffer: z.object({
-    text: z.string().min(1).max(16),
+    text: z.string().min(1).max(15),
     hasExpiration: z.boolean(),
   }).optional(),
 
@@ -406,6 +413,11 @@ const messageTemplateCreateSchema = z.object({
     }
     if (data.header && data.header.type !== 'NONE') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['limitedTimeOffer'], message: 'A limited-time offer template cannot also have a header - Meta renders the offer strip in the header\'s place.' });
+    }
+    // Confirmed live against Meta - footer components aren't supported on
+    // an LTO template at all, not just "usually omitted."
+    if (data.footer) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['limitedTimeOffer'], message: 'A limited-time offer template cannot also have a footer - Meta does not support one here.' });
     }
   }
 

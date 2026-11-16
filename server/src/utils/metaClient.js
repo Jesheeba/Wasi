@@ -678,10 +678,23 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
     });
   }
 
-  if (buttons && buttons.length > 0) {
+  // A COPY_CODE button at index 0 is REQUIRED alongside LIMITED_TIME_OFFER
+  // - confirmed live against Meta ("COPY_CODE is required at index 0 when
+  // Limited Time Offer is present"), not author-optional. Reuses the same
+  // offer text as the button's example (capped at 15 chars in validate.js
+  // for exactly this reason) rather than asking the author to type the
+  // same coupon code twice. Any author-supplied buttons (e.g. a URL
+  // button) follow it in the same single BUTTONS component - Meta's own
+  // example shows copy_code then url in one array, not two components.
+  const effectiveButtons = limitedTimeOffer
+    ? [{ type: 'COPY_CODE', example: limitedTimeOffer.text }, ...(buttons || [])]
+    : buttons;
+
+  if (effectiveButtons && effectiveButtons.length > 0) {
     components.push({
       type: 'BUTTONS',
-      buttons: buttons.map((b) => {
+      buttons: effectiveButtons.map((b) => {
+        if (b.type === 'COPY_CODE') return { type: 'COPY_CODE', example: b.example };
         if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url };
         if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number };
         return { type: 'QUICK_REPLY', text: b.text };
