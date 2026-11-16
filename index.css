@@ -2722,26 +2722,25 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .template-skeleton .skeleton { height: 12px; }
 
 /* Library */
-.automation-tabs { margin-bottom: var(--sp-4); flex-shrink: 0; }
 .library-filters { margin-bottom: var(--sp-4); }
 .library-filters .table-toolbar { padding: 0; border-bottom: none; }
 .library-list-card { padding: var(--sp-4); }
 .library-preview-card { padding: var(--sp-4); }
 
-/* Template Library (UI redesign continuation): the approved reference uses
-   a grey-track segmented control for the Wasi Curated/Meta Official source
-   switch (Component Specs' "segmented control"), not the underline tabs
-   used elsewhere (Analytics, Automation) - scoped to .library-tabs only so
-   those other, already-verified tab strips are untouched. */
-.library-tabs {
+/* Segmented-control tab strip (Component Specs' "segmented control"): a
+   grey track with the active item as a white pill - the approved
+   references show this for Template Library's source switch AND
+   Automation's Rules/Flows switch, not the underline-tab treatment used
+   elsewhere (Analytics' own reference keeps underline tabs - untouched). */
+.library-tabs, .automation-tabs {
   display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-muted);
   border-radius: 9px; border-bottom: none; margin-bottom: var(--sp-4); flex-shrink: 0;
 }
-.library-tabs .tab {
+.library-tabs .tab, .automation-tabs .tab {
   padding: 6px 14px; border-radius: 7px; font-size: var(--fs-label);
   border-bottom: none; margin-bottom: 0;
 }
-.library-tabs .tab[aria-selected="true"] {
+.library-tabs .tab[aria-selected="true"], .automation-tabs .tab[aria-selected="true"] {
   background: var(--bg-card); color: var(--text); font-weight: 600;
 }
 
