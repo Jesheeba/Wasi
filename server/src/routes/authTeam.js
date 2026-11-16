@@ -82,6 +82,7 @@ router.get('/me', sessionCheckLimiter, requireClientOrTeamAuth, asyncHandler(asy
     clientId: req.clientId,
     clientName: client?.name || null,
     tenantSlug: client?.tenant_slug || null,
+    clientStatus: client?.status || null,
   });
 }));
 

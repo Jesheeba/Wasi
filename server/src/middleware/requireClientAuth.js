@@ -22,11 +22,12 @@ async function requireClientAuth(req, res, next) {
   }
 
   try {
-    const { rows } = await pool.query('select token_version from clients where id = $1', [payload.sub]);
+    const { rows } = await pool.query('select token_version, status from clients where id = $1', [payload.sub]);
     const currentVersion = rows[0]?.token_version;
     if (currentVersion === undefined || (payload.tokenVersion ?? 0) !== currentVersion) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
+    req.clientStatus = rows[0].status;
   } catch (err) {
     return next(err);
   }

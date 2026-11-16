@@ -7,6 +7,7 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { apiV1NotFoundHandler, apiV1ErrorHandler } = require('./middleware/apiV1ErrorHandler');
 const { requireClientAuth } = require('./middleware/requireClientAuth');
 const { requireClientOrTeamAuth } = require('./middleware/requireClientOrTeamAuth');
+const { requireActiveSubscription } = require('./middleware/requireActiveSubscription');
 const { requireAdminAuth } = require('./middleware/requireAdminAuth');
 const { withTenantContext } = require('./middleware/tenantContext');
 
@@ -161,27 +162,32 @@ function createApp() {
   // Hub API credentials, integration secrets - and stay unreachable by any
   // team-member role at all, including one titled Admin (a deliberate,
   // stricter-than-the-reference-spec choice, not an oversight).
-  app.use('/api/contacts', requireClientOrTeamAuth, withTenantContext, contactsRouter);
-  app.use('/api/chats', requireClientOrTeamAuth, withTenantContext, chatsRouter);
-  app.use('/api/tags', requireClientOrTeamAuth, withTenantContext, tagsRouter);
-  app.use('/api/onboarding', requireClientAuth, withTenantContext, onboardingRouter);
+  // requireActiveSubscription runs on every one of these EXCEPT billing -
+  // a suspended client must still be able to pay their way out (see
+  // build-docs/features/client-suspension-paywall.md). It reads
+  // req.clientStatus, set by the auth middleware just before it, so it adds
+  // no extra query.
+  app.use('/api/contacts', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactsRouter);
+  app.use('/api/chats', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, chatsRouter);
+  app.use('/api/tags', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, tagsRouter);
+  app.use('/api/onboarding', requireClientAuth, requireActiveSubscription, withTenantContext, onboardingRouter);
   app.use('/api/billing', requireClientAuth, withTenantContext, billingRouter);
-  app.use('/api/broadcasts', requireClientOrTeamAuth, withTenantContext, broadcastsRouter);
-  app.use('/api/contact-lists', requireClientOrTeamAuth, withTenantContext, contactListsRouter);
-  app.use('/api/contact-segments', requireClientOrTeamAuth, withTenantContext, contactSegmentsRouter);
-  app.use('/api/automation-rules', requireClientOrTeamAuth, withTenantContext, automationRulesRouter);
-  app.use('/api/automation-flows', requireClientOrTeamAuth, withTenantContext, automationFlowsRouter);
-  app.use('/api/templates', requireClientOrTeamAuth, withTenantContext, templatesRouter);
-  app.use('/api/support-tickets', requireClientOrTeamAuth, withTenantContext, supportTicketsRouter);
-  app.use('/api/analytics', requireClientOrTeamAuth, withTenantContext, analyticsRouter);
-  app.use('/api/team-members', requireClientOrTeamAuth, withTenantContext, teamMembersRouter);
-  app.use('/api/contact-attributes', requireClientOrTeamAuth, withTenantContext, contactAttributesRouter);
-  app.use('/api/payment-links', requireClientAuth, withTenantContext, paymentLinksRouter);
-  app.use('/api/wallet', requireClientAuth, withTenantContext, walletRouter);
-  app.use('/api/client-webhook', requireClientAuth, withTenantContext, clientWebhookRouter);
-  app.use('/api/api-keys', requireClientAuth, withTenantContext, apiKeysRouter);
-  app.use('/api/template-library', requireClientOrTeamAuth, withTenantContext, templateLibraryRouter);
-  app.use('/api/canned-responses', requireClientOrTeamAuth, withTenantContext, cannedResponsesRouter);
+  app.use('/api/broadcasts', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, broadcastsRouter);
+  app.use('/api/contact-lists', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactListsRouter);
+  app.use('/api/contact-segments', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactSegmentsRouter);
+  app.use('/api/automation-rules', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, automationRulesRouter);
+  app.use('/api/automation-flows', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, automationFlowsRouter);
+  app.use('/api/templates', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, templatesRouter);
+  app.use('/api/support-tickets', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, supportTicketsRouter);
+  app.use('/api/analytics', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, analyticsRouter);
+  app.use('/api/team-members', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, teamMembersRouter);
+  app.use('/api/contact-attributes', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactAttributesRouter);
+  app.use('/api/payment-links', requireClientAuth, requireActiveSubscription, withTenantContext, paymentLinksRouter);
+  app.use('/api/wallet', requireClientAuth, requireActiveSubscription, withTenantContext, walletRouter);
+  app.use('/api/client-webhook', requireClientAuth, requireActiveSubscription, withTenantContext, clientWebhookRouter);
+  app.use('/api/api-keys', requireClientAuth, requireActiveSubscription, withTenantContext, apiKeysRouter);
+  app.use('/api/template-library', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, templateLibraryRouter);
+  app.use('/api/canned-responses', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, cannedResponsesRouter);
 
   // Meta calls these directly (no client JWT available).
   app.use('/webhooks/meta/data-deletion', webhookLimiter, metaDataDeletionRouter);

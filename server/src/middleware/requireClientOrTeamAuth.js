@@ -30,11 +30,12 @@ async function requireClientOrTeamAuth(req, res, next) {
 
   if (payload.type === 'client') {
     try {
-      const { rows } = await pool.query('select token_version from clients where id = $1', [payload.sub]);
+      const { rows } = await pool.query('select token_version, status from clients where id = $1', [payload.sub]);
       const currentVersion = rows[0]?.token_version;
       if (currentVersion === undefined || (payload.tokenVersion ?? 0) !== currentVersion) {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
+      req.clientStatus = rows[0].status;
     } catch (err) {
       return next(err);
     }
@@ -47,14 +48,20 @@ async function requireClientOrTeamAuth(req, res, next) {
 
   if (payload.type === 'team_member') {
     try {
+      // Joined to clients in one round trip - the owning CLIENT's status is
+      // what gates a team member (a team member has no status of their
+      // own), see requireActiveSubscription.js.
       const { rows } = await pool.query(
-        'select token_version from team_members where id = $1 and client_id = $2',
+        `select tm.token_version, c.status as client_status
+         from team_members tm join clients c on c.id = tm.client_id
+         where tm.id = $1 and tm.client_id = $2`,
         [payload.sub, payload.clientId]
       );
       const currentVersion = rows[0]?.token_version;
       if (currentVersion === undefined || (payload.tokenVersion ?? 0) !== currentVersion) {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
+      req.clientStatus = rows[0].client_status;
     } catch (err) {
       return next(err);
     }
