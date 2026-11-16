@@ -6238,6 +6238,30 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
+  // Keyed by File object, not re-created per render - updateTemplatePreview
+  // runs on every keystroke, and createObjectURL-per-render would mint a
+  // new blob: URL (and leak it) each time. The same File input value keeps
+  // the same File object until the user re-picks a file, so this caches
+  // correctly without ever needing to revoke (modal-scoped memory, freed
+  // when the File itself is garbage collected).
+  const filePreviewUrls = new WeakMap();
+  function filePreviewUrl(file) {
+    if (!filePreviewUrls.has(file)) filePreviewUrls.set(file, URL.createObjectURL(file));
+    return filePreviewUrls.get(file);
+  }
+
+  // Shows an actual thumbnail for IMAGE/VIDEO headers - matching what
+  // WhatsApp itself renders - instead of the filename as plain text, which
+  // told the user nothing about what they were about to submit. DOCUMENT
+  // headers keep the filename label since that's what WhatsApp actually
+  // shows for a document attachment (no inline preview there either).
+  function headerMediaPreviewHtml(headerType, file, noFileLabel) {
+    if (!file) return `<div class="template-preview-header">${escapeHtml(noFileLabel)}</div>`;
+    if (headerType === 'IMAGE') return `<img class="template-preview-media-thumb" src="${filePreviewUrl(file)}" alt="">`;
+    if (headerType === 'VIDEO') return `<video class="template-preview-media-thumb" src="${filePreviewUrl(file)}" controls></video>`;
+    return `<div class="template-preview-header">${escapeHtml(file.name)}</div>`;
+  }
+
   // Authentication's body isn't author-written - Meta generates it (see
   // metaClient.js's buildAuthenticationPayload) - so this preview shows
   // representative wording, not a live substitution of anything editable.
@@ -6266,8 +6290,8 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `<div class="template-preview-header">${escapeHtml(substituteTemplateParams(headerText, samples))}</div>`;
     } else if (MEDIA_HEADER_TYPES.includes(headerType)) {
       const file = document.getElementById('new-template-header-file').files[0];
-      const label = file ? file.name : `${headerType.charAt(0)}${headerType.slice(1).toLowerCase()} header - no file chosen yet`;
-      html += `<div class="template-preview-header">${escapeHtml(label)}</div>`;
+      const noFileLabel = `${headerType.charAt(0)}${headerType.slice(1).toLowerCase()} header - no file chosen yet`;
+      html += headerMediaPreviewHtml(headerType, file, noFileLabel);
     }
     const bodyPreview = substituteTemplateParams(body, samples).trim();
     html += `<div>${bodyPreview ? escapeHtml(bodyPreview) : '<span style="color:var(--text-muted)">Body preview appears here</span>'}</div>`;
@@ -6289,7 +6313,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('new-template-carousel-enabled')?.checked) {
       html += `<div class="template-preview-carousel">${templateCards.map((card) => `
         <div class="template-preview-card">
-          <div class="template-preview-header">${card.file ? escapeHtml(card.file.name) : `${card.headerType.charAt(0)}${card.headerType.slice(1).toLowerCase()} - no file chosen yet`}</div>
+          ${headerMediaPreviewHtml(card.headerType, card.file, `${card.headerType.charAt(0)}${card.headerType.slice(1).toLowerCase()} - no file chosen yet`)}
           ${card.bodyText ? `<div>${escapeHtml(card.bodyText)}</div>` : ''}
           ${card.buttonText ? `<div class="template-preview-buttons"><div class="template-preview-button">&#128279; ${escapeHtml(card.buttonText)}</div></div>` : ''}
         </div>
