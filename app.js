@@ -5914,9 +5914,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTemplatePreview();
   }
 
-  // Mutually exclusive with the header field - enabling the offer strip
-  // disables (and resets) the header select rather than letting both be
-  // submitted, matching the server's own superRefine rule in validate.js.
+  // Mutually exclusive with the header AND footer fields - enabling the
+  // offer strip disables (and resets) both rather than letting either be
+  // submitted, matching the server's own superRefine rule in validate.js
+  // (confirmed live against Meta: a footer isn't supported on an LTO
+  // template at all).
   function updateTemplateLtoFields() {
     const enabled = document.getElementById('new-template-lto-enabled').checked;
     document.getElementById('template-lto-fields').style.display = enabled ? '' : 'none';
@@ -5926,6 +5928,9 @@ document.addEventListener('DOMContentLoaded', () => {
       headerSelect.value = 'NONE';
       updateTemplateHeaderField();
     }
+    const footerInput = document.getElementById('new-template-footer');
+    footerInput.disabled = enabled;
+    if (enabled) footerInput.value = '';
     updateTemplatePreview();
   }
 
@@ -6010,7 +6015,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('new-template-lto-enabled')?.checked) {
       const offerText = document.getElementById('new-template-lto-text').value.trim();
       const hasExpiration = document.getElementById('new-template-lto-expiration').checked;
-      html += `<div class="template-preview-lto">&#127873; ${escapeHtml(offerText || '(offer text)')}${hasExpiration ? ' &middot; expires in... <span class="template-preview-button">Copy Code</span>' : ' <span class="template-preview-button">Copy Code</span>'}</div>`;
+      html += `<div class="template-preview-lto">&#127873; ${escapeHtml(offerText || '(offer text)')}${hasExpiration ? ' &middot; expires in...' : ''} <span class="template-preview-button">Copy Code</span></div>`;
     }
     bubble.innerHTML = html;
   }
@@ -6039,6 +6044,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-template-category').disabled = false;
     document.getElementById('new-template-language').disabled = false;
     document.getElementById('new-template-header-type').disabled = false;
+    document.getElementById('new-template-footer').disabled = false;
     const modalTitle = document.querySelector('#modal-create-template .modal-title');
     if (modalTitle) modalTitle.textContent = 'Create Template';
     const submitBtn = document.querySelector('#create-template-form button[type="submit"]');
@@ -6089,6 +6095,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('new-template-header-file')?.addEventListener('change', updateTemplatePreview);
   document.getElementById('new-template-lto-enabled')?.addEventListener('change', updateTemplateLtoFields);
   document.getElementById('new-template-lto-text')?.addEventListener('input', updateTemplatePreview);
+  document.getElementById('new-template-lto-code')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
     updateTemplateSubmitGating();
     updateTemplatePreview();
@@ -6212,12 +6219,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (category === 'Marketing' && document.getElementById('new-template-lto-enabled').checked) {
         const offerText = document.getElementById('new-template-lto-text').value.trim();
-        if (!offerText) {
-          showToast('Enter the offer text (e.g. "Use code 25OFF") before submitting.');
+        const offerCode = document.getElementById('new-template-lto-code').value.trim();
+        if (!offerText || !offerCode) {
+          showToast('Enter both the offer text and the coupon code before submitting.');
           return;
         }
         payload.limitedTimeOffer = {
           text: offerText,
+          code: offerCode,
           hasExpiration: document.getElementById('new-template-lto-expiration').checked,
         };
         payload.header = { type: 'NONE' };

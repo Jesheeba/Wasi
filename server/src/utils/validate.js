@@ -380,15 +380,16 @@ const messageTemplateCreateSchema = z.object({
   // visual slot), enforced below rather than at the type level since
   // "NONE or absent" is the only valid combination and that's easiest to
   // express as a superRefine check against the already-parsed header.
-  // Reused as both the offer-strip text AND the auto-added COPY_CODE
-  // button's example (metaClient.js's buildUtilityMarketingPayload) - capped
-  // at 15, not Meta's own 16-char limit for the strip text itself, because
-  // the button's example has the stricter 15-char cap and this one field
-  // has to satisfy both (confirmed live against Meta: "COPY_CODE is
-  // required at index 0 when Limited Time Offer is present" - not optional,
-  // not author-configurable separately).
+  // `text` (max 16) is the strip's free marketing copy (e.g. "Flash Sale!");
+  // `code` (max 15) is the literal coupon code the auto-added COPY_CODE
+  // button copies (e.g. "25OFF") - confirmed live against Meta that these
+  // are two genuinely different fields, not one: an initial implementation
+  // reused `text` as the button's example and Meta rejected it ("Button
+  // example provided is invalid") once `text` was a sentence rather than a
+  // bare code.
   limitedTimeOffer: z.object({
-    text: z.string().min(1).max(15),
+    text: z.string().min(1).max(16),
+    code: z.string().min(1).max(15),
     hasExpiration: z.boolean(),
   }).optional(),
 

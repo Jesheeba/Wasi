@@ -680,14 +680,15 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
 
   // A COPY_CODE button at index 0 is REQUIRED alongside LIMITED_TIME_OFFER
   // - confirmed live against Meta ("COPY_CODE is required at index 0 when
-  // Limited Time Offer is present"), not author-optional. Reuses the same
-  // offer text as the button's example (capped at 15 chars in validate.js
-  // for exactly this reason) rather than asking the author to type the
-  // same coupon code twice. Any author-supplied buttons (e.g. a URL
-  // button) follow it in the same single BUTTONS component - Meta's own
-  // example shows copy_code then url in one array, not two components.
+  // Limited Time Offer is present"), not author-optional. Its example is
+  // the literal coupon code (limitedTimeOffer.code), NOT the strip's
+  // marketing text - Meta rejected "Button example provided is invalid"
+  // when this used to pass the sentence-like `text` here instead. Any
+  // author-supplied buttons (e.g. a URL button) follow it in the same
+  // single BUTTONS component - Meta's own example shows copy_code then
+  // url in one array, not two components.
   const effectiveButtons = limitedTimeOffer
-    ? [{ type: 'COPY_CODE', example: limitedTimeOffer.text }, ...(buttons || [])]
+    ? [{ type: 'COPY_CODE', example: limitedTimeOffer.code }, ...(buttons || [])]
     : buttons;
 
   if (effectiveButtons && effectiveButtons.length > 0) {

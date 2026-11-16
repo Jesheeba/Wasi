@@ -54,17 +54,23 @@ every Meta call stubbed. Run against the local test Postgres above (migrations
 |---|---|
 | LTO + non-NONE header rejected locally (400), no Meta call | #2 |
 | LTO offer text over 16 chars rejected locally (400) | #2 |
+| LTO coupon code over 15 chars rejected locally (400) | #2 |
+| LTO with no coupon code rejected locally (400) | #2 |
+| LTO + footer rejected locally (400), no Meta call | #2 |
 | LTO on a non-Marketing category rejected locally (400) | #2 |
-| Valid Marketing + LTO (no header) submits to Meta with a `LIMITED_TIME_OFFER` component; local row stores `limited_time_offer` | #1 |
-| Sending with `hasExpiration` requires `limitedTimeOfferExpirationMs`; valid value forwarded to Meta as `expiration_time_ms` | #3, #4 (via `limited_time_offer_expiration_required` rejection) |
+| Valid Marketing + LTO (no header) submits to Meta with a `LIMITED_TIME_OFFER` component AND the Meta-required `COPY_CODE` button (`example` = the literal code, not the strip text); local row stores `limited_time_offer` | #1 |
+| Sending with `hasExpiration` requires `limitedTimeOfferExpirationMs`; valid value forwarded to Meta as `expiration_time_ms` + the required `copy_code` button component | #3, #4 (via `limited_time_offer_expiration_required` rejection) |
 
-Result: 5/5 pass. Regression: re-ran every file in the feature doc's impact
-map plus the template/broadcast/consent suites most likely to interact -
-`templateEdit`, `templateMediaAssets`, `templateSync`, `templateLibrary`,
+Result: 8/8 pass (grew from an initial 5/5 - 3 more added after a real
+Meta submission caught 2 real bugs the stubbed tests couldn't: see the
+feature doc's "Correction after real Meta submission" section). Regression:
+re-ran every file in the feature doc's impact map plus the template/
+broadcast/consent suites most likely to interact - `templateEdit`,
+`templateMediaAssets`, `templateSync`, `templateLibrary`,
 `templateCategoryMismatchWarning`, `templateLanguageHardcodeFixes`,
 `consentTracking`, `apiV1AuthenticationTemplateSend`, `broadcastRetry`,
-`broadcastPacing`, `broadcastSmartSending` - 74/74 pass, all pre-existing,
-none touched by this change.
+`broadcastPacing`, `broadcastSmartSending` - 82/82 pass (incl. the 8 LTO
+tests), all pre-existing ones unaffected by this change.
 
 Also ran the full 101-file suite once as a final check: 767 tests, 753
 pass, 13 fail, 1 skipped. All 13 failures are in files this feature never

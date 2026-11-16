@@ -11,6 +11,28 @@ smallest of the four messaging gaps found in this audit — it is a
 template **component addition**, not a new send type or new Meta
 object (unlike Flows/catalog messages above).
 
+## Correction after real Meta submission (2026-11-16)
+Two things the plan below got wrong, found only by actually submitting a
+real template to Meta's live API (the test suite's stubbed Meta never
+would have caught either):
+1. **A `COPY_CODE` button at index 0 is Meta-required alongside
+   `LIMITED_TIME_OFFER`, not optional.** Meta rejected the first real
+   submission: "COPY_CODE is required at index 0 when Limited Time Offer
+   is present." Fixed by auto-adding it in `buildUtilityMarketingPayload`
+   rather than asking the author to configure a button separately.
+2. **The offer strip's `text` and the button's coupon code are two
+   different fields, not one.** The first fix reused `text` (e.g. "Use
+   code 25OFF") as the button's `example`, and Meta rejected that too:
+   "Button example provided is invalid" - the example has to be a bare
+   code (e.g. "25OFF"), not a sentence. `limitedTimeOffer` now carries
+   both `text` (max 16, the strip's marketing copy) and `code` (max 15,
+   the literal coupon code), used for the button's `example` at create
+   time and the `coupon_code` send-time parameter.
+3. **A footer is also disallowed on an LTO template** (Meta's own
+   "Limitations" section) - added as a third mutual-exclusion rule
+   alongside the header one below, UI-side (footer field disables when
+   LTO is enabled, same as the header select).
+
 ## Architecture
 **Create (`metaClient.js` / `validate.js`)**
 - `messageTemplateCreateSchema` grows an optional `limitedTimeOffer:

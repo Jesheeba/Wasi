@@ -197,10 +197,10 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
       // Required alongside limited_time_offer at send time too (confirmed
       // against Meta's docs) - the coupon_code parameter is dynamic per
       // send, same as expiration_time_ms, even though this app always
-      // reuses the template's own fixed offer text rather than offering a
-      // per-send-different code (no UI for that - out of this feature's
+      // reuses the template's own fixed offer code rather than offering a
+      // per-send-different one (no UI for that - out of this feature's
       // scope).
-      { type: 'button', sub_type: 'copy_code', index: '0', parameters: [{ type: 'coupon_code', coupon_code: template.limited_time_offer.text }] },
+      { type: 'button', sub_type: 'copy_code', index: '0', parameters: [{ type: 'coupon_code', coupon_code: template.limited_time_offer.code }] },
     ];
   }
 
