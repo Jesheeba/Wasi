@@ -428,6 +428,7 @@
             </div>
           </div>
           <div id="import-contacts-csv-status" class="contacts-import-status" role="status" aria-live="polite"></div>
+          <div class="contacts-layout">
           <div class="table-card">
             <div class="table-toolbar contacts-toolbar">
               <div class="search-box grow">
@@ -483,6 +484,55 @@
                 <button type="button" class="btn-secondary btn-sm" id="contacts-next-page">Next</button>
               </div>
             </div>
+          </div>
+
+          <!-- Moved here from a standalone end-of-body modal (UI redesign
+               continuation) - at >=900px this renders as a permanent inline
+               panel beside the table (approved Contacts reference), not a
+               dark-scrim overlay; below 900px it still slides over as
+               before. All JS references are by id, so relocating the
+               markup changes nothing about how app.js opens/closes it. -->
+          <div id="modal-contact-detail" class="modal-overlay contact-drawer-overlay">
+            <div class="modal-box contact-drawer" role="dialog" aria-modal="true" aria-labelledby="contact-detail-name">
+              <div class="contact-drawer-header">
+                <div class="contact-drawer-avatar" id="contact-detail-avatar" aria-hidden="true">?</div>
+                <div class="contact-drawer-who">
+                  <h3 class="contact-drawer-name" id="contact-detail-name">Contact</h3>
+                  <div class="contact-drawer-phone" id="contact-detail-phone"></div>
+                </div>
+                <button class="close-modal-btn" data-close-modal="modal-contact-detail" aria-label="Close contact details"><i data-lucide="x"></i></button>
+              </div>
+              <div class="contact-drawer-body">
+
+              <dl class="contact-kv" id="contact-detail-summary" aria-label="Contact summary"></dl>
+
+              <details class="contact-drawer-section" open>
+                <summary class="details-section-title">Opt-In Status</summary>
+                <div id="contact-detail-optin" style="font-size: 0.825rem;"></div>
+              </details>
+
+              <details class="contact-drawer-section" open>
+                <summary class="details-section-title">Tags</summary>
+                <div class="contact-tags-wrapper" id="contact-detail-tags-wrapper">
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;" class="contact-tags-chips" id="contact-detail-tags-chips"></div>
+                  <select class="form-input contact-tags-select" id="contact-detail-tags-select" style="font-size: 0.75rem; padding: 3px 6px; height: auto; margin-top: 6px;">
+                    <option value="">+ Add tag…</option>
+                  </select>
+                </div>
+              </details>
+
+              <details class="contact-drawer-section" open>
+                <summary class="details-section-title">Attributes</summary>
+                <div id="contact-detail-attributes" style="font-size: 0.825rem; color: #9CA3AF;"></div>
+              </details>
+
+              <details class="contact-drawer-section" open>
+                <summary class="details-section-title">Activity</summary>
+                <div id="contact-detail-timeline" class="modal-inner-scroll" style="font-size: 0.8rem; color: #9CA3AF;"></div>
+              </details>
+              </div>
+            </div>
+          </div>
           </div>
         </div>
 
@@ -1482,55 +1532,6 @@
        second implementation. contacts.tag_id (the primary tag) has no UI
        here either, by explicit decision - this panel only ever shows what
        items 7/8 already built. -->
-  <div id="modal-contact-detail" class="modal-overlay contact-drawer-overlay">
-    <div class="modal-box contact-drawer" role="dialog" aria-modal="true" aria-labelledby="contact-detail-name">
-      <div class="contact-drawer-header">
-        <div class="contact-drawer-avatar" id="contact-detail-avatar" aria-hidden="true">?</div>
-        <div class="contact-drawer-who">
-          <h3 class="contact-drawer-name" id="contact-detail-name">Contact</h3>
-          <div class="contact-drawer-phone" id="contact-detail-phone"></div>
-        </div>
-        <button class="close-modal-btn" data-close-modal="modal-contact-detail" aria-label="Close contact details"><i data-lucide="x"></i></button>
-      </div>
-      <div class="contact-drawer-body">
-
-      <dl class="contact-kv" id="contact-detail-summary" aria-label="Contact summary"></dl>
-
-      <!-- Consent hardening Phase 2 - per-contact opt-in/opt-out control.
-           Rendered by app.js's renderContactOptInInto; "Mark opted in"
-           reuses the exact same confirmation modal (#modal-bulk-opt-in)
-           bulk opt-in uses, just with a single-id array - one flow, not
-           two parallel implementations. -->
-      <details class="contact-drawer-section" open>
-        <summary class="details-section-title">Opt-In Status</summary>
-        <div id="contact-detail-optin" style="font-size: 0.825rem;"></div>
-      </details>
-
-      <details class="contact-drawer-section" open>
-        <summary class="details-section-title">Tags</summary>
-        <div class="contact-tags-wrapper" id="contact-detail-tags-wrapper">
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;" class="contact-tags-chips" id="contact-detail-tags-chips"></div>
-          <select class="form-input contact-tags-select" id="contact-detail-tags-select" style="font-size: 0.75rem; padding: 3px 6px; height: auto; margin-top: 6px;">
-            <option value="">+ Add tag…</option>
-          </select>
-        </div>
-      </details>
-
-      <details class="contact-drawer-section" open>
-        <summary class="details-section-title">Attributes</summary>
-        <div id="contact-detail-attributes" style="font-size: 0.825rem; color: #9CA3AF;"></div>
-      </details>
-
-      <!-- PLAN.md item 10 - Contact 360 activity timeline. Read-only,
-           merges messages/broadcast sends/flow entries/consent events. -->
-      <details class="contact-drawer-section" open>
-        <summary class="details-section-title">Activity</summary>
-        <div id="contact-detail-timeline" class="modal-inner-scroll" style="font-size: 0.8rem; color: #9CA3AF;"></div>
-      </details>
-      </div>
-    </div>
-  </div>
-
   <div id="modal-create-ticket" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
