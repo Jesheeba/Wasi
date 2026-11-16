@@ -4215,6 +4215,66 @@ document.addEventListener('DOMContentLoaded', () => {
     in_appeal: 'badge-info',
   };
 
+  // Rebuilt wholesale on every renderTemplates() call - keyed by template id,
+  // read by showTemplateHoverPopover below.
+  let templateHoverPreviewById = {};
+
+  function positionTemplateHoverPopover(triggerEl, popover) {
+    const rect = triggerEl.getBoundingClientRect();
+    const margin = 8;
+    let left = Math.min(rect.left, window.innerWidth - popover.offsetWidth - margin);
+    left = Math.max(margin, left);
+    let top = rect.bottom + 6;
+    if (top + popover.offsetHeight > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - popover.offsetHeight - 6);
+    }
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+  }
+
+  function showTemplateHoverPopover(triggerEl) {
+    const popover = document.getElementById('template-hover-popover');
+    const html = templateHoverPreviewById[triggerEl.dataset.hoverTemplate];
+    if (!popover || !html) return;
+    popover.innerHTML = html;
+    popover.classList.add('open');
+    positionTemplateHoverPopover(triggerEl, popover);
+  }
+
+  function hideTemplateHoverPopover() {
+    document.getElementById('template-hover-popover')?.classList.remove('open');
+  }
+
+  // Delegated once (renderTemplates rebuilds #templates-grid's markup on
+  // every call, which would drop a listener bound to an individual
+  // trigger). mouseover/mouseout (not mouseenter/mouseleave, which don't
+  // bubble) + a relatedTarget containment check, so moving the mouse
+  // between the name and the badge inside the same trigger doesn't
+  // flicker the popover closed and back open.
+  (function bindTemplateHoverPopover() {
+    const grid = document.getElementById('templates-grid');
+    if (!grid) return;
+    grid.addEventListener('mouseover', (e) => {
+      const trigger = e.target.closest('.template-hover-trigger');
+      if (trigger && !trigger.contains(e.relatedTarget)) showTemplateHoverPopover(trigger);
+    });
+    grid.addEventListener('mouseout', (e) => {
+      const trigger = e.target.closest('.template-hover-trigger');
+      if (trigger && !trigger.contains(e.relatedTarget)) hideTemplateHoverPopover();
+    });
+    grid.addEventListener('focusin', (e) => {
+      const trigger = e.target.closest('.template-hover-trigger');
+      if (trigger) showTemplateHoverPopover(trigger);
+    });
+    grid.addEventListener('focusout', (e) => {
+      const trigger = e.target.closest('.template-hover-trigger');
+      if (trigger && !trigger.contains(e.relatedTarget)) hideTemplateHoverPopover();
+    });
+    // A fixed-position popover doesn't move with the page, so close it
+    // rather than let it float over the wrong card once the user scrolls.
+    window.addEventListener('scroll', hideTemplateHoverPopover, true);
+  })();
+
   function getFilteredTemplates() {
     const q = templatesView.q.trim().toLowerCase();
     return state.templates.filter((t) =>
@@ -4227,6 +4287,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderTemplates() {
     const templatesGrid = document.getElementById('templates-grid');
     if (!templatesGrid) return;
+    hideTemplateHoverPopover(); // the grid's about to be rebuilt - don't leave a popover open over a stale/removed card
 
     if (templatesView.loadState === 'loading') {
       templatesGrid.className = 'templates-grid';
@@ -4269,6 +4330,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    templateHoverPreviewById = {};
     templatesGrid.className = 'templates-grid';
     templatesGrid.innerHTML = filtered.map((t) => {
       const status = t.status || 'pending';
@@ -4310,22 +4372,27 @@ document.addEventListener('DOMContentLoaded', () => {
       // can never show a different rendering of the template than what
       // actually sends. body_param_examples mirrors openTemplateChatPreview's
       // own read-only preview (no live params to fill in here either).
-      const hoverPreviewHtml = `
-        <div class="template-hover-popover" role="tooltip">
-          <div class="msg-bubble msg-out template-preview-bubble">${renderTemplateBubbleMarkup(t, t.body_param_examples || {})}</div>
-          <div class="template-hover-meta">
-            ${submittedAt ? `<div>Submitted ${esc(submittedAt)}</div>` : ''}
-            ${showStatusChange ? `<div>${esc(statusLabel)} ${esc(statusAt)}</div>` : ''}
-          </div>
+      // Wrapped in .template-preview-frame (the same WhatsApp-wallpaper
+      // background the Preview-in-chat modal uses) so this actually looks
+      // like a WhatsApp chat window, not a bare bubble on white.
+      //
+      // Kept in a lookup map (templateHoverPreviewById), not inlined into
+      // each card's own markup - the single #template-hover-popover element
+      // (index.html) reads from this map on hover/focus. See that
+      // element's own comment for why a popover nested per-card doesn't work.
+      templateHoverPreviewById[t.id] = `
+        <div class="template-preview-frame"><div class="msg-bubble msg-out template-preview-bubble">${renderTemplateBubbleMarkup(t, t.body_param_examples || {})}</div></div>
+        <div class="template-hover-meta">
+          ${submittedAt ? `<div>Submitted ${esc(submittedAt)}</div>` : ''}
+          ${showStatusChange ? `<div>${esc(statusLabel)} ${esc(statusAt)}</div>` : ''}
         </div>`;
 
       return `
         <div class="template-card">
           <div class="template-card-main">
-            <div class="template-card-head template-hover-trigger" tabindex="0">
+            <div class="template-card-head template-hover-trigger" tabindex="0" data-hover-template="${esc(t.id)}">
               <span class="template-card-name">${esc(t.name)}</span>
               <span class="badge ${badgeCls}">${esc(statusLabel)}</span>
-              ${hoverPreviewHtml}
             </div>
             <p class="template-card-body">${bodyPreview}</p>
             ${rejectionNote}

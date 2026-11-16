@@ -2629,6 +2629,13 @@
 
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
+  <!-- Single reused popover for the Templates view's hover preview - kept
+       outside the scrollable templates-grid and positioned with
+       position:fixed (app.js), so it can never get clipped or
+       mispositioned by an ancestor's scroll/overflow the way a popover
+       nested inside each card would be. -->
+  <div id="template-hover-popover" class="template-hover-popover" role="tooltip"></div>
+
   <!-- Same file server/src/utils/templateParams.js requires() server-side -
        served raw so the Create/Edit Template modal's live validation
        (app.js) can call the exact same functions the server checks at
