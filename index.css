@@ -2866,6 +2866,13 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .flow-editor-shell.is-canvas #bot-flow-editor-iframe { border: none; border-radius: 0; }
 .flow-editor-shell.is-canvas .flow-editor-footer { display: none; }
 .flow-editor-shell.is-canvas .flow-editor-issues { margin: var(--sp-2) var(--sp-4); width: auto; max-width: none; }
+/* The embedded Visual Editor already shows its own flow name, status badge,
+   and Activate/Delete actions in its own topbar - the approved reference's
+   canvas view has one header, not two. Hiding the outer modal's duplicate
+   heading/actions in canvas mode; back button + the List/Visual Editor
+   toggle itself stay, since the embedded app has no way back to List. */
+.flow-editor-shell.is-canvas .flow-editor-heading,
+.flow-editor-shell.is-canvas .flow-editor-actions { display: none; }
 @media (max-width: 640px) {
   .flow-editor-topbar { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); }
   .flow-editor-actions { margin-left: auto; }
