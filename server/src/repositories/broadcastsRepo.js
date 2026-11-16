@@ -93,7 +93,7 @@ async function findByIdWithStats(db, clientId, id) {
 
 async function create(db, clientId, {
   title, tag_id, contact_list_id, segment_id, template_name, scheduled_date, param_mappings, header_media_asset_id, pacing_config,
-  smart_sending_hours,
+  smart_sending_hours, limited_time_offer_expiration_ms,
 }) {
   // No scheduled_date (or one that's today/past) -> ready to send now.
   const isFuture = scheduled_date && new Date(scheduled_date) > new Date(new Date().toDateString());
@@ -101,15 +101,16 @@ async function create(db, clientId, {
   const { rows } = await db.query(
     `insert into broadcasts (
        client_id, title, tag_id, contact_list_id, segment_id, template_name, scheduled_date, status,
-       param_mappings, header_media_asset_id, pacing_config, smart_sending_hours
+       param_mappings, header_media_asset_id, pacing_config, smart_sending_hours, limited_time_offer_expiration_ms
      )
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      returning *`,
     [
       clientId, title, tag_id || null, contact_list_id || null, segment_id || null, template_name, scheduled_date || null, status,
       JSON.stringify(param_mappings || {}), header_media_asset_id || null,
       pacing_config ? JSON.stringify(pacing_config) : null,
       smart_sending_hours || null,
+      limited_time_offer_expiration_ms || null,
     ]
   );
   return rows[0];

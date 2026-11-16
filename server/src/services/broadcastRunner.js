@@ -177,6 +177,7 @@ async function sendOneRecipient(broadcast, recipient, template) {
       templateLanguage: template.language,
       templateComponents,
       headerMediaAssetId: broadcast.header_media_asset_id,
+      limitedTimeOfferExpirationMs: broadcast.limited_time_offer_expiration_ms,
     });
     await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {

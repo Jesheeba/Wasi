@@ -59,6 +59,7 @@ async function create(db, {
   client_id, name, category, status, body,
   language, header, footer, buttons, bodyParamExamples,
   codeExpirationMinutes, addSecurityDisclaimer, otpButtonType,
+  limitedTimeOffer,
   meta_template_id,
 }) {
   const authOptions = category === 'Authentication'
@@ -68,9 +69,9 @@ async function create(db, {
     `insert into message_templates (
        client_id, name, category, status, body, language,
        header_type, header_content, footer_text, buttons, body_param_examples, auth_options,
-       meta_template_id
+       meta_template_id, limited_time_offer
      )
-     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12, $13)
+     values ($1, $2, $3, coalesce($4, 'pending'), $5, coalesce($6, 'en_US'), $7, $8, $9, $10, $11, $12, $13, $14)
      returning *`,
     [
       client_id, name, category, status, body || null, language,
@@ -79,6 +80,7 @@ async function create(db, {
       bodyParamExamples ? JSON.stringify(bodyParamExamples) : null,
       authOptions ? JSON.stringify(authOptions) : null,
       meta_template_id || null,
+      limitedTimeOffer ? JSON.stringify(limitedTimeOffer) : null,
     ]
   );
   return rows[0];

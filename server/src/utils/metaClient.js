@@ -608,7 +608,7 @@ function buildTemplateCreatePayload(templateData) {
   return buildUtilityMarketingPayload(templateData);
 }
 
-function buildUtilityMarketingPayload({ name, category, language = 'en_US', body, bodyParamExamples, header, footer, buttons }) {
+function buildUtilityMarketingPayload({ name, category, language = 'en_US', body, bodyParamExamples, header, footer, buttons, limitedTimeOffer }) {
   const bodyValidation = validateTemplateText(body, { label: 'Body' });
   if (!bodyValidation.valid) throw new TemplateValidationError(bodyValidation.errors);
 
@@ -666,6 +666,17 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
   components.push(bodyComponent);
 
   if (footer) components.push({ type: 'FOOTER', text: footer });
+
+  // validate.js's messageTemplateCreateSchema already rejects a header
+  // alongside this, and rejects category !== Marketing - this is the
+  // payload-building side of that same rule, not a second enforcement of
+  // it (TemplateValidationError here would mean that guard was bypassed).
+  if (limitedTimeOffer) {
+    components.push({
+      type: 'LIMITED_TIME_OFFER',
+      limited_time_offer: { text: limitedTimeOffer.text, has_expiration: limitedTimeOffer.hasExpiration },
+    });
+  }
 
   if (buttons && buttons.length > 0) {
     components.push({

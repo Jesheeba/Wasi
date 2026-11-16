@@ -106,7 +106,7 @@ async function assertWithinPlanLimit(db, clientId) {
 // connection right before the Meta network call below and reacquire()
 // opens a fresh one only for the final result write, so a slow Meta response
 // never pins a connection the pool's other concurrent requests need.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, apiKeyId }, connectionHooks = {}) {
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId }, connectionHooks = {}) {
   if ((type === 'text' || type === 'interactive') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window - send a template message instead.',
@@ -172,6 +172,29 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     }
     const headerComponent = mediaHeaderService.buildMediaHeaderComponent(template.header_type, resolved.mediaId, resolved.filename);
     finalComponents = [headerComponent, ...finalComponents.filter((c) => c.type !== 'header')];
+  }
+  // Limited-Time-Offer (build-docs/features/limited-time-offer-templates.md).
+  // The offer's text/has_expiration are fixed at template-creation time
+  // (metaClient.buildUtilityMarketingPayload), but Meta requires the actual
+  // expiration moment to be supplied fresh on every send - the same
+  // approved template is reused across many sends/broadcasts with
+  // different sale windows, so it can't be baked in once. Resolved
+  // pre-flight, same as the Authentication-code and media-header checks
+  // above: a missing expiry never creates a message row.
+  if (type === 'template' && template?.limited_time_offer?.hasExpiration) {
+    if (!limitedTimeOfferExpirationMs) {
+      throw new MessagingError(
+        'This is a Limited-Time-Offer template with an expiration - pass limitedTimeOfferExpirationMs (the offer\'s expiry as a Unix ms timestamp).',
+        'limited_time_offer_expiration_required'
+      );
+    }
+    finalComponents = [
+      ...finalComponents.filter((c) => c.type !== 'limited_time_offer'),
+      // Number(): a bigint column (broadcasts.limited_time_offer_expiration_ms)
+      // comes back from pg as a string, not a number - Meta's API expects a
+      // numeric timestamp either way.
+      { type: 'limited_time_offer', parameters: [{ type: 'limited_time_offer', limited_time_offer: { expiration_time_ms: Number(limitedTimeOfferExpirationMs) } }] },
+    ];
   }
 
   const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody, apiKeyId || null);

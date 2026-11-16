@@ -96,6 +96,7 @@ router.post('/', asyncHandler(async (req, res) => {
       templateLanguage,
       templateComponents,
       headerMediaUrl: data.headerMediaUrl,
+      limitedTimeOfferExpirationMs: data.limitedTimeOfferExpirationMs,
       // interactive (type: 'interactive') only - buttons routes through
       // sendChatMessage -> metaClient.sendInteractiveMessage, the same path
       // the flow engine's "Send Interactive Buttons" node already uses

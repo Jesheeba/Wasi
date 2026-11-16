@@ -76,6 +76,11 @@ const messageSendSchema = z.object({
   // /:id/header-media) to send instead of a media-header template's
   // approval-time default sample. Omitted -> falls back to that default.
   headerMediaAssetId: uuid.optional(),
+  // Required only when the template being sent has limited_time_offer.
+  // hasExpiration true - see messagingService.sendChatMessage's own check
+  // for why this can't be validated here (needs the DB-fetched template
+  // row, not just the request shape).
+  limitedTimeOfferExpirationMs: z.number().int().positive().optional(),
 }).refine(
   (data) => (data.type === 'text' ? Boolean(data.body) : Boolean(data.templateName)),
   { message: "body is required for type 'text'; templateName is required for type 'template'" }
@@ -245,6 +250,11 @@ const broadcastCreateSchema = z.object({
   // /:id/header-media) this campaign sends instead of a media-header
   // template's approval-time default sample. Omitted -> that default.
   headerMediaAssetId: uuid.optional(),
+  // Required only when templateName refers to an LTO template with
+  // hasExpiration true - checked against the real template row in
+  // routes/broadcasts.js, not here (same reason headerMediaAssetId's
+  // media-header requirement is checked there too).
+  limitedTimeOfferExpirationMs: z.number().int().positive().optional(),
   pacingConfig: pacingConfigSchema,
   // PLAN.md item 12 - Smart Sending. Omitted/undefined disables it, same
   // nullable-means-off convention as pacing_config above.
@@ -364,19 +374,39 @@ const messageTemplateCreateSchema = z.object({
   footer: z.string().max(60).optional(),
   buttons: z.array(templateButtonSchema).max(10).optional(),
 
+  // Marketing only - the coupon/countdown strip (build-docs/features/
+  // limited-time-offer-templates.md). Mutually exclusive with a non-NONE
+  // header (Meta's own real constraint: the LTO strip takes the header's
+  // visual slot), enforced below rather than at the type level since
+  // "NONE or absent" is the only valid combination and that's easiest to
+  // express as a superRefine check against the already-parsed header.
+  limitedTimeOffer: z.object({
+    text: z.string().min(1).max(16),
+    hasExpiration: z.boolean(),
+  }).optional(),
+
   // Authentication only.
   codeExpirationMinutes: z.number().int().positive().max(90).optional(),
   addSecurityDisclaimer: z.boolean().optional(),
   otpButtonType: z.enum(['COPY_CODE']).optional(),
 }).superRefine((data, ctx) => {
   if (data.category === 'Authentication') {
-    if (data.body || data.header || data.footer || data.buttons) {
+    if (data.body || data.header || data.footer || data.buttons || data.limitedTimeOffer) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Authentication templates cannot have a custom body, header, footer, or buttons - Meta generates that text automatically.',
+        message: 'Authentication templates cannot have a custom body, header, footer, buttons, or limited-time offer - Meta generates that text automatically.',
       });
     }
     return;
+  }
+
+  if (data.limitedTimeOffer) {
+    if (data.category !== 'Marketing') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['limitedTimeOffer'], message: 'A limited-time offer is only allowed on a Marketing template.' });
+    }
+    if (data.header && data.header.type !== 'NONE') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['limitedTimeOffer'], message: 'A limited-time offer template cannot also have a header - Meta renders the offer strip in the header\'s place.' });
+    }
   }
 
   if (!data.body) {
@@ -673,6 +703,9 @@ const apiMessageSendSchema = z.object({
   // resolveMediaIdFromUrl fetches it, uploads it to Meta, and sends with the
   // resulting id) - the alternative to first uploading through this app's UI.
   headerMediaUrl: z.string().url().startsWith('https://').optional(),
+  // Required only when the template being sent has limited_time_offer.
+  // hasExpiration true - see messagingService.sendChatMessage's own check.
+  limitedTimeOfferExpirationMs: z.number().int().positive().optional(),
   // interactive (type: 'interactive') only - two distinct Meta shapes
   // sharing this one type value, decided by which fields are present:
   // `buttons` -> interactive.type: "button" (metaClient.sendInteractiveMessage),

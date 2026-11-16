@@ -84,7 +84,7 @@ function requiredParamNames(template) {
 }
 
 router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
-  const { templateName, paramMappings, headerMediaAssetId, pacingConfig, smartSendingHours, ...data } = broadcastCreateSchema.parse(req.body);
+  const { templateName, paramMappings, headerMediaAssetId, pacingConfig, smartSendingHours, limitedTimeOfferExpirationMs, ...data } = broadcastCreateSchema.parse(req.body);
 
   // Fetched once, up front - needed for both the param-coverage check below
   // and the consent-category check further down, and (build plan Phase 4)
@@ -102,6 +102,15 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
         details: missing.map((name) =>
           `"${name}" has no value source - set it to a contact field (e.g. name) or a static value before creating this broadcast.`
         ),
+      });
+    }
+    // Limited-Time-Offer (build-docs/features/limited-time-offer-templates.md)
+    // - one fixed expiry for the whole campaign, required up front since
+    // broadcastRunner.js sends to each recipient independently with no
+    // later chance to ask for it.
+    if (template.limited_time_offer?.hasExpiration && !limitedTimeOfferExpirationMs) {
+      return res.status(400).json({
+        error: 'This is a Limited-Time-Offer template with an expiration - set limitedTimeOfferExpirationMs (the offer\'s expiry as a Unix ms timestamp) before creating this broadcast.',
       });
     }
   }
@@ -136,6 +145,7 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
   const broadcast = await broadcastsRepo.create(req.db, req.clientId, {
     ...data, template_name: templateName, param_mappings: paramMappings, header_media_asset_id: headerMediaAssetId,
     pacing_config: pacingConfig, smart_sending_hours: smartSendingHours,
+    limited_time_offer_expiration_ms: limitedTimeOfferExpirationMs,
   });
   // Audience source: contact_list_id, then segment_id, else the existing
   // tag_id path (null tag_id there already means "everyone" - unchanged).
