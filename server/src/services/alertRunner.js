@@ -236,8 +236,37 @@ async function replayFailedConsentWrites() {
   const pending = await failedConsentWritesRepo.listPending();
   for (const row of pending) {
     try {
+      // A stale 'opted_out' row must never overwrite a NEWER opt-in the
+      // contact produced themselves in the meantime (Phase 4 note,
+      // CLAUDE.md Known Gaps: "must never apply a stored opt-out on top of
+      // a newer opt-in... compare event times before replaying, not just
+      // presence/absence of a row"). This is the one place that comparison
+      // belongs - recordEvent itself has no timestamp to compare against
+      // the write it's being asked to make, only the contact's CURRENT
+      // status.
+      if (row.event === 'opted_out') {
+        const { rows } = await pool.query(
+          'select opt_in_status, opt_in_at from contacts where client_id = $1 and id = $2',
+          [row.client_id, row.contact_id]
+        );
+        const contact = rows[0];
+        if (contact && contact.opt_in_status === 'opted_in' && contact.opt_in_at && new Date(contact.opt_in_at) > new Date(row.created_at)) {
+          console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} is a stale STOP from before a newer START - resolving as moot, not applying:`, { contactId: row.contact_id });
+          await failedConsentWritesRepo.resolve(row.id);
+          continue;
+        }
+      }
       await consentRepo.recordEvent(row.client_id, row.contact_id, {
         event: row.event, source: row.source, evidence: row.evidence,
+        // Scoped to the exact source consentRepo.recordOptInDurable always
+        // writes (metaWebhook.js's inbound START handling), NOT a blanket
+        // `event === 'opted_in'` - the sticky-opt-out guarantee has to hold
+        // for ANY opted_in row that ends up here regardless of how, not
+        // just the one legitimate source. Without replaying it with the
+        // override at all, every retry would throw ConsentBlockedError and
+        // be wrongly treated as "contact has opted out since" below,
+        // permanently losing a real customer's START.
+        allowOverrideOptOut: row.event === 'opted_in' && row.source === 'inbound_start_keyword',
       });
       // Either the write now succeeded, or the contact no longer exists
       // (recordEvent's own not-found case resolves to null without
@@ -246,9 +275,8 @@ async function replayFailedConsentWrites() {
       await failedConsentWritesRepo.resolve(row.id);
     } catch (err) {
       if (err instanceof consentRepo.ConsentBlockedError) {
-        // Only reachable if this row's event were ever 'opted_in' - today
-        // recordOptOutDurable only ever writes 'opted_out' rows here, so
-        // this is defensive, not the expected path. It means the contact
+        // Only reachable for an 'opted_out' row now (an 'opted_in' row
+        // above always passes allowOverrideOptOut) - it means the contact
         // has genuinely opted out since this row was written, by some
         // other route - a stronger, more current signal than this stale
         // pending write, so it's resolved as moot rather than retried

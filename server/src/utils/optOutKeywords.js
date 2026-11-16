@@ -23,6 +23,21 @@ const OPT_OUT_KEYWORDS = [
   'nirthu', 'nirthungal', 'venda', 'vendaam', 'vendam', 'thevaiyillai',
 ];
 
+// Inbound opt-in detection (build plan Phase 4, approved in CLAUDE.md's
+// Known Gaps - "a contact-initiated START keyword... is approved to lift
+// a sticky opt-out, the only path that may"). Same whole-message matching
+// rules as OPT_OUT_KEYWORDS above, for the same reasons (precision over
+// recall - a false positive here silently re-enables marketing to someone
+// who never asked for it back).
+const OPT_IN_KEYWORDS = [
+  // English
+  'start', 'subscribe', 'optin', 'opt in', 'yes', 'resume',
+  // Tamil script
+  'தொடங்கு', 'ஆம்',
+  // Tanglish (best-effort, same caveat as OPT_OUT_KEYWORDS above)
+  'thodangu', 'aam',
+];
+
 function normalize(text) {
   return (text || '').trim().toLowerCase().replace(/[.!?,]+$/, '');
 }
@@ -33,4 +48,10 @@ function isOptOutMessage(body) {
   return OPT_OUT_KEYWORDS.includes(normalized);
 }
 
-module.exports = { isOptOutMessage, OPT_OUT_KEYWORDS };
+function isOptInMessage(body) {
+  const normalized = normalize(body);
+  if (!normalized) return false;
+  return OPT_IN_KEYWORDS.includes(normalized);
+}
+
+module.exports = { isOptOutMessage, OPT_OUT_KEYWORDS, isOptInMessage, OPT_IN_KEYWORDS };

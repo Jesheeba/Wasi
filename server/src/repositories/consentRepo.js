@@ -47,7 +47,12 @@ class ConsentBlockedError extends Error {
 // correct to keep this self-contained on its own privileged connection -
 // the two writes inside are still atomic with each other, just not part of
 // the outer request transaction.
-async function recordEvent(clientId, contactId, { event, source, evidence, actorType, actorId, batchId } = {}) {
+// allowOverrideOptOut (Phase 4) - the ONE way past the opted_out-is-sticky
+// guard below. Only ever true for the contact's own inbound START keyword
+// (metaWebhook.js) and its durable-write replay (alertRunner.js) - every
+// other caller (manual UI, bulk/CSV, flow nodes) omits it and stays
+// blocked, exactly as the comment on ConsentBlockedError above requires.
+async function recordEvent(clientId, contactId, { event, source, evidence, actorType, actorId, batchId, allowOverrideOptOut } = {}) {
   const client = await pool.connect();
   // Named handler, removed before release() - pg.Pool reuses the same
   // underlying Client object across separate connect()/release() cycles, so
@@ -76,7 +81,7 @@ async function recordEvent(clientId, contactId, { event, source, evidence, actor
       await client.query('ROLLBACK');
       return null;
     }
-    if (event === 'opted_in' && locked[0].opt_in_status === 'opted_out') {
+    if (event === 'opted_in' && locked[0].opt_in_status === 'opted_out' && !allowOverrideOptOut) {
       throw new ConsentBlockedError(contactId);
     }
 
@@ -145,28 +150,30 @@ async function recordEvent(clientId, contactId, { event, source, evidence, actor
 // (client, contact, phone, time) is always console.error'd once at the end,
 // unconditionally, as a last-resort trace independent of whether anything
 // above landed anywhere.
-async function recordOptOutDurable(clientId, contactId, { source, evidence, phone }) {
+// Shared by recordOptOutDurable (event: 'opted_out') and recordOptInDurable
+// (event: 'opted_in', allowOverrideOptOut: true) - the retry/durable-
+// fallback/alert machinery is identical for both, only the alert's
+// type/wording and which direction the write goes differ. Extracted here
+// rather than keeping two near-duplicate ~65-line functions in sync by hand.
+async function recordConsentDurable(clientId, contactId, { event, source, evidence, phone, allowOverrideOptOut, alertType, alertMessage, logLabel }) {
   let lastErr;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      return await recordEvent(clientId, contactId, { event: 'opted_out', source, evidence });
+      return await recordEvent(clientId, contactId, { event, source, evidence, allowOverrideOptOut });
     } catch (err) {
       lastErr = err;
-      console.error(`consentRepo.recordOptOutDurable: attempt ${attempt}/2 failed:`, err.message);
+      console.error(`consentRepo.recordConsentDurable(${event}): attempt ${attempt}/2 failed:`, err.message);
     }
   }
 
   let durableWriteSucceeded = false;
   try {
-    await failedConsentWritesRepo.record({
-      clientId, contactId, event: 'opted_out', source, evidence, errorMessage: lastErr.message,
-    });
+    await failedConsentWritesRepo.record({ clientId, contactId, event, source, evidence, errorMessage: lastErr.message });
     durableWriteSucceeded = true;
   } catch (writeErr) {
-    console.error('consentRepo.recordOptOutDurable: durable fallback write ALSO failed (same database as the write itself - likely a full DB outage):', writeErr.message);
+    console.error(`consentRepo.recordConsentDurable(${event}): durable fallback write ALSO failed (same database as the write itself - likely a full DB outage):`, writeErr.message);
   }
 
-  const ALERT_TYPE = 'consent_opt_out_write_failed';
   const DEDUP_KEY = 'global';
   // Shaped to match what alertNotifier.notify() itself reads (severity,
   // alert_type, message, details - see its own module comment) - used
@@ -174,18 +181,18 @@ async function recordOptOutDurable(clientId, contactId, { source, evidence, phon
   // dedupKey added for alertEventsRepo.open()'s different key names.
   const alertPayload = {
     severity: 'critical',
-    alert_type: ALERT_TYPE,
-    message: 'An inbound WhatsApp opt-out (STOP) could not be recorded after retrying - see the failed_consent_writes table for the durable copy of what was attempted. This is a compliance risk, not just a missing-data gap.',
+    alert_type: alertType,
+    message: alertMessage,
     details: { clientId, contactId, phone: phone || null, source, error: lastErr.message, durableWriteSucceeded },
   };
   let alerted = false;
   try {
-    const existing = await alertEventsRepo.findOpen(ALERT_TYPE, DEDUP_KEY);
+    const existing = await alertEventsRepo.findOpen(alertType, DEDUP_KEY);
     if (existing) {
       await alertEventsRepo.touch(existing.id);
       alerted = true; // already notified when first opened - touching is the correct behavior, not a fresh notify
     } else {
-      const created = await alertEventsRepo.open({ ...alertPayload, alertType: ALERT_TYPE, dedupKey: DEDUP_KEY });
+      const created = await alertEventsRepo.open({ ...alertPayload, alertType, dedupKey: DEDUP_KEY });
       try {
         await alertNotifier.notify(created);
         alerted = true;
@@ -198,26 +205,52 @@ async function recordOptOutDurable(clientId, contactId, { source, evidence, phon
     // unreachable, the same reason the write and the durable fallback both
     // failed above). Dedup is impossible without the DB to check against -
     // this branch always sends its own real notification rather than
-    // silently giving up, since a real customer's opt-out is on the line.
-    console.error('consentRepo.recordOptOutDurable: DB-backed alerting failed - falling back to a direct notify with no DB dependency:', dbAlertErr.message);
+    // silently giving up, since a real customer's consent change is on the line.
+    console.error(`consentRepo.recordConsentDurable(${event}): DB-backed alerting failed - falling back to a direct notify with no DB dependency:`, dbAlertErr.message);
     try {
       await alertNotifier.notify(alertPayload);
       alerted = true;
     } catch (lastResortErr) {
-      console.error('consentRepo.recordOptOutDurable: last-resort direct alertNotifier.notify ALSO failed:', lastResortErr.message);
+      console.error(`consentRepo.recordConsentDurable(${event}): last-resort direct alertNotifier.notify ALSO failed:`, lastResortErr.message);
     }
   }
 
   // Unconditional - printed regardless of whether the durable write or the
   // alert succeeded, so there is always at least one trace of this specific
-  // opt-out attempt even in a total-outage scenario where nothing above
-  // landed anywhere.
-  console.error('CONSENT OPT-OUT WRITE FAILED - last-resort record:', {
-    clientId, contactId, phone: phone || null, event: 'opted_out', source, evidence,
+  // attempt even in a total-outage scenario where nothing above landed
+  // anywhere.
+  console.error(`CONSENT ${logLabel} WRITE FAILED - last-resort record:`, {
+    clientId, contactId, phone: phone || null, event, source, evidence,
     error: lastErr.message, durableWriteSucceeded, alerted, at: new Date().toISOString(),
   });
 
   return null;
+}
+
+async function recordOptOutDurable(clientId, contactId, { source, evidence, phone }) {
+  return recordConsentDurable(clientId, contactId, {
+    event: 'opted_out', source, evidence, phone,
+    alertType: 'consent_opt_out_write_failed',
+    alertMessage: 'An inbound WhatsApp opt-out (STOP) could not be recorded after retrying - see the failed_consent_writes table for the durable copy of what was attempted. This is a compliance risk, not just a missing-data gap.',
+    // Exact wording preserved from before the Phase 4 refactor -
+    // server/test/consentHardeningPhase1.test.js asserts on this literal
+    // substring.
+    logLabel: 'OPT-OUT',
+  });
+}
+
+// Phase 4 - the contact's own inbound START keyword (metaWebhook.js) is the
+// ONE path allowed to lift a sticky opt-out (see ConsentBlockedError's
+// comment above). allowOverrideOptOut: true is hardcoded here, not
+// caller-supplied, so this durable-write path can never be reused by
+// anything else to bypass the sticky-opt-out guard.
+async function recordOptInDurable(clientId, contactId, { source, evidence, phone }) {
+  return recordConsentDurable(clientId, contactId, {
+    event: 'opted_in', source, evidence, phone, allowOverrideOptOut: true,
+    alertType: 'consent_opt_in_write_failed',
+    alertMessage: 'An inbound WhatsApp opt-in (START) could not be recorded after retrying - see the failed_consent_writes table for the durable copy of what was attempted. The contact believes they are resubscribed; this app does not yet reflect that.',
+    logLabel: 'OPT-IN',
+  });
 }
 
 async function listEventsForContact(db, clientId, contactId) {
@@ -228,4 +261,4 @@ async function listEventsForContact(db, clientId, contactId) {
   return rows;
 }
 
-module.exports = { recordEvent, recordOptOutDurable, listEventsForContact, ConsentBlockedError };
+module.exports = { recordEvent, recordOptOutDurable, recordOptInDurable, listEventsForContact, ConsentBlockedError };

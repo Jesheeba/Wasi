@@ -15,7 +15,7 @@ const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo
 const flowEngine = require('../services/flowEngine');
 const aiAgentRunner = require('../services/aiAgentRunner');
 const forwardRunner = require('../services/forwardRunner');
-const { isOptOutMessage } = require('../utils/optOutKeywords');
+const { isOptOutMessage, isOptInMessage } = require('../utils/optOutKeywords');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = Router();
@@ -244,6 +244,21 @@ async function handleInboundMessages(waba, value) {
         // evidence's contents.
         await consentRepo.recordOptOutDurable(clientId, contact.id, {
           source: 'inbound_stop_keyword',
+          phone,
+          evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
+        });
+      }
+
+      // Opt-in (build plan Phase 4, approved in CLAUDE.md's Known Gaps) -
+      // the contact's own inbound START is the one path allowed to lift a
+      // sticky opt-out (consentRepo.recordOptInDurable passes
+      // allowOverrideOptOut: true internally - not available to any other
+      // caller). Mutually exclusive with the STOP branch above: the two
+      // keyword lists don't overlap, so a given inbound body matches at
+      // most one of them.
+      if (isOptInMessage(body)) {
+        await consentRepo.recordOptInDurable(clientId, contact.id, {
+          source: 'inbound_start_keyword',
           phone,
           evidence: { message_id: inserted.id, meta_message_id: msg.id, body },
         });
