@@ -1899,6 +1899,23 @@
             </div>
           </div>
 
+          <!-- Marketing-only (build-docs/features/carousel-templates.md).
+               Mutually exclusive with the header above and with LTO -
+               Meta's carousel examples never show either alongside it. -->
+          <div class="form-group" id="template-carousel-group" style="display:none;">
+            <div class="template-checkbox-row">
+              <input type="checkbox" id="new-template-carousel-enabled" />
+              <label class="form-label" for="new-template-carousel-enabled">This is a Carousel (2-10 swipeable cards)</label>
+            </div>
+            <div id="template-carousel-fields" style="display:none; margin-top: 8px;">
+              <div id="template-cards-list"></div>
+              <div class="template-button-add-row">
+                <button type="button" class="btn-secondary" id="template-add-card-btn">+ Add Card</button>
+              </div>
+              <div class="form-hint">2-10 cards, each image/video + optional text + optional link. Every card must have the same button setup.</div>
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Body <span id="template-body-charcount" class="form-hint-inline"></span></label>
             <textarea id="new-template-body" class="form-input" style="height: 90px; padding: 10px; line-height: 1.4;" maxlength="1024" placeholder="Hi {{customer_name}}, ..."></textarea>
@@ -1918,6 +1935,7 @@
           <div class="form-group">
             <label class="form-label">Buttons <span class="form-hint-inline">(optional &mdash; up to 10 quick replies, or up to 2 URL + 1 phone)</span></label>
             <div id="template-buttons-list"></div>
+            <div id="template-buttons-warning" class="template-inline-warning" style="display:none;"></div>
             <div class="template-button-add-row">
               <button type="button" class="btn-secondary template-add-button-btn" data-add-button="QUICK_REPLY">+ Quick Reply</button>
               <button type="button" class="btn-secondary template-add-button-btn" data-add-button="URL">+ URL</button>

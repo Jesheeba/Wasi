@@ -339,11 +339,46 @@ const flowEdgeUpdateSchema = z.object({
   priority: z.number().int(),
 });
 
+// Meta rejects a URL-type button whose target is whatsapp.com/wa.me
+// ("Direct links to WhatsApp aren't allowed for buttons") regardless of
+// header type or category - previously only Meta itself caught this, at
+// actual submit time. Enforced here so both the main create/update path
+// and carousel cards (templateCardSchema below reuses this schema) reject
+// it before ever calling Meta, matching app.js's own live client-side
+// check (isDisallowedWhatsAppButtonUrl) - that one is just UX, this is the
+// real boundary since the API can be called directly.
+function isDisallowedWhatsAppButtonUrl(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return host === 'whatsapp.com' || host.endsWith('.whatsapp.com') || host === 'wa.me';
+  } catch {
+    return false;
+  }
+}
+
 const templateButtonSchema = z.object({
   type: z.enum(['QUICK_REPLY', 'URL', 'PHONE_NUMBER']),
   text: z.string().min(1).max(25),
   url: z.string().url().optional(),
   phone_number: z.string().min(1).optional(),
+}).refine((b) => b.type !== 'URL' || !b.url || !isDisallowedWhatsAppButtonUrl(b.url), {
+  message: 'A button can\'t link to whatsapp.com or wa.me - Meta blocks this on every template.',
+  path: ['url'],
+});
+
+// Carousel templates (build-docs/features/carousel-templates.md), per
+// Meta's own "Media card carousel templates" doc. header.type is IMAGE or
+// VIDEO only (no DOCUMENT/TEXT/NONE - every card needs a real media
+// header). bodyText is optional but Meta requires it on EITHER every card
+// or none (checked in messageTemplateCreateSchema's superRefine below,
+// since that's a cross-card rule, not a per-card one). buttons reuses
+// templateButtonSchema (QUICK_REPLY/URL/PHONE_NUMBER are exactly what
+// Meta allows on a card too), capped at 2 per card per Meta's own limit
+// (tighter than the top-level 10).
+const templateCardSchema = z.object({
+  headerType: z.enum(['IMAGE', 'VIDEO']),
+  bodyText: z.string().min(1).max(160).optional(),
+  buttons: z.array(templateButtonSchema).max(2).optional(),
 });
 
 // Category-driven: Authentication's shape is fundamentally different from
@@ -400,19 +435,56 @@ const messageTemplateCreateSchema = z.object({
     hasExpiration: z.boolean(),
   }).optional(),
 
+  // Marketing only - the horizontally-swipeable card set (build-docs/
+  // features/carousel-templates.md). 2-10 cards per Meta's own limit.
+  // Mutually exclusive with header/footer (Meta's examples never show
+  // either alongside a carousel - see the feature doc's scope decision)
+  // and with limitedTimeOffer (no documented interaction, not attempted).
+  cards: z.array(templateCardSchema).min(2).max(10).optional(),
+
   // Authentication only.
   codeExpirationMinutes: z.number().int().positive().max(90).optional(),
   addSecurityDisclaimer: z.boolean().optional(),
   otpButtonType: z.enum(['COPY_CODE']).optional(),
 }).superRefine((data, ctx) => {
   if (data.category === 'Authentication') {
-    if (data.body || data.header || data.footer || data.buttons || data.limitedTimeOffer) {
+    if (data.body || data.header || data.footer || data.buttons || data.limitedTimeOffer || data.cards) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Authentication templates cannot have a custom body, header, footer, buttons, or limited-time offer - Meta generates that text automatically.',
+        message: 'Authentication templates cannot have a custom body, header, footer, buttons, limited-time offer, or cards - Meta generates that text automatically.',
       });
     }
     return;
+  }
+
+  if (data.cards) {
+    if (data.category !== 'Marketing') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cards'], message: 'A carousel is only allowed on a Marketing template.' });
+    }
+    if (data.header && data.header.type !== 'NONE') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cards'], message: 'A carousel template cannot also have a header.' });
+    }
+    if (data.footer) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cards'], message: 'A carousel template cannot also have a footer.' });
+    }
+    if (data.limitedTimeOffer) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cards'], message: 'A carousel template cannot also be a limited-time offer.' });
+    }
+    // Meta: "if any card includes a card body text, then all cards must
+    // include one" - checked here (cross-card), not in templateCardSchema
+    // (per-card), since no single card's shape alone can tell this is
+    // wrong.
+    const bodyTextCount = data.cards.filter((c) => c.bodyText).length;
+    if (bodyTextCount > 0 && bodyTextCount < data.cards.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cards'], message: 'If any card has body text, every card must have body text - Meta does not allow mixing.' });
+    }
+    // Meta: "all cards defined on a template must have the same
+    // components" - every card needs the same button count/types/order.
+    const firstButtonShape = JSON.stringify((data.cards[0].buttons || []).map((b) => b.type));
+    const mismatchedCard = data.cards.find((c) => JSON.stringify((c.buttons || []).map((b) => b.type)) !== firstButtonShape);
+    if (mismatchedCard) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cards'], message: 'Every card must have the same number and types of buttons, in the same order - Meta does not allow cards to differ.' });
+    }
   }
 
   if (data.limitedTimeOffer) {

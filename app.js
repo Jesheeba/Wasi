@@ -166,6 +166,20 @@ document.addEventListener('DOMContentLoaded', () => {
     return res.status === 204 ? null : res.json();
   }
 
+  // Base64url-decodes the JWT payload only (no signature check - this is a
+  // same-tab identity comparison, not an auth decision; the server already
+  // verifies signature + tokenVersion on every request). Returns the tenant
+  // (client account) the token acts as, or null if unreadable.
+  function tokenTenantId(token) {
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.type === 'team_member' ? payload.clientId : payload.sub;
+    } catch (_e) {
+      return null;
+    }
+  }
+
   function timeLabel(isoString) {
     if (!isoString) return '';
     return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -657,6 +671,11 @@ document.addEventListener('DOMContentLoaded', () => {
     state.actorType = actor?.type || 'owner';
     state.actorRole = actor?.role || 'Owner';
     state.actorId = actor?.id || client?.id || null;
+    // Cross-tab tenant-isolation guard (see the 'storage' listener below) -
+    // records which account's token this tab is actually running on, so a
+    // DIFFERENT account logging in on another tab can be detected even
+    // though it overwrites the same shared localStorage key.
+    state.sessionTenantId = tokenTenantId(localStorage.getItem('client_token'));
 
     if (client?.status === 'suspended') {
       showSuspendedScreen();
@@ -861,6 +880,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   })();
+
+  // Cross-tab tenant-isolation guard - localStorage['client_token'] is
+  // shared across every tab on this origin, so logging into a DIFFERENT
+  // account in one tab (or a second browser tab left open) silently
+  // overwrites the token every other open tab is using. Without this, that
+  // other tab's next poll (startPolling, every 4s) would fetch and render
+  // the NEW account's chats/contacts while its own UI chrome still shows
+  // the OLD account's name - exactly the "wrong account's conversation
+  // showed up" bug this fixes. The 'storage' event only fires in tabs that
+  // did NOT make the write, which is exactly the tab that needs to react;
+  // comparing decoded tenant ids (not raw token strings) means a tab stays
+  // open normally if the SAME account simply re-logs-in/refreshes its
+  // token elsewhere.
+  window.addEventListener('storage', (e) => {
+    if (e.key !== 'client_token' || !state.user) return;
+    if (tokenTenantId(e.newValue) === state.sessionTenantId) return;
+    stopPolling();
+    showAuthView();
+    showToast('You were signed out because a different account logged in on another tab.', 'error');
+  });
 
   // --- Navigation Router ---
   const navItems = document.querySelectorAll('.nav-item');
@@ -4160,7 +4199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="template-card-meta">${esc(t.category)}${t.language ? ' · ' + esc(t.language) : ''}</span>
             <div class="template-card-actions">
               <button type="button" class="btn-ghost btn-sm tpl-action preview-template-btn" data-preview-template="${esc(t.id)}" title="Preview in chat" aria-label="Preview ${esc(t.name)}"><i data-lucide="eye" class="icon-14"></i></button>
-              <button type="button" class="btn-ghost btn-sm tpl-action edit-template-btn" data-edit-template="${esc(t.id)}" title="Edit template" aria-label="Edit ${esc(t.name)}"><i data-lucide="pencil" class="icon-14"></i></button>
+              <button type="button" class="btn-ghost btn-sm tpl-action edit-template-btn" data-edit-template="${esc(t.id)}" title="${t.cards ? 'Meta does not support editing a carousel template - delete and recreate instead' : 'Edit template'}" aria-label="Edit ${esc(t.name)}" ${t.cards ? 'disabled' : ''}><i data-lucide="pencil" class="icon-14"></i></button>
               <button type="button" class="btn-ghost btn-sm tpl-action tpl-action-danger delete-template-btn" data-delete-template="${esc(t.id)}" title="Delete template" aria-label="Delete ${esc(t.name)}"><i data-lucide="trash-2" class="icon-14"></i></button>
             </div>
           </div>
@@ -5724,6 +5763,34 @@ document.addEventListener('DOMContentLoaded', () => {
     return { hasErrors: hasBlockingError };
   }
 
+  // Meta rejects a URL-type button whose target is a whatsapp.com/wa.me
+  // address - real rejection confirmed live ("Direct links to WhatsApp
+  // aren't allowed for buttons"), independent of header type/category.
+  // Previously nothing caught this until Meta itself did, at submit time -
+  // someone could fill out the whole form and only find out after
+  // clicking Submit. Checked live per keystroke, same as the body/header
+  // warnings above.
+  function isDisallowedWhatsAppButtonUrl(url) {
+    try {
+      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+      return host === 'whatsapp.com' || host.endsWith('.whatsapp.com') || host === 'wa.me';
+    } catch {
+      return false; // not a parseable URL yet - the plain required-URL check handles that
+    }
+  }
+
+  function updateTemplateButtonsValidation() {
+    const warning = document.getElementById('template-buttons-warning');
+    if (!warning) return { hasErrors: false };
+    const badUrls = templateButtons.filter((b) => b.type === 'URL' && b.url && isDisallowedWhatsAppButtonUrl(b.url));
+    const hasErrors = badUrls.length > 0;
+    warning.style.display = hasErrors ? '' : 'none';
+    warning.textContent = hasErrors
+      ? 'A button can\'t link to whatsapp.com or wa.me - Meta blocks this on every template, regardless of header type. Use a different link, or put it in the body text instead.'
+      : '';
+    return { hasErrors };
+  }
+
   function updateTemplateHeaderValidation() {
     const typeSelect = document.getElementById('new-template-header-type');
     const field = document.getElementById('new-template-header-text');
@@ -5762,9 +5829,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const bodyState = updateTemplateBodyValidation();
     const headerState = updateTemplateHeaderValidation();
-    const hasErrors = bodyState.hasErrors || headerState.hasErrors;
+    const buttonsState = updateTemplateButtonsValidation();
+    const hasErrors = bodyState.hasErrors || headerState.hasErrors || buttonsState.hasErrors;
     submitBtn.disabled = hasErrors;
-    submitBtn.title = hasErrors ? 'Fix the highlighted body/header issues above before submitting.' : '';
+    submitBtn.title = hasErrors ? 'Fix the highlighted body/header/button issues above before submitting.' : '';
   }
 
   function substituteTemplateParams(text, samples) {
@@ -5845,6 +5913,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // time - dynamically added/removed rows make DOM-as-source-of-truth
   // fiddly, and this mirrors what actually gets submitted directly.
   let templateButtons = [];
+  // Carousel templates (build-docs/features/carousel-templates.md) - one
+  // entry per card: { headerType: 'IMAGE'|'VIDEO', file: File|null,
+  // bodyText: string, buttonText: string, buttonUrl: string }. Deliberately
+  // a simpler per-card editor than the top-level button list above (one
+  // optional URL button per card, not the full QUICK_REPLY/PHONE_NUMBER
+  // mix Meta allows) - matches the common "image + text + link" card
+  // pattern from the reference screenshot without building two full
+  // button editors; every card still gets the exact same button shape,
+  // satisfying Meta's "all cards must have the same components" rule by
+  // construction.
+  let templateCards = [];
 
   // The Create Template modal doubles as the Edit Template modal - set
   // whenever openEditTemplateModal opens it, cleared whenever the modal
@@ -5891,6 +5970,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const i = Number(e.target.dataset.index);
         templateButtons[i][e.target.dataset.buttonField] = e.target.value;
         updateTemplatePreview();
+        updateTemplateSubmitGating();
       });
     });
     container.querySelectorAll('[data-remove-button]').forEach((btn) => {
@@ -5899,6 +5979,7 @@ document.addEventListener('DOMContentLoaded', () => {
         templateButtons.splice(i, 1);
         renderTemplateButtonsList();
         updateTemplatePreview();
+        updateTemplateSubmitGating();
       });
     });
     updateTemplateAddButtonState();
@@ -5912,6 +5993,60 @@ document.addEventListener('DOMContentLoaded', () => {
     templateButtons.push({ type, text: '', url: '', phone_number: '' });
     renderTemplateButtonsList();
     updateTemplatePreview();
+    updateTemplateSubmitGating();
+  }
+
+  function renderTemplateCardsList() {
+    const container = document.getElementById('template-cards-list');
+    if (!container) return;
+    container.innerHTML = templateCards.map((card, i) => `
+      <div class="template-button-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border-light);">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong>Card ${i + 1}</strong>
+          <button type="button" class="template-row-remove-btn" data-remove-card="${i}"><i data-lucide="x"></i></button>
+        </div>
+        <select class="form-input" data-card-field="headerType" data-index="${i}">
+          <option value="IMAGE" ${card.headerType === 'IMAGE' ? 'selected' : ''}>Image</option>
+          <option value="VIDEO" ${card.headerType === 'VIDEO' ? 'selected' : ''}>Video</option>
+        </select>
+        <input type="file" class="form-input" data-card-field="file" data-index="${i}" accept="${card.headerType === 'VIDEO' ? '.mp4' : '.jpg,.jpeg,.png'}" />
+        <span class="form-hint">${card.file ? escapeHtml(card.file.name) : 'No file chosen yet'}</span>
+        <input type="text" class="form-input" data-card-field="bodyText" data-index="${i}" placeholder="Card text (optional, max 160 chars)" maxlength="160" value="${escapeHtml(card.bodyText || '')}" />
+        <input type="text" class="form-input" data-card-field="buttonText" data-index="${i}" placeholder="Button text (optional, e.g. Read more)" maxlength="25" value="${escapeHtml(card.buttonText || '')}" />
+        <input type="text" class="form-input" data-card-field="buttonUrl" data-index="${i}" placeholder="https://... (required if button text is set)" value="${escapeHtml(card.buttonUrl || '')}" />
+      </div>
+    `).join('');
+    refreshIcons();
+
+    container.querySelectorAll('[data-card-field]').forEach((input) => {
+      input.addEventListener(input.type === 'file' ? 'change' : 'input', (e) => {
+        const i = Number(e.target.dataset.index);
+        const field = e.target.dataset.cardField;
+        templateCards[i][field] = field === 'file' ? (e.target.files[0] || null) : e.target.value;
+        if (field === 'headerType') renderTemplateCardsList(); // file accept attr depends on this
+        updateTemplatePreview();
+        updateTemplateSubmitGating();
+      });
+    });
+    container.querySelectorAll('[data-remove-card]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const i = Number(e.currentTarget.dataset.removeCard);
+        templateCards.splice(i, 1);
+        renderTemplateCardsList();
+        updateTemplatePreview();
+        updateTemplateSubmitGating();
+      });
+    });
+    const addBtn = document.getElementById('template-add-card-btn');
+    if (addBtn) addBtn.disabled = templateCards.length >= 10;
+  }
+
+  function addTemplateCard() {
+    if (templateCards.length >= 10) return;
+    templateCards.push({ headerType: 'IMAGE', file: null, bodyText: '', buttonText: '', buttonUrl: '' });
+    renderTemplateCardsList();
+    updateTemplatePreview();
+    updateTemplateSubmitGating();
   }
 
   function updateTemplateCategoryFields() {
