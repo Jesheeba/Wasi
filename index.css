@@ -2120,6 +2120,36 @@ body {
   overflow-x: auto;
 }
 
+.template-hover-trigger { position: relative; cursor: default; }
+.template-hover-popover {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 6px;
+  width: 260px;
+  padding: 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.15));
+}
+/* :focus-within keeps this reachable by keyboard (tabindex on the trigger), not just a mouse hover. */
+.template-hover-trigger:hover .template-hover-popover,
+.template-hover-trigger:focus-within .template-hover-popover {
+  display: block;
+}
+.template-hover-popover .template-preview-bubble { max-width: 100%; }
+.template-hover-meta {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .template-preview-card {
   flex: 0 0 160px;
   border: 1px solid var(--border-light);

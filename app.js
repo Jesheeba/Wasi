@@ -4303,18 +4303,29 @@ document.addEventListener('DOMContentLoaded', () => {
       // to show, since there's no status change yet.
       const submittedAt = t.created_at ? new Date(t.created_at).toLocaleString() : null;
       const statusAt = t.updated_at ? new Date(t.updated_at).toLocaleString() : null;
-      const statusTooltip = submittedAt
-        ? (status === 'pending' || !statusAt || statusAt === submittedAt)
-          ? `Submitted ${submittedAt}`
-          : `Submitted ${submittedAt}\n${statusLabel} ${statusAt}`
-        : '';
+      const showStatusChange = status !== 'pending' && statusAt && statusAt !== submittedAt;
+
+      // Same bubble renderer the "Preview in chat" modal and the Create/Edit
+      // live preview use (renderTemplateBubbleMarkup) - so this hover card
+      // can never show a different rendering of the template than what
+      // actually sends. body_param_examples mirrors openTemplateChatPreview's
+      // own read-only preview (no live params to fill in here either).
+      const hoverPreviewHtml = `
+        <div class="template-hover-popover" role="tooltip">
+          <div class="msg-bubble msg-out template-preview-bubble">${renderTemplateBubbleMarkup(t, t.body_param_examples || {})}</div>
+          <div class="template-hover-meta">
+            ${submittedAt ? `<div>Submitted ${esc(submittedAt)}</div>` : ''}
+            ${showStatusChange ? `<div>${esc(statusLabel)} ${esc(statusAt)}</div>` : ''}
+          </div>
+        </div>`;
 
       return `
         <div class="template-card">
           <div class="template-card-main">
-            <div class="template-card-head">
+            <div class="template-card-head template-hover-trigger" tabindex="0">
               <span class="template-card-name">${esc(t.name)}</span>
-              <span class="badge ${badgeCls}"${statusTooltip ? ` title="${esc(statusTooltip)}"` : ''}>${esc(statusLabel)}</span>
+              <span class="badge ${badgeCls}">${esc(statusLabel)}</span>
+              ${hoverPreviewHtml}
             </div>
             <p class="template-card-body">${bodyPreview}</p>
             ${rejectionNote}
