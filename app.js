@@ -6241,7 +6241,13 @@ document.addEventListener('DOMContentLoaded', () => {
         : JSON.stringify(payload);
       const result = await authFetch('/api/templates', {
         method: 'POST',
-        body: requestBody
+        body: requestBody,
+        // A media header (routes/templates.js) makes 3 sequential Meta
+        // calls - createUploadSession/uploadFileBytes/uploadMedia - before
+        // template creation even starts, same reasoning as the embedded
+        // signup's 90s override above. The default 45s (authFetch) was
+        // timing out on a DOCUMENT header's upload mid-flight.
+        ...(headerFile ? { timeoutMs: 90_000 } : {}),
       });
       await refreshTemplates();
       renderTemplates();
