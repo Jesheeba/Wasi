@@ -18,6 +18,36 @@ fixes), the user manually created and submitted a real carousel template
 through the deployed app and confirmed it worked - no undocumented Meta
 requirement surfaced this time. No code changes needed.
 
+## Added: swap a card's image without re-approval (2026-11-16)
+Gap closed, triggered by the user asking "what if I need to send a
+different carousel - do I need approval again and again?" The honest
+answer: a carousel can never be *edited* (Meta: delete + recreate only),
+but its card images specifically don't need to be - Meta's own send-time
+shape for a card's header is a media-id reference, never baked into the
+approved template, exactly like a plain single-header template's media
+can already be swapped via `headerMediaAssetId`. This app's gap was never
+asking Meta for the capability, not a platform limitation.
+
+`POST /:id/header-media` grows an optional `cardIndex` form field: when
+given, it validates against `template.cards[cardIndex]` instead of the
+template's own `header_type` (a carousel template has none), uploads
+against that card's slot, and the new asset still has to be explicitly
+promoted via `POST /:id/header-media/:assetId/default` to actually change
+future sends (uploading alone only adds a non-default alternative, same
+behavior a single-header template already had). `GET /:id/header-media`
+now returns each asset's `cardIndex` so a caller can group by card.
+
+New UI: a "Manage Images" button (image icon) on every carousel template
+row in the Templates list, opening a modal with one row per card -
+upload a file, and it's uploaded + promoted to default in one action
+(the explicit two-step API stays two calls under the hood, but the user
+never needs to know that).
+
+Files: `server/src/routes/templates.js`, `app.js`, `index.html`.
+Tests: 2 new cases in `server/test/carouselTemplates.test.js` (9/9 pass
+total); 48/48 on the carousel/templateMediaAssets/LTO/templateEdit/
+verifyTemplateUrl/broadcast regression.
+
 ## Scope decision (confirming before implementing)
 Corrected against Meta's own "Media card carousel templates" doc
 (fetched 2026-11-16, Graph API v27.0) - two corrections to the original

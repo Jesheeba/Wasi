@@ -419,31 +419,50 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
 // Reused by the chat send-template modal, the broadcast-creation modal, and
 // the flow editor's Send Template node - all three just need { id, filename }
 // back to attach to their own send/create call as headerMediaAssetId.
+// cardIndex (optional form field, build-docs/features/carousel-templates.md's
+// "swap a carousel card's image without re-approval" gap) - Meta's own
+// send-time shape for BOTH a single media header and a carousel card is
+// just a media id reference, never baked into the approval; this app's
+// gap was never asking for a new image, not a real Meta limitation. When
+// given, this uploads against that specific card instead of the
+// template's own (non-carousel) header - the one other branch this route
+// needs, since a carousel template has no header_type of its own at all.
 router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMedia.single('file'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
   if (!template) return res.status(404).json({ error: 'Not found' });
-  if (!mediaHeaderService.isMediaHeaderType(template.header_type)) {
-    return res.status(400).json({
-      error: `"${template.name}" does not have a media header - only IMAGE/VIDEO/DOCUMENT header templates accept uploaded media.`,
-    });
+
+  const cardIndex = req.body.cardIndex !== undefined && req.body.cardIndex !== '' ? Number(req.body.cardIndex) : null;
+  let headerTypeForLimits;
+  if (cardIndex !== null) {
+    if (!Array.isArray(template.cards) || !Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= template.cards.length) {
+      return res.status(400).json({ error: `"${template.name}" has no card at index ${req.body.cardIndex}.` });
+    }
+    headerTypeForLimits = template.cards[cardIndex].headerType;
+  } else {
+    if (!mediaHeaderService.isMediaHeaderType(template.header_type)) {
+      return res.status(400).json({
+        error: `"${template.name}" does not have a media header - only IMAGE/VIDEO/DOCUMENT header templates accept uploaded media.`,
+      });
+    }
+    headerTypeForLimits = template.header_type;
   }
 
-  const limits = MEDIA_HEADER_LIMITS[template.header_type];
+  const limits = MEDIA_HEADER_LIMITS[headerTypeForLimits];
   if (!req.file) {
-    return res.status(400).json({ error: 'Missing file', detail: `A ${template.header_type.toLowerCase()} file is required.` });
+    return res.status(400).json({ error: 'Missing file', detail: `A ${headerTypeForLimits.toLowerCase()} file is required.` });
   }
   const mimeType = limits.mimeTypes[req.file.mimetype];
   if (!mimeType) {
     return res.status(400).json({
       error: 'Unsupported file type',
-      detail: `${template.header_type} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
+      detail: `${headerTypeForLimits} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
     });
   }
   if (req.file.size > limits.maxBytes) {
     return res.status(400).json({
       error: 'File too large',
-      detail: `${template.header_type} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
+      detail: `${headerTypeForLimits} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
     });
   }
 
@@ -480,9 +499,9 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
 
   // Recommended (not required) by Meta for a document header send, same as
   // the approval-time seed in the POST / handler above - null for IMAGE/VIDEO.
-  const filename = template.header_type === 'DOCUMENT' ? (req.file.originalname || null) : null;
-  const asset = await templateMediaCacheRepo.insertAsset(req.db, req.clientId, template.id, { mediaId: uploaded.id, filename });
-  res.status(201).json({ id: asset.id, filename: asset.filename });
+  const filename = headerTypeForLimits === 'DOCUMENT' ? (req.file.originalname || null) : null;
+  const asset = await templateMediaCacheRepo.insertAsset(req.db, req.clientId, template.id, { mediaId: uploaded.id, filename, cardIndex });
+  res.status(201).json({ id: asset.id, filename: asset.filename, cardIndex: asset.card_index });
 }));
 
 // Lists every media row for a template, default first - the New Campaign
@@ -490,13 +509,14 @@ router.post('/:id/header-media', requireRole('Admin', 'Manager'), uploadHeaderMe
 // of only ever being able to upload a brand new file, which was the only
 // option before: a template synced in from Meta, or one with successfully
 // uploaded assets that never got promoted to default, had usable media
-// this app had no way to show or pick.
+// this app had no way to show or pick. cardIndex is included so a caller
+// managing a carousel template's per-card media can group by it.
 router.get('/:id/header-media', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
   if (!template) return res.status(404).json({ error: 'Not found' });
   const assets = await templateMediaCacheRepo.listByTemplateId(req.db, req.clientId, template.id);
-  res.json(assets.map((a) => ({ id: a.id, filename: a.filename, isDefault: a.is_default, resolvedAt: a.resolved_at })));
+  res.json(assets.map((a) => ({ id: a.id, filename: a.filename, isDefault: a.is_default, resolvedAt: a.resolved_at, cardIndex: a.card_index })));
 }));
 
 // Promotes an existing, already-uploaded asset to be this template's
@@ -511,7 +531,7 @@ router.post('/:id/header-media/:assetId/default', requireRole('Admin', 'Manager'
   if (!template) return res.status(404).json({ error: 'Not found' });
   const updated = await templateMediaCacheRepo.setDefault(req.db, req.clientId, template.id, req.params.assetId);
   if (!updated) return res.status(404).json({ error: 'Media asset not found for this template' });
-  res.json({ id: updated.id, filename: updated.filename, isDefault: updated.is_default });
+  res.json({ id: updated.id, filename: updated.filename, isDefault: updated.is_default, cardIndex: updated.card_index });
 }));
 
 // Edits an existing template's content - body/header[NONE|TEXT only]/

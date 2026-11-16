@@ -2476,6 +2476,72 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-template-chat-preview')?.classList.add('open');
   }
 
+  // Swap a carousel card's image/video without re-approval
+  // (build-docs/features/carousel-templates.md) - a carousel can't be
+  // edited otherwise at all, so this is the one post-approval change
+  // Meta actually allows: the card's media is a send-time reference, not
+  // baked into the approved template.
+  async function openCarouselMediaModal(template) {
+    document.getElementById('carousel-media-template-name').textContent = template.name;
+    const container = document.getElementById('carousel-media-cards-list');
+    container.innerHTML = '<div class="form-hint">Loading…</div>';
+    document.getElementById('modal-carousel-media')?.classList.add('open');
+
+    let assets = [];
+    try {
+      assets = await authFetch(`/api/templates/${template.id}/header-media`);
+    } catch (err) {
+      container.innerHTML = `<div class="form-hint" style="color:#B91C1C;">Could not load current images: ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+
+    function renderRows() {
+      container.innerHTML = template.cards.map((card, i) => {
+        const cardAssets = assets.filter((a) => a.cardIndex === i);
+        const current = cardAssets.find((a) => a.isDefault);
+        return `
+          <div class="template-button-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border-light);">
+            <strong>Card ${i + 1}</strong>
+            <div class="form-hint">Current: ${current ? escapeHtml(current.filename || 'uploaded ' + card.headerType.toLowerCase()) : 'approval-time sample (never replaced)'}</div>
+            <input type="file" class="form-input" data-replace-card="${i}" accept="${card.headerType === 'VIDEO' ? '.mp4' : '.jpg,.jpeg,.png'}" />
+            <span class="form-hint-inline" data-replace-card-status="${i}"></span>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('[data-replace-card]').forEach((input) => {
+        input.addEventListener('change', async (e) => {
+          const i = Number(e.target.dataset.replaceCard);
+          const file = e.target.files[0];
+          const statusEl = container.querySelector(`[data-replace-card-status="${i}"]`);
+          if (!file) return;
+          statusEl.textContent = 'Uploading…';
+          statusEl.style.color = 'var(--text-muted)';
+          try {
+            const form = new FormData();
+            form.append('file', file);
+            form.append('cardIndex', String(i));
+            const uploaded = await authFetch(`/api/templates/${template.id}/header-media`, { method: 'POST', body: form });
+            // Uploading alone only adds a non-default asset (same as a
+            // single-header template's own upload route) - promoting it
+            // is the step that actually makes future sends use it, which
+            // is the whole point of this screen (swap the DEFAULT, not
+            // just add an alternative).
+            await authFetch(`/api/templates/${template.id}/header-media/${uploaded.id}/default`, { method: 'POST' });
+            assets.push({ ...uploaded, isDefault: true, cardIndex: i });
+            assets.forEach((a) => { if (a.cardIndex === i && a.id !== uploaded.id) a.isDefault = false; });
+            renderRows();
+            showToast(`Card ${i + 1}'s image replaced - future sends use it immediately, no re-approval needed.`);
+          } catch (err) {
+            statusEl.textContent = `Failed: ${escapeHtml(extractApiErrorDetail(err) || err.message)}`;
+            statusEl.style.color = '#B91C1C';
+          }
+        });
+      });
+    }
+    renderRows();
+  }
+
   // Same split-by-component-type logic as
   // server/src/utils/templateParamMapping.js's buildTemplateComponents,
   // duplicated client-side for the same no-build-step reason as
@@ -4259,6 +4325,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="template-card-actions">
               <button type="button" class="btn-ghost btn-sm tpl-action preview-template-btn" data-preview-template="${esc(t.id)}" title="Preview in chat" aria-label="Preview ${esc(t.name)}"><i data-lucide="eye" class="icon-14"></i></button>
               <button type="button" class="btn-ghost btn-sm tpl-action edit-template-btn" data-edit-template="${esc(t.id)}" title="${t.cards ? 'Meta does not support editing a carousel template - delete and recreate instead' : 'Edit template'}" aria-label="Edit ${esc(t.name)}" ${t.cards ? 'disabled' : ''}><i data-lucide="pencil" class="icon-14"></i></button>
+              ${t.cards ? `<button type="button" class="btn-ghost btn-sm tpl-action manage-carousel-media-btn" data-manage-carousel-media="${esc(t.id)}" title="Replace a card's image/video - no re-approval needed" aria-label="Manage images for ${esc(t.name)}"><i data-lucide="image" class="icon-14"></i></button>` : ''}
               <button type="button" class="btn-ghost btn-sm tpl-action tpl-action-danger delete-template-btn" data-delete-template="${esc(t.id)}" title="Delete template" aria-label="Delete ${esc(t.name)}"><i data-lucide="trash-2" class="icon-14"></i></button>
             </div>
           </div>
@@ -5681,6 +5748,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewBtn = e.target.closest('[data-preview-template]');
     const editBtn = e.target.closest('[data-edit-template]');
     const deleteBtn = e.target.closest('[data-delete-template]');
+    const manageMediaBtn = e.target.closest('[data-manage-carousel-media]');
+
+    if (manageMediaBtn) {
+      const template = state.templates.find((t) => t.id === manageMediaBtn.dataset.manageCarouselMedia);
+      if (template) await openCarouselMediaModal(template);
+      return;
+    }
 
     if (e.target.closest('#templates-retry-btn')) { reloadTemplatesWithState(); return; }
     if (e.target.closest('#templates-empty-create')) { document.getElementById('open-create-template-modal')?.click(); return; }

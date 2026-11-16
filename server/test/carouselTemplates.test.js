@@ -279,3 +279,107 @@ test('sending an approved carousel template resolves one media id per card and s
     global.fetch = originalFetch;
   }
 });
+
+// --- Replacing a card's media without re-approval ---
+// (build-docs/features/carousel-templates.md's "swap a carousel card's
+// image without re-approval" gap - Meta's own send-time shape for a
+// card's media is a reference, never baked into the approval.)
+
+test('POST /:id/header-media: with a valid cardIndex uploads against that specific card, not the (non-existent) template-level header', async () => {
+  const originalFetch = global.fetch;
+  let mediaUploadCount = 0;
+  global.fetch = async (url, options) => {
+    const urlStr = String(url);
+    if (!urlStr.includes('graph.facebook.com')) return originalFetch(url, options);
+    if (urlStr.includes('/uploads') && options?.method === 'POST' && !urlStr.includes('/media')) {
+      return { ok: true, json: async () => ({ id: `upload_session_${mediaUploadCount}` }) };
+    }
+    if (urlStr.includes('upload_session_')) return { ok: true, json: async () => ({ h: 'HANDLE_X' }) };
+    if (urlStr.endsWith('/media')) {
+      mediaUploadCount++;
+      return { ok: true, json: async () => ({ id: `${SUITE_PREFIX}replace_media_${mediaUploadCount}` }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ id: `${SUITE_PREFIX}meta_template_id_3`, status: 'APPROVED', category: 'MARKETING' }) };
+  };
+  try {
+    const templateRes = await fetch(`${baseUrl}/api/templates`, {
+      method: 'POST', headers: { Authorization: `Bearer ${clientToken}` },
+      body: cardFilesForm({ name: `${SUITE_PREFIX}replace_test`, category: 'Marketing', language: 'en_US', body: 'Top picks!', cards: twoValidCards() }, 2),
+    });
+    assert.equal(templateRes.status, 201, JSON.stringify(await templateRes.clone().json()));
+    const template = await templateRes.json();
+
+    // Captured before the replace call below, rather than hardcoded - this
+    // stub's media ids are numbered sequentially across BOTH the creation
+    // upload (2 calls) and the replace upload (1 more), so card 1's real
+    // seeded value isn't a fixed string.
+    const assetsBeforeReplace = await templateMediaCacheRepo.listByTemplateId(pool, testClientId, template.id);
+    const card1MediaIdBeforeReplace = assetsBeforeReplace.find((a) => a.card_index === 1 && a.is_default).media_id;
+
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from('new-image-for-card-0')], { type: 'image/jpeg' }), 'new.jpg');
+    form.append('cardIndex', '0');
+    const uploadRes = await fetch(`${baseUrl}/api/templates/${template.id}/header-media`, {
+      method: 'POST', headers: { Authorization: `Bearer ${clientToken}` }, body: form,
+    });
+    assert.equal(uploadRes.status, 201, JSON.stringify(await uploadRes.clone().json()));
+    const asset = await uploadRes.json();
+    assert.equal(asset.cardIndex, 0);
+
+    const defaultRes = await fetch(`${baseUrl}/api/templates/${template.id}/header-media/${asset.id}/default`, {
+      method: 'POST', headers: { Authorization: `Bearer ${clientToken}` },
+    });
+    assert.equal(defaultRes.status, 200);
+
+    // Card 0's default changed; card 1's own default (seeded at creation)
+    // must be completely untouched - these are independent slots.
+    const assetsAfter = await templateMediaCacheRepo.listByTemplateId(pool, testClientId, template.id);
+    const card0Default = assetsAfter.find((a) => a.card_index === 0 && a.is_default);
+    const card1Default = assetsAfter.find((a) => a.card_index === 1 && a.is_default);
+    assert.equal(card0Default.id, asset.id, 'card 0\'s default must now be the newly uploaded asset');
+    assert.equal(card1Default.media_id, card1MediaIdBeforeReplace, 'card 1\'s own default must be completely untouched by card 0\'s replace');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('POST /:id/header-media: an out-of-range cardIndex is rejected (400), no Meta call made', async () => {
+  const originalFetch = global.fetch;
+  let mediaUploadCount = 0;
+  global.fetch = async (url, options) => {
+    const urlStr = String(url);
+    if (!urlStr.includes('graph.facebook.com')) return originalFetch(url, options);
+    if (urlStr.includes('/uploads') && options?.method === 'POST' && !urlStr.includes('/media')) {
+      return { ok: true, json: async () => ({ id: `upload_session_${mediaUploadCount}` }) };
+    }
+    if (urlStr.includes('upload_session_')) return { ok: true, json: async () => ({ h: 'HANDLE_X' }) };
+    if (urlStr.endsWith('/media')) {
+      mediaUploadCount++;
+      return { ok: true, json: async () => ({ id: `${SUITE_PREFIX}oor_media_${mediaUploadCount}` }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ id: `${SUITE_PREFIX}meta_template_id_4`, status: 'APPROVED', category: 'MARKETING' }) };
+  };
+  try {
+    const templateRes = await fetch(`${baseUrl}/api/templates`, {
+      method: 'POST', headers: { Authorization: `Bearer ${clientToken}` },
+      body: cardFilesForm({ name: `${SUITE_PREFIX}oor_test`, category: 'Marketing', language: 'en_US', body: 'Top picks!', cards: twoValidCards() }, 2),
+    });
+    assert.equal(templateRes.status, 201, JSON.stringify(await templateRes.clone().json()));
+    const template = await templateRes.json();
+
+    const originalFetch2 = global.fetch;
+    global.fetch = async (url, options) => {
+      if (String(url).includes('graph.facebook.com')) throw new Error('must not call Meta - rejected before that point');
+      return originalFetch2(url, options);
+    };
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from('x')], { type: 'image/jpeg' }), 'x.jpg');
+    form.append('cardIndex', '5'); // only cards 0 and 1 exist
+    const uploadRes = await fetch(`${baseUrl}/api/templates/${template.id}/header-media`, {
+      method: 'POST', headers: { Authorization: `Bearer ${clientToken}` }, body: form,
+    });
+    assert.equal(uploadRes.status, 400);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

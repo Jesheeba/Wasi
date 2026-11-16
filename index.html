@@ -2043,6 +2043,23 @@
     </div>
   </div>
 
+  <!-- Swap a carousel card's image/video without re-approval - Meta's own
+       send-time shape for a card's media is a reference, not something
+       baked into the approval, so replacing it needs no new template
+       (build-docs/features/carousel-templates.md). A carousel can't be
+       edited at all otherwise (see the disabled Edit button), so this is
+       the one thing that CAN change post-approval. -->
+  <div id="modal-carousel-media" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Manage Images: <span id="carousel-media-template-name"></span></h3>
+        <button class="close-modal-btn" data-close-modal="modal-carousel-media"><i data-lucide="x"></i></button>
+      </div>
+      <p class="form-hint" style="margin-bottom: 12px;">Upload a new image/video for a card - it becomes that card's default immediately, no re-approval needed. The card's text and buttons can't change (Meta limitation).</p>
+      <div id="carousel-media-cards-list"></div>
+    </div>
+  </div>
+
   <!-- ===================== USE META OFFICIAL TEMPLATE MODAL ===================== -->
   <!-- Narrow, read-only-content flow (wasi-master-plan.md §2b, Phase 0 decision) -
        unlike the Create/Edit Template modal, this never lets a client retype
