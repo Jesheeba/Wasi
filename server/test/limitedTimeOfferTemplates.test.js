@@ -89,7 +89,7 @@ test('POST /api/templates: a limited-time offer alongside a non-NONE header is r
       body: JSON.stringify({
         name: `${SUITE_PREFIX}lto_with_header`, category: 'Marketing', language: 'en_US',
         body: 'Flash sale this weekend!', header: { type: 'TEXT', text: 'Sale!' },
-        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', hasExpiration: true },
+        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true },
       }),
     });
     assert.equal(res.status, 400);
@@ -104,7 +104,7 @@ test('POST /api/templates: offer text over 16 characters is rejected locally (40
     body: JSON.stringify({
       name: `${SUITE_PREFIX}lto_text_too_long`, category: 'Marketing', language: 'en_US',
       body: 'Flash sale this weekend!',
-      limitedTimeOffer: { text: 'This offer text is way too long', code: '25OFF', hasExpiration: true },
+      limitedTimeOffer: { text: 'This offer text is way too long', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true },
     }),
   });
   assert.equal(res.status, 400);
@@ -116,7 +116,7 @@ test('POST /api/templates: coupon code over 15 characters is rejected locally (4
     body: JSON.stringify({
       name: `${SUITE_PREFIX}lto_code_too_long`, category: 'Marketing', language: 'en_US',
       body: 'Flash sale this weekend!',
-      limitedTimeOffer: { text: 'Flash Sale!', code: 'THIS-CODE-IS-WAY-TOO-LONG', hasExpiration: true },
+      limitedTimeOffer: { text: 'Flash Sale!', code: 'THIS-CODE-IS-WAY-TOO-LONG', url: 'https://example.com/shop', hasExpiration: true },
     }),
   });
   assert.equal(res.status, 400);
@@ -128,7 +128,19 @@ test('POST /api/templates: a limited-time offer with no coupon code is rejected 
     body: JSON.stringify({
       name: `${SUITE_PREFIX}lto_no_code`, category: 'Marketing', language: 'en_US',
       body: 'Flash sale this weekend!',
-      limitedTimeOffer: { text: 'Flash Sale!', hasExpiration: true },
+      limitedTimeOffer: { text: 'Flash Sale!', url: 'https://example.com/shop', hasExpiration: true },
+    }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('POST /api/templates: a limited-time offer with no shop url is rejected locally (400)', async () => {
+  const res = await fetch(`${baseUrl}/api/templates`, {
+    method: 'POST', headers: authed(clientToken),
+    body: JSON.stringify({
+      name: `${SUITE_PREFIX}lto_no_url`, category: 'Marketing', language: 'en_US',
+      body: 'Flash sale this weekend!',
+      limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', hasExpiration: true },
     }),
   });
   assert.equal(res.status, 400);
@@ -146,7 +158,7 @@ test('POST /api/templates: a limited-time offer alongside a footer is rejected l
       body: JSON.stringify({
         name: `${SUITE_PREFIX}lto_with_footer`, category: 'Marketing', language: 'en_US',
         body: 'Flash sale this weekend!', footer: 'Reply STOP to unsubscribe',
-        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', hasExpiration: true },
+        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true },
       }),
     });
     assert.equal(res.status, 400);
@@ -161,7 +173,7 @@ test('POST /api/templates: a limited-time offer on a non-Marketing category is r
     body: JSON.stringify({
       name: `${SUITE_PREFIX}lto_wrong_category`, category: 'Utility', language: 'en_US',
       body: 'Your order has shipped!',
-      limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', hasExpiration: true },
+      limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true },
     }),
   });
   assert.equal(res.status, 400);
@@ -183,7 +195,7 @@ test('POST /api/templates: a valid Marketing + limited-time-offer template (no h
       body: JSON.stringify({
         name: `${SUITE_PREFIX}flash_sale`, category: 'Marketing', language: 'en_US',
         body: 'Flash sale this weekend - everything must go!',
-        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', hasExpiration: true },
+        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true },
       }),
     });
     assert.equal(res.status, 201, JSON.stringify(await res.clone().json()));
@@ -194,18 +206,22 @@ test('POST /api/templates: a valid Marketing + limited-time-offer template (no h
       { type: 'LIMITED_TIME_OFFER', limited_time_offer: { text: 'Flash Sale!', has_expiration: true } }
     );
     // Confirmed live against Meta (2026-11-16): a COPY_CODE button at
-    // index 0 is REQUIRED alongside LIMITED_TIME_OFFER, not optional -
-    // Meta rejects the template otherwise ("COPY_CODE is required at
-    // index 0 when Limited Time Offer is present"). Its example must be
-    // the literal code, not the strip's marketing text (also confirmed
-    // live: Meta rejects a sentence-like example as invalid).
+    // index 0 AND a URL button at index 1 are BOTH REQUIRED alongside
+    // LIMITED_TIME_OFFER, not optional - two separate live rejections
+    // ("COPY_CODE is required at index 0...", then "URL is required at
+    // index 1..."). COPY_CODE's example must be the literal code, not
+    // the strip's marketing text (also confirmed live: Meta rejects a
+    // sentence-like example as invalid).
     assert.deepEqual(
       createRequestBody.components.find((c) => c.type === 'BUTTONS'),
-      { type: 'BUTTONS', buttons: [{ type: 'COPY_CODE', example: '25OFF' }] }
+      { type: 'BUTTONS', buttons: [
+        { type: 'COPY_CODE', example: '25OFF' },
+        { type: 'URL', text: 'Shop Now', url: 'https://example.com/shop' },
+      ] }
     );
 
     const fromDb = await messageTemplatesRepo.findById(pool, testClientId, template.id);
-    assert.deepEqual(fromDb.limited_time_offer, { text: 'Flash Sale!', code: '25OFF', hasExpiration: true });
+    assert.deepEqual(fromDb.limited_time_offer, { text: 'Flash Sale!', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true });
   } finally {
     global.fetch = originalFetch;
   }
@@ -231,7 +247,7 @@ test('sending a limited-time-offer template with hasExpiration requires limitedT
       body: JSON.stringify({
         name: templateName, category: 'Marketing', language: 'en_US',
         body: 'Flash sale - today only!',
-        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', hasExpiration: true },
+        limitedTimeOffer: { text: 'Flash Sale!', code: '25OFF', url: 'https://example.com/shop', hasExpiration: true },
       }),
     });
     assert.equal(templateRes.status, 201, JSON.stringify(await templateRes.clone().json()));

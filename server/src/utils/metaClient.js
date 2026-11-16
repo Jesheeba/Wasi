@@ -678,17 +678,21 @@ function buildUtilityMarketingPayload({ name, category, language = 'en_US', body
     });
   }
 
-  // A COPY_CODE button at index 0 is REQUIRED alongside LIMITED_TIME_OFFER
-  // - confirmed live against Meta ("COPY_CODE is required at index 0 when
-  // Limited Time Offer is present"), not author-optional. Its example is
-  // the literal coupon code (limitedTimeOffer.code), NOT the strip's
-  // marketing text - Meta rejected "Button example provided is invalid"
-  // when this used to pass the sentence-like `text` here instead. Any
-  // author-supplied buttons (e.g. a URL button) follow it in the same
-  // single BUTTONS component - Meta's own example shows copy_code then
-  // url in one array, not two components.
+  // A COPY_CODE button at index 0 AND a URL button at index 1 are BOTH
+  // REQUIRED alongside LIMITED_TIME_OFFER, not author-optional - confirmed
+  // live against Meta, one rejection each ("COPY_CODE is required at
+  // index 0...", then "URL is required at index 1..."). COPY_CODE's
+  // example is the literal coupon code (limitedTimeOffer.code), NOT the
+  // strip's marketing text - a still-earlier attempt passed the
+  // sentence-like `text` here and Meta rejected that too ("Button example
+  // provided is invalid"). Any further author-supplied buttons follow
+  // these two in the same single BUTTONS component.
   const effectiveButtons = limitedTimeOffer
-    ? [{ type: 'COPY_CODE', example: limitedTimeOffer.code }, ...(buttons || [])]
+    ? [
+        { type: 'COPY_CODE', example: limitedTimeOffer.code },
+        { type: 'URL', text: 'Shop Now', url: limitedTimeOffer.url },
+        ...(buttons || []),
+      ]
     : buttons;
 
   if (effectiveButtons && effectiveButtons.length > 0) {

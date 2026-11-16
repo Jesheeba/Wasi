@@ -32,6 +32,13 @@ would have caught either):
    "Limitations" section) - added as a third mutual-exclusion rule
    alongside the header one below, UI-side (footer field disables when
    LTO is enabled, same as the header select).
+4. **A `URL` button at index 1 is ALSO Meta-required**, found by a
+   second real rejection right after fixing #1: "URL is required at
+   index 1 when Limited Time Offer is present." Not documented as a hard
+   requirement anywhere this audit's web research surfaced - only
+   discovered by actually submitting. `limitedTimeOffer` grows a required
+   `url` field; the button's text is a fixed "Shop Now" (not author-
+   configurable - nothing about it needs to vary per template).
 
 ## Architecture
 **Create (`metaClient.js` / `validate.js`)**

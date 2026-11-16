@@ -6015,7 +6015,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('new-template-lto-enabled')?.checked) {
       const offerText = document.getElementById('new-template-lto-text').value.trim();
       const hasExpiration = document.getElementById('new-template-lto-expiration').checked;
-      html += `<div class="template-preview-lto">&#127873; ${escapeHtml(offerText || '(offer text)')}${hasExpiration ? ' &middot; expires in...' : ''} <span class="template-preview-button">Copy Code</span></div>`;
+      html += `<div class="template-preview-lto">&#127873; ${escapeHtml(offerText || '(offer text)')}${hasExpiration ? ' &middot; expires in...' : ''}</div>
+        <div class="template-preview-buttons"><div class="template-preview-button">&#128203; Copy Code</div><div class="template-preview-button">&#128279; Shop Now</div></div>`;
     }
     bubble.innerHTML = html;
   }
@@ -6096,6 +6097,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('new-template-lto-enabled')?.addEventListener('change', updateTemplateLtoFields);
   document.getElementById('new-template-lto-text')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-lto-code')?.addEventListener('input', updateTemplatePreview);
+  document.getElementById('new-template-lto-url')?.addEventListener('input', updateTemplatePreview);
   document.getElementById('new-template-header-text')?.addEventListener('input', () => {
     updateTemplateSubmitGating();
     updateTemplatePreview();
@@ -6220,13 +6222,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (category === 'Marketing' && document.getElementById('new-template-lto-enabled').checked) {
         const offerText = document.getElementById('new-template-lto-text').value.trim();
         const offerCode = document.getElementById('new-template-lto-code').value.trim();
-        if (!offerText || !offerCode) {
-          showToast('Enter both the offer text and the coupon code before submitting.');
+        const offerUrl = document.getElementById('new-template-lto-url').value.trim();
+        if (!offerText || !offerCode || !offerUrl) {
+          showToast('Enter the offer text, coupon code, and shop link before submitting.');
           return;
         }
         payload.limitedTimeOffer = {
           text: offerText,
           code: offerCode,
+          url: offerUrl,
           hasExpiration: document.getElementById('new-template-lto-expiration').checked,
         };
         payload.header = { type: 'NONE' };
