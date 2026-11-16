@@ -2096,30 +2096,41 @@ body {
 /* Shared footer for every simple create/edit modal - was 13 separate
    copies of the identical inline style attribute across the app (Add
    Contact, New Ticket, Create Payment Link, Save Tag, etc.). */
-.modal-footer { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-5); }
+.modal-footer {
+  display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-2);
+  margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1px solid var(--border);
+}
 
 /* Create Automation Rule - redesigned structure (not a colour swap): two
    clearly separated sections (Trigger / Action) joined by a small "causes
    -> happens" connector, so the rule's own logic reads at a glance instead
    of 5 stacked plain inputs. */
-.rule-form-section {
+.form-section {
   background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: var(--sp-4); margin-bottom: var(--sp-4);
 }
-.rule-form-section:first-of-type { margin-bottom: var(--sp-3); }
-.rule-form-section .form-group:last-child { margin-bottom: 0; }
-.rule-form-section-eyebrow {
+.form-section:first-of-type { margin-bottom: var(--sp-3); }
+.form-section .form-group:last-child { margin-bottom: 0; }
+.form-section-eyebrow {
   font-size: var(--fs-caption); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--brand-dark); margin-bottom: var(--sp-3);
 }
-.rule-form-connector {
+.form-section-connector {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   color: var(--text-faint); margin: -4px 0 var(--sp-1); height: 28px; justify-content: center;
 }
-.rule-form-connector-line { width: 1px; height: 14px; background: var(--border-strong); }
-.rule-form-footer {
-  display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-2);
-  margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1px solid var(--border);
+.form-section-connector-line { width: 1px; height: 14px; background: var(--border-strong); }
+
+/* Create/Edit Template - 2-column layout matching the approved reference
+   (form fields left, live WhatsApp preview as a persistent right panel,
+   not buried at the bottom of a long scroll). */
+.template-form-layout { display: flex; gap: var(--sp-5); align-items: flex-start; }
+.template-form-main { flex: 1; min-width: 0; }
+.template-form-aside { width: 260px; flex-shrink: 0; position: sticky; top: 0; }
+.template-form-aside .template-preview-frame { margin-top: var(--sp-2); }
+@media (max-width: 768px) {
+  .template-form-layout { flex-direction: column; }
+  .template-form-aside { width: 100%; position: static; }
 }
 
 .close-modal-btn {
