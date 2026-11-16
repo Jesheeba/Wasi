@@ -2724,6 +2724,21 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .template-skeleton { gap: var(--sp-3); }
 .template-skeleton .skeleton { height: 12px; }
 
+/* Support tickets (UI redesign continuation) - the approved reference
+   shows each ticket as its own bordered card, title left/status right,
+   no message-body preview; this used to be a fully inline-styled block
+   with a hand-rolled status-colour map instead of the shared .badge-*
+   tones. */
+#tickets-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.support-ticket-card {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+}
+.support-ticket-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.support-ticket-subject { font-weight: 600; color: var(--text); }
+.support-ticket-date { font-size: var(--fs-caption); color: var(--text-muted); }
+
 /* Library */
 .library-filters { margin-bottom: var(--sp-4); }
 .library-filters .table-toolbar { padding: 0; border-bottom: none; }

@@ -139,6 +139,18 @@ document.addEventListener('DOMContentLoaded', () => {
       authErr.isAuthError = true;
       throw authErr;
     }
+    if (res.status === 402) {
+      // Account was suspended mid-session (e.g. the auto-suspend runner
+      // fired while this tab was open) - tear down to the block screen the
+      // same way a 401 tears down to the login screen. Token stays valid
+      // (this isn't a logout) so GET /api/auth/me and /api/billing/* -
+      // exempt from this check server-side - keep working from here.
+      stopPolling();
+      showSuspendedScreen();
+      const suspendedErr = new Error('Your subscription has ended.');
+      suspendedErr.isSuspendedError = true;
+      throw suspendedErr;
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const err = new Error(body.error || `Request failed (${res.status})`);
@@ -348,9 +360,55 @@ document.addEventListener('DOMContentLoaded', () => {
     // logout and a session actually expiring mid-use (a real 401).
     if (location.hash) location.hash = '';
     appShell.style.display = 'none';
+    suspendedView.style.display = 'none';
     authView.style.display = 'flex';
     stopSendabilityBannerPolling();
   }
+
+  // client-suspension-paywall feature - hard block for status='suspended'.
+  // Called both from enterApp (login/resume) and authFetch's 402 branch
+  // (mid-session suspension). The token stays valid - this isn't a logout -
+  // so GET /api/auth/me, /api/auth/team/me and /api/billing/* (server-side
+  // exempt, see requireActiveSubscription.js) keep working from here.
+  function showSuspendedScreen() {
+    if (location.hash) location.hash = '';
+    appShell.style.display = 'none';
+    authView.style.display = 'none';
+    suspendedView.style.display = 'flex';
+    stopSendabilityBannerPolling();
+
+    const isOwner = state.actorType !== 'team_member';
+    const payBtn = document.getElementById('suspended-view-pay-btn');
+    const msgEl = document.getElementById('suspended-view-message');
+    if (payBtn) payBtn.style.display = isOwner ? '' : 'none';
+    if (msgEl) {
+      msgEl.textContent = isOwner
+        ? 'Pay to continue using Wasi.'
+        : 'Ask your account owner to renew the subscription to continue using Wasi.';
+    }
+  }
+
+  document.getElementById('suspended-view-pay-btn')?.addEventListener('click', async () => {
+    // Reuses the existing Subscription-tab plan picker (renderSubscriptionTab's
+    // own logic) instead of building a second checkout UI - owner-only, same
+    // /api/billing/* routes that stay reachable while suspended.
+    try {
+      const [subscription, plans] = await Promise.all([
+        authFetch('/api/billing/subscription'),
+        authFetch('/api/billing/plans'),
+      ]);
+      openChoosePlanModal(plans, subscription?.plan);
+    } catch (err) {
+      reportError(err);
+    }
+  });
+
+  document.getElementById('suspended-view-logout-btn')?.addEventListener('click', () => {
+    stopPolling();
+    localStorage.removeItem('client_token');
+    localStorage.removeItem('actor_type');
+    showAuthView();
+  });
 
   // Shared HTML escaper (UI redesign Stage 2): `esc` is the short name for
   // escapeHtml below; every dynamic value placed in an innerHTML template string
@@ -392,6 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Auth Handlers ---
   const authView = document.getElementById('auth-view');
   const appShell = document.getElementById('app-shell');
+  const suspendedView = document.getElementById('suspended-view');
   const loginForm = document.getElementById('login-form');
   const togglePwdBtn = document.getElementById('toggle-pwd-btn');
   const loginPwdInput = document.getElementById('login-password');
@@ -581,7 +640,14 @@ document.addEventListener('DOMContentLoaded', () => {
     state.actorType = actor?.type || 'owner';
     state.actorRole = actor?.role || 'Owner';
     state.actorId = actor?.id || client?.id || null;
+
+    if (client?.status === 'suspended') {
+      showSuspendedScreen();
+      return;
+    }
+
     authView.style.display = 'none';
+    suspendedView.style.display = 'none';
     appShell.style.display = 'flex';
 
     // The sidebar account indicator was a hardcoded "Mohamed" left over from
@@ -676,11 +742,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       localStorage.setItem('client_token', data.token);
       localStorage.setItem('actor_type', 'team_member');
-      // The login response only carries {id, name, role} - no email/avatar
-      // seed exists for a team member the way the owner's own client row
-      // provides one, so `client` here is just enough to satisfy enterApp's
-      // shape, not a full profile.
-      await enterApp({ name: data.teamMember.name }, { type: 'team_member', role: data.teamMember.role, id: data.teamMember.id });
+      // The login response only carries {id, name, role} - no clientStatus,
+      // needed to know whether to show the suspended-account block screen
+      // (build-docs/features/client-suspension-paywall.md). One extra call,
+      // same endpoint session-resume already uses for exactly this reason.
+      const me = await authFetch('/api/auth/team/me');
+      await enterApp({ name: me.name, email: me.email, status: me.clientStatus }, { type: 'team_member', role: me.role, id: me.id });
     } catch (err) {
       reportError(err);
     } finally {
@@ -755,7 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       if (actorType === 'team_member') {
         const me = await authFetch('/api/auth/team/me');
-        await enterApp({ name: me.name, email: me.email }, { type: 'team_member', role: me.role, id: me.id });
+        await enterApp({ name: me.name, email: me.email, status: me.clientStatus }, { type: 'team_member', role: me.role, id: me.id });
       } else {
         const client = await authFetch('/api/auth/me');
         await enterApp(client, { type: 'owner', role: 'Owner', id: client.id });
@@ -3930,11 +3997,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Support Tickets ---
-  const TICKET_STATUS_COLORS = {
-    open: { bg: '#FEF3C7', color: '#B45309' },
-    in_progress: { bg: '#DBEAFE', color: '#1D4ED8' },
-    resolved: { bg: '#DCFCE7', color: '#15803D' },
-    closed: { bg: '#F1F5F9', color: '#475569' }
+  const TICKET_STATUS_TONE = {
+    open: 'warning',
+    in_progress: 'info',
+    resolved: 'success',
+    closed: 'neutral',
   };
 
   function renderTickets() {
@@ -3947,15 +4014,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     ticketsList.innerHTML = state.tickets.map(t => {
-      const colors = TICKET_STATUS_COLORS[t.status] || TICKET_STATUS_COLORS.open;
+      const tone = TICKET_STATUS_TONE[t.status] || 'warning';
       return `
-        <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.25rem; box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-weight: 700; font-size: 1rem; color: var(--color-heading);">${t.subject}</span>
-            <span class="status-badge" style="background: ${colors.bg}; color: ${colors.color};">${t.status.replace('_', ' ')}</span>
+        <div class="support-ticket-card">
+          <div class="support-ticket-main">
+            <span class="support-ticket-subject">${esc(t.subject)}</span>
+            <span class="support-ticket-date">Created ${new Date(t.created_at).toLocaleDateString()}</span>
           </div>
-          <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">${t.message}</p>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">Opened ${new Date(t.created_at).toLocaleDateString()}</div>
+          <span class="badge badge-${tone}">${esc(t.status.replace('_', ' '))}</span>
         </div>
       `;
     }).join('');
