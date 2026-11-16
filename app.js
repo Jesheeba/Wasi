@@ -2698,9 +2698,36 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter(c => matchesQueueFilter(c, queueFilter))
       .filter(c => !searchTerm || (c.name || '').toLowerCase().includes(searchTerm) || (c.phone || '').toLowerCase().includes(searchTerm));
 
+    // Search only ever matched state.chats (existing conversation threads),
+    // so a stored contact nobody has messaged yet was indistinguishable from
+    // "no results" even though they're right there in Contacts. Only surface
+    // this when actively searching - otherwise every contact with no chat
+    // would clutter the default inbox view.
+    const chatPhones = new Set(state.chats.map(c => (c.phone || '').toLowerCase()).filter(Boolean));
+    const matchingContacts = searchTerm
+      ? (state.contacts || []).filter(c =>
+          !chatPhones.has((c.phone || '').toLowerCase()) &&
+          ((c.name || '').toLowerCase().includes(searchTerm) || (c.phone || '').toLowerCase().includes(searchTerm)))
+      : [];
+
+    const contactsHtml = matchingContacts.length
+      ? `<div class="chat-list-contacts-section">
+          <div class="chat-list-contacts-heading">Contacts (no conversation yet)</div>
+          ${matchingContacts.map(c => `
+            <div class="chat-item chat-item-contact" data-contact-id="${esc(c.id)}" role="button" tabindex="0" aria-label="Start a conversation with ${esc(c.name)}">
+              <div class="chat-avatar" aria-hidden="true">${esc(initialsFor(c.name))}</div>
+              <div class="chat-item-main">
+                <div class="chat-item-name">${esc(c.name)}</div>
+                <div class="chat-item-sub"><span>${esc(c.phone || '')}</span></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>`
+      : '';
+
     if (!visible.length) {
       const filtersActive = filter !== 'all' || queueFilter !== 'all' || !!searchTerm;
-      inboxChatList.innerHTML = chatListEmptyHtml(state.chats.length > 0, filtersActive);
+      inboxChatList.innerHTML = contactsHtml || chatListEmptyHtml(state.chats.length > 0, filtersActive);
       refreshIcons();
       return;
     }
@@ -2725,7 +2752,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
-    }).join('');
+    }).join('') + contactsHtml;
 
     refreshIcons();
   }
@@ -2738,7 +2765,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const selected = state.chats.find(c => String(c.id) === item.dataset.chatId);
       if (selected) openActiveChat(selected);
     }
+    function startFromContactItem(item) {
+      const contact = (state.contacts || []).find(c => String(c.id) === item.dataset.contactId);
+      if (contact) proceedWithContact(contact);
+    }
     list.addEventListener('click', (e) => {
+      const contactItem = e.target.closest('.chat-item-contact');
+      if (contactItem) { startFromContactItem(contactItem); return; }
       const action = e.target.closest('[data-chat-list-action]');
       if (action) {
         const kind = action.dataset.chatListAction;
@@ -2766,7 +2799,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const item = e.target.closest('.chat-item');
       if (!item || e.target !== item) return;
       e.preventDefault();
-      openFromItem(item);
+      if (item.classList.contains('chat-item-contact')) startFromContactItem(item);
+      else openFromItem(item);
     });
   })();
 
@@ -4664,6 +4698,15 @@ document.addEventListener('DOMContentLoaded', () => {
   async function useTemplateFromLibrary(entry) {
     document.getElementById('create-template-form')?.reset();
     templateButtons = [];
+    templateCards = [];
+    renderTemplateCardsList();
+    // Without this, a category select left disabled by a previous
+    // Carousel/LTO/Authentication type-picker visit (setTemplateType
+    // locks it for 3 of the 4 types) would stay stuck disabled here too -
+    // this entry point bypasses the picker entirely and needs every
+    // field re-enabled itself, same as open-create-template-modal's own
+    // resetTemplateModalToCreateMode call.
+    resetTemplateModalToCreateMode();
 
     try {
       const status = await authFetch('/api/onboarding/whatsapp/status');
@@ -6291,7 +6334,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (submitBtn) submitBtn.textContent = 'Submit for Approval';
   }
 
-  document.getElementById('open-create-template-modal')?.addEventListener('click', async () => {
+  // Sets everything the type picker already decided, so the form that
+  // opens next shows only what that type needs - no "This is a..."
+  // checkboxes left for the user to also notice and toggle. 'standard'
+  // leaves category open (Marketing vs Utility is still a real choice for
+  // a plain template); the other three lock it, since Meta ties each of
+  // them to exactly one category anyway.
+  function setTemplateType(type) {
+    const categorySelect = document.getElementById('new-template-category');
+    const ltoCheckbox = document.getElementById('new-template-lto-enabled');
+    const carouselCheckbox = document.getElementById('new-template-carousel-enabled');
+    const titleByType = {
+      standard: 'Create Template',
+      carousel: 'Create Carousel Template',
+      limited_time_offer: 'Create Limited-Time-Offer Template',
+      authentication: 'Create Authentication Template',
+    };
+
+    if (type === 'authentication') {
+      categorySelect.value = 'Authentication';
+      categorySelect.disabled = true;
+    } else if (type === 'carousel' || type === 'limited_time_offer') {
+      categorySelect.value = 'Marketing';
+      categorySelect.disabled = true;
+    } else {
+      categorySelect.value = 'Utility';
+      categorySelect.disabled = false;
+    }
+    updateTemplateCategoryFields();
+
+    if (ltoCheckbox) {
+      ltoCheckbox.checked = type === 'limited_time_offer';
+      updateTemplateLtoFields();
+    }
+    if (carouselCheckbox) {
+      carouselCheckbox.checked = type === 'carousel';
+      updateTemplateCarouselFields();
+    }
+
+    const modalTitle = document.querySelector('#modal-create-template .modal-title');
+    if (modalTitle) modalTitle.textContent = titleByType[type] || 'Create Template';
+  }
+
+  async function openCreateTemplateModal(type) {
     // Reset unconditionally on open, not just after a successful submit.
     // templateButtons/header-type/etc. previously only got cleared by
     // e.target.reset() in the submit success path - so Cancel, closing the
@@ -6320,8 +6405,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     applyMediaHeaderGating();
 
+    setTemplateType(type);
+    document.getElementById('modal-template-type-picker')?.classList.remove('open');
     document.getElementById('modal-create-template')?.classList.add('open');
     syncTemplateFormUI();
+  }
+
+  document.getElementById('open-create-template-modal')?.addEventListener('click', () => {
+    document.getElementById('modal-template-type-picker')?.classList.add('open');
+  });
+  document.querySelectorAll('.template-type-card').forEach((card) => {
+    card.addEventListener('click', () => openCreateTemplateModal(card.dataset.templateType));
   });
 
   renderTemplateLanguageOptions();

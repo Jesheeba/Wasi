@@ -1822,6 +1822,44 @@
     </div>
   </div>
 
+  <!-- Template type picker - the entry point for "Create Template" now.
+       Replaces the old single form's "This is a Limited-Time-Offer"/
+       "This is a Carousel" checkboxes (flagged as too cluttered, same
+       pattern every competitor avoids): pick the type here first, then
+       modal-create-template opens pre-configured for exactly that type -
+       no mode-switching checkboxes visible inside it anymore. -->
+  <div id="modal-template-type-picker" class="modal-overlay">
+    <div class="modal-box modal-box-wide">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Template</h3>
+        <button class="close-modal-btn" data-close-modal="modal-template-type-picker"><i data-lucide="x"></i></button>
+      </div>
+      <div class="form-hint" style="margin-bottom: 14px;">Choose what kind of message this template sends - each type gets its own form, with only the fields it actually needs.</div>
+      <div class="template-type-grid">
+        <button type="button" class="template-type-card" data-template-type="standard">
+          <i data-lucide="message-square" class="template-type-icon"></i>
+          <div class="template-type-name">Marketing / Utility</div>
+          <div class="template-type-desc">Text, image, video, or document header, optional buttons - the standard message type.</div>
+        </button>
+        <button type="button" class="template-type-card" data-template-type="carousel">
+          <i data-lucide="layout-grid" class="template-type-icon"></i>
+          <div class="template-type-name">Carousel</div>
+          <div class="template-type-desc">2-10 swipeable cards, each with its own image/video, text, and link.</div>
+        </button>
+        <button type="button" class="template-type-card" data-template-type="limited_time_offer">
+          <i data-lucide="percent" class="template-type-icon"></i>
+          <div class="template-type-name">Limited-Time-Offer</div>
+          <div class="template-type-desc">Coupon code strip with a countdown and a "Shop Now" button - for flash sales.</div>
+        </button>
+        <button type="button" class="template-type-card" data-template-type="authentication">
+          <i data-lucide="shield-check" class="template-type-icon"></i>
+          <div class="template-type-name">Authentication</div>
+          <div class="template-type-desc">One-time passcode delivery with an auto-generated Copy Code button.</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Redesigned (structure, not just colour): a 2-column layout with the
        live WhatsApp preview as a persistent side panel (matching the
        approved Create Template reference's own left-form/right-preview
@@ -1884,7 +1922,12 @@
                offer strip in the header's visual slot, so enabling this
                disables the header select rather than letting both be set. -->
           <div class="form-group" id="template-lto-group" style="display:none;">
-            <div class="template-checkbox-row">
+            <!-- Driven by setTemplateType() now, not a visible toggle -
+                 the type picker already decided this before the form
+                 opened. Hidden, not removed, so the existing mutual-
+                 exclusion/validation logic reading this checkbox's state
+                 is untouched. -->
+            <div class="template-checkbox-row" style="display:none;">
               <input type="checkbox" id="new-template-lto-enabled" />
               <label class="form-label" for="new-template-lto-enabled">This is a Limited-Time-Offer (coupon/countdown strip)</label>
             </div>
@@ -1903,7 +1946,9 @@
                Mutually exclusive with the header above and with LTO -
                Meta's carousel examples never show either alongside it. -->
           <div class="form-group" id="template-carousel-group" style="display:none;">
-            <div class="template-checkbox-row">
+            <!-- Driven by setTemplateType() now - see the LTO checkbox's
+                 own comment above for why this is hidden, not removed. -->
+            <div class="template-checkbox-row" style="display:none;">
               <input type="checkbox" id="new-template-carousel-enabled" />
               <label class="form-label" for="new-template-carousel-enabled">This is a Carousel (2-10 swipeable cards)</label>
             </div>

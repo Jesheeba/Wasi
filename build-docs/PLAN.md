@@ -19,6 +19,16 @@ This file tracks features built under the global build workflow going forward.
   screenshot was, after realizing only limited-time-offer had been built.
   Scope question (edit UX) resolved: Edit button shown but disabled with
   a tooltip, not hidden.
+- Template type picker (no separate feature doc - a UI fix to the
+  cross-cutting decision below, not a new Meta capability) — built
+  2026-11-16. Triggered by: the user flagging the LTO/Carousel checkboxes
+  stacked inside one form as "too congested" once they saw it live.
+  Replaces both checkboxes with a 4-card "choose type first" picker
+  (Marketing/Utility, Carousel, Limited-Time-Offer, Authentication) -
+  `app.js`'s `setTemplateType`/`openCreateTemplateModal`, new
+  `#modal-template-type-picker` in `index.html`. The checkboxes still
+  exist in the DOM (hidden) so the existing, already-tested mutual-
+  exclusion/validation logic reading their state is untouched.
 
 ## Proposed (awaiting approval)
 
