@@ -4227,12 +4227,28 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `<p class="template-rejection-reason">Not found on Meta as of the last sync - may have been deleted in WhatsApp Manager.</p>`
         : '';
 
+      // Submitted = created_at (the row is created at submit time). Approved/
+      // rejected time = updated_at - every writer that changes status to/from
+      // approved/rejected/pending also bumps updated_at in the same query
+      // (messageTemplatesRepo.js's updateStatus/updateFromMetaSync/
+      // updateContent), and nothing else touches updated_at without also
+      // changing status, so it's a reliable "last status change" timestamp,
+      // not just a generic edit marker. Still pending: only a submitted time
+      // to show, since there's no status change yet.
+      const submittedAt = t.created_at ? new Date(t.created_at).toLocaleString() : null;
+      const statusAt = t.updated_at ? new Date(t.updated_at).toLocaleString() : null;
+      const statusTooltip = submittedAt
+        ? (status === 'pending' || !statusAt || statusAt === submittedAt)
+          ? `Submitted ${submittedAt}`
+          : `Submitted ${submittedAt}\n${statusLabel} ${statusAt}`
+        : '';
+
       return `
         <div class="template-card">
           <div class="template-card-main">
             <div class="template-card-head">
               <span class="template-card-name">${esc(t.name)}</span>
-              <span class="badge ${badgeCls}">${esc(statusLabel)}</span>
+              <span class="badge ${badgeCls}"${statusTooltip ? ` title="${esc(statusTooltip)}"` : ''}>${esc(statusLabel)}</span>
             </div>
             <p class="template-card-body">${bodyPreview}</p>
             ${rejectionNote}
