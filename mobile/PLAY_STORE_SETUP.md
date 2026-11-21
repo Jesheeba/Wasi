@@ -5,18 +5,26 @@ Everything below that's pure code/config is already done in this repo (see
 account, your decisions, or a human click. I drafted the text wherever I could so you're
 mostly reviewing/pasting, not writing from scratch.
 
-## 0. Blocking item: your privacy policy is still placeholder text
+## 0. Status (2026-11-21)
 
-`CLAUDE.md`'s own Known Gaps already flag this across the project. Google Play **requires
-a real, published privacy policy URL** before it will let you submit for review, and it
-must accurately describe what this specific app does (WhatsApp messages, contacts,
-business data, and - if/when the AI agent feature ships - that message content is sent to
-a third-party model provider). This has to be resolved with real legal review before
-submission; I can draft the text but you need a lawyer or at minimum a careful
-non-placeholder pass over it, same caveat this project's other legal-text entries already
-carry.
+Done in the repo:
+- Real privacy policy (replaces the placeholder): `marketing/privacy.html`.
+  Play Console URL: **https://wasi.sirahagents.com/marketing/privacy.html**
+- Account deletion page (Play requires a web link for apps that let users create an
+  account): `marketing/delete-account.html`.
+  Play Console URL (Data safety > Data deletion): **https://wasi.sirahagents.com/marketing/delete-account.html**
+- Upload key generated and a signed `.aab` built locally (`KEYSTORE_SETUP.md`). The file
+  to upload: `C:\Users\JESHEEBA\wasi-android-signing\builds\wasi-1.0-vc1.aab`.
+- Listing graphics: `mobile/store-listing/app-icon-512.png`,
+  `mobile/store-listing/feature-graphic-1024x500.png`.
 
-**Do this first — it has the longest lead time of anything on this list.**
+Still yours:
+- Read the privacy policy and deletion page once. They describe what the code does today
+  and make two commitments you must keep: deletion within 30 days of a confirmed request,
+  and email notice of significant policy changes. Legal review is still recommended.
+- The pages must be **deployed** before you paste the URLs into Play Console.
+- Phone screenshots (2 minimum) from the real app, signed in.
+- Everything from section 1 down that happens inside Play Console.
 
 ## 1. Confirm your Play Console account is in good standing
 
@@ -66,8 +74,8 @@ You said you already have one. Two things worth checking before you start:
 
 **Graphics you need to prepare** (I can't generate photographic app-in-use screenshots -
 these need real screenshots of the actual running app):
-- App icon: already generated from `img/wasi-mark-512.png` (`mobile/android/app/src/main/res/mipmap-*`) - Play Console also wants a standalone 512x512 PNG upload, same source file works
-- Feature graphic: 1024x500 PNG/JPG — a simple banner with the Wasi mark + tagline; I can build this as an artifact if you want a starting design
+- App icon (512x512): `mobile/store-listing/app-icon-512.png`
+- Feature graphic (1024x500): `mobile/store-listing/feature-graphic-1024x500.png`
 - Phone screenshots: minimum 2, Google recommends 4-8 — take these from the real app (Chat view, Contacts, Campaigns, Templates) once you have a build running on a device/emulator
 - Short promo video: optional, skip for v1
 
@@ -96,9 +104,8 @@ actually does:
 
 **Declare "Data is encrypted in transit"** — true, since the app only loads
 `https://wasi.sirahagents.com` (TLS, Capacitor's `cleartext: false` blocks any plain
-HTTP). **Declare whether users can request deletion** — true if your existing account
-deletion/support process covers it; if not, that's a gap to close before this question can
-be answered honestly.
+HTTP). **Declare that users can request deletion**: yes, via the email process on
+`marketing/delete-account.html` (URL in section 0).
 
 Don't let me guess your answers into the actual form - this table is a starting point for
 you to confirm against reality, since a wrong declaration here is a policy violation in
@@ -119,10 +126,9 @@ Skip this entirely if you're fine uploading the `.aab` by hand the first few tim
 
 ## 7. Build and upload the first release
 
-1. Follow `mobile/KEYSTORE_SETUP.md` once (keystore + GitHub secrets).
-2. Run the **Android Release Build** GitHub Action (Actions tab > select it > Run
-   workflow), or build locally if you install Android Studio.
-3. Download the `.aab` artifact from the workflow run.
+1. The first `.aab` is already built: `C:\Users\JESHEEBA\wasi-android-signing\builds\wasi-1.0-vc1.aab`.
+2. Later releases: raise `versionCode`, then build locally or via the GitHub Action
+   (`KEYSTORE_SETUP.md`).
 4. Play Console > **Release > Testing > Closed testing** (or Production, if your account
    doesn't need the closed-testing gate) > **Create new release** > upload the `.aab`.
 5. Add release notes (e.g. "Initial release").

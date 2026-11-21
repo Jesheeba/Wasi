@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(play-store): signed release build, real privacy policy, deletion page
+Closed the repo-side blockers for the Play Store submission. Upload key generated
+outside the repo (Play App Signing makes it resettable, so the old "unrecoverable"
+warning was wrong and is corrected); first signed .aab built and jarsigner-verified
+locally. marketing/privacy.html replaced (was placeholder) with a policy matching the
+real processors (Meta, Supabase, Render, Resend, Razorpay), the Android app's single
+permission, DPDP rights and retention. New marketing/delete-account.html for Play's
+account-deletion URL requirement. Listing graphics in mobile/store-listing/. Still
+manual: screenshots, Play Console steps, legal review.
+
 ## fix(templates): verify button/shop-link URLs before submission
 Reported directly: discovering a dead/malformed button URL only after the
 full Meta submission round trip (create, wait, 502) was too slow to

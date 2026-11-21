@@ -27,16 +27,17 @@ mobile/
   www/                    - local fallback page only, shown if the remote URL can't be reached
   resources/              - source icon/splash images (from img/wasi-mark-512.png)
   android/                - generated native Android project (Gradle)
-  KEYSTORE_SETUP.md        - one-time signing key setup (you must do this, not me - see why inside)
+  store-listing/          - Play listing graphics (512 icon, 1024x500 feature graphic)
+  KEYSTORE_SETUP.md        - upload key location, local + CI signed builds
   PLAY_STORE_SETUP.md      - the full Play Console checklist (account, listing, data safety, etc.)
 ```
 
 ## Local development
 
-Building/running the Android project needs Android Studio (which bundles a JDK) or a
-standalone JDK 21 + Android SDK command-line tools — neither is installed on this
-machine, so builds run via the GitHub Actions workflow
-(`.github/workflows/android-release.yml`) by default.
+Android Studio (bundled JDK 21) and the Android SDK are installed on the dev machine, so
+signed release builds run locally (see `KEYSTORE_SETUP.md`). The GitHub Actions workflow
+(`.github/workflows/android-release.yml`) is an optional alternative once its secrets are
+set.
 
 If you install Android Studio and want to run it locally:
 
