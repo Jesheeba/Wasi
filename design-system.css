@@ -261,6 +261,16 @@ textarea.form-input { font-family: inherit; min-height: 110px; line-height: 1.5;
 .settings-section-heading { font-size: var(--fs-card); font-weight: 600; color: var(--text); margin: 0 0 var(--sp-3); }
 .list-row-amount { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .plan-summary { margin-bottom: var(--sp-5); }
+.connect-steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: var(--sp-4); }
+.connect-steps li { counter-increment: step; position: relative; padding-left: 44px; color: var(--text-muted); font-size: var(--fs-body); line-height: 1.5; }
+.connect-steps li strong { display: block; color: var(--text); }
+.connect-steps li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-dark); font-weight: 700; display: grid; place-items: center; }
+.webhook-status-card { align-items: flex-start; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: 0; }
+.webhook-status-card .channel-info-left { min-width: 0; flex: 1; }
+.webhook-status-main { min-width: 0; }
+.webhook-status-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; font-family: var(--font-mono); }
+.webhook-event-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2); }
+.webhook-status-actions { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
 .canned-row { align-items: flex-start; }
 .canned-row-preview { margin-top: var(--sp-2); padding: 10px; max-width: 560px; }
 .canned-row-preview .wa-bubble { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }

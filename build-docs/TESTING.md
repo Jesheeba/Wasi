@@ -1,6 +1,6 @@
 # Testing
 
-## settings-forms-admin-redesign (steps 1-3)
+## settings-forms-admin-redesign (steps 1-4)
 `server/test/settingsRedesign.test.js` (Playwright, :4000, local embedded
 Postgres via TEST_DATABASE_URL, disposable client deleted in after()):
 tags inline add saves the chosen colour and never opens the modal (AC4);
@@ -10,7 +10,12 @@ as `number` (the 400 fix, AC8); 375px no overflow + full-width drawer
 (AC9). Step 3: wallet chips set amount + aria-pressed, quick recharge
 POSTs {amount_inr} through the existing form (AC2); all plans rendered,
 Choose pre-selects in checkout (AC3); billing tiles + empty state. 375px
-check covers all six sections. 8/8 pass. Regression: chatUiPass 15/15 (needs JWT_SECRET set; it
+check covers all nine sections. Step 4: invite POSTs the role picked from
+the cards (Agent), row + tiles update; webhook form-when-unset, secret stays
+visible after first save, summary after reload, Edit/Cancel restores; not-
+connected WhatsApp shows the guide with tabs hidden. 11/11 pass. Message
+Link builder not browser-tested (needs a connected WABA locally).
+chatUiPass re-run 15/15. Regression: chatUiPass 15/15 (needs JWT_SECRET set; it
 doesn't load .env), confirmPromptGroup23 + modalInnerScrollGroup4 pass.
 errorDialogUI test 2 fails identically on the pre-change tree (it predates
 the template type picker, 88bc697) - stale test, not a regression.

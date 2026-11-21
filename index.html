@@ -1246,16 +1246,22 @@
                     <button class="btn-primary btn-auto" id="open-invite-member-modal"><i data-lucide="user-plus"></i> Invite Member</button>
                   </div>
                 </div>
-                <div class="table-card">
-                  <table class="data-table stack-mobile">
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
-                    <tbody id="team-table-body">
-                      <tr class="analytics-state-row"><td colspan="4" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
-                    </tbody>
-                  </table>
+                <div class="stat-tiles" id="team-stats" aria-live="polite"></div>
+                <div class="settings-split">
+                  <div class="list-card" id="team-table-body" aria-live="polite">
+                    <div class="list-row"><span class="skeleton analytics-skeleton"></span></div>
+                  </div>
+                  <aside class="side-note">
+                    <h3><i data-lucide="users"></i> Roles at a glance</h3>
+                    <ul>
+                      <li><strong>Owner</strong> - you. Always has full access.</li>
+                      <li><strong>Admin / Manager</strong> - full access to every area.</li>
+                      <li><strong>Agent</strong> - chats and contacts only.</li>
+                    </ul>
+                    <p>Invited people get an email to set their password, then log in with "Log in as a team member".</p>
+                  </aside>
                 </div>
               </div>
-
               <!-- WALLET -->
               <div id="sec-view-wallet" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
@@ -1578,42 +1584,54 @@
                     <p class="page-subtitle">Receive WhatsApp events at your own endpoint</p>
                   </div>
                 </div>
-                <div class="profile-form-card settings-card-narrow">
-                  <div class="form-section">
-                    <div class="form-section-eyebrow">1 · Endpoint</div>
-                    <div class="form-group">
-                      <label class="form-label" for="webhook-url-input">Webhook URL</label>
-                      <input type="url" class="form-input" id="webhook-url-input" placeholder="https://your-server.example.com/webhook" />
-                    </div>
-                  </div>
-
-                  <div class="form-section-connector" aria-hidden="true"><span class="form-section-connector-line"></span><i data-lucide="arrow-down" class="icon-14"></i></div>
-
-                  <div class="form-section">
-                    <div class="form-section-eyebrow">2 · Events to send</div>
-                    <fieldset id="webhook-events-fieldset" class="hub-event-list webhook-events-fieldset">
-                      <legend class="sr-only">Events to send to your endpoint</legend>
-                    </fieldset>
-                    <div class="form-hint">Pick at least one. Only the events you check here are sent to your URL.</div>
-                  </div>
-
-                  <div class="form-section">
-                    <div class="form-section-eyebrow">3 · Signing secret</div>
-                    <div class="form-group">
-                      <label class="form-label" for="webhook-secret-display">Verify the <code>x-wasi-signature-256</code> header with this</label>
-                      <div class="settings-inline-row">
-                        <input type="text" class="form-input settings-mono" id="webhook-secret-display" readonly value="Save a URL to generate one" />
-                        <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="copy-webhook-secret-btn" aria-label="Copy signing secret" hidden><i data-lucide="copy"></i></button>
-                        <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="regenerate-webhook-secret-btn" title="Regenerate secret" aria-label="Regenerate signing secret" hidden><i data-lucide="refresh-cw"></i></button>
+                <div class="settings-split">
+                  <div>
+                    <div class="channel-status-card webhook-status-card" id="webhook-status-card" hidden></div>
+                    <div class="profile-form-card" id="webhook-form-card">
+                      <div class="form-section">
+                        <div class="form-section-eyebrow">1 · Endpoint</div>
+                        <div class="form-group">
+                          <label class="form-label" for="webhook-url-input">Webhook URL</label>
+                          <input type="url" class="form-input" id="webhook-url-input" placeholder="https://your-server.example.com/webhook" />
+                        </div>
                       </div>
-                      <div id="webhook-secret-hint" class="form-hint"></div>
+                      <div class="form-section-connector" aria-hidden="true"><span class="form-section-connector-line"></span><i data-lucide="arrow-down" class="icon-14"></i></div>
+                      <div class="form-section">
+                        <div class="form-section-eyebrow">2 · Events to send</div>
+                        <fieldset id="webhook-events-fieldset" class="hub-event-list webhook-events-fieldset">
+                          <legend class="sr-only">Events to send to your endpoint</legend>
+                        </fieldset>
+                        <div class="form-hint">Pick at least one. Only the events you check here are sent to your URL.</div>
+                      </div>
+                      <div class="form-section">
+                        <div class="form-section-eyebrow">3 · Signing secret</div>
+                        <div class="form-group">
+                          <label class="form-label" for="webhook-secret-display">Verify the <code>x-wasi-signature-256</code> header with this</label>
+                          <div class="settings-inline-row">
+                            <input type="text" class="form-input settings-mono" id="webhook-secret-display" readonly value="Save a URL to generate one" />
+                            <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="copy-webhook-secret-btn" aria-label="Copy signing secret" hidden><i data-lucide="copy"></i></button>
+                            <button type="button" class="btn-secondary btn-auto settings-icon-btn" id="regenerate-webhook-secret-btn" title="Regenerate secret" aria-label="Regenerate signing secret" hidden><i data-lucide="refresh-cw"></i></button>
+                          </div>
+                          <div id="webhook-secret-hint" class="form-hint"></div>
+                        </div>
+                      </div>
+                      <div class="settings-inline-row">
+                        <button class="btn-primary btn-auto" id="save-webhook-btn">Save Webhook</button>
+                        <button type="button" class="btn-secondary btn-auto" id="cancel-webhook-edit-btn" hidden>Cancel</button>
+                      </div>
                     </div>
                   </div>
-
-                  <div class="settings-inline-row"><button class="btn-primary btn-auto" id="save-webhook-btn">Save Webhook</button></div>
+                  <aside class="side-note">
+                    <h3><i data-lucide="webhook"></i> How deliveries work</h3>
+                    <ul>
+                      <li>Wasi sends a <code>POST</code> with a JSON body for each event you pick.</li>
+                      <li>Each request is signed. Check <code>x-wasi-signature-256</code> with your secret before trusting it.</li>
+                      <li>If your endpoint is down, delivery is retried automatically with growing delays.</li>
+                    </ul>
+                    <p>Payload examples are in <strong>Developer / API</strong>.</p>
+                  </aside>
                 </div>
               </div>
-
               <!-- BILLING -->
               <div id="sec-view-billing" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
@@ -2256,28 +2274,36 @@
       </form>
     </div>
   </div>
-  <div id="modal-invite-member" class="modal-overlay">
+  <div id="modal-invite-member" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">Invite Member</h3>
+        <div>
+          <h3 class="modal-title">Invite Member</h3>
+          <p class="modal-subtitle">They'll get an email to set a password</p>
+        </div>
         <button class="close-modal-btn" data-close-modal="modal-invite-member"><i data-lucide="x"></i></button>
       </div>
       <form id="invite-member-form">
-        <div class="form-group">
-          <label class="form-label">Full Name</label>
-          <input type="text" id="new-member-name" class="form-input" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email</label>
-          <input type="email" id="new-member-email" class="form-input" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Role</label>
-          <select id="new-member-role" class="form-input">
-            <option value="Manager">Manager</option>
-            <option value="Agent">Agent</option>
-            <option value="Admin">Admin</option>
-          </select>
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="drawer-section-title">Who</div>
+            <div class="form-group">
+              <label class="form-label" for="new-member-name">Full name</label>
+              <input type="text" id="new-member-name" class="form-input" placeholder="e.g. Priya Raman" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-member-email">Work email</label>
+              <input type="email" id="new-member-email" class="form-input" placeholder="priya@yourbusiness.com" required autocomplete="off" />
+            </div>
+          </div>
+          <div class="drawer-section">
+            <fieldset class="option-cards stacked">
+              <legend class="drawer-section-title">Role</legend>
+              <label class="option-card"><input type="radio" name="new-member-role" value="Admin"><span class="option-card-body"><span class="option-card-title"><i data-lucide="shield-check"></i> Admin</span><span class="option-card-desc">Everything: inbox, contacts, campaigns, templates, automation, analytics and workspace settings.</span></span></label>
+              <label class="option-card"><input type="radio" name="new-member-role" value="Manager" checked><span class="option-card-body"><span class="option-card-title"><i data-lucide="briefcase"></i> Manager</span><span class="option-card-desc">Same access as Admin today. Use it to tell team leads apart.</span></span></label>
+              <label class="option-card"><input type="radio" name="new-member-role" value="Agent"><span class="option-card-body"><span class="option-card-title"><i data-lucide="headset"></i> Agent</span><span class="option-card-desc">Chats and contacts only. Can't run campaigns, edit automation, see analytics or change settings.</span></span></label>
+            </fieldset>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-invite-member">Cancel</button>

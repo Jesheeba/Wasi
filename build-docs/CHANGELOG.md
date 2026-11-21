@@ -1,5 +1,16 @@
 # Changelog
 
+## feat(settings-redesign): Team, WhatsApp, Webhook
+Step 4. Team: member/active/pending tiles, member rows with initials, a
+roles side note; Invite is a drawer with role cards whose descriptions match
+the real route gating (Admin and Manager have identical access today - no
+route is Admin-only - so the copy says so). WhatsApp, not connected: one
+"how connecting works" guide + "before you start" checklist instead of three
+tabs that all said "connect first". Message Link: pre-filled message
+builder, Copy and Test. Webhook: read-only summary (URL, event chips, Edit)
+once configured; Cancel restores the saved values; after a save that
+reveals a new one-time secret the form stays open so it can be copied.
+
 ## feat(settings-redesign): Wallet, Subscription, Billing
 Step 3. Wallet: summary tiles (added this month, pending top-ups, last
 recharge) and the recent top-up list from the ledger GET /api/wallet always

@@ -137,7 +137,7 @@ test('attribute: drawer saves with a lowercase type (was a 400 on every save)', 
 
 test('375px: redesigned sections and drawers have no horizontal overflow', async () => {
   const page = await openSettings(375);
-  for (const s of ['tags', 'canned-responses', 'attributes', 'wallet', 'subscription', 'billing']) {
+  for (const s of ['tags', 'canned-responses', 'attributes', 'wallet', 'subscription', 'billing', 'team', 'webhook', 'whatsapp']) {
     await goSection(page, s);
     await page.waitForTimeout(500);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${s} overflows`);
@@ -184,5 +184,58 @@ test('billing: summary tiles render above the invoice table', async () => {
   await page.waitForFunction(() => document.querySelectorAll('#billing-stats .stat-tile').length === 3);
   assert.match(await page.textContent('#billing-stats'), /Invoices\s*0/);
   assert.match(await page.textContent('#billing-invoices-body'), /No invoices yet/);
+  await page.close();
+});
+
+test('team: invite drawer sends the role picked from the role cards; member row + tiles appear', async () => {
+  const page = await openSettings();
+  await goSection(page, 'team');
+  await page.waitForFunction(() => document.querySelectorAll('#team-stats .stat-tile').length === 3);
+  await page.click('#open-invite-member-modal');
+  assert.ok(await page.evaluate(() => document.getElementById('modal-invite-member').classList.contains('as-drawer')));
+  await page.fill('#new-member-name', 'Suite Agent');
+  await page.fill('#new-member-email', `agent-${Date.now()}@wasi.local`);
+  await page.click('label.option-card:has(input[value="Agent"])');
+  const req = page.waitForRequest((r) => r.url().endsWith('/api/team-members') && r.method() === 'POST');
+  await page.click('#invite-member-form button[type="submit"]');
+  assert.equal(JSON.parse((await req).postData()).role, 'Agent');
+  await page.waitForFunction(() => document.getElementById('team-table-body').textContent.includes('Suite Agent'));
+  assert.match(await page.textContent('#team-table-body'), /Agent[\s\S]*Invited/);
+  assert.match(await page.textContent('#team-stats'), /Invites pending\s*1/);
+  await page.close();
+});
+
+test('webhook: form when unset; after save the new secret stays visible; reload shows summary; Edit/Cancel toggle', async () => {
+  const page = await openSettings();
+  await goSection(page, 'webhook');
+  await page.waitForTimeout(800);
+  assert.equal(await page.isVisible('#webhook-form-card'), true);
+  assert.equal(await page.isVisible('#webhook-status-card'), false);
+  await page.fill('#webhook-url-input', 'https://example.com/suite-hook');
+  await page.click('#save-webhook-btn');
+  await page.waitForFunction(() => /copy it now/.test(document.getElementById('webhook-secret-hint').textContent));
+  assert.equal(await page.isVisible('#webhook-form-card'), true, 'stays on the form so the one-time secret can be copied');
+  await page.close();
+
+  const again = await openSettings();
+  await goSection(again, 'webhook');
+  await again.waitForFunction(() => !document.getElementById('webhook-status-card').hidden);
+  assert.equal(await again.isVisible('#webhook-form-card'), false);
+  assert.match(await again.textContent('#webhook-status-card'), /Sending 4 events[\s\S]*suite-hook/);
+  await again.click('#edit-webhook-btn');
+  assert.equal(await again.isVisible('#webhook-form-card'), true);
+  await again.fill('#webhook-url-input', 'https://example.com/changed-but-cancelled');
+  await again.click('#cancel-webhook-edit-btn');
+  assert.equal(await again.isVisible('#webhook-status-card'), true);
+  assert.equal(await again.inputValue('#webhook-url-input'), 'https://example.com/suite-hook', 'cancel restores the saved URL');
+  await again.close();
+});
+
+test('whatsapp (not connected): one connect guide instead of three empty tabs', async () => {
+  const page = await openSettings();
+  await goSection(page, 'whatsapp');
+  await page.waitForFunction(() => document.querySelectorAll('#whatsapp-profile-content .connect-steps li').length === 3);
+  assert.equal(await page.isVisible('#sec-view-whatsapp .inner-tabs-list'), false);
+  assert.equal(await page.isVisible('#settings-connect-wa-btn'), true);
   await page.close();
 });

@@ -7020,19 +7020,39 @@ document.addEventListener('DOMContentLoaded', () => {
       // shows up in either picker until the next full session refresh.
       state.teamMembers = await authFetch('/api/team-members');
     } catch (err) {
-      tbody.innerHTML = analyticsErrorRow(4, err.message || 'Couldn’t load your team.', 'team-load-retry');
+      tbody.innerHTML = `<div class="error-state"><div>${esc(err.message || 'Couldn’t load your team.')}</div><button type="button" class="btn-secondary btn-sm" id="team-load-retry">Try again</button></div>`;
       document.getElementById('team-load-retry')?.addEventListener('click', renderTeamTable);
       return;
     }
-    tbody.innerHTML = state.teamMembers.length ? state.teamMembers.map(m => `
-      <tr>
-        <td data-label="Name" class="analytics-name">${esc(m.name)}</td>
-        <td data-label="Email">${esc(m.email)}</td>
-        <td data-label="Role"><span class="badge badge-neutral">${esc(m.role)}</span></td>
-        <td data-label="Status"><span class="badge ${m.status === 'active' ? 'badge-success' : 'badge-warning'}">${m.status === 'active' ? 'Active' : 'Invited'}</span></td>
-      </tr>
-    `).join('') : analyticsEmptyRow(4, 'No team members yet', 'Invite a teammate to share the inbox.');
+    const members = state.teamMembers;
+    const active = members.filter((m) => m.status === 'active').length;
+    const statsEl = document.getElementById('team-stats');
+    if (statsEl) statsEl.innerHTML = [
+      statTile('users', 'Members', String(members.length)),
+      statTile('user-check', 'Active', String(active)),
+      statTile('mail', 'Invites pending', String(members.length - active), members.length - active ? 'Waiting for them to set a password' : ''),
+    ].join('');
+    tbody.innerHTML = members.length ? members.map((m) => `
+      <div class="list-row">
+        <span class="avatar-initials" aria-hidden="true">${esc(initials(m.name))}</span>
+        <div class="list-row-main">
+          <div class="list-row-title">${esc(m.name)}</div>
+          <div class="list-row-sub">${esc(m.email)}</div>
+        </div>
+        <span class="badge badge-neutral">${esc(m.role)}</span>
+        <span class="badge ${m.status === 'active' ? 'badge-success' : 'badge-warning'}">${m.status === 'active' ? 'Active' : 'Invited'}</span>
+      </div>
+    `).join('') : `<div class="empty-state">
+        <i data-lucide="users" class="empty-icon"></i>
+        <div class="empty-title">It's just you for now</div>
+        <div>Invite teammates so you can share the inbox and assign chats.</div>
+        ${state.actorRole !== 'Agent' ? '<button type="button" class="btn-primary btn-auto" id="team-empty-invite">Invite a teammate</button>' : ''}
+      </div>`;
+    if (window.lucide) lucide.createIcons();
+    document.getElementById('team-empty-invite')?.addEventListener('click', () => document.getElementById('open-invite-member-modal')?.click());
   }
+
+  const initials = (name) => String(name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   document.getElementById('open-invite-member-modal')?.addEventListener('click', () => {
     document.getElementById('modal-invite-member')?.classList.add('open');
@@ -7042,7 +7062,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const name = document.getElementById('new-member-name').value.trim();
     const email = document.getElementById('new-member-email').value.trim();
-    const role = document.getElementById('new-member-role').value;
+    const role = e.target.querySelector('input[name="new-member-role"]:checked')?.value || 'Manager';
     if (!name || !email) return;
 
     const restoreSubmit = withSubmitLoading(e.target, 'Inviting…');
@@ -8164,13 +8184,61 @@ document.addEventListener('DOMContentLoaded', () => {
         urlInput.value = webhook.callback_url || '';
         renderWebhookSecretField(webhook, null);
         renderWebhookEventsFieldset(webhook.events || []);
+        setWebhookMode('read', webhook);
       } else {
         renderWebhookEventsFieldset([]);
+        setWebhookMode('edit', null);
       }
     } catch (err) {
       reportError(err);
     }
   }
+
+  // Configured webhook: show a read-only summary first; Edit reveals the
+  // unchanged form. Unconfigured: the form is the page.
+  let lastSavedWebhook = null;
+  function setWebhookMode(mode, webhook) {
+    const card = document.getElementById('webhook-status-card');
+    const form = document.getElementById('webhook-form-card');
+    const cancel = document.getElementById('cancel-webhook-edit-btn');
+    if (!card || !form) return;
+    if (webhook) lastSavedWebhook = webhook;
+    const saved = lastSavedWebhook;
+    if (cancel) cancel.hidden = !(mode === 'edit' && saved);
+    if (mode === 'read' && saved) {
+      const labels = CLIENT_WEBHOOK_EVENTS.filter((e) => (saved.events || []).includes(e.value)).map((e) => e.label.split(' (')[0]);
+      card.innerHTML = `
+        <div class="channel-info-left">
+          <div class="wa-icon-circle"><i data-lucide="webhook"></i></div>
+          <div class="webhook-status-main">
+            <div class="channel-name">Sending ${labels.length} event${labels.length === 1 ? '' : 's'}</div>
+            <div class="channel-meta webhook-status-url" title="${attrEscape(saved.callback_url)}">${esc(saved.callback_url)}</div>
+            <div class="webhook-event-chips">${labels.map((l) => `<span class="badge badge-neutral">${esc(l)}</span>`).join('')}</div>
+          </div>
+        </div>
+        <div class="webhook-status-actions">
+          <span class="badge badge-success">Active</span>
+          <button type="button" class="btn-secondary btn-auto" id="edit-webhook-btn"><i data-lucide="pencil" class="icon-14"></i> Edit</button>
+        </div>`;
+      card.hidden = false;
+      form.hidden = true;
+      if (window.lucide) lucide.createIcons();
+      document.getElementById('edit-webhook-btn')?.addEventListener('click', () => {
+        setWebhookMode('edit');
+        document.getElementById('webhook-url-input')?.focus();
+      });
+    } else {
+      card.hidden = true;
+      form.hidden = false;
+    }
+  }
+  document.getElementById('cancel-webhook-edit-btn')?.addEventListener('click', () => {
+    if (!lastSavedWebhook) return;
+    document.getElementById('webhook-url-input').value = lastSavedWebhook.callback_url || '';
+    renderWebhookEventsFieldset(lastSavedWebhook.events || []);
+    renderWebhookSecretField(lastSavedWebhook, null);
+    setWebhookMode('read');
+  });
 
   function regenerateWebhookSecret() {
     showConfirm({
@@ -8201,6 +8269,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // the masked form (see server/src/routes/clientWebhook.js).
       renderWebhookSecretField(saved, saved.secret || null);
       renderWebhookEventsFieldset(saved.events || events);
+      // A freshly generated secret is only shown in the form, once - stay
+      // there so it can be copied; otherwise go back to the summary.
+      lastSavedWebhook = saved;
+      setWebhookMode(saved.secret ? 'edit' : 'read');
       showToast('Webhook settings saved');
     } catch (err) {
       reportError(err);
@@ -8643,10 +8715,37 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!profileEl && !linkEl && !settingsEl) return;
 
     const waba = status && status.connected ? status.waba : null;
+    // Profile / Message Link / Settings tabs only mean something once a
+    // number is connected; before that, one guide replaces three panels
+    // that all said "connect first".
+    const tabsEl = document.querySelector('#sec-view-whatsapp .inner-tabs-list');
+    if (tabsEl) tabsEl.hidden = !waba;
 
     if (!waba) {
       const notConnected = '<p class="settings-muted">Connect a WhatsApp number above to see its profile here.</p>';
-      if (profileEl) profileEl.innerHTML = notConnected;
+      if (profileEl) {
+        document.querySelector('#sec-view-whatsapp .inner-tab-btn[data-inner-tab="profile"]')?.click();
+        profileEl.innerHTML = `
+          <div class="settings-split">
+            <div class="profile-form-card">
+              <h3 class="settings-card-title">How connecting works</h3>
+              <ol class="connect-steps">
+                <li><strong>Click Connect WhatsApp.</strong> A Facebook window opens - log in with the account that manages your business.</li>
+                <li><strong>Pick your business and number.</strong> Use a number already on the WhatsApp Business app, or a new one that can receive an SMS or call.</li>
+                <li><strong>Finish in the window.</strong> We set up messaging and sync your templates. It usually takes under a minute.</li>
+              </ol>
+            </div>
+            <aside class="side-note">
+              <h3><i data-lucide="list-checks"></i> Before you start</h3>
+              <ul>
+                <li>Admin access to your Meta (Facebook) Business account.</li>
+                <li>The phone with the number you want to use, nearby.</li>
+                <li>If another provider manages this number, release it there first.</li>
+              </ul>
+            </aside>
+          </div>`;
+        if (window.lucide) lucide.createIcons();
+      }
       if (linkEl) linkEl.innerHTML = notConnected;
       if (settingsEl) settingsEl.innerHTML = notConnected;
       return;
@@ -8664,12 +8763,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (linkEl) {
       linkEl.innerHTML = phone
         ? `
+          <h3 class="settings-card-title">Click-to-chat link</h3>
+          <p class="settings-help">Put this on your website, Instagram bio or a QR code. Tapping it opens a WhatsApp chat with you.</p>
           <div class="form-group">
-            <label class="form-label">Click-to-Chat Link</label>
-            <input type="text" class="form-input" readonly value="https://wa.me/${attrEscape(phone.replace(/[^\d]/g, ''))}" />
+            <label class="form-label" for="wa-link-message">Pre-filled message (optional)</label>
+            <input type="text" class="form-input" id="wa-link-message" maxlength="200" placeholder="Hi, I'd like to know more" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="wa-link-output">Your link</label>
+            <div class="settings-inline-row">
+              <input type="text" class="form-input settings-mono" id="wa-link-output" readonly />
+              <button type="button" class="btn-secondary btn-auto" id="wa-link-copy"><i data-lucide="copy" class="icon-14"></i> Copy</button>
+              <a class="btn-secondary btn-auto" id="wa-link-open" target="_blank" rel="noopener">Test</a>
+            </div>
           </div>
         `
         : '<p class="settings-muted">Dialable phone number not available yet - reconnect this WhatsApp number to fetch it.</p>';
+      if (phone) {
+        const digits = phone.replace(/[^\d]/g, '');
+        const out = document.getElementById('wa-link-output');
+        const msg = document.getElementById('wa-link-message');
+        const update = () => {
+          const text = msg.value.trim();
+          const link = `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+          out.value = link;
+          document.getElementById('wa-link-open').href = link;
+        };
+        msg.addEventListener('input', update);
+        update();
+        document.getElementById('wa-link-copy').addEventListener('click', () => {
+          navigator.clipboard.writeText(out.value)
+            .then(() => showToast('Link copied', 'success'))
+            .catch(() => showToast('Could not copy - clipboard permission denied'));
+        });
+        if (window.lucide) lucide.createIcons();
+      }
     }
 
     if (settingsEl) {
