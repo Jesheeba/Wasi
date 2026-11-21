@@ -1665,20 +1665,36 @@
   </div>
 
   <!-- MODALS -->
-  <div id="modal-add-contact" class="modal-overlay">
+  <div id="modal-add-contact" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">Add New Contact</h3>
+        <div>
+          <h3 class="modal-title">Add New Contact</h3>
+          <p class="modal-subtitle">Save someone you'll message on WhatsApp</p>
+        </div>
         <button class="close-modal-btn" data-close-modal="modal-add-contact"><i data-lucide="x"></i></button>
       </div>
       <form id="add-contact-form">
-        <div class="form-group">
-          <label class="form-label">Full Name</label>
-          <input type="text" id="new-contact-name" class="form-input" placeholder="e.g. Rahul Sharma" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Phone Number</label>
-          <input type="text" id="new-contact-phone" class="form-input" placeholder="+91 9876543210" required />
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="new-contact-name">Full name</label>
+              <input type="text" id="new-contact-name" class="form-input" placeholder="e.g. Rahul Sharma" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-contact-phone">WhatsApp number</label>
+              <input type="tel" id="new-contact-phone" class="form-input" placeholder="+91 98765 43210" required autocomplete="off" aria-describedby="new-contact-phone-hint" />
+              <div class="form-hint" id="new-contact-phone-hint">Include the country code. Spaces and dashes are fine.</div>
+            </div>
+          </div>
+          <div class="side-note">
+            <h3><i data-lucide="info"></i> Good to know</h3>
+            <ul>
+              <li>Adding a contact doesn't message them.</li>
+              <li>Marketing templates need the contact's opt-in. You can record it from their profile.</li>
+              <li>Adding many people? Use <strong>Import CSV</strong> on the Contacts page.</li>
+            </ul>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-contact">Cancel</button>
@@ -1687,7 +1703,6 @@
       </form>
     </div>
   </div>
-
   <!-- PLAN.md item 8.5 - Contacts-view contact detail panel. Reuses the
        exact same tags/attributes markup shape (and JS render functions,
        renderContactTagsInto/renderContactAttributesInto in app.js) as the
@@ -1696,20 +1711,35 @@
        second implementation. contacts.tag_id (the primary tag) has no UI
        here either, by explicit decision - this panel only ever shows what
        items 7/8 already built. -->
-  <div id="modal-create-ticket" class="modal-overlay">
+  <div id="modal-create-ticket" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">New Support Ticket</h3>
+        <div>
+          <h3 class="modal-title">New Support Ticket</h3>
+          <p class="modal-subtitle">Tell the Wasi team what's going wrong</p>
+        </div>
         <button class="close-modal-btn" data-close-modal="modal-create-ticket"><i data-lucide="x"></i></button>
       </div>
       <form id="create-ticket-form">
-        <div class="form-group">
-          <label class="form-label">Subject</label>
-          <input type="text" id="new-ticket-subject" class="form-input" placeholder="e.g. Broadcast failing to send" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Message</label>
-          <textarea id="new-ticket-message" class="form-input" rows="4" placeholder="Describe the issue…" required></textarea>
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="new-ticket-subject">Subject</label>
+              <input type="text" id="new-ticket-subject" class="form-input" placeholder="e.g. Broadcast failing to send" maxlength="150" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-ticket-message">What happened?</label>
+              <textarea id="new-ticket-message" class="form-input" rows="7" placeholder="Describe the issue…" required></textarea>
+            </div>
+          </div>
+          <div class="side-note">
+            <h3><i data-lucide="lightbulb"></i> Helps us fix it faster</h3>
+            <ul>
+              <li>What you were trying to do, and what happened instead.</li>
+              <li>The exact error text. The error dialog has a <strong>Copy details</strong> button.</li>
+              <li>The campaign, template or contact involved.</li>
+            </ul>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-ticket">Cancel</button>
@@ -1718,7 +1748,6 @@
       </form>
     </div>
   </div>
-
   <div id="modal-create-campaign" class="modal-overlay">
     <div class="modal-box modal-box-wide campaign-wizard" role="dialog" aria-modal="true" aria-labelledby="campaign-wizard-title">
       <div class="modal-header">
@@ -2348,27 +2377,32 @@
       </form>
     </div>
   </div>
-  <div id="modal-create-payment" class="modal-overlay">
+  <div id="modal-create-payment" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">Create Payment Link</h3>
+        <div>
+          <h3 class="modal-title">Create Payment Link</h3>
+          <p class="modal-subtitle">A link your customer can pay from, in WhatsApp</p>
+        </div>
         <button class="close-modal-btn" data-close-modal="modal-create-payment"><i data-lucide="x"></i></button>
       </div>
       <form id="create-payment-form">
-        <div class="form-group">
-          <label class="form-label">Customer Name</label>
-          <input type="text" id="new-payment-customer" class="form-input" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Amount (₹)</label>
-          <input type="number" id="new-payment-amount" class="form-input" min="1" step="0.01" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Gateway</label>
-          <select id="new-payment-gateway" class="form-input">
-            <option value="Razorpay UPI">Razorpay UPI</option>
-            <option value="WhatsApp Pay">WhatsApp Pay</option>
-          </select>
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="new-payment-customer">Customer name</label>
+              <input type="text" id="new-payment-customer" class="form-input" placeholder="e.g. Rahul Sharma" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-payment-amount">Amount (₹)</label>
+              <input type="number" id="new-payment-amount" class="form-input" min="1" step="1" placeholder="e.g. 1500" required aria-describedby="new-payment-amount-hint" />
+              <div class="form-hint" id="new-payment-amount-hint">Whole rupees.</div>
+            </div>
+          </div>
+          <div class="side-note">
+            <h3><i data-lucide="shield-check"></i> How it's paid</h3>
+            <p>Links are created through Razorpay, so your customer can pay by UPI, card or netbanking. Paste the link into the chat to send it.</p>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-payment">Cancel</button>
@@ -2377,7 +2411,6 @@
       </form>
     </div>
   </div>
-
   <div id="modal-recharge-wallet" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
@@ -2425,7 +2458,7 @@
        field id, the kind-select's show/hide behaviour, and the submit
        handler in app.js are unchanged - this only reorganises markup
        around them. -->
-  <div id="modal-create-rule" class="modal-overlay">
+  <div id="modal-create-rule" class="modal-overlay as-drawer">
     <div class="modal-box modal-box-wide rule-form-modal" role="dialog" aria-modal="true" aria-labelledby="create-rule-title">
       <div class="modal-header">
         <div>
@@ -2435,6 +2468,7 @@
         <button class="close-modal-btn" data-close-modal="modal-create-rule" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
       <form id="create-rule-form">
+        <div class="drawer-content">
         <div class="form-section">
           <div class="form-section-eyebrow">Rule</div>
           <div class="form-group">
@@ -2477,6 +2511,7 @@
           </div>
         </div>
 
+        </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-rule">Cancel</button>
           <button type="submit" class="btn-primary btn-auto">Save Rule</button>

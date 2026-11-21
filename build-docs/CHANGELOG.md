@@ -1,5 +1,16 @@
 # Changelog
 
+## feat(settings-redesign): remaining pop-ups as drawers
+Step 5. Add Contact, New Support Ticket, Create Payment Link and Create
+Automation Rule open as right-hand drawers with helper text and a "good to
+know" note; Create Rule keeps its trigger/action form unchanged. Create
+Payment Link's Gateway dropdown (offering "WhatsApp Pay") was removed: its
+value was never sent and every link is created through Razorpay; the amount
+is whole rupees to match the rounding the handler already did.
+**Bug fixed:** the inner-tab handler toggled every `.inner-tab-panel` on the
+page, so picking a tab in Developer blanked WhatsApp's active panel and vice
+versa; now scoped to the clicked tab's own section.
+
 ## feat(settings-redesign): Team, WhatsApp, Webhook
 Step 4. Team: member/active/pending tiles, member rows with initials, a
 roles side note; Invite is a drawer with role cards whose descriptions match

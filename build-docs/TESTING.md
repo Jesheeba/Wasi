@@ -1,6 +1,6 @@
 # Testing
 
-## settings-forms-admin-redesign (steps 1-4)
+## settings-forms-admin-redesign (steps 1-5)
 `server/test/settingsRedesign.test.js` (Playwright, :4000, local embedded
 Postgres via TEST_DATABASE_URL, disposable client deleted in after()):
 tags inline add saves the chosen colour and never opens the modal (AC4);
@@ -15,7 +15,12 @@ the cards (Agent), row + tiles update; webhook form-when-unset, secret stays
 visible after first save, summary after reload, Edit/Cancel restores; not-
 connected WhatsApp shows the guide with tabs hidden. 11/11 pass. Message
 Link builder not browser-tested (needs a connected WABA locally).
-chatUiPass re-run 15/15. Regression: chatUiPass 15/15 (needs JWT_SECRET set; it
+chatUiPass re-run 15/15. Step 5: all 7 converted pop-ups are drawers; Add
+Contact 201s from the drawer, payment link POSTs the same body with no
+gateway field, Create Rule saves and lists. confirmPromptGroup23 caught a
+real regression (API-key button hidden) from the page-wide inner-tab
+handler; fixed + covered by the WhatsApp test. 12/12 + confirmPromptGroup23
++ modalInnerScrollGroup4 = 22/22. Regression: chatUiPass 15/15 (needs JWT_SECRET set; it
 doesn't load .env), confirmPromptGroup23 + modalInnerScrollGroup4 pass.
 errorDialogUI test 2 fails identically on the pre-change tree (it predates
 the template type picker, 88bc697) - stale test, not a regression.

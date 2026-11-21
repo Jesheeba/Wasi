@@ -237,5 +237,54 @@ test('whatsapp (not connected): one connect guide instead of three empty tabs', 
   await page.waitForFunction(() => document.querySelectorAll('#whatsapp-profile-content .connect-steps li').length === 3);
   assert.equal(await page.isVisible('#sec-view-whatsapp .inner-tabs-list'), false);
   assert.equal(await page.isVisible('#settings-connect-wa-btn'), true);
+  // Inner tabs are scoped per section: switching WhatsApp's tab must not
+  // blank Developer's active panel (it used to, page-wide).
+  await goSection(page, 'developer');
+  await page.waitForTimeout(400);
+  assert.equal(await page.isVisible('#new-api-key-btn'), true);
+  await page.click('#sec-view-developer .inner-tab-btn[data-inner-tab="dev-docs"]');
+  await goSection(page, 'whatsapp');
+  await page.waitForTimeout(400);
+  assert.equal(await page.isVisible('#whatsapp-profile-content .connect-steps'), true);
+  await page.close();
+});
+
+test('remaining pop-ups open as drawers and still submit the same requests', async () => {
+  const page = await openSettings();
+  const drawers = ['modal-add-contact', 'modal-create-ticket', 'modal-create-payment', 'modal-create-rule', 'modal-invite-member', 'modal-add-attribute', 'modal-add-canned-response'];
+  for (const id of drawers) {
+    assert.ok(await page.evaluate((i) => document.getElementById(i).classList.contains('as-drawer'), id), `${id} is a drawer`);
+  }
+
+  // Add Contact through the drawer.
+  await page.evaluate(() => { location.hash = 'contacts'; });
+  await page.waitForTimeout(800);
+  await page.evaluate(() => document.getElementById('modal-add-contact').classList.add('open'));
+  await page.fill('#new-contact-name', `${SUITE_PREFIX}contact`);
+  await page.fill('#new-contact-phone', `91900${String(Date.now()).slice(-7)}`);
+  const contactReq = page.waitForResponse((r) => r.url().endsWith('/api/contacts') && r.request().method() === 'POST');
+  await page.click('#add-contact-form button[type="submit"]');
+  assert.equal((await contactReq).status(), 201);
+
+  // Payment link: same body as before; the fake gateway <select> is gone.
+  assert.equal(await page.$('#new-payment-gateway'), null);
+  await page.evaluate(() => document.getElementById('modal-create-payment').classList.add('open'));
+  await page.fill('#new-payment-customer', 'Suite Customer');
+  await page.fill('#new-payment-amount', '1500');
+  const payReq = page.waitForRequest((r) => r.url().endsWith('/api/payment-links') && r.method() === 'POST');
+  await page.click('#create-payment-form button[type="submit"]');
+  assert.deepEqual(JSON.parse((await payReq).postData()), { title: 'Payment from Suite Customer', amount_inr: 1500 });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => document.querySelectorAll('.modal-overlay.open').forEach((o) => o.classList.remove('open')));
+
+  // Create Rule keeps its form and saves from the drawer.
+  await page.evaluate(() => { location.hash = 'automation'; });
+  await page.waitForTimeout(800);
+  await page.click('#open-create-rule-modal');
+  await page.fill('#new-rule-title', `${SUITE_PREFIX}rule`);
+  await page.fill('#new-rule-trigger', 'hours');
+  await page.fill('#new-rule-action', 'We are open 9 to 7.');
+  await page.click('#create-rule-form button[type="submit"]');
+  await page.waitForFunction((n) => document.getElementById('automation-rules-grid').textContent.includes(n), `${SUITE_PREFIX}rule`);
   await page.close();
 });

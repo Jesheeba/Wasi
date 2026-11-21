@@ -1,6 +1,6 @@
 # Settings, pop-up forms and admin redesign
 
-Status: **Approved 2026-11-21, in progress** (steps 1-4 done). Layout and visuals only: no API, DB, auth or
+Status: **Approved 2026-11-21, in progress** (steps 1-5 done). Layout and visuals only: no API, DB, auth or
 route changes (owner decision, 2026-11-21).
 
 ## Purpose

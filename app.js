@@ -7877,13 +7877,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const innerTabBtns = document.querySelectorAll('.inner-tab-btn');
   innerTabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      innerTabBtns.forEach(b => {
+      // Scoped to the button's own section: WhatsApp and Developer both use
+      // inner tabs, and toggling every panel on the page used to blank the
+      // other section's active panel.
+      const scope = btn.closest('.sec-content-view') || document;
+      scope.querySelectorAll('.inner-tab-btn').forEach(b => {
         const on = b === btn;
         b.classList.toggle('active', on);
         b.setAttribute('aria-selected', on ? 'true' : 'false');
         b.tabIndex = on ? 0 : -1;
       });
-      document.querySelectorAll('.inner-tab-panel').forEach(panel => {
+      scope.querySelectorAll('.inner-tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `inner-tab-${btn.dataset.innerTab}`);
       });
       refreshIcons();
