@@ -255,6 +255,12 @@ textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .modal-overlay.as-drawer .modal-box > form { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .modal-overlay.as-drawer .modal-header > div { min-width: 0; }
 textarea.form-input { font-family: inherit; min-height: 110px; line-height: 1.5; padding-top: 10px; }
+.settings-split .wallet-card { max-width: none; }
+.wallet-quick-recharge { gap: var(--sp-3); margin-bottom: var(--sp-5); }
+.wallet-quick-recharge .settings-inline-row .form-input { max-width: 200px; }
+.settings-section-heading { font-size: var(--fs-card); font-weight: 600; color: var(--text); margin: 0 0 var(--sp-3); }
+.list-row-amount { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.plan-summary { margin-bottom: var(--sp-5); }
 .canned-row { align-items: flex-start; }
 .canned-row-preview { margin-top: var(--sp-2); padding: 10px; max-width: 560px; }
 .canned-row-preview .wa-bubble { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }

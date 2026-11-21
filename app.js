@@ -7275,14 +7275,69 @@ document.addEventListener('DOMContentLoaded', () => {
   async function renderWallet() {
     const balanceEl = document.getElementById('wallet-balance-display');
     if (!balanceEl) return;
+    const statsEl = document.getElementById('wallet-stats');
+    const listEl = document.getElementById('wallet-transactions');
     try {
-      const { balance } = await authFetch('/api/wallet');
-      balanceEl.textContent = '₹ ' + Number(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+      const { balance, transactions = [] } = await authFetch('/api/wallet');
+      balanceEl.textContent = formatInr(balance);
+      // GET /api/wallet already returned the top-up ledger; it was never shown.
+      // Only top-ups exist in it - nothing records spending - so no "spent" tile.
+      const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+      const completed = transactions.filter((t) => t.status === 'completed');
+      const addedThisMonth = completed.filter((t) => new Date(t.created_at) >= monthStart).reduce((n, t) => n + Number(t.amount_inr), 0);
+      const pending = transactions.filter((t) => t.status === 'pending');
+      const last = completed[0];
+      if (statsEl) statsEl.innerHTML = [
+        statTile('calendar-plus', 'Added this month', formatInr(addedThisMonth)),
+        statTile('clock', 'Pending top-ups', String(pending.length), pending.length ? 'Waiting for payment confirmation' : ''),
+        statTile('receipt', 'Last recharge', last ? formatInr(last.amount_inr) : '—', last ? formatShortDate(last.created_at) : 'No top-ups yet'),
+      ].join('');
+      if (listEl) listEl.innerHTML = transactions.length ? transactions.slice(0, 10).map((t) => {
+        const style = WALLET_TXN_STYLE[t.status] || { cls: 'badge-neutral', label: t.status };
+        return `<div class="list-row">
+          <span class="list-row-icon" aria-hidden="true"><i data-lucide="arrow-down-left"></i></span>
+          <div class="list-row-main"><div class="list-row-title">Top-up</div><div class="list-row-sub">${esc(formatShortDate(t.created_at))}</div></div>
+          <span class="badge ${style.cls}">${esc(style.label)}</span>
+          <span class="list-row-amount">${esc(formatInr(t.amount_inr))}</span>
+        </div>`;
+      }).join('') : `<div class="empty-state"><i data-lucide="wallet" class="empty-icon"></i><div class="empty-title">No top-ups yet</div><div>Use Quick recharge above to add your first credit.</div></div>`;
+      if (window.lucide) lucide.createIcons();
     } catch (err) {
       balanceEl.textContent = '-';
-      reportError(err);
+      if (listEl) listEl.innerHTML = `<div class="error-state"><div>${esc(err.message || 'Couldn’t load your wallet.')}</div><button type="button" class="btn-secondary btn-sm" id="wallet-load-retry">Try again</button></div>`;
+      document.getElementById('wallet-load-retry')?.addEventListener('click', renderWallet);
     }
   }
+
+  const WALLET_TXN_STYLE = {
+    completed: { cls: 'badge-success', label: 'Completed' },
+    pending: { cls: 'badge-warning', label: 'Pending' },
+    failed: { cls: 'badge-danger', label: 'Failed' },
+  };
+  const formatInr = (n) => '₹ ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatShortDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  function statTile(icon, label, value, hint = '') {
+    return `<div class="stat-tile"><div class="stat-tile-label"><i data-lucide="${icon}"></i> ${esc(label)}</div><div class="stat-tile-value">${esc(value)}</div>${hint ? `<div class="stat-tile-hint">${esc(hint)}</div>` : ''}</div>`;
+  }
+
+  // Quick recharge: preset chips fill the amount; submitting reuses the
+  // existing recharge form's handler (same API call + Razorpay widget).
+  document.querySelectorAll('[data-recharge-amount]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('[data-recharge-amount]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      document.getElementById('wallet-quick-amount').value = chip.dataset.rechargeAmount;
+    });
+  });
+  document.getElementById('wallet-quick-amount')?.addEventListener('input', (e) => {
+    document.querySelectorAll('[data-recharge-amount]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.rechargeAmount === e.target.value)));
+  });
+  document.getElementById('wallet-quick-recharge')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat(document.getElementById('wallet-quick-amount').value));
+    if (!amount || amount < 1) return;
+    document.getElementById('recharge-amount').value = String(amount);
+    document.getElementById('recharge-wallet-form').requestSubmit();
+  });
 
   // Real GET /api/billing/subscription - was hardcoded fake "Pro Business
   // Plan" / Active regardless of whether the client had ever subscribed.
@@ -7303,27 +7358,45 @@ document.addEventListener('DOMContentLoaded', () => {
         authFetch('/api/billing/plans'),
       ]);
 
-      if (!subscription) {
-        container.innerHTML = `
-          <p class="settings-muted">No active subscription yet.</p>
-          <div><button class="btn-primary btn-auto" id="upgrade-subscription-btn">Choose a Plan</button></div>
-        `;
-      } else {
-        const plan = plans.find(p => p.id === subscription.plan);
-        const style = SUBSCRIPTION_STATUS_STYLE[subscription.status] || { cls: 'badge-neutral', label: subscription.status };
-        const limitText = plan?.conversation_limit == null ? 'Unlimited conversations/month' : `${Number(plan.conversation_limit).toLocaleString('en-IN')} conversations/month`;
-        container.innerHTML = `
+      const planName = (id) => String(id || '').replace(/^\w/, (c) => c.toUpperCase());
+      const limitText = (p) => (p?.conversation_limit == null ? 'Unlimited conversations a month' : `${Number(p.conversation_limit).toLocaleString('en-IN')} conversations a month`);
+      const current = subscription ? plans.find((p) => p.id === subscription.plan) : null;
+      const style = subscription ? (SUBSCRIPTION_STATUS_STYLE[subscription.status] || { cls: 'badge-neutral', label: subscription.status }) : null;
+      const summary = subscription ? `
+        <div class="profile-form-card plan-summary">
           <div class="settings-plan-head">
             <div>
-              <div class="settings-plan-name">${escapeHtml(subscription.plan)} Plan</div>
-              <div class="channel-meta">${plan ? `₹${esc(plan.price_inr)}/month · ${esc(limitText)}` : ''}</div>
+              <div class="channel-meta">Current plan</div>
+              <div class="settings-plan-name">${escapeHtml(planName(subscription.plan))} Plan</div>
+              <div class="channel-meta">${current ? `₹${esc(Number(current.price_inr).toLocaleString('en-IN'))}/month · ${esc(limitText(current))}` : ''}</div>
             </div>
             <span class="badge ${style.cls}">${escapeHtml(style.label)}</span>
           </div>
-          <div><button class="btn-primary btn-auto" id="upgrade-subscription-btn">Change Plan</button></div>
-        `;
-      }
-      document.getElementById('upgrade-subscription-btn')?.addEventListener('click', () => openChoosePlanModal(plans, subscription?.plan));
+        </div>` : `
+        <div class="alert alert-info plan-summary">You're not on a plan yet. Pick one below to start sending.</div>`;
+      // Every plan side by side (the list was previously only reachable
+      // behind "Change Plan"). Choosing one opens the existing checkout
+      // modal with that plan pre-selected, so coupons + payment are unchanged.
+      const cards = plans.map((p) => {
+        const isCurrent = subscription && p.id === subscription.plan && subscription.status === 'active';
+        return `
+        <div class="plan-card${isCurrent ? ' current' : ''}">
+          <div class="plan-card-name">${escapeHtml(planName(p.id))}${isCurrent ? '<span class="badge badge-success">Your plan</span>' : ''}</div>
+          <div class="plan-card-price">₹${esc(Number(p.price_inr).toLocaleString('en-IN'))}<small>/month</small></div>
+          <ul class="plan-card-features"><li><i data-lucide="check"></i> ${esc(limitText(p))}</li></ul>
+          ${isCurrent
+            ? '<button type="button" class="btn-secondary" disabled>Current plan</button>'
+            : `<button type="button" class="btn-primary" data-choose-plan="${escapeHtml(p.id)}">Choose ${escapeHtml(planName(p.id))}</button>`}
+        </div>`;
+      }).join('');
+      container.innerHTML = `${summary}
+        <h3 class="settings-section-heading">${subscription ? 'Compare plans' : 'Plans'}</h3>
+        <div class="plan-cards">${cards || '<div class="empty-state">No plans are available right now.</div>'}</div>`;
+      if (window.lucide) lucide.createIcons();
+      container.querySelectorAll('[data-choose-plan]').forEach((btn) => btn.addEventListener('click', () => {
+        openChoosePlanModal(plans, subscription?.plan);
+        document.querySelector(`#choose-plan-options .plan-option[data-plan-id="${CSS.escape(btn.dataset.choosePlan)}"]`)?.click();
+      }));
     } catch (err) {
       container.innerHTML = `<div class="settings-error"><span>${escapeHtml(err.message)}</span><button type="button" class="btn-secondary btn-sm" id="subscription-load-retry">Try again</button></div>`;
       document.getElementById('subscription-load-retry')?.addEventListener('click', renderSubscriptionTab);
@@ -7468,12 +7541,23 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = analyticsLoadingRow(5);
     try {
       const invoices = await authFetch('/api/billing/invoices');
+      const statsEl = document.getElementById('billing-stats');
+      if (statsEl) {
+        const paid = invoices.filter((i) => i.status === 'paid');
+        const lastPaid = paid[0]; // listByClientId returns newest first
+        statsEl.innerHTML = [
+          statTile('indian-rupee', 'Total paid', formatInr(paid.reduce((n, i) => n + Number(i.amount_inr), 0))),
+          statTile('file-text', 'Invoices', String(invoices.length)),
+          statTile('calendar-check', 'Last payment', lastPaid ? formatInr(lastPaid.amount_inr) : '—', lastPaid ? formatShortDate(lastPaid.created_at) : 'No payments yet'),
+        ].join('');
+        if (window.lucide) lucide.createIcons();
+      }
       tbody.innerHTML = invoices.length ? invoices.map(inv => {
         const style = INVOICE_STATUS_STYLE[inv.status] || { cls: 'badge-neutral', label: inv.status };
         return `
           <tr>
             <td data-label="Invoice" class="analytics-name">${escapeHtml(inv.id.slice(0, 8))}</td>
-            <td data-label="Date">${esc((inv.created_at || '').slice(0, 10))}</td>
+            <td data-label="Date">${esc(formatShortDate(inv.created_at))}</td>
             <td data-label="Plan">${escapeHtml(inv.plan)}</td>
             <td data-label="Amount">₹ ${esc(Number(inv.amount_inr).toLocaleString('en-IN', { minimumFractionDigits: 2 }))}</td>
             <td data-label="Status"><span class="badge ${style.cls}">${escapeHtml(style.label)}</span></td>

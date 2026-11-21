@@ -1264,30 +1264,60 @@
                     <p class="page-subtitle">Credit used for WhatsApp conversation charges</p>
                   </div>
                 </div>
-                <div class="wallet-card">
+                <div class="settings-split">
                   <div>
-                    <div class="wallet-label">Available credit balance</div>
-                    <div class="wallet-balance" id="wallet-balance-display"><span class="skeleton wallet-skeleton"></span></div>
+                    <div class="wallet-card">
+                      <div>
+                        <div class="wallet-label">Available credit balance</div>
+                        <div class="wallet-balance" id="wallet-balance-display"><span class="skeleton wallet-skeleton"></span></div>
+                      </div>
+                      <button class="btn-primary btn-auto wallet-recharge-btn" id="open-recharge-modal"><i data-lucide="plus"></i> Recharge Balance</button>
+                    </div>
+                    <div class="stat-tiles" id="wallet-stats" aria-live="polite"></div>
+                    <form class="profile-form-card wallet-quick-recharge" id="wallet-quick-recharge" aria-labelledby="wallet-quick-recharge-title">
+                      <h3 class="settings-card-title" id="wallet-quick-recharge-title">Quick recharge</h3>
+                      <div class="chip-row" role="group" aria-label="Preset amounts">
+                        <button type="button" class="chip-btn" data-recharge-amount="500" aria-pressed="false">₹500</button>
+                        <button type="button" class="chip-btn" data-recharge-amount="1000" aria-pressed="true">₹1,000</button>
+                        <button type="button" class="chip-btn" data-recharge-amount="2000" aria-pressed="false">₹2,000</button>
+                        <button type="button" class="chip-btn" data-recharge-amount="5000" aria-pressed="false">₹5,000</button>
+                      </div>
+                      <div class="settings-inline-row">
+                        <label class="sr-only" for="wallet-quick-amount">Amount in rupees</label>
+                        <input type="number" id="wallet-quick-amount" class="form-input" min="1" step="1" value="1000" required />
+                        <button type="submit" class="btn-primary btn-auto">Add balance</button>
+                      </div>
+                      <div class="form-hint">You'll pay securely through Razorpay. The balance updates once the payment is confirmed.</div>
+                    </form>
+                    <h3 class="settings-section-heading">Recent top-ups</h3>
+                    <div class="list-card" id="wallet-transactions" aria-live="polite">
+                      <div class="list-row"><span class="skeleton analytics-skeleton"></span></div>
+                    </div>
                   </div>
-                  <button class="btn-primary btn-auto wallet-recharge-btn" id="open-recharge-modal"><i data-lucide="plus"></i> Recharge Balance</button>
+                  <aside class="side-note">
+                    <h3><i data-lucide="info"></i> How the wallet works</h3>
+                    <ul>
+                      <li><strong>Completed</strong> top-ups count towards your balance.</li>
+                      <li><strong>Pending</strong> means a payment was started but not confirmed. Nothing was charged unless Razorpay confirms it.</li>
+                      <li>Invoices for top-ups are under <strong>Billing</strong>.</li>
+                    </ul>
+                  </aside>
                 </div>
               </div>
-
               <!-- SUBSCRIPTION -->
               <div id="sec-view-subscription" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
                   <div class="page-header-text">
                     <h2 class="page-title">Subscription</h2>
-                    <p class="page-subtitle">Your current plan</p>
+                    <p class="page-subtitle">Your plan and what each plan includes</p>
                   </div>
                 </div>
                 <!-- renderSubscriptionTab() (app.js) fills this from the real
-                     GET /api/billing/subscription. -->
-                <div class="profile-form-card settings-card-narrow" id="subscription-content">
+                     GET /api/billing/subscription + GET /api/billing/plans. -->
+                <div id="subscription-content" aria-live="polite">
                   <div class="settings-loading"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>
                 </div>
               </div>
-
               <!-- DEVELOPER -->
               <div id="sec-view-developer" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
@@ -1592,6 +1622,7 @@
                     <p class="page-subtitle">Invoices for your plan and wallet</p>
                   </div>
                 </div>
+                <div class="stat-tiles" id="billing-stats" aria-live="polite"></div>
                 <!-- renderBillingTab() (app.js) fills this from real
                      GET /api/billing/invoices. No real PDF export exists, so
                      there is deliberately no Download column. -->

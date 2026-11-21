@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(settings-redesign): Wallet, Subscription, Billing
+Step 3. Wallet: summary tiles (added this month, pending top-ups, last
+recharge) and the recent top-up list from the ledger GET /api/wallet always
+returned but never showed; Quick recharge with preset amounts submits
+through the existing recharge form (same API + Razorpay). No "spent" figure:
+nothing records wallet spending. Subscription: current-plan summary + every
+plan side by side; Choose opens the existing checkout modal pre-selected
+(coupons unchanged). Billing: total paid / invoices / last payment tiles;
+dates formatted like the tiles. Zero server diffs.
+
 ## feat(settings-redesign): shared components + Tags, Canned Responses, Attributes
 Step 1+2 of [settings-forms-admin-redesign](features/settings-forms-admin-redesign.md).
 Shared (design-system.css): drawer mode for any existing .modal-overlay
