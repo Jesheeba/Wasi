@@ -1,5 +1,14 @@
 # Project memory
 
+## 2026-11-21 - open issues found during the settings redesign
+- Admin roles (support/billing/super_admin) are stored but never checked by
+  any route: every admin has full access. Surfaced in the UI, not fixed
+  (permissions change, out of a layout pass). Needs an owner decision.
+- errorDialogUI.test.js test 2 is stale (predates the template type
+  picker, 88bc697); fails on the pre-redesign tree too.
+- WhatsApp Message Link builder is not browser-tested (needs a connected
+  WABA locally).
+
 ## 2026-11-21 - settings/forms/admin redesign approved
 Owner approved the plan ("build end to end"). Layout + visuals only, zero
 server diffs. Drawers are `.modal-overlay.as-drawer` (same markup and ids)

@@ -472,3 +472,12 @@ a.btn-secondary, a.btn-primary, a.btn-ghost { text-decoration: none; }
 .sendability-inline .sendability-banner-action { white-space: normal; margin-left: 0; flex-basis: 100%; }
 @media (min-width: 641px) { .row-actions-inline { flex-wrap: nowrap; } }
 .detail-grid-single .detail-card-title { justify-content: flex-start; flex-wrap: wrap; }
+
+/* Settings/admin redesign: summary tiles that double as filters. */
+.summary-filter-tiles { margin-bottom: var(--sp-4); }
+.kpi-tile[aria-pressed="true"] { border-color: var(--brand-dark); box-shadow: inset 0 0 0 1px var(--brand-dark); }
+.client-summary-strip { margin: var(--sp-3) 0 var(--sp-4); }
+.client-summary-strip .kpi-value { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name-with-avatar { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.name-with-avatar .avatar-initials { width: 28px; height: 28px; font-size: 11px; }
+.admin-roles-note { margin-bottom: var(--sp-4); }

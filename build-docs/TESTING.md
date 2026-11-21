@@ -1,6 +1,6 @@
 # Testing
 
-## settings-forms-admin-redesign (steps 1-5)
+## settings-forms-admin-redesign (steps 1-6, complete)
 `server/test/settingsRedesign.test.js` (Playwright, :4000, local embedded
 Postgres via TEST_DATABASE_URL, disposable client deleted in after()):
 tags inline add saves the chosen colour and never opens the modal (AC4);
@@ -20,7 +20,13 @@ Contact 201s from the drawer, payment link POSTs the same body with no
 gateway field, Create Rule saves and lists. confirmPromptGroup23 caught a
 real regression (API-key button hidden) from the page-wide inner-tab
 handler; fixed + covered by the WhatsApp test. 12/12 + confirmPromptGroup23
-+ modalInnerScrollGroup4 = 22/22. Regression: chatUiPass 15/15 (needs JWT_SECRET set; it
++ modalInnerScrollGroup4 = 22/22. Step 6:
+`server/test/adminSummaryRedesign.test.js` - tile counts match the API and
+filter (status + unpaid, dropdown clears unpaid), a populated onboarding
+stage filters to its exact count, invite drawer sends the card's role
+(POST intercepted, no admin row written), client strip has 5 tiles. 4/4.
+adminUiRedesign 9/9. Needs TEST_ADMIN_PASSWORD=dev-only-admin-password
+against the local DB. Regression: chatUiPass 15/15 (needs JWT_SECRET set; it
 doesn't load .env), confirmPromptGroup23 + modalInnerScrollGroup4 pass.
 errorDialogUI test 2 fails identically on the pre-change tree (it predates
 the template type picker, 88bc697) - stale test, not a regression.

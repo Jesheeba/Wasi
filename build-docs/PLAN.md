@@ -60,7 +60,7 @@ first, then gets that kind's own minimal send UI).
   catalog the client manages in Meta Commerce Manager directly). One open
   scope confirmation in the doc.
 - [settings-forms-admin-redesign](features/settings-forms-admin-redesign.md) -
-  not started, awaiting approval (2026-11-21). Owner: Settings, pop-ups and
+  complete 2026-11-21 (approved same day). Owner: Settings, pop-ups and
   admin feel "very basic, all forms". Audited all 35 screens locally plus
   competitor/SaaS research. Layout + visuals only, zero server changes:
   summary-first sections, inline add for 1-2 field lists, right-side drawers

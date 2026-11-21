@@ -409,6 +409,7 @@
             </div>
           </div>
           <div id="clients-error" class="inline-error" role="alert" style="display:none;"></div>
+          <div class="kpi-grid kpi-grid-compact summary-filter-tiles" id="clients-summary" role="group" aria-label="Filter clients by status"></div>
 
           <div class="table-card">
             <div class="table-toolbar">
@@ -468,6 +469,7 @@
             </div>
           </div>
           <div id="onboarding-error" class="inline-error" role="alert" style="display:none;"></div>
+          <div class="kpi-grid kpi-grid-compact summary-filter-tiles" id="onboarding-funnel" role="group" aria-label="Filter by where clients are stuck"></div>
           <div class="table-card">
             <div class="table-scroll">
               <table class="data-table stack-mobile">
@@ -818,6 +820,9 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
             </div>
           </div>
           <div id="team-error" class="inline-error" role="alert" style="display:none;"></div>
+          <div class="alert alert-warning admin-roles-note" role="note">
+            <span><strong>Roles are labels only right now.</strong> The server doesn't check them yet, so every admin user - Support and Billing included - has full access to every client. Only invite people who should have that.</span>
+          </div>
           <div class="table-card">
             <div class="table-scroll">
               <table class="data-table stack-mobile">
@@ -1028,35 +1033,48 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
   </div>
 
   <!-- ===================== INVITE ADMIN MODAL ===================== -->
-  <div id="invite-admin-modal" class="modal-overlay">
+  <div id="invite-admin-modal" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h2 class="modal-title">Invite Admin</h2>
+        <div>
+          <h2 class="modal-title">Invite Admin</h2>
+          <p class="modal-subtitle">An internal Wasi operator account</p>
+        </div>
         <button class="close-modal-btn" data-close-invite-admin aria-label="Close"><i data-lucide="x"></i></button>
       </div>
-      <div id="invite-admin-error" class="inline-error" role="alert" style="display:none;"></div>
       <form id="invite-admin-form">
-        <div class="form-group">
-          <label class="form-label" for="invite-admin-name">Name</label>
-          <input type="text" id="invite-admin-name" class="form-input" required />
+        <div class="drawer-content">
+          <div id="invite-admin-error" class="inline-error" role="alert" style="display:none;"></div>
+          <div class="drawer-section">
+            <div class="drawer-section-title">Who</div>
+            <div class="form-group">
+              <label class="form-label" for="invite-admin-name">Name</label>
+              <input type="text" id="invite-admin-name" class="form-input" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="invite-admin-email">Email</label>
+              <input type="email" id="invite-admin-email" class="form-input" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="invite-admin-password">Temporary password</label>
+              <input type="text" id="invite-admin-password" class="form-input" minlength="8" required autocomplete="off" aria-describedby="invite-admin-password-hint" />
+              <div class="form-hint" id="invite-admin-password-hint">At least 8 characters. Share it privately; they should change it after first login.</div>
+            </div>
+          </div>
+          <div class="drawer-section">
+            <fieldset class="option-cards stacked">
+              <legend class="drawer-section-title">Role</legend>
+              <label class="option-card"><input type="radio" name="invite-admin-role" value="support" checked><span class="option-card-body"><span class="option-card-title"><i data-lucide="life-buoy"></i> Support</span><span class="option-card-desc">Intended for handling tickets and onboarding.</span></span></label>
+              <label class="option-card"><input type="radio" name="invite-admin-role" value="billing"><span class="option-card-body"><span class="option-card-title"><i data-lucide="credit-card"></i> Billing</span><span class="option-card-desc">Intended for payments and reminders.</span></span></label>
+              <label class="option-card"><input type="radio" name="invite-admin-role" value="super_admin"><span class="option-card-body"><span class="option-card-title"><i data-lucide="shield"></i> Super Admin</span><span class="option-card-desc">Everything, including other admins.</span></span></label>
+            </fieldset>
+            <div class="form-hint">Not enforced yet: every role currently gets full access.</div>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="invite-admin-email">Email</label>
-          <input type="email" id="invite-admin-email" class="form-input" required />
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-invite-admin>Cancel</button>
+          <button type="submit" class="btn-primary btn-auto" id="invite-admin-submit-btn">Create Admin User</button>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="invite-admin-password">Temporary Password</label>
-          <input type="text" id="invite-admin-password" class="form-input" minlength="8" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="invite-admin-role">Role</label>
-          <select id="invite-admin-role" class="form-input">
-            <option value="support">Support</option>
-            <option value="billing">Billing</option>
-            <option value="super_admin">Super Admin</option>
-          </select>
-        </div>
-        <button type="submit" class="btn-primary" id="invite-admin-submit-btn">Create Admin User</button>
       </form>
     </div>
   </div>

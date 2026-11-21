@@ -1,5 +1,14 @@
 # Changelog
 
+## feat(settings-redesign): admin summary tiles, invite drawer, client strip
+Step 6 (last). Clients: five summary tiles (all / active / pending setup /
+suspended / unpaid) that filter the table; "Unpaid" filters on
+payment_status, which the status dropdown can't. Onboarding: one tile per
+"stuck at" stage that filters the queue. Team: initials avatars and a
+warning that admin roles aren't enforced (no route checks them). Invite
+Admin is a drawer with role cards that say so. Client Detail: summary strip
+(status, plan, WhatsApp, templates, last login) above the tabs.
+
 ## feat(settings-redesign): remaining pop-ups as drawers
 Step 5. Add Contact, New Support Ticket, Create Payment Link and Create
 Automation Rule open as right-hand drawers with helper text and a "good to

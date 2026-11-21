@@ -988,6 +988,7 @@ async function loadClients() {
     // here - reflect it in the dropdown and apply it to this fresh fetch.
     const statusSelect = document.getElementById('clients-status-filter');
     if (statusSelect) statusSelect.value = state.clientsStatusFilter || '';
+    renderClientsSummary();
     filterClientsTable();
   } catch (err) {
     if (err.status === 401) return;
@@ -1027,13 +1028,14 @@ function renderClientsTable() {
 
   if (!clients.length) {
     document.getElementById('clients-pager').hidden = true;
-    const filtering = !!(state.clients.length && (document.getElementById('clients-search').value.trim() || document.getElementById('clients-status-filter').value));
+    const filtering = !!(state.clients.length && (document.getElementById('clients-search').value.trim() || document.getElementById('clients-status-filter').value || state.clientsBillingFilter));
     tbody.innerHTML = filtering
       ? stateRow(6, `<div class="empty-state"><i data-lucide="search-x" class="empty-icon"></i><div class="empty-title">No clients match</div><div>Try a different search or clear the filters.</div><button type="button" class="btn-secondary" id="clients-clear-filters">Clear filters</button></div>`)
       : emptyRow(6, 'No clients yet', 'Add your first client to get started.', 'users');
     document.getElementById('clients-clear-filters')?.addEventListener('click', () => {
       document.getElementById('clients-search').value = '';
       document.getElementById('clients-status-filter').value = '';
+      state.clientsBillingFilter = false;
       resetPage('clients');
       filterClientsTable();
     });
@@ -1056,13 +1058,50 @@ function renderClientsTable() {
   bindClickableRows(tbody, 'data-client-id', (id) => openClientDetail(id));
 }
 
+// Summary tiles double as filters: a status tile sets the existing status
+// dropdown; "Unpaid" filters on payment_status, which the dropdown can't.
+const CLIENT_SUMMARY_TILES = [
+  { key: '', label: 'All clients', icon: 'users' },
+  { key: 'active', label: 'Active', icon: 'circle-check' },
+  { key: 'pending_setup', label: 'Pending setup', icon: 'hourglass', tone: 'warning' },
+  { key: 'suspended', label: 'Suspended', icon: 'circle-pause', tone: 'danger' },
+  { key: 'unpaid', label: 'Unpaid', icon: 'receipt', tone: 'danger' },
+];
+
+function renderClientsSummary() {
+  const el = document.getElementById('clients-summary');
+  if (!el) return;
+  const all = state.clients || [];
+  const count = (k) => (k === '' ? all.length : k === 'unpaid' ? all.filter((c) => c.payment_status === 'unpaid').length : all.filter((c) => c.status === k).length);
+  const current = state.clientsBillingFilter ? 'unpaid' : (state.clientsStatusFilter || '');
+  el.innerHTML = CLIENT_SUMMARY_TILES.map((t) => `
+    <button type="button" class="kpi-tile clickable${t.tone && count(t.key) ? ` tone-${t.tone}` : ''}" data-clients-filter="${t.key}" aria-pressed="${t.key === current}">
+      <span class="kpi-icon" aria-hidden="true"><i data-lucide="${t.icon}"></i></span>
+      <span class="kpi-value">${count(t.key)}</span>
+      <span class="kpi-label">${esc(t.label)}</span>
+    </button>`).join('');
+  el.querySelectorAll('[data-clients-filter]').forEach((btn) => btn.addEventListener('click', () => {
+    const key = btn.dataset.clientsFilter;
+    state.clientsBillingFilter = key === 'unpaid';
+    document.getElementById('clients-status-filter').value = key === 'unpaid' ? '' : key;
+    resetPage('clients');
+    filterClientsTable();
+  }));
+  refreshIcons();
+}
+
 function filterClientsTable() {
   const q = document.getElementById('clients-search').value.trim().toLowerCase();
   const status = document.getElementById('clients-status-filter').value;
   state.clientsStatusFilter = status || null;
+  if (status) state.clientsBillingFilter = false; // the dropdown and "Unpaid" are mutually exclusive
 
   let filtered = state.clients;
   if (status) filtered = filtered.filter((c) => c.status === status);
+  if (state.clientsBillingFilter) filtered = filtered.filter((c) => c.payment_status === 'unpaid');
+  document.querySelectorAll('#clients-summary [data-clients-filter]').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.clientsFilter === (state.clientsBillingFilter ? 'unpaid' : (status || ''))));
+  });
   if (q) {
     filtered = filtered.filter((c) =>
       (c.name || '').toLowerCase().includes(q) ||
@@ -1627,6 +1666,14 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       </div>
     </div>
 
+    <div class="kpi-grid kpi-grid-compact client-summary-strip">
+      ${kpiTileHtml({ icon: 'activity', label: 'Status', value: titleCase(String(client.status || '-').replace(/_/g, ' ')), tone: client.status === 'suspended' ? 'danger' : client.status === 'active' ? '' : 'warning' })}
+      ${kpiTileHtml({ icon: 'badge-indian-rupee', label: 'Plan', value: subscription?.plan || 'No plan' })}
+      ${kpiTileHtml({ icon: 'message-circle', label: 'WhatsApp', value: waba ? (waba.display_phone_number || titleCase(String(waba.status || '').replace(/_/g, ' '))) : 'Not connected', tone: flags.whatsapp ? 'warning' : (waba ? '' : 'warning') })}
+      ${kpiTileHtml({ icon: 'file-text', label: 'Templates', value: String((templates || []).length) })}
+      ${kpiTileHtml({ icon: 'log-in', label: 'Last login', value: client.last_login_at ? formatDate(client.last_login_at) : 'Never' })}
+    </div>
+
     <div class="tabs" role="tablist" aria-label="Client sections" data-tabs="client">
       ${tabDefs.map(([id, label, flag]) => `<button class="tab" role="tab" type="button" id="tab-client-${id}" aria-controls="panel-client-${id}" aria-selected="${id === activeTab}" tabindex="${id === activeTab ? 0 : -1}" data-tab="${id}">${label.replace(/&/g, '&amp;')}${flag}</button>`).join('')}
     </div>
@@ -2116,17 +2163,41 @@ async function loadOnboarding() {
   try {
     const rows = await apiFetch('/api/admin/onboarding-queue');
     state.onboardingRows = rows;
-    renderOnboardingTable(rows);
+    renderOnboardingFunnel();
   } catch (err) {
     if (err.status === 401) return;
     showTableError('onboarding-table-body', 7, err.message, loadOnboarding);
   }
 }
 
+// One tile per "stuck at" stage (plus All). Clicking a tile filters the
+// queue to that stage; the counts come from the rows already loaded.
+function renderOnboardingFunnel() {
+  const el = document.getElementById('onboarding-funnel');
+  const rows = state.onboardingRows || [];
+  const stage = state.onboardingStage || '';
+  const stages = [...new Set([...Object.keys(STUCK_AT_LABELS), ...rows.map((r) => r.stuck_at).filter(Boolean)])];
+  if (el) {
+    el.innerHTML = [['', 'All in queue', rows.length], ...stages.map((s) => [s, STUCK_AT_LABELS[s] || s, rows.filter((r) => r.stuck_at === s).length])]
+      .map(([key, label, n]) => `
+        <button type="button" class="kpi-tile clickable${key && n ? ' tone-warning' : ''}" data-onboarding-stage="${esc(key)}" aria-pressed="${key === stage}">
+          <span class="kpi-value">${n}</span>
+          <span class="kpi-label">${esc(label)}</span>
+        </button>`).join('');
+    el.querySelectorAll('[data-onboarding-stage]').forEach((btn) => btn.addEventListener('click', () => {
+      state.onboardingStage = btn.dataset.onboardingStage;
+      renderOnboardingFunnel();
+    }));
+  }
+  renderOnboardingTable(stage ? rows.filter((r) => r.stuck_at === stage) : rows);
+}
+
 function renderOnboardingTable(rows) {
   const tbody = document.getElementById('onboarding-table-body');
   if (!rows.length) {
-    tbody.innerHTML = emptyRow(7, 'Onboarding queue is empty', 'Every client is active.', 'check-circle');
+    tbody.innerHTML = state.onboardingStage && (state.onboardingRows || []).length
+      ? emptyRow(7, 'Nobody is stuck here', 'Pick another stage above to see who is.', 'check-circle')
+      : emptyRow(7, 'Onboarding queue is empty', 'Every client is active.', 'check-circle');
     refreshIcons();
     return;
   }
@@ -3304,7 +3375,7 @@ function renderTeam(rows) {
   }
   tbody.innerHTML = rows.map((a) => `
     <tr>
-      <td data-label="Name">${esc(a.name)}</td>
+      <td data-label="Name"><span class="name-with-avatar"><span class="avatar-initials" aria-hidden="true">${esc(String(a.name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span>${esc(a.name)}</span></td>
       <td data-label="Email">${esc(a.email)}</td>
       <td data-label="Role">${badge(titleCase(a.role || ''), a.role === 'super_admin' ? 'info' : 'neutral')}</td>
       <td data-label="Created">${formatDate(a.created_at)}</td>
@@ -3328,7 +3399,7 @@ async function handleInviteAdminSubmit(e) {
   const name = document.getElementById('invite-admin-name').value.trim();
   const email = document.getElementById('invite-admin-email').value.trim();
   const password = document.getElementById('invite-admin-password').value;
-  const role = document.getElementById('invite-admin-role').value;
+  const role = e.target.querySelector('input[name="invite-admin-role"]:checked')?.value || 'support';
   const btn = document.getElementById('invite-admin-submit-btn');
   btn.disabled = true;
 
