@@ -19,6 +19,7 @@ export default defineConfig({
     // rebuilding, while still hitting the real API and real auth.
     proxy: {
       '/api': 'http://localhost:4000',
+      '/breakpoints.css': 'http://localhost:4000',
     },
   },
 });

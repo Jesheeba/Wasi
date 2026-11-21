@@ -25,11 +25,11 @@ export const FLOW_EDGE_TYPE_LABELS = {
 // Edge colours per condition type: distinguishable, harmonised with the WASI
 // palette (green / blue / amber / red / grey, matching design-system.css).
 export const CONDITION_COLORS = {
-  button_id: '#2E9E3B',
-  keyword: '#1D4ED8',
-  default: '#B45309',
-  timeout: '#B91C1C',
-  always: '#6B7280',
+  button_id: 'var(--wf-edge-button-id)',
+  keyword: 'var(--wf-edge-keyword)',
+  default: 'var(--wf-edge-default)',
+  timeout: 'var(--wf-edge-timeout)',
+  always: 'var(--wf-edge-always)',
 };
 
 export const NODE_TYPE_LABELS = {

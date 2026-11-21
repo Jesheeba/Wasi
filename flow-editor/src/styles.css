@@ -1,23 +1,43 @@
 /* Wasi flow editor - visual language aligned with the WASI design system
-   (design-system.css in the repo root): Poppins, brand green #4AC959, dark
-   #143518 for strong text/active states, 1px #E5E7EB borders, 8px radii,
+   (design-system.css in the repo root): Poppins, brand green, dark brand
+   for strong text/active states, 1px borders, 8px radii,
    38px/32px control heights, restrained shadows, no gradients. Node cards keep
    the direct-edit-on-card pattern (section labels with live char counts). */
 
 :root {
-  --wf-accent: #4AC959;
-  --wf-accent-hover: #43B751;
-  --wf-accent-dark: #143518;
-  --wf-accent-soft: #EDFAEE;
-  --wf-border: #E5E7EB;
-  --wf-border-strong: #D1D5DB;
-  --wf-text: #1F2937;
-  --wf-text-muted: #6B7280;
+  /* Every value comes from the shared tokens in /breakpoints.css (linked in
+     index.html, served by the main app), so a token change reaches the editor
+     without touching this file. The literal after each comma is only a
+     fallback for `npm run dev` or a failed load. */
+  --wf-accent: var(--brand, #4AC959);
+  --wf-accent-hover: var(--brand-hover, #43B751);
+  --wf-accent-dark: var(--brand-dark, #143518);
+  --wf-accent-soft: var(--brand-soft, #EDFAEE);
+  --wf-border: var(--border, #E5E7EB);
+  --wf-border-strong: var(--border-strong, #D1D5DB);
+  --wf-text: var(--text, #1F2937);
+  --wf-text-muted: var(--text-muted, #6B7280);
+  /* Canvas tint is editor-specific on purpose: --bg-app is now white (V1
+     decision 2), and white node cards need a tinted canvas to stand out. */
   --wf-bg: #F6F9F6;
-  --wf-surface: #FFFFFF;
-  --wf-red: #B91C1C;
-  --wf-red-soft: #FEF2F2;
-  --wf-red-border: #FCA5A5;
+  --wf-surface: var(--bg-card, #FFFFFF);
+  --wf-surface-hover: var(--bg-subtle, #F9FAFB);
+  --wf-on-accent: #FFFFFF; /* text on a filled brand/dark surface */
+  --wf-red: var(--danger, #B91C1C);
+  --wf-red-soft: var(--danger-bg, #FEF2F2);
+  --wf-red-border: var(--danger-border, #FCA5A5);
+  --wf-neutral: var(--neutral, #4B5563);
+  --wf-neutral-bg: var(--neutral-bg, #F3F4F6);
+  --wf-success: var(--success, #15803D);
+  --wf-success-bg: var(--success-bg, #ECFDF3);
+  --wf-success-border: var(--success-border, #A7E8BE);
+  /* Branch (edge) colours, by flow_edges.condition_type. button_id and
+     default have no shared token, so they stay editor-specific. */
+  --wf-edge-button-id: #2E9E3B;
+  --wf-edge-keyword: var(--info, #1D4ED8);
+  --wf-edge-default: #B45309;
+  --wf-edge-timeout: var(--danger, #B91C1C);
+  --wf-edge-always: var(--text-muted, #6B7280);
   --wf-focus-ring: 0 0 0 2px var(--wf-accent-dark); /* V1 decision 4: solid 2px, not a soft glow */
 }
 
@@ -38,12 +58,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent-dark)
 .wf-topbar > b { font-size: 15px; font-weight: 600; color: var(--wf-accent-dark); }
 .wf-status-badge {
   font-size: 12px; font-weight: 500; padding: 2px 10px; border-radius: 999px; line-height: 1.5;
-  background: #F3F4F6; color: #4B5563; border: 1px solid var(--wf-border); text-transform: capitalize;
+  background: var(--wf-neutral-bg); color: var(--wf-neutral); border: 1px solid var(--wf-border); text-transform: capitalize;
 }
-.wf-status-badge.active { background: #ECFDF3; color: #15803D; border-color: #A7E8BE; }
+.wf-status-badge.active { background: var(--wf-success-bg); color: var(--wf-success); border-color: var(--wf-success-border); }
 
 .wf-btn-primary {
-  height: 38px; background: var(--wf-accent); color: #fff; border: none; border-radius: 8px;
+  height: 38px; background: var(--wf-accent); color: var(--wf-on-accent); border: none; border-radius: 8px;
   padding: 0 16px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .wf-btn-primary:hover:not(:disabled) { background: var(--wf-accent-hover); }
@@ -53,7 +73,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent-dark)
   height: 38px; background: var(--wf-surface); color: var(--wf-text); border: 1px solid var(--wf-border); border-radius: 8px;
   padding: 0 16px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.wf-btn-secondary:hover:not(:disabled) { background: #F9FAFB; border-color: var(--wf-border-strong); }
+.wf-btn-secondary:hover:not(:disabled) { background: var(--wf-surface-hover); border-color: var(--wf-border-strong); }
 .wf-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 .wf-error-toast {
   margin-left: auto; background: var(--wf-red-soft); color: var(--wf-red); border: 1px solid var(--wf-red-border);
@@ -68,7 +88,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent-dark)
 .wf-trigger-bar label { font-size: 12px; font-weight: 500; color: var(--wf-text-muted); }
 .wf-trigger-bar input {
   height: 32px; border: 1px solid var(--wf-border); border-radius: 8px; padding: 0 10px; font-size: 13px; width: 200px; max-width: 100%;
-  background: #fff; color: var(--wf-text);
+  background: var(--wf-surface); color: var(--wf-text);
 }
 .wf-trigger-bar input:focus { outline: none; border-color: var(--wf-accent); box-shadow: var(--wf-focus-ring); }
 .wf-trigger-bar .wf-btn-secondary, .wf-trigger-bar .wf-btn-primary { height: 32px; padding: 0 12px; }
@@ -107,10 +127,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent-dark)
 .wf-card-selected { box-shadow: var(--wf-focus-ring); }
 
 .wf-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.wf-entry-badge { background: var(--wf-accent-dark); color: #fff; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 4px; }
+.wf-entry-badge { background: var(--wf-accent-dark); color: var(--wf-on-accent); font-size: 9px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 4px; }
 .wf-card-type { font-weight: 600; font-size: 12px; flex: 1; color: var(--wf-accent-dark); }
 .wf-card-actions button { border: none; background: none; cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; }
-.wf-card-actions button:hover { background: #F3F4F6; }
+.wf-card-actions button:hover { background: var(--wf-neutral-bg); }
 
 .wf-issue-box { background: var(--wf-red-soft); color: var(--wf-red); border: 1px solid var(--wf-red-border); border-radius: 6px; padding: 5px 7px; margin-bottom: 6px; font-size: 11px; }
 
@@ -121,17 +141,17 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--wf-accent-dark)
 
 .wf-textarea, .wf-input, .wf-select {
   width: 100%; border: 1px solid var(--wf-border); border-radius: 8px; padding: 6px 8px;
-  font-size: 12px; font-family: inherit; resize: vertical; background: #fff; color: var(--wf-text);
+  font-size: 12px; font-family: inherit; resize: vertical; background: var(--wf-surface); color: var(--wf-text);
 }
 .wf-textarea:focus, .wf-input:focus, .wf-select:focus { outline: none; border-color: var(--wf-accent); box-shadow: var(--wf-focus-ring); }
 
-.wf-input-sm, .wf-select-sm { border: 1px solid var(--wf-border); border-radius: 6px; padding: 3px 6px; font-size: 11px; background: #fff; color: var(--wf-text); }
+.wf-input-sm, .wf-select-sm { border: 1px solid var(--wf-border); border-radius: 6px; padding: 3px 6px; font-size: 11px; background: var(--wf-surface); color: var(--wf-text); }
 .wf-input-sm:focus, .wf-select-sm:focus { outline: none; border-color: var(--wf-accent); box-shadow: var(--wf-focus-ring); }
 .wf-btn-sm {
   height: 26px; border: 1px solid var(--wf-border); background: var(--wf-surface); border-radius: 6px;
   padding: 0 9px; font-size: 11px; font-weight: 500; cursor: pointer; color: var(--wf-text);
 }
-.wf-btn-sm:hover { background: #F9FAFB; border-color: var(--wf-border-strong); }
+.wf-btn-sm:hover { background: var(--wf-surface-hover); border-color: var(--wf-border-strong); }
 .wf-btn-danger { color: var(--wf-red); }
 .wf-btn-secondary.wf-btn-danger { border-color: var(--wf-red-border); }
 .wf-btn-secondary.wf-btn-danger:hover:not(:disabled) { background: var(--wf-red-soft); border-color: var(--wf-red); }

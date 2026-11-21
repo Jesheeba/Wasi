@@ -1,5 +1,16 @@
 # Changelog
 
+## design(v1-flow-editor): use the shared design tokens, not a private copy
+The visual flow editor runs in an iframe, so it never inherited the CRM's
+tokens; it hard-coded its own `--wf-*` palette plus ~13 loose colours in CSS
+and JSX. It now links `/breakpoints.css` at runtime (`vite-ignore`, not
+bundled) and every `--wf-*` colour is `var(--shared-token, fallback)`; branch
+colours moved into `--wf-edge-*` variables. Kept editor-specific on purpose:
+the canvas tint `#F6F9F6` (`--bg-app` is now white per V1 decision 2, and
+white node cards need contrast), text-on-accent white, and two branch colours
+with no shared token. No visual change today; a token change now reaches the
+editor without editing it. Local `dist/` rebuilt.
+
 ## feat(play-store): signed release build, real privacy policy, deletion page
 Closed the repo-side blockers for the Play Store submission. Upload key generated
 outside the repo (Play App Signing makes it resettable, so the old "unrecoverable"

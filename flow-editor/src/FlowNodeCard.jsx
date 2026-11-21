@@ -121,7 +121,7 @@ export default function FlowNodeCard({ id, data, selected }) {
 
   return (
     <div className={`wf-card ${hasIssue ? 'wf-card-issue' : ''} ${isEntry ? 'wf-card-entry' : ''} ${selected ? 'wf-card-selected' : ''}`}>
-      <Handle type="target" position={Position.Left} id="target" style={{ background: '#6B7280' }} />
+      <Handle type="target" position={Position.Left} id="target" style={{ background: 'var(--wf-text-muted)' }} />
 
       <div className="wf-card-header">
         {isEntry && <span className="wf-entry-badge">ENTRY</span>}
@@ -339,7 +339,7 @@ function ButtonsField({ buttons, onChange, outgoingEdges, otherNodes, onAddBranc
               type="source"
               position={Position.Right}
               id={`button-${b.id}`}
-              style={{ position: 'absolute', right: -9, top: '50%', transform: 'translateY(-50%)', background: '#2E9E3B' }}
+              style={{ position: 'absolute', right: -9, top: '50%', transform: 'translateY(-50%)', background: CONDITION_COLORS.button_id }}
             />
           </div>
         );

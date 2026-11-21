@@ -1,5 +1,14 @@
 # Testing
 
+## flow-editor-shared-tokens
+`server/test/flowEditorSharedTokens.test.js` (static, no DB): the editor links
+`/breakpoints.css`; every shared-palette `--wf-*` is `var(--token, fallback)`;
+no literal colour outside the `:root` block or in the JSX/constants; the app
+serves `/breakpoints.css` and the Dockerfile ships it. 4/4 pass; mutation check
+(re-adding one `#F9FAFB`) fails the suite as expected. Live check: `createApp()`
+on :4000 + Playwright, `/flow-editor/` loads the shared sheet, `--wf-accent` =
+`#4AC959`, and overriding `--brand` turned `.wf-btn-primary` red.
+
 ## carousel-templates
 `server/test/carouselTemplates.test.js` - real DB writes through a
 disposable test client (same pattern as `limitedTimeOfferTemplates.test.js`);
