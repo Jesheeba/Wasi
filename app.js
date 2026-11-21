@@ -472,10 +472,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function withSubmitLoading(form, label) {
     const btn = form?.querySelector('button[type="submit"]');
     if (!btn) return () => {};
-    const original = btn.textContent;
+    const original = btn.innerHTML; // innerHTML, so a button's icon survives the restore
     btn.disabled = true;
     btn.textContent = label;
-    return () => { btn.disabled = false; btn.textContent = original; };
+    return () => { btn.disabled = false; btn.innerHTML = original; };
   }
 
   // --- Auth Handlers ---
@@ -655,6 +655,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inviteBtn) inviteBtn.style.display = isAgent ? 'none' : '';
     const addCannedBtn = document.getElementById('open-add-canned-response-modal');
     if (addCannedBtn) addCannedBtn.style.display = isAgent ? 'none' : '';
+    // Create controls whose API route is Admin/Manager only (requireRole on
+    // the server is the real gate; this just avoids offering a 403).
+    document.querySelectorAll('[data-manage-only]').forEach((el) => { el.hidden = isAgent; });
 
     const agentHiddenViews = ['campaigns', 'template-library', 'automation', 'analytics'];
     agentHiddenViews.forEach((view) => {
@@ -5026,9 +5029,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const tags = Object.values(state.tagsById);
     tagsManagerList.innerHTML = tags.length
-      ? tags.map(tag => `<span class="tag-badge" style="background: ${esc(tag.bg)}; color: ${esc(tag.color)};">${esc(tag.name)}</span>`).join('')
-      : '<div class="empty-state"><div class="empty-title">No tags yet</div><div>Add a tag to start labelling contacts.</div></div>';
+      ? tags.map(tag => `
+        <div class="list-row">
+          <span class="tag-badge" style="background: ${esc(tag.bg)}; color: ${esc(tag.color)};">${esc(tag.name)}</span>
+          <span class="list-row-main"></span>
+          <span class="list-row-meta" data-tag-count="${esc(tag.id)}"></span>
+        </div>`).join('')
+      : `<div class="empty-state">
+          <i data-lucide="tag" class="empty-icon"></i>
+          <div class="empty-title">No tags yet</div>
+          <div>Add your first tag above to start grouping contacts.</div>
+        </div>`;
+    if (window.lucide) lucide.createIcons();
+    if (tags.length && state.actorRole !== 'Agent') fillTagContactCounts();
   }
+
+  // Contact counts come from the existing Admin/Manager-only analytics
+  // endpoint. Secondary data: a failure leaves the count blank and never
+  // blocks the list.
+  async function fillTagContactCounts() {
+    try {
+      const rows = await authFetch('/api/analytics/tags');
+      rows.forEach((r) => {
+        const el = document.querySelector(`[data-tag-count="${CSS.escape(r.id)}"]`);
+        if (el) el.textContent = `${Number(r.contact_count).toLocaleString('en-IN')} contact${r.contact_count === 1 ? '' : 's'}`;
+      });
+    } catch { /* counts are optional */ }
+  }
+
+  const TAG_SWATCHES = ['#4AC959', '#1D4ED8', '#B45309', '#B91C1C', '#7C3AED', '#4B5563'];
+  (function initTagSwatches() {
+    const group = document.getElementById('tags-inline-colors');
+    if (!group) return;
+    group.insertAdjacentHTML('beforeend', TAG_SWATCHES.map((c, i) => `
+      <input type="radio" name="tags-inline-color" id="tags-inline-color-${i}" value="${c}"${i === 0 ? ' checked' : ''}>
+      <label for="tags-inline-color-${i}" style="background:${c}" title="${c}"><span class="sr-only">Colour ${i + 1}</span></label>`).join(''));
+  })();
+
+  async function createTag(name, color) {
+    await authFetch('/api/tags', { method: 'POST', body: JSON.stringify({ name, bg: color + '22', color }) });
+    await refreshTags();
+    renderTagsManager();
+  }
+
+  document.getElementById('tags-inline-add-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('tags-inline-name');
+    const name = input.value.trim();
+    if (!name) return;
+    const color = e.target.querySelector('input[name="tags-inline-color"]:checked')?.value || TAG_SWATCHES[0];
+    const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
+    try {
+      await createTag(name, color);
+      input.value = '';
+      showToast(`Tag "${name}" added`, 'success');
+    } catch (err) {
+      reportError(err);
+    } finally {
+      restoreSubmit();
+      input.focus();
+    }
+  });
 
   async function refreshTags() {
     const tags = await authFetch('/api/tags');
@@ -6920,7 +6981,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Add Tag Modal ---
+  // Tags are added inline on the Tags page; the header button just jumps
+  // there. The modal stays as the fallback if the inline row isn't shown.
   document.getElementById('open-add-tag-modal')?.addEventListener('click', () => {
+    const inline = document.getElementById('tags-inline-name');
+    if (inline && inline.offsetParent !== null) { inline.focus(); return; }
     document.getElementById('modal-add-tag')?.classList.add('open');
   });
 
@@ -6932,12 +6997,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
     try {
-      await authFetch('/api/tags', {
-        method: 'POST',
-        body: JSON.stringify({ name, bg: color + '22', color })
-      });
-      await refreshTags();
-      renderTagsManager();
+      await createTag(name, color);
     } catch (err) {
       reportError(err);
       return;
@@ -7013,17 +7073,28 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       state.cannedResponses = await authFetch('/api/canned-responses');
     } catch (err) {
-      tbody.innerHTML = analyticsErrorRow(3, err.message || 'Couldn’t load canned responses.', 'canned-load-retry');
+      tbody.innerHTML = `<div class="error-state"><div>${esc(err.message || 'Couldn’t load canned responses.')}</div><button type="button" class="btn-secondary btn-sm" id="canned-load-retry">Try again</button></div>`;
       document.getElementById('canned-load-retry')?.addEventListener('click', renderCannedResponsesTable);
       return;
     }
+    const canManage = state.actorRole !== 'Agent';
     tbody.innerHTML = state.cannedResponses.length ? state.cannedResponses.map(c => `
-      <tr>
-        <td data-label="Shortcut" class="analytics-name">${esc(c.shortcut)}</td>
-        <td data-label="Message" class="settings-muted-cell">${esc((c.body || '').slice(0, 80))}</td>
-        <td data-label="" class="api-key-actions"><button type="button" class="btn-secondary btn-sm btn-auto delete-canned-response-btn" data-canned-id="${esc(c.id)}" aria-label="Delete canned response ${esc(c.shortcut)}">Delete</button></td>
-      </tr>
-    `).join('') : analyticsEmptyRow(3, 'No canned responses yet', 'Add one, then type / in a chat to insert it.');
+      <div class="list-row canned-row">
+        <div class="list-row-main">
+          <div class="list-row-title"><code class="inline-code">/${esc(String(c.shortcut).replace(/^\//, ''))}</code></div>
+          <div class="wa-preview canned-row-preview"><div class="wa-bubble out">${esc(c.body || '')}</div></div>
+        </div>
+        ${canManage ? `<button type="button" class="btn-secondary btn-sm btn-auto delete-canned-response-btn" data-canned-id="${esc(c.id)}" aria-label="Delete canned response ${esc(c.shortcut)}"><i data-lucide="trash-2" class="icon-14"></i></button>` : ''}
+      </div>
+    `).join('') : `<div class="empty-state">
+        <i data-lucide="message-square-text" class="empty-icon"></i>
+        <div class="empty-title">No canned responses yet</div>
+        <div>Save the answers you type most often - refunds, timings, payment details.</div>
+        ${canManage ? '<button type="button" class="btn-primary btn-auto" id="canned-empty-add">Add your first response</button>' : ''}
+        <div class="empty-example">Example: <code>/hours</code> → "We're open 9 AM - 7 PM, Monday to Saturday."</div>
+      </div>`;
+    if (window.lucide) lucide.createIcons();
+    document.getElementById('canned-empty-add')?.addEventListener('click', () => document.getElementById('open-add-canned-response-modal')?.click());
 
     tbody.querySelectorAll('.delete-canned-response-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -7047,6 +7118,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('open-add-canned-response-modal')?.addEventListener('click', () => {
     document.getElementById('modal-add-canned-response')?.classList.add('open');
   });
+
+  // Live WhatsApp-bubble preview + character count while typing.
+  function updateCannedPreview() {
+    const body = document.getElementById('new-canned-body');
+    const preview = document.getElementById('new-canned-preview');
+    const count = document.getElementById('new-canned-body-count');
+    if (!body || !preview) return;
+    const text = body.value;
+    preview.textContent = text.trim() ? text : 'Your message will appear here.';
+    preview.classList.toggle('placeholder', !text.trim());
+    if (count) count.textContent = `${text.length} character${text.length === 1 ? '' : 's'}`;
+  }
+  document.getElementById('new-canned-body')?.addEventListener('input', updateCannedPreview);
+  document.getElementById('add-canned-response-form')?.addEventListener('reset', () => setTimeout(updateCannedPreview));
 
   document.getElementById('add-canned-response-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -7076,18 +7161,37 @@ document.addEventListener('DOMContentLoaded', () => {
       // Chat drawer's Attributes section, item 7) needs to see a
       // newly-defined attribute without waiting for a full session refresh.
       state.contactAttributes = await authFetch('/api/contact-attributes');
-      tbody.innerHTML = state.contactAttributes.length ? state.contactAttributes.map(a => `
-        <tr>
-          <td data-label="Attribute name" class="analytics-name">${esc(a.name)}</td>
-          <td data-label="Key"><code class="inline-code">${esc(a.name.toLowerCase().replace(/\s+/g, '_'))}</code></td>
-          <td data-label="Field type">${esc(a.type)}</td>
-        </tr>
-      `).join('') : analyticsEmptyRow(3, 'No custom attributes yet', 'Add an attribute to store extra details on each contact.');
+      tbody.innerHTML = state.contactAttributes.length ? state.contactAttributes.map(a => {
+        const t = ATTRIBUTE_TYPES[a.type] || { icon: 'type', label: a.type };
+        return `
+        <div class="list-row">
+          <span class="list-row-icon" aria-hidden="true"><i data-lucide="${t.icon}"></i></span>
+          <div class="list-row-main">
+            <div class="list-row-title">${esc(a.name)}</div>
+            <div class="list-row-sub">${esc(t.label)} field</div>
+          </div>
+        </div>`;
+      }).join('') : `<div class="empty-state">
+          <i data-lucide="sliders-horizontal" class="empty-icon"></i>
+          <div class="empty-title">No custom attributes yet</div>
+          <div>Store details your team needs on every contact, like city, budget or renewal date.</div>
+          ${state.actorRole !== 'Agent' ? '<button type="button" class="btn-primary btn-auto" id="attributes-empty-add">Add an attribute</button>' : ''}
+        </div>`;
+      if (window.lucide) lucide.createIcons();
+      document.getElementById('attributes-empty-add')?.addEventListener('click', () => document.getElementById('open-add-attribute-modal')?.click());
     } catch (err) {
-      tbody.innerHTML = analyticsErrorRow(3, err.message || 'Couldn’t load attributes.', 'attributes-load-retry');
+      tbody.innerHTML = `<div class="error-state"><div>${esc(err.message || 'Couldn’t load attributes.')}</div><button type="button" class="btn-secondary btn-sm" id="attributes-load-retry">Try again</button></div>`;
       document.getElementById('attributes-load-retry')?.addEventListener('click', renderAttributesTable);
     }
   }
+
+  // Matches contactAttributeCreateSchema's enum (server/src/utils/validate.js).
+  const ATTRIBUTE_TYPES = {
+    text: { icon: 'type', label: 'Text' },
+    number: { icon: 'hash', label: 'Number' },
+    date: { icon: 'calendar', label: 'Date' },
+    boolean: { icon: 'toggle-left', label: 'Yes / No' },
+  };
 
   document.getElementById('open-add-attribute-modal')?.addEventListener('click', () => {
     document.getElementById('modal-add-attribute')?.classList.add('open');
@@ -7096,7 +7200,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('add-attribute-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('new-attribute-name').value.trim();
-    const type = document.getElementById('new-attribute-type').value;
+    // Lowercase radio values: the old <select> sent "Text"/"Number"/"Date",
+    // which the server's lowercase enum rejected with a 400 on every save.
+    const type = e.target.querySelector('input[name="new-attribute-type"]:checked')?.value || 'text';
     if (!name) return;
 
     const restoreSubmit = withSubmitLoading(e.target, 'Adding…');
@@ -8780,6 +8886,31 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (!e.shiftKey && (document.activeElement === last || !top.contains(document.activeElement))) {
       first.focus(); e.preventDefault();
     }
+  });
+
+  // Drawers (.modal-overlay.as-drawer) hold longer forms, so closing one
+  // with typed input asks first instead of silently discarding it. A
+  // successful submit closes via classList directly, never through a
+  // [data-close-modal] button, so it is never interrupted by this.
+  document.querySelectorAll('.modal-overlay.as-drawer').forEach((overlay) => {
+    overlay.addEventListener('input', () => { overlay.dataset.dirty = '1'; });
+    new MutationObserver(() => { delete overlay.dataset.dirty; })
+      .observe(overlay, { attributes: true, attributeFilter: ['class'] });
+    overlay.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-close-modal]');
+      if (!btn || overlay.dataset.dirty !== '1') return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      showConfirm({
+        title: 'Discard this form?',
+        body: 'What you typed will be lost.',
+        confirmLabel: 'Discard',
+        onConfirm: () => {
+          overlay.querySelector('form')?.reset();
+          overlay.classList.remove('open');
+        },
+      });
+    }, true);
   });
 
   // --- Confirm / Prompt dialog (UI/UX consistency pass, Group 2/3) ---

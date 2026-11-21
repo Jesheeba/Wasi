@@ -1,5 +1,19 @@
 # Changelog
 
+## feat(settings-redesign): shared components + Tags, Canned Responses, Attributes
+Step 1+2 of [settings-forms-admin-redesign](features/settings-forms-admin-redesign.md).
+Shared (design-system.css): drawer mode for any existing .modal-overlay
+(`.as-drawer`, same ids/focus trap/Escape), stat tiles, list rows, inline
+add row, colour swatches, option (radio) cards, chip buttons, plan cards,
+WhatsApp bubble preview, side notes. Drawers ask before discarding typed
+input. Tags: added inline with a colour picker, rows show contact counts
+(existing /api/analytics/tags). Canned Responses: bubble-style rows, drawer
+with live WhatsApp preview + character count. Attributes: rows with type
+icons, drawer with type cards. **Bug fixed:** Add Attribute sent
+"Text"/"Number"/"Date" but the server only accepts lowercase, so every save
+from Settings returned 400; the never-saved Key/Description fields were
+removed. `withSubmitLoading` now restores button icons. Zero server diffs.
+
 ## design(v1-flow-editor): use the shared design tokens, not a private copy
 The visual flow editor runs in an iframe, so it never inherited the CRM's
 tokens; it hard-coded its own `--wf-*` palette plus ~13 loose colours in CSS

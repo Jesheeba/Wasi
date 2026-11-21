@@ -1466,12 +1466,30 @@
                     <p class="page-subtitle">Label contacts so you can filter and target them</p>
                   </div>
                   <div class="page-actions">
-                    <button class="btn-primary btn-auto" id="open-add-tag-modal"><i data-lucide="plus"></i> Add Tag</button>
+                    <button class="btn-primary btn-auto" id="open-add-tag-modal" data-manage-only><i data-lucide="plus"></i> Add Tag</button>
                   </div>
                 </div>
-                <div class="settings-tag-list" id="tags-manager-list"></div>
+                <div class="settings-split">
+                  <div class="list-card">
+                    <form class="inline-add-row" id="tags-inline-add-form" data-manage-only aria-label="Add a tag">
+                      <label class="sr-only" for="tags-inline-name">Tag name</label>
+                      <input type="text" id="tags-inline-name" class="form-input" placeholder="New tag, e.g. Wholesale" maxlength="40" required autocomplete="off" />
+                      <fieldset class="swatch-group" id="tags-inline-colors"><legend class="sr-only">Tag colour</legend></fieldset>
+                      <button type="submit" class="btn-primary btn-auto"><i data-lucide="plus" class="icon-14"></i> Add</button>
+                    </form>
+                    <div id="tags-manager-list" aria-live="polite"></div>
+                  </div>
+                  <aside class="side-note">
+                    <h3><i data-lucide="lightbulb"></i> How tags help</h3>
+                    <ul>
+                      <li>Filter the Contacts list by tag.</li>
+                      <li>Send a campaign to everyone with a tag.</li>
+                      <li>Let a flow tag a contact automatically.</li>
+                    </ul>
+                    <p class="empty-example">Keep names short: <code>VIP</code>, <code>Lead</code>, <code>Wholesale</code>.</p>
+                  </aside>
+                </div>
               </div>
-
               <!-- CANNED RESPONSES (item 4/5.5) -->
               <div id="sec-view-canned-responses" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
@@ -1483,16 +1501,20 @@
                     <button class="btn-primary btn-auto" id="open-add-canned-response-modal"><i data-lucide="plus"></i> Add Canned Response</button>
                   </div>
                 </div>
-                <div class="table-card">
-                  <table class="data-table stack-mobile">
-                    <thead><tr><th>Shortcut</th><th>Message</th><th><span class="sr-only">Actions</span></th></tr></thead>
-                    <tbody id="canned-responses-table-body">
-                      <tr class="analytics-state-row"><td colspan="3" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
-                    </tbody>
-                  </table>
+                <div class="settings-split">
+                  <div class="list-card" id="canned-responses-table-body" aria-live="polite">
+                    <div class="list-row"><span class="skeleton analytics-skeleton"></span></div>
+                  </div>
+                  <aside class="side-note">
+                    <h3><i data-lucide="zap"></i> Reply in two keystrokes</h3>
+                    <ol>
+                      <li>In any chat, type <code class="inline-code">/</code>.</li>
+                      <li>Pick a reply or keep typing its shortcut.</li>
+                      <li>Edit it if needed, then send.</li>
+                    </ol>
+                  </aside>
                 </div>
               </div>
-
               <!-- ATTRIBUTES -->
               <div id="sec-view-attributes" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
@@ -1501,19 +1523,23 @@
                     <p class="page-subtitle">Custom fields you can store on every contact</p>
                   </div>
                   <div class="page-actions">
-                    <button class="btn-primary btn-auto" id="open-add-attribute-modal"><i data-lucide="plus"></i> Add Attribute</button>
+                    <button class="btn-primary btn-auto" id="open-add-attribute-modal" data-manage-only><i data-lucide="plus"></i> Add Attribute</button>
                   </div>
                 </div>
-                <div class="table-card">
-                  <table class="data-table stack-mobile">
-                    <thead><tr><th>Attribute name</th><th>Key</th><th>Field type</th></tr></thead>
-                    <tbody id="attributes-table-body">
-                      <tr class="analytics-state-row"><td colspan="3" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
-                    </tbody>
-                  </table>
+                <div class="settings-split">
+                  <div class="list-card" id="attributes-table-body" aria-live="polite">
+                    <div class="list-row"><span class="skeleton analytics-skeleton"></span></div>
+                  </div>
+                  <aside class="side-note">
+                    <h3><i data-lucide="sliders-horizontal"></i> Where attributes appear</h3>
+                    <ul>
+                      <li>On every contact's profile, in Chat and Contacts.</li>
+                      <li>As audience filters in segments.</li>
+                      <li>As the place a flow's <strong>Capture Reply</strong> step saves an answer.</li>
+                    </ul>
+                  </aside>
                 </div>
               </div>
-
               <!-- WEBHOOK -->
               <div id="sec-view-webhook" class="sec-content-view" style="display: none;">
                 <div class="page-header settings-page-header">
@@ -2164,29 +2190,41 @@
   </div>
 
   <!-- item 4/5.5 -->
-  <div id="modal-add-canned-response" class="modal-overlay">
+  <div id="modal-add-canned-response" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">Add Canned Response</h3>
+        <div>
+          <h3 class="modal-title">Add Canned Response</h3>
+          <p class="modal-subtitle">A saved reply your team can insert with /</p>
+        </div>
         <button class="close-modal-btn" data-close-modal="modal-add-canned-response"><i data-lucide="x"></i></button>
       </div>
       <form id="add-canned-response-form">
-        <div class="form-group">
-          <label class="form-label">Shortcut</label>
-          <input type="text" id="new-canned-shortcut" class="form-input" placeholder="/refund" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Message</label>
-          <textarea id="new-canned-body" class="form-input" style="min-height: 90px;" placeholder="Your refund has been processed." required></textarea>
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="new-canned-shortcut">Shortcut</label>
+              <input type="text" id="new-canned-shortcut" class="form-input" placeholder="/refund" maxlength="40" required autocomplete="off" aria-describedby="new-canned-shortcut-hint" />
+              <div class="form-hint" id="new-canned-shortcut-hint">What your team types after / to find it. One word works best.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-canned-body">Message</label>
+              <textarea id="new-canned-body" class="form-input" rows="5" placeholder="Your refund has been processed. It usually reaches your account in 3-5 working days." required aria-describedby="new-canned-body-count"></textarea>
+              <div class="form-hint" id="new-canned-body-count">0 characters</div>
+            </div>
+          </div>
+          <div class="drawer-section">
+            <div class="drawer-section-title">Preview in WhatsApp</div>
+            <div class="wa-preview" aria-hidden="true"><div class="wa-bubble out placeholder" id="new-canned-preview">Your message will appear here.</div></div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-canned-response">Cancel</button>
-          <button type="submit" class="btn-primary btn-auto">Save</button>
+          <button type="submit" class="btn-primary btn-auto">Save Response</button>
         </div>
       </form>
     </div>
   </div>
-
   <div id="modal-invite-member" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
@@ -2218,32 +2256,33 @@
     </div>
   </div>
 
-  <div id="modal-add-attribute" class="modal-overlay">
+  <div id="modal-add-attribute" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">Add Attribute</h3>
+        <div>
+          <h3 class="modal-title">Add Attribute</h3>
+          <p class="modal-subtitle">A field stored on every contact</p>
+        </div>
         <button class="close-modal-btn" data-close-modal="modal-add-attribute"><i data-lucide="x"></i></button>
       </div>
       <form id="add-attribute-form">
-        <div class="form-group">
-          <label class="form-label">Attribute Name</label>
-          <input type="text" id="new-attribute-name" class="form-input" placeholder="e.g. Preferred Language" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Key</label>
-          <input type="text" id="new-attribute-key" class="form-input" placeholder="e.g. custom_language" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Field Type</label>
-          <select id="new-attribute-type" class="form-input">
-            <option value="Text">Text</option>
-            <option value="Number">Number</option>
-            <option value="Date">Date</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <input type="text" id="new-attribute-description" class="form-input" />
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="new-attribute-name">Attribute name</label>
+              <input type="text" id="new-attribute-name" class="form-input" placeholder="e.g. Preferred Language" maxlength="60" required autocomplete="off" />
+            </div>
+          </div>
+          <div class="drawer-section">
+            <fieldset class="option-cards">
+              <legend class="drawer-section-title">Field type</legend>
+              <label class="option-card"><input type="radio" name="new-attribute-type" value="text" checked><span class="option-card-body"><span class="option-card-title"><i data-lucide="type"></i> Text</span><span class="option-card-desc">Names, cities, notes</span></span></label>
+              <label class="option-card"><input type="radio" name="new-attribute-type" value="number"><span class="option-card-body"><span class="option-card-title"><i data-lucide="hash"></i> Number</span><span class="option-card-desc">Order count, budget</span></span></label>
+              <label class="option-card"><input type="radio" name="new-attribute-type" value="date"><span class="option-card-body"><span class="option-card-title"><i data-lucide="calendar"></i> Date</span><span class="option-card-desc">Birthday, renewal date</span></span></label>
+              <label class="option-card"><input type="radio" name="new-attribute-type" value="boolean"><span class="option-card-body"><span class="option-card-title"><i data-lucide="toggle-left"></i> Yes / No</span><span class="option-card-desc">Paid, KYC done</span></span></label>
+            </fieldset>
+            <div class="form-hint">The type can't be changed later. Values that don't match it are rejected.</div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-add-attribute">Cancel</button>
@@ -2252,7 +2291,6 @@
       </form>
     </div>
   </div>
-
   <div id="modal-create-payment" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">

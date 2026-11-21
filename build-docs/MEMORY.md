@@ -1,5 +1,14 @@
 # Project memory
 
+## 2026-11-21 - settings/forms/admin redesign approved
+Owner approved the plan ("build end to end"). Layout + visuals only, zero
+server diffs. Drawers are `.modal-overlay.as-drawer` (same markup and ids)
+rather than a second dialog system, so the global focus trap/Escape code is
+reused. Wallet shows top-ups only: nothing in the app records wallet
+spending, so no "spent" figure is shown (would be invented). Found while
+building: Add Attribute had always failed (capitalised type vs lowercase
+enum) - fixed client-side.
+
 ## 2026-11-16 - client-suspension-paywall scope
 Decision: the "pay to continue" hard block gates on `clients.status ===
 'suspended'` only, NOT `pending_setup`. Reason: `pending_setup` is a

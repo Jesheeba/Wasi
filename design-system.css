@@ -240,6 +240,122 @@ textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .drawer-header { padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .drawer-body { padding: var(--sp-5); overflow-y: auto; flex: 1; }
 
+/* Drawer mode for an existing .modal-overlay: same markup, ids, open/close,
+   focus trap and Escape handling - only the presentation changes to a
+   right-hand panel. Used for create/edit forms with 3+ fields. */
+.modal-overlay.as-drawer { justify-content: flex-end; align-items: stretch; }
+.modal-overlay.as-drawer .modal-box {
+  max-width: 480px; height: 100%; max-height: 100vh; border-radius: 0;
+  transform: translateX(100%); display: flex; flex-direction: column; padding: 0; overflow: hidden;
+}
+.modal-overlay.as-drawer.open .modal-box { transform: none; }
+.modal-overlay.as-drawer .modal-header { margin: 0; padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.modal-overlay.as-drawer .drawer-content { flex: 1; overflow-y: auto; padding: var(--sp-5); }
+.modal-overlay.as-drawer .modal-footer { margin: 0; padding: var(--sp-3) var(--sp-5); background: var(--bg-card); flex-shrink: 0; }
+.modal-overlay.as-drawer .modal-box > form { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.modal-overlay.as-drawer .modal-header > div { min-width: 0; }
+textarea.form-input { font-family: inherit; min-height: 110px; line-height: 1.5; padding-top: 10px; }
+.canned-row { align-items: flex-start; }
+.canned-row-preview { margin-top: var(--sp-2); padding: 10px; max-width: 560px; }
+.canned-row-preview .wa-bubble { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.drawer-section { margin-bottom: var(--sp-5); }
+.drawer-section:last-child { margin-bottom: 0; }
+.drawer-section-title {
+  font-size: var(--fs-caption); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: var(--sp-3);
+}
+.drawer-lede { font-size: var(--fs-body); color: var(--text-muted); margin: 0 0 var(--sp-4); }
+@media (max-width: 640px) {
+  .modal-overlay.as-drawer .modal-box { max-width: 100%; }
+}
+
+/* ------------------------------------------------------- summary tiles */
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-5); }
+.stat-tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4); min-width: 0; }
+.stat-tile-label { font-size: var(--fs-label); color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.stat-tile-label svg { width: 14px; height: 14px; }
+.stat-tile-value { font-size: 1.5rem; font-weight: 600; color: var(--text); line-height: 1.25; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-tile-hint { font-size: var(--fs-caption); color: var(--text-faint); margin-top: 2px; }
+button.stat-tile { font: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.stat-tile:hover { border-color: var(--brand); }
+button.stat-tile[aria-pressed="true"] { border-color: var(--brand-dark); box-shadow: inset 0 0 0 1px var(--brand-dark); }
+
+/* --------------------------------------------- page body + side note */
+.settings-split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--sp-5); align-items: start; }
+@media (max-width: 1100px) { .settings-split { grid-template-columns: minmax(0, 1fr); } }
+.side-note { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4); font-size: var(--fs-body); color: var(--text-muted); }
+.side-note h3 { font-size: var(--fs-body); font-weight: 600; color: var(--text); margin: 0 0 var(--sp-2); display: flex; align-items: center; gap: 6px; }
+.side-note h3 svg { width: 16px; height: 16px; color: var(--brand-dark); }
+.side-note ul, .side-note ol { margin: 0; padding-left: 1.1rem; }
+.side-note li { margin-bottom: 6px; }
+.side-note p { margin: 0 0 var(--sp-2); }
+.side-note + .side-note { margin-top: var(--sp-3); }
+
+/* ------------------------------------------- list rows + inline add */
+.list-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.list-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border); min-width: 0; }
+.list-row:first-child { border-top: 0; }
+.list-row-main { flex: 1; min-width: 0; }
+.list-row-title { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row-sub { font-size: var(--fs-caption); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row-meta { font-size: var(--fs-label); color: var(--text-muted); flex-shrink: 0; }
+.list-row-icon { width: 36px; height: 36px; border-radius: var(--r-md); background: var(--neutral-bg); color: var(--neutral); display: grid; place-items: center; flex-shrink: 0; }
+.list-row-icon svg { width: 18px; height: 18px; }
+.list-row .empty-state { flex: 1; padding: var(--sp-6) var(--sp-4); }
+.inline-add-row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--bg-subtle); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.inline-add-row .form-input { flex: 1; min-width: 160px; height: 38px; }
+.inline-add-row .btn-primary, .inline-add-row .btn-secondary { width: auto; }
+
+.avatar-initials { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-dark); display: grid; place-items: center; font-weight: 600; font-size: var(--fs-label); flex-shrink: 0; }
+
+/* Colour swatches (real radio inputs, visually a dot). */
+.swatch-group { display: inline-flex; gap: 6px; border: 0; padding: 0; margin: 0; align-items: center; }
+.swatch-group input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.swatch-group label { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.swatch-group input:checked + label { border-color: var(--brand-dark); }
+.swatch-group input:focus-visible + label { outline: 2px solid var(--brand-dark); outline-offset: 2px; }
+
+/* ------------------------------------------- option (radio) cards */
+.option-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-2); border: 0; padding: 0; margin: 0 0 var(--sp-4); min-width: 0; }
+.option-cards.stacked { grid-template-columns: 1fr; }
+.option-card { position: relative; display: block; cursor: pointer; }
+.option-card input { position: absolute; opacity: 0; pointer-events: none; }
+.option-card-body { display: block; height: 100%; border: 1px solid var(--border-control); border-radius: var(--r-md); padding: var(--sp-3); background: var(--bg-card); transition: border-color 0.12s ease, background 0.12s ease; }
+.option-card-title { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); font-size: var(--fs-body); }
+.option-card-title svg { width: 16px; height: 16px; }
+.option-card-desc { display: block; font-size: var(--fs-caption); color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+.option-card input:checked + .option-card-body { border-color: var(--brand-dark); background: var(--brand-soft); box-shadow: inset 0 0 0 1px var(--brand-dark); }
+.option-card input:focus-visible + .option-card-body { outline: 2px solid var(--brand-dark); outline-offset: 2px; }
+
+/* Preset amount / quick-pick chips (real buttons). */
+.chip-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip-btn { height: 34px; padding: 0 14px; border-radius: var(--r-pill); border: 1px solid var(--border-control); background: var(--bg-card); color: var(--text); font: inherit; font-size: var(--fs-label); font-weight: 500; cursor: pointer; }
+.chip-btn:hover { border-color: var(--brand-dark); }
+.chip-btn[aria-pressed="true"] { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
+
+/* ------------------------------------------------------- plan cards */
+.plan-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
+.plan-card { border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-5); background: var(--bg-card); display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.plan-card.current { border-color: var(--brand-dark); box-shadow: inset 0 0 0 1px var(--brand-dark); }
+.plan-card-name { font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
+.plan-card-price { font-size: 1.75rem; font-weight: 700; color: var(--text); }
+.plan-card-price small { font-size: var(--fs-label); font-weight: 400; color: var(--text-muted); }
+.plan-card-features { list-style: none; padding: 0; margin: var(--sp-2) 0; font-size: var(--fs-body); color: var(--text-muted); flex: 1; }
+.plan-card-features li { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px; }
+.plan-card-features svg { width: 16px; height: 16px; color: var(--success); flex-shrink: 0; margin-top: 2px; }
+.plan-card .btn-primary, .plan-card .btn-secondary { width: 100%; }
+
+/* Teaching empty state additions (extends .empty-state). */
+.empty-state .empty-example { margin-top: var(--sp-3); font-size: var(--fs-caption); color: var(--text-faint); }
+.empty-state .empty-example code { background: var(--neutral-bg); padding: 1px 6px; border-radius: 4px; }
+
+/* WhatsApp bubble preview (canned responses, profile). */
+.wa-preview { background: var(--wa-wallpaper); border-radius: var(--r-lg); padding: var(--sp-4); }
+.wa-bubble { background: var(--wa-bubble); color: var(--wa-ink); border-radius: 0 8px 8px 8px; padding: 8px 10px; font-size: var(--fs-body); line-height: 1.45; max-width: 100%; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13); }
+.wa-bubble.out { background: var(--wa-bubble-out); border-radius: 8px 0 8px 8px; margin-left: auto; }
+.wa-bubble.placeholder { color: var(--wa-muted); font-style: italic; }
+.wa-bubble-time { display: block; text-align: right; font-size: 11px; color: var(--wa-muted); margin-top: 2px; }
+
 /* ------------------------------------------------------- overflow menu */
 .menu { position: relative; display: inline-block; }
 .menu-list {
