@@ -1,4 +1,4 @@
-// Storage for the AI agent (migration 102). Every function takes `db` first:
+// Storage for the AI agent (migration 103). Every function takes `db` first:
 // req.db (RLS-restricted) from routes, the privileged pool from the runner,
 // so every query scopes by client_id explicitly either way.
 const PUBLIC_COLUMNS = `id, client_id, is_enabled, enabled_at, mode, model, api_key_last4,

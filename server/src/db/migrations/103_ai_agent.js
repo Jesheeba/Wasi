@@ -155,7 +155,7 @@ exports.up = (pgm) => {
 exports.down = (pgm) => {
   pgm.sql(`do $$ begin
     if exists (select 1 from ai_agents where enabled_at is not null) then
-      raise exception 'Refusing to roll back 102_ai_agent: an agent has been enabled; its history would be lost.';
+      raise exception 'Refusing to roll back 103_ai_agent: an agent has been enabled; its history would be lost.';
     end if; end $$;`);
   pgm.dropColumns('chats', ['ai_muted', 'ai_muted_at', 'ai_muted_by_type', 'ai_muted_by_id', 'ai_cooldown_until', 'ai_handover_reason', 'ai_handover_at']);
   for (const table of [...TENANT_TABLES].reverse()) pgm.dropTable(table);

@@ -35,6 +35,32 @@ mid-run. A clean re-run passed 15/15.
 Regression, all green: whatsappFlows 17, woocommerce 13, woocommerceUI 3,
 chatUiPass 15, chatsLastAgentReplyAt 17, metaWebhookDispatch 3,
 webhookForwarding 8, whatsappQuickWins 11, apiV1 14.
+## ai-agent: UI (unit 2)
+`server/test/aiAgentUI.test.js` (Playwright, own port 4107 opened as
+`http://[::1]` so app.js calls its own origin, every request to :4000 aborted -
+another session's dev server holds :4000 against the real DB; model and key
+check stubbed). Settings: consent, key saved and cleared from the field,
+profile + staff days, Q&A added with token meter, try-it bubble, switch on
+(starts in practice mode); a non-pilot client sees the pilot note and the
+toggle reverts on the server's refusal; inbox: needs-a-person pill and queue,
+header note, assistant badge, pause sets only ai_muted (cooldown kept); a
+client without the agent sees no AI controls; 375px no overflow. 5/5, stable
+over 4 consecutive runs after fixing two test races (waiting on a condition
+already true before the save; waitForFunction treating a Promise as truthy).
+Screenshots reviewed at 1440 and 375; the Mode labels were cut off and were
+shortened. Regression, same private-port technique on temporary copies:
+settingsRedesign 11, chatUiPass 15, confirmPromptGroup23 6,
+modalInnerScrollGroup4 4 - all pass. Migration renumbered 102 -> 103 (another
+session's 102_messages_reply_and_reactions); up and down both exercised
+locally, local DB left at 101 so the other session's 102 is not blocked.
+**After rebasing onto master (568f79d, other session's 102 landed):** local DB
+migrated in order 101 -> 102 -> 103. aiAgent 19, aiAgentUI 5, aiAgentEnqueue 7,
+aiJobs 13, chatsLastAgentReplyAt 17, chatAssignment 13, webhookForwarding 8,
+metaWebhookDispatch 3, flowEngineOutcome 17, settingsRedesign 11,
+confirmPromptGroup23 6 - all pass. chatUiPass 14/15: test 10 (contacts CSV
+import, "Imported 2 contact" never shown) fails identically on plain master
+568f79d without the AI commits (2 of 2 runs) - pre-existing, not investigated.
+
 ## ai-agent: backend (unit 1)
 `server/test/aiAgent.test.js` (real local Postgres, disposable clients, model and
 send stubbed - nothing reaches Anthropic or Meta). SPEC 16.1 gate table (every row,

@@ -27,7 +27,7 @@ it can't. Replaces silence (or a canned "*" greeting) with a real answer.
 - No prompt caching (decision 19). `tokens_cached` still recorded.
 
 ## Architecture
-- Migration 102: `ai_agents` (config, knowledge, meter, consent state,
+- Migration 103: `ai_agents` (config, knowledge, meter, consent state,
   encrypted BYOK key, mode), `ai_agent_consent_events`,
   `ai_knowledge_sources`, `ai_replies`, `ai_gate_log`; `chats` gets
   `ai_muted*`, `ai_cooldown_until`, `ai_handover_reason/at`.

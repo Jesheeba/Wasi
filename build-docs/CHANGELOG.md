@@ -26,6 +26,16 @@ New form type "Booking with live slots".
 - Customers' carts show in the chat as readable items and a total.
 - Failed product sends can't be retried as plain text.
 - Migration 100.
+## feat(ai-agent): AI assistant - Settings screen and inbox markers
+Settings > AI Assistant: consent statement, bring-your-own Anthropic key
+(encrypted, last 4 shown), business profile, staff hours, handover and
+fallback wording, monthly cap, model, knowledge (Q&A, pasted or .txt text,
+2,500-token meter, suggestions from your own past chats), try-it box, and
+activity (answered, handed over, AI cost, practice replies, why it stayed
+silent). Inbox: "Needs a person" queue and pill, header note, assistant
+badge on AI messages, pause/resume AI per chat. Backend in the previous
+commit. Live only for AI_LIVE_ALLOWLIST (demo account + 9092766740).
+
 ## fix(automation-rules): remove the temporary test lock
 Reverts 63572a3 after the live test passed on production (catch-all replied
 once to 9092766740, then stayed silent within 24h). Once deployed, "*" rules

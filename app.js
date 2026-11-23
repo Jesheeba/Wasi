@@ -284,7 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
       assignedTeamMemberId: c.assigned_team_member_id || null,
       // item 7 - the linked contact record, if any (chats.contact_id),
       // needed to fetch/save its per-contact attribute values.
-      contactId: c.contact_id || null
+      contactId: c.contact_id || null,
+      // AI assistant: the client's own mute, the system's cooldown and a
+      // pending handover are three different things (SPEC section 6).
+      aiMuted: Boolean(c.ai_muted),
+      aiCooldownUntil: c.ai_cooldown_until || null,
+      aiHandoverReason: c.ai_handover_reason || null
     };
   }
 
@@ -1204,8 +1209,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const sentViaAppHtml = m.sent_via_app
       ? `<span class="msg-api-label" title="Sent by your own app/integration using a Wasi API key">🔌 via ${escapeHtml(m.sent_via_app)}</span>`
       : '';
+    const aiLabelHtml = m.ai_reply_id ? '<span class="msg-ai-label" title="Written and sent by your AI assistant">✨ Assistant</span>' : '';
     const metaHtml = showMeta
-      ? `<div class="msg-time">${isEcho ? '<span class="msg-echo-label" title="Sent from the WhatsApp Business app on your phone, not through Wasi">📱 Sent from phone</span>' : sentViaAppHtml}<time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
+      ? `<div class="msg-time">${isEcho ? '<span class="msg-echo-label" title="Sent from the WhatsApp Business app on your phone, not through Wasi">📱 Sent from phone</span>' : sentViaAppHtml + aiLabelHtml}<time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
       : `<time class="sr-only" datetime="${m.sent_at}">${fullTimeLabel(m.sent_at)}</time>`;
 
     // Reply/quote (2026-11-23) - the quoted message is looked up from the
@@ -1574,6 +1580,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.teamMembers.map(m => `<option value="${m.id}" ${m.id === chat.assignedTeamMemberId ? 'selected' : ''}>${escapeHtml(m.name)} (${escapeHtml(m.role)})</option>`).join('');
 
     document.getElementById('chat-unassign-btn').style.display = chat.assignedTeamMemberId ? '' : 'none';
+    renderChatAiState(chat);
     document.getElementById('chat-resolve-btn').style.display = isResolved ? 'none' : '';
     document.getElementById('chat-reopen-btn').style.display = isResolved ? '' : 'none';
 
@@ -1591,6 +1598,61 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+
+  // AI assistant state in the chat header (SPEC sections 6, 13, 15). The
+  // client's mute is a toggle; the system's cooldown is a read-only note and
+  // never shares that toggle. Nothing renders for a client without the agent.
+  const AI_SILENT_REASON = {
+    human_active: 'a team member was active', outside_schedule: 'inside staff hours', window_closed: 'the 24-hour window had closed',
+    cap_reached: 'the monthly limit was reached', rate_limited: 'the per-chat limit was reached', no_api_key: 'no API key is set',
+    not_in_pilot: 'this number is not in the pilot', muted: 'it is paused in this chat', cooldown: 'it paused after handing over',
+  };
+  async function renderChatAiState(chat) {
+    const note = document.getElementById('chat-ai-note');
+    const muteBtn = document.getElementById('chat-ai-mute-btn');
+    const setNote = (text, kind) => {
+      note.hidden = !text;
+      note.textContent = text || '';
+      note.className = `chat-ai-note${kind ? ` is-${kind}` : ''}`;
+    };
+    setNote('');
+    muteBtn.hidden = true;
+    let info;
+    try {
+      info = await authFetch(`/api/ai-agent/chats/${encodeURIComponent(chat.id)}`);
+    } catch (_) {
+      return; // no access or no agent: show nothing
+    }
+    if (state.activeChatId !== chat.id) return; // the user moved on
+    if (!info.agentEnabled && !chat.aiHandoverReason) return;
+
+    muteBtn.hidden = false;
+    document.getElementById('chat-ai-mute-label').textContent = chat.aiMuted ? 'Resume AI in this chat' : 'Pause AI in this chat';
+    const cooling = chat.aiCooldownUntil && new Date(chat.aiCooldownUntil) > new Date();
+    if (chat.aiHandoverReason) return setNote(`Needs a person: ${chat.aiHandoverReason}`, 'handover');
+    if (chat.aiMuted) return setNote('AI paused in this chat', 'muted');
+    if (cooling) return setNote(`AI paused until ${new Date(chat.aiCooldownUntil).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} after handing over`, 'muted');
+    const gate = info.lastGate;
+    const lastReply = info.lastReply;
+    if (gate && (!lastReply || new Date(gate.created_at) > new Date(lastReply.created_at)) && AI_SILENT_REASON[gate.gate]) {
+      return setNote(`AI did not reply: ${AI_SILENT_REASON[gate.gate]}`);
+    }
+    if (lastReply && lastReply.source_titles && lastReply.source_titles.length && lastReply.outcome === 'sent') {
+      return setNote(`AI answered from: ${lastReply.source_titles.join(', ')}`);
+    }
+  }
+
+  document.getElementById('chat-ai-mute-btn')?.addEventListener('click', async () => {
+    const chat = state.chats.find((c) => c.id === state.activeChatId);
+    if (!chat) return;
+    try {
+      await authFetch(`/api/chats/${encodeURIComponent(chat.id)}/ai-mute`, { method: 'POST', body: JSON.stringify({ muted: !chat.aiMuted }) });
+      showToast(chat.aiMuted ? 'AI resumed in this chat' : 'AI paused in this chat', 'success');
+      await refreshActiveChatFromServer();
+    } catch (err) {
+      reportError(err);
+    }
+  });
 
   async function refreshActiveChatFromServer() {
     const updated = await authFetch(`/api/chats/${state.activeChatId}`);
@@ -2858,6 +2920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (queueFilter === 'unassigned') return !chat.assignedTeamMemberId && chat.status !== 'resolved';
     if (queueFilter === 'mine') return chat.assignedTeamMemberId === state.actorId && chat.status !== 'resolved';
     if (queueFilter === 'resolved') return chat.status === 'resolved';
+    if (queueFilter === 'needs-person') return Boolean(chat.aiHandoverReason) && chat.status !== 'resolved';
     return chat.status !== 'resolved'; // 'all' - matches the pre-5.5 behavior of showing every chat, minus resolved noise
   }
 
@@ -2952,6 +3015,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const assignBadge = chat.status === 'resolved'
         ? '<span class="chat-assign-pill is-resolved">Resolved</span>'
         : (assignee ? `<span class="chat-assign-pill is-assigned">${esc(assignee.name)}</span>` : '');
+      const needsPerson = chat.aiHandoverReason && chat.status !== 'resolved'
+        ? `<span class="chat-assign-pill is-needs-person" title="${esc(chat.aiHandoverReason)}">Needs a person</span>` : '';
       const unread = Number(chat.count) > 0;
       const isActive = state.activeChatId === chat.id;
       return `
@@ -2959,7 +3024,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="chat-avatar" aria-hidden="true">${esc(initialsFor(chat.name))}</div>
           <div class="chat-item-main">
             <div class="chat-item-name">${esc(chat.name)}</div>
-            <div class="chat-item-sub"><span>WhatsApp</span>${assignBadge}</div>
+            <div class="chat-item-sub"><span>WhatsApp</span>${assignBadge}${needsPerson}</div>
           </div>
           <div class="chat-item-side">
             <span class="chat-item-time">${esc(chatListTimeLabel(chat.time))}</span>
@@ -9985,9 +10050,310 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'developer') { renderApiKeysManager(); renderMcpConfigSnippet(); renderApiDocsSnippet(); }
       if (secKey === 'subscription') renderSubscriptionTab();
       if (secKey === 'billing') renderBillingTab();
+      if (secKey === 'ai-assistant') renderAiAssistant();
       refreshIcons();
     });
   });
+
+  // --- AI Assistant (sec-view-ai-assistant; build-docs/features/ai-agent.md) ---
+  // One GET for the agent, one for knowledge, one for activity. Every write
+  // re-renders from the server's answer, never from local guesses.
+  const AI_DAYS = [['Sun', 0], ['Mon', 1], ['Tue', 2], ['Wed', 3], ['Thu', 4], ['Fri', 5], ['Sat', 6]];
+  const AI_OUTCOME_LABEL = {
+    sent: 'Answered', shadow: 'Practice reply (not sent)', refused_out_of_scope: 'Handed over: outside its knowledge',
+    no_knowledge: 'Handed over: no knowledge yet', model_error: 'Handed over: AI error', send_failed: 'Could not send', rate_limited: 'Handed over: limit',
+  };
+  const AI_GATE_LABEL = {
+    human_active: 'a team member was active', outside_schedule: 'inside staff hours', window_closed: 'the 24-hour window had closed',
+    muted: 'paused in that chat', cooldown: 'paused after a handover', cap_reached: 'the monthly limit was reached',
+    rate_limited: 'the per-chat limit was reached', no_api_key: 'no API key', not_in_pilot: 'not in the pilot',
+  };
+  const rupees = (paise) => `₹${(Number(paise || 0) / 100).toFixed(2)}`;
+  let aiAgent = null;
+
+  async function renderAiAssistant() {
+    try {
+      aiAgent = await authFetch('/api/ai-agent');
+      renderAiAgentForm();
+      await Promise.all([renderAiKnowledge(), renderAiActivity()]);
+    } catch (err) {
+      reportError(err);
+    }
+  }
+
+  function renderAiAgentForm() {
+    const a = aiAgent;
+    const note = document.getElementById('ai-pilot-note');
+    note.hidden = a.in_pilot;
+    note.textContent = 'The AI assistant is in a limited pilot. You can set it up and try it below; switching it on for customers opens after launch.';
+
+    document.getElementById('ai-enabled-toggle').checked = a.is_enabled;
+    document.getElementById('ai-enabled-label').textContent = a.is_enabled ? (a.mode === 'live' ? 'On - replying to customers' : 'On - practice mode') : 'Off';
+    document.getElementById('ai-mode').value = a.mode;
+
+    const checks = [
+      [a.in_pilot, 'Available for this account'],
+      [Boolean(a.ai_consent_at), 'Data-processing statement agreed'],
+      [Boolean(a.key_source), 'API key added'],
+      [Boolean(a.business_name), 'Business name set'],
+      [a.schedule_mode === 'always' || (a.staff_hours || []).length > 0, 'Staff hours set'],
+      [a.knowledge_tokens > 0, 'Some knowledge added'],
+    ];
+    document.getElementById('ai-checklist').innerHTML = checks.map(([ok, label]) =>
+      `<li class="${ok ? 'is-done' : ''}"><i data-lucide="${ok ? 'check-circle-2' : 'circle'}" class="icon-14"></i> ${esc(label)}</li>`).join('');
+
+    document.getElementById('ai-consent-text').textContent = a.consent.statement;
+    document.getElementById('ai-consent-checkbox').checked = Boolean(a.ai_consent_at);
+    document.getElementById('ai-consent-meta').textContent = a.ai_consent_at ? `Agreed on ${formatShortDate(a.ai_consent_at)}.` : 'Required before switching the assistant on. You can withdraw at any time.';
+
+    const keyLabel = a.key_source === 'own' ? `Your key ending in …${a.api_key_last4}`
+      : a.key_source === 'platform' ? "Using Wasi's test key (demo account only)" : 'No key added yet.';
+    document.getElementById('ai-key-current').textContent = keyLabel;
+    document.getElementById('ai-key-remove').hidden = a.key_source !== 'own';
+
+    const set = (id, v) => { document.getElementById(id).value = v ?? ''; };
+    set('ai-business-name', a.business_name); set('ai-business-type', a.business_type); set('ai-description', a.description);
+    set('ai-areas', a.areas_served); set('ai-hours', a.hours); set('ai-languages', (a.languages || []).join(', '));
+    set('ai-tone', a.tone); set('ai-schedule-mode', a.schedule_mode); set('ai-handover', a.handover_message);
+    set('ai-fallback', a.fallback_message); set('ai-cap', a.monthly_cap);
+    document.getElementById('ai-model').innerHTML = a.models.map((m) => `<option value="${esc(m)}" ${m === a.model ? 'selected' : ''}>${esc(m)}</option>`).join('');
+    const blocked = document.getElementById('ai-schedule-blocked');
+    blocked.hidden = !a.always_blocked_reason;
+    blocked.textContent = a.always_blocked_reason || '';
+    document.querySelector('#ai-schedule-mode option[value="always"]').disabled = Boolean(a.always_blocked_reason);
+
+    const win = (a.staff_hours || [])[0] || { days: [1, 2, 3, 4, 5, 6], start: '09:00', end: '18:00' };
+    document.getElementById('ai-staff-days').innerHTML = AI_DAYS.map(([label, d]) =>
+      `<button type="button" class="chip-btn${win.days.includes(d) ? ' active' : ''}" data-ai-day="${d}" aria-pressed="${win.days.includes(d)}">${label}</button>`).join('');
+    set('ai-staff-start', win.start); set('ai-staff-end', win.end);
+    refreshIcons();
+  }
+
+  async function aiSave(path, method, body, okMessage) {
+    try {
+      aiAgent = await authFetch(path, { method, body: JSON.stringify(body) });
+      renderAiAgentForm();
+      if (okMessage) showToast(okMessage, 'success');
+      return true;
+    } catch (err) {
+      reportError(err);
+      renderAiAgentForm(); // put toggles back to what the server holds
+      return false;
+    }
+  }
+
+  document.getElementById('ai-enabled-toggle')?.addEventListener('change', (e) =>
+    aiSave('/api/ai-agent/enable', 'POST', { enabled: e.target.checked }, e.target.checked ? 'AI assistant switched on' : 'AI assistant switched off'));
+  document.getElementById('ai-mode')?.addEventListener('change', (e) =>
+    aiSave('/api/ai-agent', 'PUT', { mode: e.target.value }, e.target.value === 'live' ? 'Live: replies will be sent' : 'Practice mode: nothing is sent'));
+  document.getElementById('ai-consent-checkbox')?.addEventListener('change', (e) => {
+    if (e.target.checked) return aiSave('/api/ai-agent/consent', 'POST', { granted: true }, 'Consent recorded');
+    showConfirm({
+      title: 'Withdraw consent?', body: 'The assistant is switched off immediately and stops sending messages to the AI provider.',
+      confirmLabel: 'Withdraw', onConfirm: () => aiSave('/api/ai-agent/consent', 'POST', { granted: false }, 'Consent withdrawn; assistant off'),
+    });
+    e.target.checked = true; // until confirmed
+  });
+  document.getElementById('ai-key-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('ai-key-input');
+    const restore = withSubmitLoading(e.target, 'Checking…');
+    const ok = await aiSave('/api/ai-agent/api-key', 'PUT', { apiKey: input.value.trim() }, 'Key saved');
+    restore();
+    if (ok) input.value = '';
+  });
+  document.getElementById('ai-key-remove')?.addEventListener('click', () => showConfirm({
+    title: 'Remove your API key?', body: 'The assistant stops replying until a key is added again.',
+    confirmLabel: 'Remove', onConfirm: () => aiSave('/api/ai-agent/api-key', 'DELETE', {}, 'Key removed'),
+  }));
+  document.getElementById('ai-staff-days')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ai-day]');
+    if (!btn) return;
+    btn.classList.toggle('active');
+    btn.setAttribute('aria-pressed', btn.classList.contains('active'));
+  });
+  document.getElementById('ai-settings-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const val = (id) => document.getElementById(id).value.trim();
+    const days = [...document.querySelectorAll('#ai-staff-days .chip-btn.active')].map((b) => Number(b.dataset.aiDay));
+    const body = {
+      business_name: val('ai-business-name'), business_type: val('ai-business-type'), description: val('ai-description'),
+      areas_served: val('ai-areas'), hours: val('ai-hours'),
+      languages: val('ai-languages').split(',').map((l) => l.trim().toLowerCase()).filter(Boolean),
+      tone: val('ai-tone'), schedule_mode: val('ai-schedule-mode'),
+      staff_hours: days.length ? [{ days, start: val('ai-staff-start'), end: val('ai-staff-end') }] : [],
+      handover_message: val('ai-handover'), fallback_message: val('ai-fallback'),
+      monthly_cap: Number(val('ai-cap')), model: val('ai-model'),
+    };
+    if (!body.languages.length) body.languages = ['english'];
+    const restore = withSubmitLoading(e.target, 'Saving…');
+    await aiSave('/api/ai-agent', 'PUT', body, 'Settings saved');
+    restore();
+  });
+
+  // --- knowledge
+  async function renderAiKnowledge() {
+    const k = await authFetch('/api/ai-agent/knowledge');
+    const pct = Math.min(100, Math.round((k.knowledge_tokens / k.budget) * 100));
+    document.getElementById('ai-meter-label').textContent = `${k.knowledge_tokens.toLocaleString('en-IN')} of ${k.budget.toLocaleString('en-IN')} tokens used`;
+    const bar = document.getElementById('ai-meter-bar');
+    bar.setAttribute('aria-valuemax', k.budget); bar.setAttribute('aria-valuenow', k.knowledge_tokens);
+    document.getElementById('ai-meter-fill').style.width = `${pct}%`;
+    bar.classList.toggle('is-near', pct >= 80);
+    const list = document.getElementById('ai-sources');
+    list.innerHTML = k.sources.length ? k.sources.map((s) => `
+      <div class="list-row${s.is_active ? '' : ' is-muted'}">
+        <div class="list-row-main">
+          <div class="list-row-title">${esc(s.kind === 'qa' ? s.question : s.title)}</div>
+          <div class="list-row-sub">${esc((s.kind === 'qa' ? s.answer : s.body).slice(0, 160))}${s.origin === 'history_seed' ? ' · from your conversations' : ''}</div>
+        </div>
+        <div class="list-row-meta">
+          <label class="wasi-toggle" title="${s.is_active ? 'Used by the assistant' : 'Not used'}">
+            <input type="checkbox" data-ai-source-toggle="${esc(s.id)}" ${s.is_active ? 'checked' : ''} aria-label="Use this in answers" />
+          </label>
+          <button type="button" class="btn-ghost btn-sm tpl-action-danger" data-ai-source-delete="${esc(s.id)}" aria-label="Delete"><i data-lucide="trash-2" class="icon-14"></i></button>
+        </div>
+      </div>`).join('')
+      : '<div class="empty-state"><div class="empty-title">No knowledge yet</div><div>Add your common questions and answers, or let us suggest them from your past conversations.</div></div>';
+    refreshIcons();
+  }
+
+  async function aiKnowledgeWrite(path, method, body, okMessage) {
+    try {
+      await authFetch(path, { method, body: body ? JSON.stringify(body) : undefined });
+      if (okMessage) showToast(okMessage, 'success');
+      aiAgent = await authFetch('/api/ai-agent');
+      renderAiAgentForm();
+      await renderAiKnowledge();
+      return true;
+    } catch (err) {
+      reportError(err);
+      await renderAiKnowledge();
+      return false;
+    }
+  }
+
+  document.getElementById('ai-sources')?.addEventListener('change', (e) => {
+    const id = e.target.dataset.aiSourceToggle;
+    if (id) aiKnowledgeWrite(`/api/ai-agent/knowledge/${encodeURIComponent(id)}`, 'PATCH', { is_active: e.target.checked });
+  });
+  document.getElementById('ai-sources')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ai-source-delete]');
+    if (!btn) return;
+    showConfirm({ title: 'Delete this knowledge?', body: 'The assistant will no longer use it.', confirmLabel: 'Delete',
+      onConfirm: () => aiKnowledgeWrite(`/api/ai-agent/knowledge/${encodeURIComponent(btn.dataset.aiSourceDelete)}`, 'DELETE', null, 'Deleted') });
+  });
+  document.getElementById('ai-qa-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ok = await aiKnowledgeWrite('/api/ai-agent/knowledge', 'POST', {
+      kind: 'qa', question: document.getElementById('ai-qa-question').value.trim(), answer: document.getElementById('ai-qa-answer').value.trim(),
+    }, 'Added');
+    if (ok) e.target.reset();
+  });
+  document.getElementById('ai-doc-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 200 * 1024) { showToast('That file is too large. Paste only the parts the assistant needs.', 'error'); e.target.value = ''; return; }
+    document.getElementById('ai-doc-body').value = (await file.text()).slice(0, 20000);
+    if (!document.getElementById('ai-doc-title').value) document.getElementById('ai-doc-title').value = file.name.replace(/\.txt$/i, '');
+  });
+  document.getElementById('ai-doc-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.getElementById('ai-doc-file').files[0];
+    const ok = await aiKnowledgeWrite('/api/ai-agent/knowledge', 'POST', {
+      kind: file ? 'upload' : 'pasted', title: document.getElementById('ai-doc-title').value.trim(),
+      body: document.getElementById('ai-doc-body').value.trim(), ...(file ? { file_name: file.name, file_bytes: file.size } : {}),
+    }, 'Added');
+    if (ok) e.target.reset();
+  });
+
+  document.getElementById('ai-suggest-btn')?.addEventListener('click', async (e) => {
+    const box = document.getElementById('ai-suggestions');
+    e.target.disabled = true;
+    try {
+      const { suggestions } = await authFetch('/api/ai-agent/knowledge/suggest', { method: 'POST', body: '{}' });
+      box.hidden = false;
+      box.innerHTML = suggestions.length
+        ? `<div class="list-row"><div class="list-row-main"><div class="list-row-title">The questions your customers ask most, with the answers you gave</div><div class="list-row-sub">Check each one before adding it.</div></div></div>`
+          + suggestions.map((s, i) => `
+          <div class="list-row" data-ai-suggestion="${i}">
+            <div class="list-row-main">
+              <label class="form-label" for="ai-sug-q-${i}">Asked ${s.asked} times</label>
+              <input id="ai-sug-q-${i}" class="form-input" value="${esc(s.question)}" maxlength="500" />
+              <label class="sr-only" for="ai-sug-a-${i}">Answer</label>
+              <textarea id="ai-sug-a-${i}" class="form-input" rows="2" maxlength="2000">${esc(s.answer)}</textarea>
+            </div>
+            <div class="list-row-meta">
+              <button type="button" class="btn-primary btn-sm" data-ai-accept="${i}">Add</button>
+              <button type="button" class="btn-ghost btn-sm" data-ai-skip="${i}">Skip</button>
+            </div>
+          </div>`).join('')
+        : '<div class="empty-state"><div class="empty-title">No repeated questions found yet</div><div>Suggestions appear once customers have asked the same thing a few times in the last 60 days.</div></div>';
+    } catch (err) {
+      reportError(err);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+  document.getElementById('ai-suggestions')?.addEventListener('click', async (e) => {
+    const accept = e.target.closest('[data-ai-accept]');
+    const skip = e.target.closest('[data-ai-skip]');
+    const i = (accept || skip)?.dataset.aiAccept ?? (accept || skip)?.dataset.aiSkip;
+    if (i === undefined) return;
+    const row = document.querySelector(`[data-ai-suggestion="${i}"]`);
+    if (accept) {
+      const ok = await aiKnowledgeWrite('/api/ai-agent/knowledge', 'POST', {
+        kind: 'qa', origin: 'history_seed', question: document.getElementById(`ai-sug-q-${i}`).value.trim(), answer: document.getElementById(`ai-sug-a-${i}`).value.trim(),
+      }, 'Added');
+      if (!ok) return;
+    }
+    row?.remove();
+  });
+
+  document.getElementById('ai-try-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const out = document.getElementById('ai-try-result');
+    const question = document.getElementById('ai-try-input').value.trim();
+    const restore = withSubmitLoading(e.target, 'Thinking…');
+    try {
+      const r = await authFetch('/api/ai-agent/test', { method: 'POST', body: JSON.stringify({ message: question }) });
+      out.hidden = false;
+      out.innerHTML = `<div class="wa-bubble in">${esc(question)}</div>
+        <div class="wa-bubble out">${esc(r.reply)}</div>
+        <div class="form-hint">${r.refused ? 'It would hand this one over to your team. ' : ''}${r.cost_paise ? `Cost: ${rupees(r.cost_paise)}` : ''}${r.latency_ms ? ` · ${(r.latency_ms / 1000).toFixed(1)} s` : ''}</div>`;
+    } catch (err) {
+      reportError(err);
+    } finally {
+      restore();
+    }
+  });
+
+  // --- activity (SPEC 12.4)
+  async function renderAiActivity() {
+    const onlyHandovers = document.getElementById('ai-handovers-only').checked;
+    const a = await authFetch(`/api/ai-agent/activity?days=30${onlyHandovers ? '&handovers=1' : ''}`);
+    const s = a.summary;
+    document.getElementById('ai-stat-tiles').innerHTML = [
+      statTile('message-circle-reply', 'Answered', s.answered.toLocaleString('en-IN'), `${aiAgent.replies_used} of ${aiAgent.monthly_cap} this month`),
+      statTile('users', 'Handed to your team', s.handed_over.toLocaleString('en-IN')),
+      statTile('indian-rupee', 'AI cost (30 days)', rupees(s.cost_paise), 'Billed to your API key'),
+      statTile('flask-conical', 'Practice replies', s.shadow.toLocaleString('en-IN'), 'Written, not sent'),
+    ].join('');
+    document.getElementById('ai-gate-summary').textContent = a.gates.length
+      ? `Stayed silent: ${a.gates.map((g) => `${g.n} × ${AI_GATE_LABEL[g.gate] || g.gate}`).join(', ')}.` : '';
+    document.getElementById('ai-activity-list').innerHTML = a.recent.length ? a.recent.map((r) => `
+      <div class="list-row">
+        <div class="list-row-main">
+          <div class="list-row-title">${esc(r.customer_text)}</div>
+          <div class="list-row-sub">${esc(AI_OUTCOME_LABEL[r.outcome] || r.outcome)}${r.reply_text && ['sent', 'shadow'].includes(r.outcome) ? `: ${esc(r.reply_text)}` : ''}</div>
+          ${r.source_titles.length ? `<div class="list-row-sub">Answered from: ${esc(r.source_titles.join(', '))}</div>` : ''}
+        </div>
+        <div class="list-row-meta">${esc(r.chat_name || '')}<br>${esc(formatShortDate(r.created_at))} · ${rupees(r.cost_paise)}</div>
+      </div>`).join('')
+      : '<div class="empty-state"><div class="empty-title">Nothing yet</div><div>Replies the assistant writes appear here, with what they were based on.</div></div>';
+    refreshIcons();
+  }
+  document.getElementById('ai-handovers-only')?.addEventListener('change', () => renderAiActivity().catch(reportError));
 
   // --- Developer Hub (sec-view-developer) ---
   // "Webhooks" isn't one of this view's own .inner-tab-panel's (the real

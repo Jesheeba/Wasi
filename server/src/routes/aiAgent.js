@@ -263,7 +263,10 @@ router.get('/activity', manage, asyncHandler(async (req, res) => {
 
 router.get('/chats/:chatId', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.chatId);
-  res.json(await aiAgentRepo.latestForChat(req.db, req.clientId, req.params.chatId));
+  const agent = await aiAgentRepo.findByClientId(req.db, req.clientId);
+  const latest = await aiAgentRepo.latestForChat(req.db, req.clientId, req.params.chatId);
+  // agentEnabled lets the inbox stay free of AI controls for clients without it.
+  res.json({ agentEnabled: Boolean(agent && agent.is_enabled), ...latest });
 }));
 
 module.exports = router;
