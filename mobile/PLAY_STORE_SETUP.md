@@ -18,7 +18,7 @@ Done in the repo:
 - Listing graphics: `mobile/store-listing/app-icon-512.png`,
   `mobile/store-listing/feature-graphic-1024x500.png`.
 - Screenshots (2026-11-23): `mobile/store-listing/screenshots/` - `phone-*` (1080x1920),
-  `tablet7-*` (1200x1920), `tablet10-*` (1600x2560). Taken from the synthetic
+  `tablet7-*` (1920x1080), `tablet10-*` (2560x1440) - tablets must be 16:9 or 9:16. Taken from the synthetic
   "Vetri Academy (Demo)" client (`server/src/db/seedLandingDemo.js`) seeded into the
   LOCAL embedded Postgres only, never production, so no real client data appears.
   Re-take: seed it locally, then serve with `createApp()` on port 4000 and capture with
