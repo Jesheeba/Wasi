@@ -966,24 +966,6 @@ body {
   margin-top: 4px;
 }
 
-/* Wallet & Recharge Balance Cards */
-.wallet-card {
-  background: var(--brand-dark);
-  color: white;
-  border-radius: var(--r-lg);
-  padding: var(--sp-5) var(--sp-6);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-4);
-  margin-bottom: 1.5rem;
-  max-width: 640px;
-}
-.wallet-label { font-size: var(--fs-body); opacity: 0.8; }
-.wallet-balance { font-size: 2.25rem; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; min-height: 2.9rem; }
-.wallet-skeleton { display: inline-block; width: 160px; height: 2rem; background: rgba(255, 255, 255, 0.18); animation: none; }
-.wallet-recharge-btn { background: var(--brand); color: var(--brand-dark); font-weight: 600; flex-shrink: 0; }
-
 
 /* Page Views */
 .view-container {
@@ -1708,15 +1690,6 @@ body {
      enough to need the full row width at 375px. */
   .metrics-cards-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  /* Settings > Wallet .wallet-card (~line 840) - no-wrap flex row squeezes
-     a 2.25rem balance figure against a "+ Recharge Balance" button. Stack
-     instead, same pattern as other row-squeeze fixes in this block. */
-  .wallet-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
   }
 
   /* .channel-status-card (~line 549) - shared by #view-instagram, Settings
@@ -3205,7 +3178,7 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 
 @media (max-width: 900px) {
   .analytics-view { padding: 1rem; }
-  .settings-card-wide, .settings-card-narrow, .wallet-card, .channel-status-card { max-width: none; }
+  .settings-card-wide, .settings-card-narrow, .channel-status-card { max-width: none; }
 }
 @media (max-width: 640px) {
   .analytics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }

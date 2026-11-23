@@ -7319,7 +7319,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- Wallet ---
+  // --- Billing helpers ---
   function loadScriptOnce(src) {
     return new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -7331,72 +7331,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function renderWallet() {
-    const balanceEl = document.getElementById('wallet-balance-display');
-    if (!balanceEl) return;
-    const statsEl = document.getElementById('wallet-stats');
-    const listEl = document.getElementById('wallet-transactions');
-    try {
-      const { balance, transactions = [] } = await authFetch('/api/wallet');
-      balanceEl.textContent = formatInr(balance);
-      // GET /api/wallet already returned the top-up ledger; it was never shown.
-      // Only top-ups exist in it - nothing records spending - so no "spent" tile.
-      const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-      const completed = transactions.filter((t) => t.status === 'completed');
-      const addedThisMonth = completed.filter((t) => new Date(t.created_at) >= monthStart).reduce((n, t) => n + Number(t.amount_inr), 0);
-      const pending = transactions.filter((t) => t.status === 'pending');
-      const last = completed[0];
-      if (statsEl) statsEl.innerHTML = [
-        statTile('calendar-plus', 'Added this month', formatInr(addedThisMonth)),
-        statTile('clock', 'Pending top-ups', String(pending.length), pending.length ? 'Waiting for payment confirmation' : ''),
-        statTile('receipt', 'Last recharge', last ? formatInr(last.amount_inr) : '—', last ? formatShortDate(last.created_at) : 'No top-ups yet'),
-      ].join('');
-      if (listEl) listEl.innerHTML = transactions.length ? transactions.slice(0, 10).map((t) => {
-        const style = WALLET_TXN_STYLE[t.status] || { cls: 'badge-neutral', label: t.status };
-        return `<div class="list-row">
-          <span class="list-row-icon" aria-hidden="true"><i data-lucide="arrow-down-left"></i></span>
-          <div class="list-row-main"><div class="list-row-title">Top-up</div><div class="list-row-sub">${esc(formatShortDate(t.created_at))}</div></div>
-          <span class="badge ${style.cls}">${esc(style.label)}</span>
-          <span class="list-row-amount">${esc(formatInr(t.amount_inr))}</span>
-        </div>`;
-      }).join('') : `<div class="empty-state"><i data-lucide="wallet" class="empty-icon"></i><div class="empty-title">No top-ups yet</div><div>Use Quick recharge above to add your first credit.</div></div>`;
-      if (window.lucide) lucide.createIcons();
-    } catch (err) {
-      balanceEl.textContent = '-';
-      if (listEl) listEl.innerHTML = `<div class="error-state"><div>${esc(err.message || 'Couldn’t load your wallet.')}</div><button type="button" class="btn-secondary btn-sm" id="wallet-load-retry">Try again</button></div>`;
-      document.getElementById('wallet-load-retry')?.addEventListener('click', renderWallet);
-    }
-  }
-
-  const WALLET_TXN_STYLE = {
-    completed: { cls: 'badge-success', label: 'Completed' },
-    pending: { cls: 'badge-warning', label: 'Pending' },
-    failed: { cls: 'badge-danger', label: 'Failed' },
-  };
   const formatInr = (n) => '₹ ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatShortDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
   function statTile(icon, label, value, hint = '') {
     return `<div class="stat-tile"><div class="stat-tile-label"><i data-lucide="${icon}"></i> ${esc(label)}</div><div class="stat-tile-value">${esc(value)}</div>${hint ? `<div class="stat-tile-hint">${esc(hint)}</div>` : ''}</div>`;
   }
 
-  // Quick recharge: preset chips fill the amount; submitting reuses the
-  // existing recharge form's handler (same API call + Razorpay widget).
-  document.querySelectorAll('[data-recharge-amount]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      document.querySelectorAll('[data-recharge-amount]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
-      document.getElementById('wallet-quick-amount').value = chip.dataset.rechargeAmount;
-    });
-  });
-  document.getElementById('wallet-quick-amount')?.addEventListener('input', (e) => {
-    document.querySelectorAll('[data-recharge-amount]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.rechargeAmount === e.target.value)));
-  });
-  document.getElementById('wallet-quick-recharge')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const amount = Math.round(parseFloat(document.getElementById('wallet-quick-amount').value));
-    if (!amount || amount < 1) return;
-    document.getElementById('recharge-amount').value = String(amount);
-    document.getElementById('recharge-wallet-form').requestSubmit();
-  });
+
 
   // Real GET /api/billing/subscription - was hardcoded fake "Pro Business
   // Plan" / Active regardless of whether the client had ever subscribed.
@@ -7465,8 +7406,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Choose a Plan modal - was previously just a stub toast
   // ("Redirecting to plan upgrade...") with no actual plan picker anywhere
   // in the app; POST /api/billing/checkout already existed and worked, it
-  // just had no UI calling it. Same Checkout.js widget pattern as the
-  // wallet recharge handler above.
+  // just had no UI calling it. Uses the Razorpay Checkout.js widget.
   let selectedPlanId = null;
   let appliedCouponCode = null; // server-confirmed, never trust the input alone
 
@@ -7622,54 +7562,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <td data-label="Status"><span class="badge ${style.cls}">${escapeHtml(style.label)}</span></td>
           </tr>
         `;
-      }).join('') : analyticsEmptyRow(5, 'No invoices yet', 'Invoices for plan payments and wallet recharges will appear here.');
+      }).join('') : analyticsEmptyRow(5, 'No invoices yet', 'Invoices for plan payments will appear here.');
     } catch (err) {
       tbody.innerHTML = analyticsErrorRow(5, err.message || 'Couldn’t load invoices.', 'billing-load-retry');
       document.getElementById('billing-load-retry')?.addEventListener('click', renderBillingTab);
     }
   }
-
-  document.getElementById('open-recharge-modal')?.addEventListener('click', () => {
-    document.getElementById('modal-recharge-wallet')?.classList.add('open');
-  });
-
-  document.getElementById('recharge-wallet-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = Math.round(parseFloat(document.getElementById('recharge-amount').value));
-    if (!amount) return;
-    const restoreSubmit = withSubmitLoading(e.target, 'Processing…');
-
-    try {
-      const order = await authFetch('/api/wallet/recharge', { method: 'POST', body: JSON.stringify({ amount_inr: amount }) });
-      document.getElementById('modal-recharge-wallet')?.classList.remove('open');
-      e.target.reset();
-
-      if (!order.keyId) {
-        showToast('Payment isn’t configured on this platform yet.');
-        return;
-      }
-
-      await loadScriptOnce('https://checkout.razorpay.com/v1/checkout.js');
-      const rzp = new window.Razorpay({
-        key: order.keyId,
-        order_id: order.razorpayOrderId,
-        amount: order.amount,
-        currency: order.currency,
-        name: 'Wasi CRM Wallet',
-        description: `Recharge ₹${amount}`,
-        theme: { color: '#4AC959' },
-        handler: async () => {
-          showToast('Payment received - updating balance…');
-          setTimeout(renderWallet, 2000); // webhook lands asynchronously
-        },
-      });
-      rzp.open();
-    } catch (err) {
-      reportError(err);
-    } finally {
-      restoreSubmit();
-    }
-  });
 
   // --- Create / View / Edit Automation Rule drawer ---
   // One drawer for both: editingRuleId null = create (POST), set = edit (PATCH).
@@ -8712,7 +8610,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'whatsapp') renderWhatsAppSettings();
       if (secKey === 'team') renderTeamTable();
       if (secKey === 'attributes') renderAttributesTable();
-      if (secKey === 'wallet') renderWallet();
       if (secKey === 'webhook') renderClientWebhook();
       if (secKey === 'developer') { renderApiKeysManager(); renderMcpConfigSnippet(); renderApiDocsSnippet(); }
       if (secKey === 'subscription') renderSubscriptionTab();
