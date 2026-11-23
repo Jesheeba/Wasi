@@ -1,5 +1,38 @@
 # Testing
 
+## woocommerce-integration
+`server/test/woocommerce.test.js` (fake store + fake Meta via global.fetch,
+fake DNS via publicUrl.resolver, local Postgres), 13/13:
+- Phone normalisation (Indian local, 0-prefixed, international, refusals);
+  triggers, fields, param mapping (empty -> "-").
+- AC5: http, localhost, 127.x, 169.254.x, a host resolving to 10.x, and
+  credentials in the URL are all refused, with no request made.
+- Connection: bad keys 502 and leave nothing; keys connect sends Basic auth
+  with redirect: 'error', creates 2 webhooks with our delivery URL and a
+  secret, and stores keys encrypted; no secret in the response; a second
+  store is refused (409).
+- AC4: rules refuse Marketing, pending and unmapped templates; unknown keys
+  are dropped.
+- Webhooks: ping 200; bad signature 401 with nothing stored.
+- AC2: order placed sends the template to 9198... with mapped params and
+  creates the contact.
+- AC3: duplicate sends nothing; no rule is logged; an unusable phone and a
+  STOP'd contact are skipped with a reason.
+- Page data has no secrets; one-click callback connects and the token is
+  single-use; disconnect removes both webhooks.
+
+The first runs caught the `.end()` commit trap (see CHANGELOG).
+`woocommerceUI.test.js` (Playwright), 3/3: private URL error shown, keys
+connect, rule drawer offers only approved Utility templates and auto-maps
+same-named variables, a signed event shows as Sent, disconnect, the
+Integrations card, 375px.
+
+Regression, all green: integrationsPage 5, comingSoonPages 3, ctwaAdsPage
+6, whatsappFlows 17 (+2 commit assertions, mutation-checked against
+`.end()`), whatsappFlowsUI 4, chatUiPass 15, settingsRedesign 11, apiV1
+14, webhookForwarding 8, metaWebhookDispatch 3, consentHardeningPhase1 8,
+chatsLastAgentReplyAt 17, apiKeysSelfServe 9.
+
 ## whatsapp-flows
 `server/test/whatsappFlows.test.js` (API, Meta faked via global.fetch,
 local Postgres): builder output (7.3, complete footer, `${form.x}`

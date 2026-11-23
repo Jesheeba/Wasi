@@ -109,6 +109,7 @@ test('AC1: an empty client gets an honest all-off status', async () => {
     zapier: { activeZaps: 0, lastDelivery: null },
     api: { activeKeys: 0, lastUsedAt: null },
     paymentLinks: { created: 0, lastCreatedAt: null },
+    woocommerce: { connected: false, lastEventAt: null },
   });
 });
 

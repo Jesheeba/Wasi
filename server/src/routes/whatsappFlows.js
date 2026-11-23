@@ -153,7 +153,7 @@ router.delete('/:id', manage, asyncHandler(async (req, res) => {
     }
   }
   await whatsappFlowsRepo.remove(req.db, req.clientId, flow.id);
-  res.status(204).end();
+  res.status(204).send();
 }));
 
 router.get('/:id/responses', asyncHandler(async (req, res) => {

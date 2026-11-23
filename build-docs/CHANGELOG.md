@@ -1,5 +1,22 @@
 # Changelog
 
+## feat(woocommerce): order messages from WooCommerce stores
+Ecommerce page (no longer Soon). Clients connect a WooCommerce store, either
+by one-click approval in the store or with REST keys. Wasi creates signed
+order webhooks on the store and sends the client's chosen approved Utility
+template for "order placed" and each status change, with template
+variables mapped to order fields.
+- Each order and status sends at most once.
+- Customers who sent STOP are skipped.
+- Every event is listed with its result and reason.
+- Store URLs must be public https (SSRF guard, no redirects followed).
+- Keys and secrets are stored encrypted and never returned.
+- Migration 096. A WooCommerce card was added to Integrations.
+
+Also fixed: `res.status(204).end()` in a tenant route skips
+tenantContext's commit, so the work is rolled back. The Forms delete route
+had this; it now uses `.send()`, and its test checks the row is gone.
+
 ## feat(whatsapp-flows): Forms - native WhatsApp lead, booking and survey forms
 "Forms" in the nav (no longer Soon). Clients create a form from three
 types, change the wording and choices with a live preview, publish it,

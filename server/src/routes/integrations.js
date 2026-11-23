@@ -25,7 +25,7 @@ async function lastDelivery(db, clientId, urls) {
 
 router.get('/status', asyncHandler(async (req, res) => {
   const { db, clientId } = req;
-  const [waba, hook, zaps, keys, links] = await Promise.all([
+  const [waba, hook, zaps, keys, links, wooStore] = await Promise.all([
     db.query(`select 1 from wabas where client_id = $1 and status = 'connected' limit 1`, [clientId]),
     db.query('select callback_url, events from client_webhooks where client_id = $1', [clientId]),
     db.query('select target_url from zapier_subscriptions where client_id = $1', [clientId]),
@@ -35,6 +35,7 @@ router.get('/status', asyncHandler(async (req, res) => {
       [clientId]
     ),
     db.query('select count(*)::int as n, max(created_at) as last_at from payment_links where client_id = $1', [clientId]),
+    db.query(`select status, last_event_at from ecommerce_stores where client_id = $1 and platform = 'woocommerce'`, [clientId]),
   ]);
   const webhook = hook.rows[0];
   const zapUrls = [...new Set(zaps.rows.map((r) => r.target_url))];
@@ -48,6 +49,7 @@ router.get('/status', asyncHandler(async (req, res) => {
     zapier: { activeZaps: zaps.rows.length, lastDelivery: await lastDelivery(db, clientId, zapUrls) },
     api: { activeKeys: keys.rows[0].active, lastUsedAt: keys.rows[0].last_used_at },
     paymentLinks: { created: links.rows[0].n, lastCreatedAt: links.rows[0].last_at },
+    woocommerce: { connected: wooStore.rows[0]?.status === 'connected', lastEventAt: wooStore.rows[0]?.last_event_at || null },
   });
 }));
 

@@ -49,7 +49,7 @@ committing to it.
 | Feature | Requires | See |
 |---|---|---|
 | Shopify app (orders, shipping, COD, abandoned cart) | Shopify Partner account; "Level 2 protected customer data" approval; App Store review for public listing | [ecommerce-integration-guide.md](ecommerce-integration-guide.md) |
-| WooCommerce | Nothing: client approves access in one click | same guide |
+| WooCommerce | Nothing: client approves access in one click. **Built 2026-11-23** (order messages) | same guide |
 
 ## D. Blocked by our own gaps, not by Meta
 

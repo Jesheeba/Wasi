@@ -1,5 +1,13 @@
 # Project memory
 
+## 2026-11-23 - WooCommerce first
+- Owner: "Add woocommerce for now - build". The Ecommerce page is
+  WooCommerce order messages. Shopify, abandoned carts and catalog product
+  messages are shown as Coming soon on that page.
+- Decisions: order messages use approved Utility templates only; one store
+  per client; contacts who sent STOP are skipped; store URLs must be public
+  https.
+
 ## 2026-11-23 - Flows testing, Instagram on hold
 - Owner: test WhatsApp Flows on the demo account, demo names, and send test
   messages only to 9092766740. No other recipient.

@@ -1030,6 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'ctwa') renderCtwaView();
     if (targetView === 'integrations') renderIntegrations();
     if (targetView === 'whatsapp-flows') renderWaForms();
+    if (targetView === 'ecommerce') renderEcommerce();
     // The Whatsapp sub-tab ships marked active by default (index.html) but
     // previously only rendered real data on an explicit sub-nav click -
     // landing here from the main nav showed static placeholder markup
@@ -8875,6 +8876,205 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- Ecommerce: WooCommerce (build-docs/features/woocommerce-integration.md) ---
+  const WOO_EVENT_STATUS = {
+    sent: { cls: 'badge-success', text: 'Sent' },
+    skipped: { cls: 'badge-warning', text: 'Skipped' },
+    no_rule: { cls: 'badge-neutral', text: 'No message set' },
+    failed: { cls: 'badge-danger', text: 'Failed' },
+    received: { cls: 'badge-neutral', text: 'Processing' },
+  };
+  const wooState = { data: null, templates: [], editingTrigger: null };
+  const wooTriggerLabel = (t) => wooState.data?.triggers.find((x) => x.trigger === t)?.label || t;
+
+  function showWooError(id, message) {
+    const box = document.getElementById(id);
+    box.textContent = message || '';
+    box.hidden = !message;
+  }
+
+  async function renderEcommerce() {
+    const connectCard = document.getElementById('woo-connect-card');
+    const connected = document.getElementById('woo-connected');
+    if (!connectCard) return;
+    try {
+      wooState.data = await authFetch('/api/ecommerce/woocommerce');
+    } catch (err) {
+      connectCard.hidden = false;
+      connected.hidden = true;
+      showWooError('woo-connect-error', err.message || 'Could not load your store connection.');
+      return;
+    }
+    if (state.currentView !== 'ecommerce') return;
+    const { store, rules, events, triggers } = wooState.data;
+    const isConnected = store?.status === 'connected';
+    connectCard.hidden = isConnected;
+    connected.hidden = !isConnected;
+    if (!isConnected) {
+      if (store?.status === 'pending') showWooError('woo-connect-error', '');
+      if (store?.status === 'error') showWooError('woo-connect-error', `Last attempt failed: ${store.lastError || 'unknown error'}`);
+      if (store?.storeUrl) document.getElementById('woo-store-url').value = store.storeUrl;
+      refreshIcons();
+      return;
+    }
+    document.getElementById('woo-store-name').textContent = store.storeUrl.replace(/^https:\/\//, '');
+    document.getElementById('woo-store-meta').textContent = store.lastEventAt ? `Last order event ${formatShortDate(store.lastEventAt)}` : 'No order events yet';
+    const byTrigger = Object.fromEntries(rules.map((r) => [r.trigger, r]));
+    document.getElementById('woo-rules-tbody').innerHTML = triggers.map((t) => {
+      const r = byTrigger[t.trigger];
+      const status = !r ? '<span class="badge badge-neutral">Not set</span>' : r.enabled ? '<span class="badge badge-success">On</span>' : '<span class="badge badge-neutral">Off</span>';
+      return `<tr>
+        <td data-label="When"><span class="analytics-name">${esc(t.label)}</span></td>
+        <td data-label="Template">${r ? esc(r.templateName) : '<span class="settings-muted">-</span>'}</td>
+        <td data-label="Status">${status}</td>
+        <td data-label=""><button type="button" class="btn-secondary btn-sm" data-woo-rule="${esc(t.trigger)}">${r ? 'Edit' : 'Set up'}</button></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('woo-events-tbody').innerHTML = events.length ? events.map((e) => {
+      const st = WOO_EVENT_STATUS[e.status] || WOO_EVENT_STATUS.received;
+      return `<tr>
+        <td data-label="Order">#${esc(e.orderNumber || '-')}</td>
+        <td data-label="Event">${esc(wooTriggerLabel(e.trigger))}</td>
+        <td data-label="Customer">${esc(e.customerName || '-')}${e.phone ? `<div class="settings-muted">+${esc(e.phone)}</div>` : ''}</td>
+        <td data-label="Result"><span class="badge ${st.cls}">${st.text}</span>${e.detail ? `<div class="woo-event-detail">${esc(e.detail)}</div>` : ''}</td>
+        <td data-label="When">${esc(formatShortDate(e.createdAt))}</td>
+      </tr>`;
+    }).join('') : analyticsEmptyRow(5, 'No order events yet', 'Place a test order in your store to see it here.');
+    refreshIcons();
+  }
+
+  document.getElementById('woo-connect-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showWooError('woo-connect-error', '');
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      const { authorizeUrl } = await authFetch('/api/ecommerce/woocommerce/connect', {
+        method: 'POST', body: JSON.stringify({ storeUrl: document.getElementById('woo-store-url').value }),
+      });
+      window.location.href = authorizeUrl;
+    } catch (err) {
+      showWooError('woo-connect-error', err.message);
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('woo-keys-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showWooError('woo-connect-error', '');
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      await authFetch('/api/ecommerce/woocommerce/keys', {
+        method: 'POST',
+        body: JSON.stringify({
+          storeUrl: document.getElementById('woo-key-url').value,
+          consumerKey: document.getElementById('woo-key-ck').value,
+          consumerSecret: document.getElementById('woo-key-cs').value,
+        }),
+      });
+      document.getElementById('woo-key-cs').value = '';
+      showToast('Store connected', 'success');
+      renderEcommerce();
+    } catch (err) {
+      showWooError('woo-connect-error', err.body?.detail || err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('woo-disconnect-btn')?.addEventListener('click', () => showConfirm({
+    title: 'Disconnect this store?', confirmLabel: 'Disconnect',
+    body: 'Order messages stop, and your message settings for this store are removed. Wasi also removes its webhooks from the store.',
+    onConfirm: async () => {
+      try {
+        await authFetch('/api/ecommerce/woocommerce', { method: 'DELETE' });
+        showToast('Store disconnected', 'success');
+      } catch (err) { reportError(err); }
+      renderEcommerce();
+    },
+  }));
+
+  async function renderWooRuleVars(rule) {
+    const box = document.getElementById('woo-rule-vars');
+    const name = document.getElementById('woo-rule-template').value;
+    box.innerHTML = '';
+    if (!name) return;
+    try {
+      const { variables } = await authFetch(`/api/ecommerce/woocommerce/template-variables?name=${encodeURIComponent(name)}`);
+      const fields = wooState.data.fields;
+      box.innerHTML = variables.length
+        ? `<div class="drawer-section-title">Fill each variable from the order</div>${variables.map((v) => {
+          const current = rule?.templateName === name ? rule.paramMap?.[v] : (fields.some((fl) => fl.key === v) ? v : '');
+          return `<div class="form-group"><label class="form-label" for="woo-var-${esc(v)}">{{${esc(v)}}}</label>
+            <select id="woo-var-${esc(v)}" class="form-input" data-woo-var="${esc(v)}" required>
+              <option value="">Choose an order field</option>
+              ${fields.map((fl) => `<option value="${esc(fl.key)}" ${fl.key === current ? 'selected' : ''}>${esc(fl.label)}</option>`).join('')}
+            </select></div>`;
+        }).join('')}`
+        : '<p class="form-hint">This template has no variables.</p>';
+    } catch (err) {
+      showWooError('woo-rule-error', err.message);
+    }
+  }
+
+  async function openWooRuleDrawer(trigger) {
+    wooState.editingTrigger = trigger;
+    const rule = wooState.data.rules.find((r) => r.trigger === trigger);
+    document.getElementById('woo-rule-title').textContent = wooTriggerLabel(trigger);
+    showWooError('woo-rule-error', '');
+    try {
+      wooState.templates = await authFetch('/api/templates');
+    } catch (err) { reportError(err); return; }
+    const usable = wooState.templates.filter((t) => String(t.category).toLowerCase() === 'utility' && t.status === 'approved');
+    const select = document.getElementById('woo-rule-template');
+    select.innerHTML = `<option value="">Choose a template</option>${usable.map((t) => `<option value="${esc(t.name)}" ${t.name === rule?.templateName ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}`;
+    document.getElementById('woo-rule-template-hint').textContent = usable.length ? '' : 'You have no approved Utility templates yet. Create one under Templates first.';
+    document.getElementById('woo-rule-enabled').checked = rule ? rule.enabled : true;
+    document.getElementById('woo-rule-remove').hidden = !rule;
+    select.onchange = () => renderWooRuleVars(rule);
+    await renderWooRuleVars(rule);
+    document.getElementById('modal-woo-rule').classList.add('open');
+  }
+
+  document.getElementById('woo-rules-tbody')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-woo-rule]');
+    if (btn) openWooRuleDrawer(btn.dataset.wooRule);
+  });
+
+  document.getElementById('woo-rule-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showWooError('woo-rule-error', '');
+    const paramMap = {};
+    document.querySelectorAll('#woo-rule-vars [data-woo-var]').forEach((sel) => { paramMap[sel.dataset.wooVar] = sel.value; });
+    try {
+      await authFetch(`/api/ecommerce/woocommerce/rules/${encodeURIComponent(wooState.editingTrigger)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          templateName: document.getElementById('woo-rule-template').value,
+          paramMap,
+          enabled: document.getElementById('woo-rule-enabled').checked,
+        }),
+      });
+      document.getElementById('modal-woo-rule').classList.remove('open');
+      showToast('Order message saved', 'success');
+      renderEcommerce();
+    } catch (err) {
+      showWooError('woo-rule-error', err.message);
+    }
+  });
+
+  document.getElementById('woo-rule-remove')?.addEventListener('click', async () => {
+    try {
+      await authFetch(`/api/ecommerce/woocommerce/rules/${encodeURIComponent(wooState.editingTrigger)}`, { method: 'DELETE' });
+      document.getElementById('modal-woo-rule').classList.remove('open');
+      showToast('Order message removed', 'success');
+      renderEcommerce();
+    } catch (err) {
+      showWooError('woo-rule-error', err.message);
+    }
+  });
+
   // --- Integrations (build-docs/features/integrations-page.md) ---
   // Read-only status of integrations configured elsewhere; each card links
   // to where it is set up. Shopify is planned, so it has no action.
@@ -8938,6 +9138,12 @@ document.addEventListener('DOMContentLoaded', () => {
           action: { go: 'payments', label: 'Open Payments' },
         }),
         integrationCard({
+          icon: 'shopping-cart', name: 'WooCommerce', desc: 'Send order confirmations and status updates on WhatsApp automatically.',
+          badge: st.woocommerce?.connected ? on : off,
+          lines: st.woocommerce?.connected ? [{ text: st.woocommerce.lastEventAt ? `Last order event ${formatShortDate(st.woocommerce.lastEventAt)}` : 'No order events yet' }] : [],
+          action: { go: 'ecommerce', label: st.woocommerce?.connected ? 'Manage' : 'Connect store' },
+        }),
+        integrationCard({
           icon: 'shopping-bag', name: 'Shopify', desc: 'Sync orders and recover abandoned carts on WhatsApp.',
           badge: { cls: 'badge-info', text: 'Coming soon' },
         }),
@@ -8945,7 +9151,7 @@ document.addEventListener('DOMContentLoaded', () => {
       grid.querySelectorAll('[data-integration-go]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const go = btn.dataset.integrationGo;
-          if (go === 'payments') { switchView('payments'); return; }
+          if (go === 'payments' || go === 'ecommerce') { switchView(go); return; }
           switchView('settings');
           document.querySelector(`.sec-nav-item[data-sec-view="${go}"]`)?.click();
         });

@@ -200,10 +200,9 @@
           <i data-lucide="credit-card"></i>
           <span class="nav-text">Payments</span>
         </a>
-        <a class="nav-item" data-view="ecommerce" role="button" tabindex="0" title="Ecommerce - coming soon">
+        <a class="nav-item" data-view="ecommerce" role="button" tabindex="0" title="Ecommerce">
           <i data-lucide="shopping-bag"></i>
           <span class="nav-text">Ecommerce</span>
-          <span class="nav-soon">Soon</span>
         </a>
         <a class="nav-item" data-view="analytics" role="button" tabindex="0">
           <i data-lucide="bar-chart-2"></i>
@@ -819,22 +818,77 @@
         </div>
 
         <!-- 6. ECOMMERCE VIEW -->
-        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
-             this page is listed in the nav so clients know it is planned. -->
+        <!-- Ecommerce: WooCommerce order messages (build-docs/features/woocommerce-integration.md).
+             Rendered by renderEcommerce() in app.js from GET /api/ecommerce/woocommerce. -->
         <div id="view-ecommerce" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Ecommerce <span class="badge badge-info">Coming soon</span></h1>
-              <p class="page-subtitle">Product messages from your Meta catalog</p>
+              <h1 class="page-title">Ecommerce</h1>
+              <p class="page-subtitle">Send order updates on WhatsApp automatically from your online store</p>
             </div>
           </div>
-          <div class="table-card" id="ecommerce-content">
-            <div class="empty-state">
-              <i data-lucide="shopping-bag" class="empty-icon" aria-hidden="true"></i>
-              <div class="empty-title">Ecommerce is coming soon</div>
-              <p>Send single products and product lists from your own Meta Commerce catalog straight into a chat, so customers can browse and order without leaving WhatsApp.</p>
-              <p class="empty-example">Abandoned-cart recovery needs a store integration and will follow later.</p>
+
+          <!-- Not connected -->
+          <section class="profile-form-card woo-connect" id="woo-connect-card" hidden aria-labelledby="woo-connect-title">
+            <h2 class="settings-card-title" id="woo-connect-title"><i data-lucide="shopping-cart" class="icon-16"></i> Connect your WooCommerce store</h2>
+            <p class="settings-help">You approve the connection inside your store's admin. Wasi then sends your chosen WhatsApp template when an order is placed or its status changes.</p>
+            <div class="alert alert-danger" id="woo-connect-error" role="alert" hidden></div>
+            <form id="woo-connect-form" class="woo-connect-form">
+              <label class="form-label" for="woo-store-url">Store address</label>
+              <div class="settings-inline-row">
+                <input type="url" id="woo-store-url" class="form-input" placeholder="https://yourshop.com" required autocomplete="url" />
+                <button type="submit" class="btn-primary btn-auto">Connect store</button>
+              </div>
+              <div class="form-hint">You'll be taken to your store to approve access, then brought back here.</div>
+            </form>
+            <details class="woo-keys">
+              <summary>Use API keys instead</summary>
+              <form id="woo-keys-form">
+                <p class="form-hint">In WordPress: WooCommerce &gt; Settings &gt; Advanced &gt; REST API &gt; Add key, with Read/Write permission.</p>
+                <div class="form-group"><label class="form-label" for="woo-key-url">Store address</label><input type="url" id="woo-key-url" class="form-input" placeholder="https://yourshop.com" required /></div>
+                <div class="form-group"><label class="form-label" for="woo-key-ck">Consumer key</label><input type="text" id="woo-key-ck" class="form-input" placeholder="ck_..." required autocomplete="off" spellcheck="false" /></div>
+                <div class="form-group"><label class="form-label" for="woo-key-cs">Consumer secret</label><input type="password" id="woo-key-cs" class="form-input" placeholder="cs_..." required autocomplete="off" /></div>
+                <button type="submit" class="btn-secondary btn-auto">Connect with keys</button>
+              </form>
+            </details>
+          </section>
+
+          <!-- Connected -->
+          <section id="woo-connected" hidden>
+            <div class="channel-status-card woo-status">
+              <div class="channel-info-left">
+                <div class="wa-icon-circle woo-icon"><i data-lucide="shopping-cart"></i></div>
+                <div>
+                  <div class="woo-store-name" id="woo-store-name"></div>
+                  <div class="woo-store-meta" id="woo-store-meta"></div>
+                </div>
+              </div>
+              <div class="woo-status-actions">
+                <span class="badge badge-success" id="woo-store-badge">Connected</span>
+                <button type="button" class="btn-secondary btn-sm" id="woo-disconnect-btn">Disconnect</button>
+              </div>
             </div>
+            <h2 class="settings-section-heading">Order messages</h2>
+            <p class="form-hint">Pick an approved Utility template for each event. Events without a message are logged but nothing is sent.</p>
+            <div class="table-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>When</th><th>Template</th><th>Status</th><th></th></tr></thead>
+                <tbody id="woo-rules-tbody"></tbody>
+              </table>
+            </div>
+            <h2 class="settings-section-heading">Recent order events</h2>
+            <div class="table-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>Order</th><th>Event</th><th>Customer</th><th>Result</th><th>When</th></tr></thead>
+                <tbody id="woo-events-tbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="woo-coming-soon">
+            <div><strong>Shopify</strong> <span class="badge badge-info">Coming soon</span><p>Needs Shopify's app approval.</p></div>
+            <div><strong>Abandoned cart recovery</strong> <span class="badge badge-info">Coming soon</span><p>WooCommerce has no checkout event without a plugin.</p></div>
+            <div><strong>Product messages from your catalog</strong> <span class="badge badge-info">Coming soon</span><p>Send products from your Meta catalog in chat.</p></div>
           </div>
         </div>
 
@@ -2263,6 +2317,38 @@
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-send-form">Cancel</button>
           <button type="submit" class="btn-primary btn-auto">Send form</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Ecommerce: order message rule drawer (openWooRuleDrawer in app.js) -->
+  <div id="modal-woo-rule" class="modal-overlay as-drawer">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="woo-rule-title">Order message</h3>
+          <p class="modal-subtitle">Only approved Utility templates can be used for order updates.</p>
+        </div>
+        <button class="close-modal-btn" data-close-modal="modal-woo-rule"><i data-lucide="x"></i></button>
+      </div>
+      <form id="woo-rule-form">
+        <div class="drawer-content">
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="woo-rule-template">Template</label>
+              <select id="woo-rule-template" class="form-input" required></select>
+              <div class="form-hint" id="woo-rule-template-hint"></div>
+            </div>
+            <div id="woo-rule-vars"></div>
+            <label class="wa-form-required"><input type="checkbox" id="woo-rule-enabled" checked /> Send this message</label>
+          </div>
+          <div class="alert alert-danger" id="woo-rule-error" role="alert" hidden></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="woo-rule-remove">Remove</button>
+          <button type="button" class="btn-secondary" data-close-modal="modal-woo-rule">Cancel</button>
+          <button type="submit" class="btn-primary btn-auto">Save</button>
         </div>
       </form>
     </div>

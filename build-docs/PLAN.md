@@ -44,7 +44,7 @@ separately, in build order:
 2. [integrations-page](features/integrations-page.md) - **done 2026-11-23**. small. Real status
    of integrations that already work (webhooks, Zapier, API/MCP, Razorpay
    links). Shopify card marked "Coming soon".
-3. [catalog-product-messages](features/catalog-product-messages.md) -
+3. **Ecommerce = [woocommerce-integration](features/woocommerce-integration.md), built 2026-11-23** (owner: "Add woocommerce for now"). [catalog-product-messages](features/catalog-product-messages.md) stays listed as Coming soon on the page -
    medium. Becomes the **Ecommerce** page: send product / product-list
    messages from the client's own Meta Commerce catalog. Abandoned-cart
    recovery needs a store integration (Shopify) and is NOT in scope; that

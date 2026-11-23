@@ -241,6 +241,7 @@ test('AC1: a published form must be retired before delete; retired deletes local
   metaCalls = [];
   const del2 = await api(`/api/whatsapp-flows/${draftId}`, { method: 'DELETE' });
   assert.equal(del2.status, 204);
+  assert.equal((await pool.query('select count(*)::int n from whatsapp_flows where id = $1', [draftId])).rows[0].n, 0, 'committed');
   assert.equal(metaCalls.length, 0, 'Meta cannot delete a retired flow, so it is not asked to');
 });
 
@@ -252,6 +253,8 @@ test('AC1: deleting a draft deletes it on Meta first', async () => {
   assert.equal(res.status, 204);
   assert.equal(metaCalls[0].method, 'DELETE');
   assert.match(metaCalls[0].url, /\/meta_flow_copy$/);
+  const left = (await pool.query('select count(*)::int n from whatsapp_flows where id = $1', [copy.id])).rows[0].n;
+  assert.equal(left, 0, 'the delete is committed, not rolled back');
 });
 
 // ---------- receiving ----------
