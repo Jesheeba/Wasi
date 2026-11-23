@@ -108,9 +108,10 @@ async function listRecentApiSends(db, clientId, limit = 20) {
 async function listMessages(db, clientId, chatId, { since } = {}) {
   if (since) {
     const { rows } = await db.query(
-      `select m.*, ak.app_name as sent_via_app
+      `select m.*, ak.app_name as sent_via_app, ar.id as ai_reply_id
        from messages m
        left join api_keys ak on ak.id = m.api_key_id
+       left join ai_replies ar on ar.outbound_message_id = m.id
        where m.client_id = $1 and m.chat_id = $2 and m.sent_at > $3
        order by m.sent_at asc`,
       [clientId, chatId, since]
@@ -118,9 +119,10 @@ async function listMessages(db, clientId, chatId, { since } = {}) {
     return rows;
   }
   const { rows } = await db.query(
-    `select m.*, ak.app_name as sent_via_app
+    `select m.*, ak.app_name as sent_via_app, ar.id as ai_reply_id
      from messages m
      left join api_keys ak on ak.id = m.api_key_id
+     left join ai_replies ar on ar.outbound_message_id = m.id
      where m.client_id = $1 and m.chat_id = $2
      order by m.sent_at asc`,
     [clientId, chatId]
@@ -383,8 +385,11 @@ async function markAgentReplyNonFatal(db, clientId, chatId) {
   try {
     await db.query('savepoint mark_agent_reply');
     await db.query(
+      // A person replying also answers any AI handover (SPEC section 15), so
+      // the "needs a person" flag is cleared in the same statement.
       `update chats
-          set last_agent_reply_at = greatest(coalesce(last_agent_reply_at, now()), now())
+          set last_agent_reply_at = greatest(coalesce(last_agent_reply_at, now()), now()),
+              ai_handover_reason = null, ai_handover_at = null
         where client_id = $1 and id = $2`,
       [clientId, chatId]
     );

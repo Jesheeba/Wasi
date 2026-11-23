@@ -35,6 +35,24 @@ mid-run. A clean re-run passed 15/15.
 Regression, all green: whatsappFlows 17, woocommerce 13, woocommerceUI 3,
 chatUiPass 15, chatsLastAgentReplyAt 17, metaWebhookDispatch 3,
 webhookForwarding 8, whatsappQuickWins 11, apiV1 14.
+## ai-agent: backend (unit 1)
+`server/test/aiAgent.test.js` (real local Postgres, disposable clients, model and
+send stubbed - nothing reaches Anthropic or Meta). SPEC 16.1 gate table (every row,
+incl. 23h59m vs 24h01m, 14 vs 16 min, schedule by timezone, muted vs cooldown);
+prompt (rules first, no phone, user turn first, 500-char turns, refusal token
+anywhere); cost in integer paise, no temperature; knowledge compile + history
+seeder; AC9 consent Owner-only, key validated then encrypted, never returned;
+AC8 pilot/staff-hours enable checks, honest handover wording; knowledge budget
+refusal writes nothing; try-it; AC2 sent + metered + AI-marked + idempotent;
+AC3 refusal -> handover, cooldown, token never sent; AC4 human reply clears
+handover and silences 15 min; unmute keeps cooldown; model/send failure not
+metered; shadow never sends; other numbers: no model call; window closed,
+empty knowledge, cap notified once, new month resets; AC7 invisible when off;
+AC6 activity reconciles; revoke switches off. 19/19. Bugs found by the tests
+and fixed: two Promise.all on one tenant connection (pg deprecation). Regression:
+aiAgentEnqueue 7, aiJobs 13, chatsLastAgentReplyAt 17, flowEngineOutcome 17,
+chatAssignment 13, webhookForwarding 8, metaWebhookDispatch 3 - all pass.
+
 ## automation-rule-view-edit: live test on production (2026-11-23)
 Migration 094 applied to production (only 094; `up 1`). Deployed with a
 temporary lock (63572a3): demo-account rules replied only to 9092766740, and
