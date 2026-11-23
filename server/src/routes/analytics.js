@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { z } = require('zod');
 const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
@@ -144,7 +145,9 @@ router.get('/ctwa/chats', asyncHandler(async (req, res) => {
     return typeof v === 'string' && v !== '' ? v.slice(0, 500) : null;
   };
   const { rows } = await req.db.query(
-    `select m.chat_id, ch.name, ch.phone, min(m.sent_at) as first_at, count(*)::int as message_count
+    `select m.chat_id, ch.name, ch.phone, min(m.sent_at) as first_at, count(*)::int as message_count,
+            bool_or(m.referral->>'ctwa_clid' is not null) as has_click_id,
+            (select coalesce(array_agg(cv.event_name), '{}') from ctwa_conversions cv where cv.chat_id = m.chat_id) as conversions
      from messages m join chats ch on ch.id = m.chat_id
      where m.client_id = $1 and m.direction = 'in' and m.referral is not null
        and ($2::timestamptz is null or m.sent_at > $2)
@@ -156,7 +159,10 @@ router.get('/ctwa/chats', asyncHandler(async (req, res) => {
     [req.clientId, since, field('sourceId'), field('headline')]
   );
   res.json({
-    chats: rows.map((r) => ({ chatId: r.chat_id, name: r.name, phone: r.phone, firstAt: r.first_at, messageCount: r.message_count })),
+    chats: rows.map((r) => ({
+      chatId: r.chat_id, name: r.name, phone: r.phone, firstAt: r.first_at, messageCount: r.message_count,
+      hasClickId: r.has_click_id, conversions: r.conversions,
+    })),
   });
 }));
 
@@ -314,6 +320,50 @@ router.post('/template-insights/enable', asyncHandler(async (req, res) => {
   }
   await wabasRepo.markTemplateInsightsEnabled(conn.waba.id);
   res.json({ enabled: true });
+}));
+
+// --- Ad lead feedback to Meta (build-docs/features/ctwa-conversions.md) ---
+// Reports that an ad-started chat became a lead or a sale, so Meta can
+// optimise the ad. One event per chat per type: Meta does not deduplicate.
+const conversionSchema = z.object({
+  event: z.enum(['LeadSubmitted', 'Purchase']),
+  value: z.number().positive().max(10000000).optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).default('INR'),
+});
+router.post('/ctwa/chats/:chatId/conversion', asyncHandler(async (req, res) => {
+  const chatId = z.string().uuid().parse(req.params.chatId);
+  const input = conversionSchema.parse(req.body);
+  if (input.event === 'Purchase' && input.value == null) return res.status(400).json({ error: 'Enter the sale amount.' });
+  const { rows } = await req.db.query(
+    `select referral->>'ctwa_clid' as clid from messages
+     where client_id = $1 and chat_id = $2 and direction = 'in' and referral->>'ctwa_clid' is not null
+     order by sent_at asc limit 1`,
+    [req.clientId, chatId]
+  );
+  const clid = rows[0]?.clid;
+  if (!clid) return res.status(409).json({ error: 'This chat did not start from a Click-to-WhatsApp ad with a click id, so Meta cannot match it.' });
+  const done = await req.db.query('select 1 from ctwa_conversions where client_id = $1 and chat_id = $2 and event_name = $3', [req.clientId, chatId, input.event]);
+  if (done.rows.length) return res.status(409).json({ error: 'Already reported to Meta for this chat.' });
+  const conn = await analyticsWaba(req.clientId);
+  if (!conn) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  try {
+    let datasetId = conn.waba.ctwa_dataset_id;
+    if (!datasetId) {
+      datasetId = await metaClient.getOrCreateCtwaDataset(conn.waba.waba_id, conn.token);
+      await wabasRepo.setCtwaDatasetId(conn.waba.id, datasetId);
+    }
+    await metaClient.sendCtwaConversion(datasetId, conn.token, {
+      wabaId: conn.waba.waba_id, ctwaClid: clid, eventName: input.event,
+      value: input.event === 'Purchase' ? input.value : undefined, currency: input.currency,
+    });
+  } catch (err) {
+    return analyticsMetaFailure(res, err, 'Meta did not accept the event');
+  }
+  await req.db.query(
+    'insert into ctwa_conversions (client_id, chat_id, event_name, value, currency, ctwa_clid) values ($1, $2, $3, $4, $5, $6)',
+    [req.clientId, chatId, input.event, input.event === 'Purchase' ? input.value : null, input.event === 'Purchase' ? input.currency : null, clid]
+  );
+  res.status(201).json({ reported: input.event });
 }));
 
 module.exports = router;

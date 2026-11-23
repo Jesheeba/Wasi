@@ -42,7 +42,7 @@ steps added to build-docs/MANUAL_TESTS.md.
 3. QR codes and short links - same doc
 4. Ice breakers, commands, welcome message - same doc
 5. **Built 2026-11-23**: Real Meta cost + template analytics - [meta-analytics](features/meta-analytics.md)
-6. Ad lead feedback to Meta (Conversions API) - [ctwa-conversions](features/ctwa-conversions.md)
+6. **Built 2026-11-23**: Ad lead feedback to Meta (Conversions API) - [ctwa-conversions](features/ctwa-conversions.md)
 7. Green-tick application - same doc as 1-4
 8. Product messages from the Meta catalog - [catalog-product-messages](features/catalog-product-messages.md)
 9. Forms with a live data endpoint - [whatsapp-flows](features/whatsapp-flows.md), phase 2

@@ -82,5 +82,11 @@ async function markTemplateInsightsEnabled(id) {
   await pool.query('update wabas set template_insights_enabled_at = coalesce(template_insights_enabled_at, now()) where id = $1', [id]);
 }
 
+// Conversions API dataset for this WABA (migration 099).
+async function setCtwaDatasetId(id, datasetId) {
+  await pool.query('update wabas set ctwa_dataset_id = $2 where id = $1', [id, datasetId]);
+}
+
 module.exports = {
+  setCtwaDatasetId,
   markTemplateInsightsEnabled, findByClientId, findById, findByWabaId, findAnyConnected, listAllWithClient, upsertForClient };

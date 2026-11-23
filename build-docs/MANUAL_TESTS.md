@@ -150,3 +150,17 @@ Deploy first (migration 098).
    fix the mapping.
 
 Status: PENDING
+
+## 11. Report ad leads and sales to Meta
+Deploy first (migration 099). Needs a chat that started from a real
+Click-to-WhatsApp ad on the demo number (same as test 3).
+1. Ad Leads > open the ad > on the chat, click "Mark as lead" > Report lead.
+   - Expect: "Lead reported to Meta", or a red message from Meta.
+   - **Send me Meta's message if it fails**: it tells us whether Meta needs
+     extra access (the Marketing API tier) before this works.
+2. Click "Mark sale" > enter 100 > Report sale.
+   - Expect: "Sale reported to Meta".
+3. In Meta Events Manager for the demo business, a WhatsApp dataset should
+   show the Lead and Purchase events within about an hour.
+
+Status: PENDING

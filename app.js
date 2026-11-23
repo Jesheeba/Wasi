@@ -8574,16 +8574,62 @@ document.addEventListener('DOMContentLoaded', () => {
           <td data-label="Phone">${esc(c.phone || '-')}</td>
           <td data-label="Came in">${esc(formatShortDate(c.firstAt))}</td>
           <td data-label="Ad messages">${esc(formatCount(c.messageCount))}</td>
-          <td data-label=""><button type="button" class="btn-secondary btn-sm" data-ctwa-open-chat="${esc(c.chatId)}">Open chat</button></td>
+          <td data-label=""><span class="ctwa-chat-actions">
+            <button type="button" class="btn-secondary btn-sm" data-ctwa-open-chat="${esc(c.chatId)}">Open chat</button>
+            ${ctwaConversionButtons(c)}
+          </span></td>
         </tr>`).join('') : analyticsEmptyRow(5, 'No chats in this date range', '');
       tbody.querySelectorAll('[data-ctwa-open-chat]').forEach((btn) => {
         btn.addEventListener('click', () => openChatById(btn.dataset.ctwaOpenChat));
+      });
+      tbody.querySelectorAll('[data-ctwa-convert]').forEach((btn) => {
+        btn.addEventListener('click', () => reportCtwaConversion(btn.dataset.ctwaConvert, btn.dataset.ctwaChat, ad));
       });
     } catch (err) {
       tbody.innerHTML = analyticsErrorRow(5, err.message || 'Couldn’t load chats for this ad.', 'ctwa-chats-retry');
       document.getElementById('ctwa-chats-retry')?.addEventListener('click', () => renderCtwaChats(ad));
     }
     refreshIcons();
+  }
+
+  // Ad lead feedback to Meta (build-docs/features/ctwa-conversions.md).
+  function ctwaConversionButtons(c) {
+    if (!c.hasClickId) return '<span class="settings-muted ctwa-no-clid" title="Meta did not attach an ad click id to this chat">Can\'t report to Meta</span>';
+    const done = (ev) => (c.conversions || []).includes(ev);
+    return [
+      done('LeadSubmitted') ? '<span class="badge badge-success">Lead reported</span>'
+        : `<button type="button" class="btn-ghost btn-sm" data-ctwa-convert="LeadSubmitted" data-ctwa-chat="${esc(c.chatId)}">Mark as lead</button>`,
+      done('Purchase') ? '<span class="badge badge-success">Sale reported</span>'
+        : `<button type="button" class="btn-ghost btn-sm" data-ctwa-convert="Purchase" data-ctwa-chat="${esc(c.chatId)}">Mark sale</button>`,
+    ].join('');
+  }
+
+  async function reportCtwaConversion(event, chatId, ad) {
+    const send = async (value) => {
+      try {
+        await authFetch(`/api/analytics/ctwa/chats/${chatId}/conversion`, {
+          method: 'POST', body: JSON.stringify(value != null ? { event, value } : { event }),
+        });
+        showToast(event === 'Purchase' ? 'Sale reported to Meta' : 'Lead reported to Meta', 'success');
+      } catch (err) { reportError(err); }
+      renderCtwaChats(ad);
+    };
+    if (event === 'Purchase') {
+      showPrompt({
+        title: 'Report a sale to Meta', label: 'Sale amount in rupees', placeholder: '1499', confirmLabel: 'Report sale',
+        onConfirm: async (raw) => {
+          const value = Number(String(raw).replace(/[,₹\s]/g, ''));
+          if (!Number.isFinite(value) || value <= 0) { showToast('Enter an amount greater than 0', 'warning'); return; }
+          await send(value);
+        },
+      });
+    } else {
+      showConfirm({
+        title: 'Report this chat as a lead?', danger: false, confirmLabel: 'Report lead',
+        body: 'Meta uses this to show your ad to more people like this customer. Each chat can be reported once.',
+        onConfirm: () => send(),
+      });
+    }
   }
 
   async function openChatById(chatId) {

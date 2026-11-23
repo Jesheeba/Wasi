@@ -1,5 +1,17 @@
 # Testing
 
+## ctwa-conversions
+`ctwaConversions.test.js` (Meta faked), 5/5:
+- No click id -> 409 with no call.
+- A Meta refusal -> 502 and nothing recorded.
+- The dataset is created once and stored; event payload as documented;
+  a repeat is refused with no call.
+- A sale needs an amount and sends value + INR, reusing the dataset.
+- The list exposes hasClickId and conversions.
+
+Regression, all green: ctwaAdsPage 6 (UI), metaAnalytics 4,
+messageReferral 3.
+
 ## meta-analytics
 `metaAnalytics.test.js` (Meta faked), 4/4:
 - The exact `pricing_analytics` field syntax and the 7-day window.

@@ -1193,7 +1193,33 @@ async function getTemplateAnalytics(wabaId, accessToken, { start, end, templateI
   return (data.data || []).flatMap((d) => d.data_points || []);
 }
 
+// --- Conversions API for Business Messaging - build-docs/features/ctwa-conversions.md ---
+// POST /{WABA_ID}/dataset is idempotent (returns the existing dataset). The
+// response field name isn't confirmed in Meta's docs, so read id or dataset_id.
+async function getOrCreateCtwaDataset(wabaId, accessToken) {
+  const data = await graphFetch(`/${wabaId}/dataset`, { method: 'POST', accessToken });
+  const id = data.id || data.dataset_id || data.data?.[0]?.id;
+  if (!id) throw new Error('Meta did not return a dataset id');
+  return String(id);
+}
+
+// One event for a chat that started from a Click-to-WhatsApp ad. ctwa_clid
+// is sent as-is (not hashed). Meta does not deduplicate - the caller must.
+async function sendCtwaConversion(datasetId, accessToken, { wabaId, ctwaClid, eventName, value, currency, eventTime }) {
+  const event = {
+    event_name: eventName,
+    event_time: eventTime || Math.floor(Date.now() / 1000),
+    action_source: 'business_messaging',
+    messaging_channel: 'whatsapp',
+    user_data: { whatsapp_business_account_id: wabaId, ctwa_clid: ctwaClid },
+  };
+  if (value != null) event.custom_data = { currency, value };
+  return graphFetch(`/${datasetId}/events`, { method: 'POST', accessToken, body: { data: [event], partner_agent: 'wasi' } });
+}
+
 module.exports = {
+  getOrCreateCtwaDataset,
+  sendCtwaConversion,
   getPricingAnalytics,
   enableTemplateInsights,
   getTemplateAnalytics,

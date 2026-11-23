@@ -1,5 +1,12 @@
 # Changelog
 
+## feat(ctwa-conversions): report ad leads and sales back to Meta
+Ad Leads > an ad: each chat gets "Mark as lead" and "Mark sale" (with an
+amount). Wasi sends the event to Meta's Conversions API for Business
+Messaging with the chat's ad click id, once per chat and event (Meta doesn't
+deduplicate). Chats without a click id show "Can't report to Meta".
+Migration 099.
+
 ## feat(meta-analytics): real WhatsApp cost and template performance
 Analytics has two new tabs:
 - **WhatsApp cost:** what Meta charged, per category and per day, from
