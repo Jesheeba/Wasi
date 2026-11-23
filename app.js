@@ -8747,32 +8747,107 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const ctwaAdName = (ad) => ad.headline || ad.sourceId || 'Unnamed ad';
 
+  // --- Ad account metrics (build-docs/features/ctwa-ad-metrics.md) ---
+  const ADS_RESULT_MESSAGES = {
+    connected: ['Meta ad account connected', 'success'],
+    no_accounts: ['Connected, but Meta shared no ad accounts. Sign in again and tick your ad account.', 'warning'],
+    cancelled: ['Ad account connection was cancelled', 'warning'],
+    expired: ['That sign-in took too long. Please try again.', 'warning'],
+    failed: ['Meta did not connect the ad account. If you are not an admin of the Wasi Meta app, Meta must approve ad access for Wasi first.', 'warning'],
+  };
+  (function showAdsResult() {
+    const params = new URLSearchParams(location.search);
+    const result = params.get('ads');
+    if (!result) return;
+    const msg = ADS_RESULT_MESSAGES[result];
+    if (msg) showToast(msg[0], msg[1]);
+    params.delete('ads');
+    history.replaceState(null, '', `${location.pathname}${params.toString() ? `?${params}` : ''}${location.hash}`);
+  })();
+
+  async function renderAdsConnect() {
+    const box = document.getElementById('ctwa-ads-connect');
+    if (!box) return;
+    let st;
+    try { st = await authFetch('/api/ads/status'); } catch { box.hidden = true; return; }
+    box.hidden = false;
+    if (!st.configured) {
+      box.innerHTML = '<p class="settings-muted"><strong>Ad spend and cost per lead:</strong> coming soon. Meta has to approve ad reporting for Wasi first.</p>';
+      return;
+    }
+    if (!st.connected) {
+      box.innerHTML = `<div class="ctwa-ads-connect-row"><p><strong>See spend and cost per lead.</strong> Connect the Meta ad account that runs your Click-to-WhatsApp ads. Wasi only reads numbers; it can't change your ads.</p>
+        <button type="button" class="btn-primary btn-auto" id="ctwa-ads-connect-btn"><i data-lucide="link" class="icon-14"></i> Connect ad account</button></div>`;
+      document.getElementById('ctwa-ads-connect-btn').addEventListener('click', async () => {
+        try {
+          const { url } = await authFetch('/api/ads/connect', { method: 'POST' });
+          window.location.href = url;
+        } catch (err) { reportError(err); }
+      });
+      refreshIcons();
+      return;
+    }
+    if (!st.adAccountId) {
+      box.innerHTML = '<div class="ctwa-ads-connect-row"><label class="form-label" for="ctwa-ads-account">Which ad account runs your WhatsApp ads?</label><select id="ctwa-ads-account" class="form-input"><option value="">Loading...</option></select><button type="button" class="btn-primary btn-auto" id="ctwa-ads-account-save">Use this account</button></div>';
+      try {
+        const accounts = await authFetch('/api/ads/accounts');
+        document.getElementById('ctwa-ads-account').innerHTML = accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name || a.id)}${a.currency ? ` (${esc(a.currency)})` : ''}</option>`).join('') || '<option value="">No ad accounts shared</option>';
+      } catch (err) { reportError(err); }
+      document.getElementById('ctwa-ads-account-save').addEventListener('click', async () => {
+        try {
+          await authFetch('/api/ads/account', { method: 'PUT', body: JSON.stringify({ adAccountId: document.getElementById('ctwa-ads-account').value }) });
+          showToast('Ad account saved', 'success');
+          renderCtwaView();
+        } catch (err) { reportError(err); }
+      });
+      return;
+    }
+    box.innerHTML = `<div class="ctwa-ads-connect-row"><p>Ad numbers from <strong>${esc(st.adAccountName || st.adAccountId)}</strong>${st.lastError ? ` <span class="settings-muted">(${esc(st.lastError)})</span>` : ''}</p>
+      <button type="button" class="btn-secondary btn-sm" id="ctwa-ads-disconnect">Disconnect</button></div>`;
+    document.getElementById('ctwa-ads-disconnect').addEventListener('click', () => showConfirm({
+      title: 'Disconnect the ad account?', confirmLabel: 'Disconnect',
+      body: 'Ad Leads goes back to showing leads only. Your ads are not affected.',
+      onConfirm: async () => {
+        try { await authFetch('/api/ads', { method: 'DELETE' }); showToast('Ad account disconnected', 'success'); } catch (err) { reportError(err); }
+        renderCtwaView();
+      },
+    }));
+  }
+
   async function renderCtwaView() {
     const tbody = document.getElementById('ctwa-ads-tbody');
     const stats = document.getElementById('ctwa-stats');
     if (!tbody || !stats) return;
     document.getElementById('ctwa-chats-card').hidden = true;
     document.getElementById('ctwa-ads-card').hidden = false;
-    tbody.innerHTML = analyticsLoadingRow(5);
+    tbody.innerHTML = analyticsLoadingRow(8);
+    renderAdsConnect();
     const since = ctwaSince();
     try {
-      const { totals, bySource } = await authFetch(`/api/analytics/ctwa${since ? `?since=${encodeURIComponent(since)}` : ''}`);
+      const { totals, bySource, adsAccount } = await authFetch(`/api/analytics/ctwa${since ? `?since=${encodeURIComponent(since)}` : ''}`);
+      const cur = adsAccount?.currency ? `${adsAccount.currency} ` : '';
+      const moneyCell = (v) => (v == null ? '-' : `${cur}${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
       if (state.currentView !== 'ctwa') return;
       stats.innerHTML = [
         statTile('user-plus', 'Leads from ads', formatCount(totals.leads), 'Chats started from an ad'),
         statTile('megaphone', 'Ads with leads', formatCount(totals.ads)),
         statTile('message-square', 'Ad messages', formatCount(totals.messages)),
+        ...(totals.spend != null ? [statTile('wallet', 'Ad spend', moneyCell(totals.spend)), statTile('target', 'Cost per lead', moneyCell(totals.costPerLead))] : []),
       ].join('');
+      if (adsAccount?.error) showToast(`Couldn't load ad numbers from Meta: ${adsAccount.error}`, 'warning');
       state.ctwaAds = bySource;
       tbody.innerHTML = bySource.length ? bySource.map((ad, i) => `
         <tr class="ctwa-ad-row" data-ctwa-ad="${i}" tabindex="0" aria-label="Show chats from ${esc(ctwaAdName(ad))}">
           <td data-label="Ad"><span class="analytics-name">${esc(ctwaAdName(ad))}</span>${ad.sourceUrl && /^https?:/i.test(ad.sourceUrl) ? ` <a href="${esc(ad.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="ctwa-ad-link" aria-label="Open the ad">View ad</a>` : ''}</td>
           <td data-label="Leads">${esc(formatCount(ad.leadCount))}</td>
           <td data-label="Messages">${esc(formatCount(ad.messageCount))}</td>
+          <td data-label="Spend">${esc(moneyCell(ad.spend))}</td>
+          <td data-label="Clicks">${ad.clicks == null ? '-' : esc(formatCount(ad.clicks))}</td>
+          <td data-label="Cost per lead">${esc(moneyCell(ad.costPerLead))}</td>
           <td data-label="First lead">${esc(formatShortDate(ad.firstAt))}</td>
           <td data-label="Latest lead">${esc(formatShortDate(ad.lastAt))}</td>
         </tr>`).join('')
-        : analyticsEmptyRow(5, 'No chats from ads yet', 'When someone taps a Click-to-WhatsApp ad and messages you, the chat shows up here automatically.');
+        : analyticsEmptyRow(8, 'No chats from ads yet', 'When someone taps a Click-to-WhatsApp ad and messages you, the chat shows up here automatically.');
       tbody.querySelectorAll('[data-ctwa-ad]').forEach((row) => {
         const open = (e) => { if (!e.target.closest('a')) renderCtwaChats(state.ctwaAds[row.dataset.ctwaAd]); };
         row.addEventListener('click', open);

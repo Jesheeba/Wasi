@@ -3,6 +3,7 @@ const { z } = require('zod');
 const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
+const { insightsByAd } = require('./ads');
 const chatSlaLogsRepo = require('../repositories/chatSlaLogsRepo');
 const conversationPricingRepo = require('../repositories/conversationPricingRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -126,12 +127,30 @@ router.get('/ctwa', asyncHandler(async (req, res) => {
       [req.clientId, since]
     ),
   ]);
-  res.json({
-    totals: { ...totals.rows[0], ads: rows.length },
-    bySource: rows.map((r) => ({
+  // Spend / clicks from the connected Meta ad account (ctwa-ad-metrics.md),
+  // matched by ad id = referral.source_id. Cost per lead uses Wasi's own lead
+  // count, not Meta's messaging-conversion metric (unconfirmed, and Meta is
+  // deprecating conversion metrics in Ads Insights).
+  const ymd = (d) => d.toISOString().slice(0, 10);
+  const until = ymd(new Date());
+  const sinceDay = ymd(since || new Date(Date.now() - 365 * 86400000));
+  const ads = await insightsByAd(req.db, req.clientId, { since: sinceDay, until });
+  const money = (n) => Math.round(n * 100) / 100;
+  let totalSpend = 0;
+  const bySource = rows.map((r) => {
+    const m = ads.byAd?.get(String(r.source_id)) || null;
+    if (m) totalSpend += m.spend;
+    return {
       sourceId: r.source_id, headline: r.headline, sourceUrl: r.source_url, sourceType: r.source_type,
       messageCount: r.message_count, leadCount: r.lead_count, firstAt: r.first_at, lastAt: r.last_at,
-    })),
+      ...(m ? { spend: money(m.spend), clicks: m.clicks, impressions: m.impressions, costPerLead: r.lead_count ? money(m.spend / r.lead_count) : null } : {}),
+    };
+  });
+  const t = totals.rows[0];
+  res.json({
+    totals: { ...t, ads: rows.length, ...(ads.byAd ? { spend: money(totalSpend), costPerLead: t.leads ? money(totalSpend / t.leads) : null } : {}) },
+    adsAccount: { connected: ads.connected, hasMetrics: Boolean(ads.byAd), error: ads.error, currency: ads.currency },
+    bySource,
   });
 }));
 

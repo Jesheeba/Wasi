@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(ctwa-ad-metrics): ad spend, clicks and cost per lead on Ad Leads
+- Ad Leads can connect a Meta ad account (Facebook Login for Business,
+  ads_read).
+- Per-ad spend and clicks come from Ads Insights, matched to Wasi's leads by
+  ad id; cost per lead = spend / leads.
+- Works for the owner's own ad account now. Clients need Meta App Review
+  for ads_read and the Marketing API Full access tier; owner steps are in
+  the feature doc.
+- Migration 105.
+
 ## feat(whatsapp-flows-phase3): contact fields, send anytime, CSV, bookings
 - Forms can save answers to contact fields.
 - Forms get a "Send anytime" template (an Open form button, reviewed by

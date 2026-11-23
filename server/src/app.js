@@ -37,6 +37,7 @@ const ecommerceRouter = require('./routes/ecommerce');
 const wooWebhookRouter = require('./routes/wooWebhook');
 const whatsappToolsRouter = require('./routes/whatsappTools');
 const flowsEndpointRouter = require('./routes/flowsEndpoint');
+const adsRoutes = require('./routes/ads');
 const teamMembersRouter = require('./routes/teamMembers');
 const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
@@ -190,6 +191,9 @@ function createApp() {
   app.use('/api/whatsapp-flows', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, whatsappFlowsRouter);
   app.use('/api/ecommerce', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, ecommerceRouter);
   app.use('/api/whatsapp-tools', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, whatsappToolsRouter);
+  // The ads sign-in callback is a public browser redirect from Meta (signed state), so it is mounted before the authenticated /api/ads routes.
+  app.use('/api/ads/callback', webhookLimiter, adsRoutes.callbackRouter);
+  app.use('/api/ads', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, adsRoutes.router);
   app.use('/api/team-members', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, teamMembersRouter);
   app.use('/api/contact-attributes', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactAttributesRouter);
   app.use('/api/payment-links', requireClientAuth, requireActiveSubscription, withTenantContext, paymentLinksRouter);

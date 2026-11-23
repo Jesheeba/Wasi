@@ -224,3 +224,17 @@ Deploy first (migration 104).
    Expect that time to become bookable again.
 
 Status: PENDING
+
+## 15. Ad spend and cost per lead (your own ad account first)
+Needs the owner setup in build-docs/features/ctwa-ad-metrics.md (steps 1-3)
+and a deploy (migration 105).
+1. Ad Leads > Connect ad account > sign in with your Facebook account (an
+   admin of the Wasi Meta app) > choose your ad account.
+   - Expect: back on Ad Leads with "Meta ad account connected".
+2. Expect "Ad spend" and "Cost per lead" tiles, and Spend / Clicks / Cost
+   per lead for ads that brought chats.
+3. Compare the spend for one ad with Meta Ads Manager for the same dates.
+4. A client account will see Meta's refusal until App Review approves
+   ads_read: expected for now.
+
+Status: PENDING

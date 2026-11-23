@@ -105,7 +105,11 @@ test('AC3 server: chats for one ad, and an ad with no source_id/headline is stil
 
 test('AC6 server + AC5: empty client gets zeros; tenant isolation holds', async () => {
   const body = await api('/api/analytics/ctwa', emptyToken).then((r) => r.json());
-  assert.deepEqual(body, { totals: { leads: 0, messages: 0, ads: 0 }, bySource: [] });
+  assert.deepEqual(body, {
+    totals: { leads: 0, messages: 0, ads: 0 },
+    adsAccount: { connected: false, hasMetrics: false, error: null, currency: null },
+    bySource: [],
+  });
   const q = new URLSearchParams({ sourceId: AD_A.source_id, headline: AD_A.headline });
   const other = await api(`/api/analytics/ctwa/chats?${q}`, emptyToken).then((r) => r.json());
   assert.deepEqual(other.chats, [], "another client's ad chats are never visible");
@@ -144,7 +148,12 @@ test('AC1-AC4 UI: nav opens the page, tiles + table, range filter, drill into ch
   assert.deepEqual(hrefs, [AD_A.source_url]);
 
   const text = await page.locator('#view-ctwa').innerText();
-  for (const banned of [/cost per lead\s*[:₹0-9]/i, /\bclicks?\s*[0-9]/i, /spend\s*[:₹0-9]/i]) assert.doesNotMatch(text, banned);
+  // No ad account connected: spend/clicks/cost per lead are never invented
+  // (ctwa-ad-metrics.md). The columns show "-" and there is no spend tile.
+  assert.ok(text.length);
+  assert.doesNotMatch(await page.locator('#ctwa-stats').innerText(), /Ad spend|Cost per lead/);
+  const moneyCells = await page.$$eval('#ctwa-ads-tbody td[data-label="Spend"], #ctwa-ads-tbody td[data-label="Clicks"], #ctwa-ads-tbody td[data-label="Cost per lead"]', (tds) => tds.map((t) => t.innerText.trim()));
+  assert.ok(moneyCells.length && moneyCells.every((v) => v === '-'), JSON.stringify(moneyCells));
 
   await page.click('#ctwa-ads-tbody tr.ctwa-ad-row >> text=Summer Sale');
   await page.waitForSelector('#ctwa-chats-tbody [data-ctwa-open-chat]');

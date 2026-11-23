@@ -3454,3 +3454,10 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 #wa-form-bookings[hidden] { display: none; }
 .wa-booking-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .wa-form-tpl { font-size: 0.75rem; margin-top: 2px; }
+
+/* Ad account metrics (build-docs/features/ctwa-ad-metrics.md). */
+.ctwa-ads-connect { margin-bottom: 1rem; }
+.ctwa-ads-connect[hidden] { display: none; }
+.ctwa-ads-connect p { margin: 0; }
+.ctwa-ads-connect-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ctwa-ads-connect-row .form-input { flex: 1 1 220px; min-width: 0; }

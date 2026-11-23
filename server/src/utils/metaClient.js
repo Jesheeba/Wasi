@@ -1291,7 +1291,45 @@ async function createFlowTemplate(wabaId, accessToken, { name, category, languag
   });
 }
 
+// --- Ad account metrics - build-docs/features/ctwa-ad-metrics.md ---
+// Facebook Login for Business (redirect flow) with an ads_read config.
+// redirect_uri must exactly match the one in the dialog URL and be listed
+// under Valid OAuth Redirect URIs in the App Dashboard.
+async function exchangeAdsCode(code, redirectUri) {
+  assertConfigured();
+  const url = new URL(`${GRAPH_BASE}/oauth/access_token`);
+  url.searchParams.set('client_id', process.env.META_APP_ID);
+  url.searchParams.set('client_secret', process.env.META_APP_SECRET);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('code', code);
+  const res = await fetchWithTimeout(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || `Token exchange failed (${res.status})`);
+  return data.access_token;
+}
+
+async function listAdAccounts(accessToken) {
+  const data = await graphFetch('/me/adaccounts?fields=id,name,currency,account_status&limit=100', { accessToken });
+  return data.data || [];
+}
+
+// Per-ad spend, impressions and clicks (the stable Insights fields). Ads are
+// matched to chats by ad id = referral.source_id.
+async function getAdInsights(adAccountId, accessToken, { since, until }) {
+  const q = new URLSearchParams({
+    level: 'ad',
+    fields: 'ad_id,ad_name,spend,impressions,clicks',
+    time_range: JSON.stringify({ since, until }),
+    limit: '500',
+  });
+  const data = await graphFetch(`/${adAccountId}/insights?${q}`, { accessToken });
+  return data.data || [];
+}
+
 module.exports = {
+  exchangeAdsCode,
+  listAdAccounts,
+  getAdInsights,
   createFlowTemplate,
   listWabaCatalogs,
   sendProductMessage,

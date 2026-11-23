@@ -1,5 +1,16 @@
 # Testing
 
+## ctwa-ad-metrics
+`ctwaAdMetrics.test.js` (Meta faked), 8/8. `ctwaAdsPage.test.js` 6/6
+after a deliberate change: the old "never show spend" check became "never
+invent it" (no account connected -> "-" and no spend tile). ctwaConversions
+5, metaAnalytics 4.
+
+Port 4000 was held by a local `run-local.js` dev server, so the browser
+suites were run on `127.0.0.2:4100` through temporary copies (deleted
+afterwards). app.js only redirects API calls to :4000 for localhost and
+127.0.0.1, so 127.0.0.2 stays same-origin.
+
 ## whatsapp-flows phase 3
 `whatsappFlowsPhase3.test.js` (Meta faked), 6/6:
 - Attribute map: an unknown field or a foreign attribute is 400.
