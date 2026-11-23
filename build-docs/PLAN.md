@@ -30,7 +30,37 @@ This file tracks features built under the global build workflow going forward.
   exist in the DOM (hidden) so the existing, already-tested mutual-
   exclusion/validation logic reading their state is untouched.
 
-## Proposed (awaiting approval)
+## Proposed (awaiting approval) - placeholder pages, 2026-11-23
+
+Owner asked to "develop" the 5 hidden placeholder pages (Ecommerce,
+WhatsApp Flows, Instagram, CTWA, Integrations). They are very different in
+size and two are blocked outside engineering, so they are planned
+separately, in build order:
+
+1. [ctwa-ads-page](features/ctwa-ads-page.md) - small. Server data already
+   captured (`messages.referral`, `/api/analytics/ctwa`); UI only + 2
+   additive fields. Shows leads per ad, never invented clicks/spend/CPL
+   (no Marketing API access).
+2. [integrations-page](features/integrations-page.md) - small. Real status
+   of integrations that already work (webhooks, Zapier, API/MCP, Razorpay
+   links). Shopify card marked "Coming soon".
+3. [catalog-product-messages](features/catalog-product-messages.md) -
+   medium. Becomes the **Ecommerce** page: send product / product-list
+   messages from the client's own Meta Commerce catalog. Abandoned-cart
+   recovery needs a store integration (Shopify) and is NOT in scope; that
+   section is marked "Coming soon". VERIFY: needs `catalog_management`
+   permission on the Meta app.
+4. [whatsapp-flows](features/whatsapp-flows.md) - large. Fixed set of
+   authored Flow templates (lead form, booking, survey), send + store
+   `nfm_reply`. Open question in the doc still needs an answer.
+5. [instagram-dm](features/instagram-dm.md) - medium engineering, blocked
+   on Meta App Review + rebasing a 2-month-old branch and renumbering its
+   migrations. Engineering can start; going live cannot until Meta approves.
+
+Until each one ships, its page is shown in the nav with a "Coming soon"
+badge (no fake data), so the owner's original request is met on day one.
+
+## Proposed (awaiting approval) - earlier
 
 Scope for this batch: messaging/template gaps only (user's explicit choice,
 2026-11-16, after a full-CRM audit review — AI Agent/Instagram/Dashboard/

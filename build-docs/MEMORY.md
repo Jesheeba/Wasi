@@ -1,5 +1,18 @@
 # Project memory
 
+## 2026-11-23 - placeholder pages approved
+Owner approved building the 5 hidden placeholder pages in this order:
+CTWA Ads, Integrations, Ecommerce, WhatsApp Flows, Instagram (PLAN.md).
+- Ecommerce = catalog/product messages only; abandoned-cart recovery
+  (needs a Shopify app) stays "Coming soon".
+- WhatsApp Flows = fixed authored set (lead, booking, survey) with
+  editable labels, not a visual designer.
+- Every page shows in the nav with a "Coming soon" badge until it ships;
+  no fake data on any of them.
+- CTWA shows leads per ad only: no clicks/spend/CPL (no Marketing API).
+- Repo is public (GitHub API answers unauthenticated), so per the
+  2026-10-12 owner rule commits stay local, not pushed.
+
 ## 2026-11-21 - open issues found during the settings redesign
 - Admin roles (support/billing/super_admin) are stored but never checked by
   any route: every admin has full access. Surfaced in the UI, not fixed

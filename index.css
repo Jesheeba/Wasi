@@ -376,7 +376,21 @@ body {
   gap: 4px;
 }
 
-.sidebar.collapsed .nav-text {
+/* "Soon" pill on nav entries for planned pages (PLAN.md 2026-11-23). */
+.nav-soon {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--info, #1D4ED8);
+  background: var(--info-bg, #EFF6FF);
+  border: 1px solid var(--info-border, #BFDBFE);
+}
+
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .nav-soon {
   display: none;
 }
 
@@ -428,6 +442,7 @@ body {
     width: var(--sidebar-collapsed-width);
   }
   .sidebar .nav-text,
+  .sidebar .nav-soon,
   .sidebar .nav-group-label,
   .sidebar-profile-text,
   .logo-container span {

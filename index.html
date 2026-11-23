@@ -160,6 +160,11 @@
           <i data-lucide="message-square"></i>
           <span class="nav-text">Chat</span>
         </a>
+        <a class="nav-item" data-view="instagram" role="button" tabindex="0" title="Instagram - coming soon">
+          <i data-lucide="camera"></i>
+          <span class="nav-text">Instagram</span>
+          <span class="nav-soon">Soon</span>
+        </a>
         <div class="nav-group-label">Audience</div>
         <a class="nav-item" data-view="contacts" role="button" tabindex="0">
           <i data-lucide="users"></i>
@@ -182,10 +187,25 @@
           <i data-lucide="bot"></i>
           <span class="nav-text">Automation</span>
         </a>
+        <a class="nav-item" data-view="whatsapp-flows" role="button" tabindex="0" title="WhatsApp Flows (in-chat forms) - coming soon">
+          <i data-lucide="clipboard-list"></i>
+          <span class="nav-text">Forms</span>
+          <span class="nav-soon">Soon</span>
+        </a>
+        <a class="nav-item" data-view="ctwa" role="button" tabindex="0" title="Click-to-WhatsApp Ads - coming soon">
+          <i data-lucide="target"></i>
+          <span class="nav-text">Ad Leads</span>
+          <span class="nav-soon">Soon</span>
+        </a>
         <div class="nav-group-label">Business</div>
         <a class="nav-item" data-view="payments" role="button" tabindex="0">
           <i data-lucide="credit-card"></i>
           <span class="nav-text">Payments</span>
+        </a>
+        <a class="nav-item" data-view="ecommerce" role="button" tabindex="0" title="Ecommerce - coming soon">
+          <i data-lucide="shopping-bag"></i>
+          <span class="nav-text">Ecommerce</span>
+          <span class="nav-soon">Soon</span>
         </a>
         <a class="nav-item" data-view="analytics" role="button" tabindex="0">
           <i data-lucide="bar-chart-2"></i>
@@ -195,11 +215,11 @@
           <i data-lucide="life-buoy"></i>
           <span class="nav-text">Support</span>
         </a>
-        <!-- Instagram and Integrations were "Not connected" placeholder pages
-             (no backend). Removed from the primary nav (UI redesign Stage 3);
-             their view-instagram / view-integrations containers are left in
-             the DOM, unreachable, until each is a real feature. Ecommerce,
-             Whatsapp Flows and CTWA were removed earlier for the same reason. -->
+        <a class="nav-item" data-view="integrations" role="button" tabindex="0" title="Integrations - coming soon">
+          <i data-lucide="plug"></i>
+          <span class="nav-text">Integrations</span>
+          <span class="nav-soon">Soon</span>
+        </a>
       </nav>
 
       <div class="sidebar-bottom">
@@ -799,176 +819,97 @@
         </div>
 
         <!-- 6. ECOMMERCE VIEW -->
+        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
+             this page is listed in the nav so clients know it is planned. -->
         <div id="view-ecommerce" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Ecommerce Catalog & Cart Recovery</h1>
-              <p class="page-subtitle">Product catalogs, cart recovery automation, and WhatsApp checkout</p>
-            </div>
-            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="sync-catalog-btn"><i data-lucide="refresh-cw"></i> Sync Meta Catalog</button>
-          </div>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-            <div class="table-card" style="padding: 1.25rem;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Classic Cotton T-Shirt</span><span class="status-badge active">In Stock</span></div>
-              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 4px;">₹ 450.00</div>
-              <div style="font-size: 0.75rem; color: #6B7280;">SKU: BSR-TSH-01 • Synced with WhatsApp</div>
-            </div>
-            <div class="table-card" style="padding: 1.25rem;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Ceramic Table Lamp</span><span class="status-badge active">In Stock</span></div>
-              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 4px;">₹ 680.00</div>
-              <div style="font-size: 0.75rem; color: #6B7280;">SKU: BSR-LMP-02 • Synced with WhatsApp</div>
-            </div>
-            <div class="table-card" style="padding: 1.25rem;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Steel Water Bottle</span><span class="status-badge active">In Stock</span></div>
-              <div style="font-size: 1.25rem; font-weight: 700; color: #1F2937; margin-bottom: 4px;">₹ 320.00</div>
-              <div style="font-size: 0.75rem; color: #6B7280;">SKU: BSR-BTL-03 • Synced with WhatsApp</div>
+              <h1 class="page-title">Ecommerce <span class="badge badge-info">Coming soon</span></h1>
+              <p class="page-subtitle">Product messages from your Meta catalog</p>
             </div>
           </div>
-
-          <div class="table-card" style="padding: 1.5rem;">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Abandoned Cart Recovery Rules</h3>
-            <table class="data-table">
-              <thead><tr><th>Trigger Condition</th><th>Target Audience</th><th>Auto Message Template</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td style="font-weight:600;">1 Hour After Cart Abandoned</td><td>All Shoppers</td><td>Cart Recovery Reminder 1</td><td><span class="status-badge active">Active</span></td></tr>
-                <tr><td style="font-weight:600;">24 Hours After Cart Abandoned</td><td>High Value (>&nbsp;₹1000)</td><td>Special 5% Discount Coupon</td><td><span class="status-badge active">Active</span></td></tr>
-              </tbody>
-            </table>
+          <div class="table-card" id="ecommerce-content">
+            <div class="empty-state">
+              <i data-lucide="shopping-bag" class="empty-icon" aria-hidden="true"></i>
+              <div class="empty-title">Ecommerce is coming soon</div>
+              <p>Send single products and product lists from your own Meta Commerce catalog straight into a chat, so customers can browse and order without leaving WhatsApp.</p>
+              <p class="empty-example">Abandoned-cart recovery needs a store integration and will follow later.</p>
+            </div>
           </div>
         </div>
 
-        <!-- 7. WHATSAPP FLOWS VIEW -->
+        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
+             this page is listed in the nav so clients know it is planned. -->
         <div id="view-whatsapp-flows" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Whatsapp Flows</h1>
-              <p class="page-subtitle">Interactive native forms and appointment booking flows</p>
+              <h1 class="page-title">WhatsApp Flows <span class="badge badge-info">Coming soon</span></h1>
+              <p class="page-subtitle">Forms your customers fill in inside WhatsApp</p>
             </div>
-            <button class="btn-primary" style="width: auto; padding: 0 18px;" id="open-create-flow-modal"><i data-lucide="plus"></i> Create Flow</button>
           </div>
-
-          <div class="table-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;" id="flows-grid">
-              <div style="border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; background: white;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Lead Qualification Flow</span><span class="status-badge active">Published</span></div>
-                <p style="font-size: 0.85rem; color: #4B5563; margin-bottom: 0.75rem;">3-step native form capturing name, requirement, and budget range.</p>
-                <div style="font-size: 0.75rem; color: #6B7280;">Submissions: 342 • Completion Rate: 89.5%</div>
-              </div>
-              <div style="border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; background: white;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span style="font-weight: 700;">Appointment Scheduler</span><span class="status-badge active">Published</span></div>
-                <p style="font-size: 0.85rem; color: #4B5563; margin-bottom: 0.75rem;">Select date, time slot, and preferred consultant directly in chat.</p>
-                <div style="font-size: 0.75rem; color: #6B7280;">Submissions: 185 • Completion Rate: 94.2%</div>
-              </div>
+          <div class="table-card" id="whatsapp-flows-content">
+            <div class="empty-state">
+              <i data-lucide="clipboard-list" class="empty-icon" aria-hidden="true"></i>
+              <div class="empty-title">WhatsApp Flows is coming soon</div>
+              <p>Lead forms, appointment booking and feedback surveys that open inside WhatsApp. Answers are saved to the contact automatically.</p>
+              <p class="empty-example">Looking for chatbots? Those are already live under Automation.</p>
             </div>
           </div>
         </div>
 
-        <!-- 8. INSTAGRAM VIEW -->
+        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
+             this page is listed in the nav so clients know it is planned. -->
         <div id="view-instagram" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Instagram DM Automation</h1>
-              <p class="page-subtitle">Auto-reply to Story Mentions, DMs, and Comments</p>
+              <h1 class="page-title">Instagram <span class="badge badge-info">Coming soon</span></h1>
+              <p class="page-subtitle">Reply to Instagram DMs from the same inbox</p>
             </div>
           </div>
-
-          <!-- No Instagram integration exists anywhere in this codebase
-               (no OAuth flow, no API routes, no repo) - this used to claim
-               "@wasi_official ... Connected" plus two fake "Active"
-               automation rules regardless. Left honest until the feature is
-               actually built: not connected, no rules possible yet. -->
-          <div class="channel-status-card">
-            <div class="channel-info-left">
-              <div class="wa-icon-circle" style="background: #E1306C;"><i data-lucide="camera"></i></div>
-              <div>
-                <div style="font-weight: 700; font-size: 1.05rem; color: #1F2937;">No Instagram account connected</div>
-                <div style="font-size: 0.8rem; color: #6B7280;">This feature isn't available yet</div>
-              </div>
+          <div class="table-card" id="instagram-content">
+            <div class="empty-state">
+              <i data-lucide="camera" class="empty-icon" aria-hidden="true"></i>
+              <div class="empty-title">Instagram is coming soon</div>
+              <p>Connect your Instagram professional account and answer DMs alongside your WhatsApp chats.</p>
+              <p class="empty-example">Waiting on Meta to approve Instagram messaging for Wasi.</p>
             </div>
-            <span class="status-badge" style="padding: 4px 14px; font-weight: 700; background: #F1F5F9; color: #64748B;">Not Connected</span>
-          </div>
-
-          <div class="table-card" style="padding: 1.5rem;">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #1F2937; margin-bottom: 1rem;">Instagram Rules</h3>
-            <div style="text-align:center;color:#9CA3AF;padding:1rem 0;">Connect an Instagram account to create automation rules.</div>
           </div>
         </div>
 
-        <!-- 9. CTWA VIEW -->
+        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
+             this page is listed in the nav so clients know it is planned. -->
         <div id="view-ctwa" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Click to WhatsApp Ads (CTWA)</h1>
-              <p class="page-subtitle">Track conversions and leads from Meta Facebook & Instagram Ads</p>
+              <h1 class="page-title">Click-to-WhatsApp Ads <span class="badge badge-info">Coming soon</span></h1>
+              <p class="page-subtitle">Leads from your Facebook and Instagram ads</p>
             </div>
           </div>
-
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-icon"><i data-lucide="target"></i></div>
-              <div>
-                <div class="stat-val">1,420</div>
-                <div class="stat-label">Ad Clicks</div>
-              </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-icon"><i data-lucide="user-check"></i></div>
-              <div>
-                <div class="stat-val">385</div>
-                <div class="stat-label">Leads Captured</div>
-              </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
-              <div>
-                <div class="stat-val">₹ 14.20</div>
-                <div class="stat-label">Cost Per Lead</div>
-              </div>
+          <div class="table-card" id="ctwa-content">
+            <div class="empty-state">
+              <i data-lucide="target" class="empty-icon" aria-hidden="true"></i>
+              <div class="empty-title">Click-to-WhatsApp Ads is coming soon</div>
+              <p>See which of your ads start WhatsApp conversations, and open every chat each ad brought in.</p>
+              <p class="empty-example">Wasi already records the ad behind each new chat, so your history will show up when this page launches.</p>
             </div>
           </div>
         </div>
 
-        <!-- 10. INTEGRATIONS VIEW -->
+        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
+             this page is listed in the nav so clients know it is planned. -->
         <div id="view-integrations" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Integrations</h1>
-              <p class="page-subtitle">Connect Shopify, CRM, Webhooks, and Zapier</p>
+              <h1 class="page-title">Integrations <span class="badge badge-info">Coming soon</span></h1>
+              <p class="page-subtitle">Everything Wasi connects to, in one place</p>
             </div>
           </div>
-          <!-- None of these 5 cards check any real connection state - no
-               OAuth flow or API integration exists for any of them in this
-               codebase (Razorpay is genuinely used elsewhere, for Wallet
-               top-ups and Billing checkout, but that's a platform-level
-               payment gateway, not a per-client "connection" this card
-               actually reflects). Every card claimed "Connected"
-               unconditionally; left honest until each is real. -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
-            <div class="table-card" style="padding: 1.25rem;">
-              <h4 style="font-weight: 700;">Shopify</h4>
-              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Sync orders & abandoned carts</p>
-              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
-            </div>
-            <div class="table-card" style="padding: 1.25rem;">
-              <h4 style="font-weight: 700;">HubSpot CRM</h4>
-              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Sync contacts & deals</p>
-              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
-            </div>
-            <div class="table-card" style="padding: 1.25rem;">
-              <h4 style="font-weight: 700;">Razorpay</h4>
-              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">In-chat payment links</p>
-              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
-            </div>
-            <div class="table-card" style="padding: 1.25rem;">
-              <h4 style="font-weight: 700;">Zapier</h4>
-              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Automate 5000+ app workflows</p>
-              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
-            </div>
-            <div class="table-card" style="padding: 1.25rem;">
-              <h4 style="font-weight: 700;">Google Sheets</h4>
-              <p style="font-size: 0.8rem; color: #6B7280; margin: 4px 0 12px;">Export leads automatically</p>
-              <span class="status-badge" style="background: #F1F5F9; color: #64748B;">Not Connected</span>
+          <div class="table-card" id="integrations-content">
+            <div class="empty-state">
+              <i data-lucide="plug" class="empty-icon" aria-hidden="true"></i>
+              <div class="empty-title">Integrations is coming soon</div>
+              <p>See the live status of your webhooks, Zapier, API keys and payment links on one page.</p>
+              <p class="empty-example">All of these already work today. Set them up under Settings &gt; Developer and Settings &gt; Webhook.</p>
             </div>
           </div>
         </div>

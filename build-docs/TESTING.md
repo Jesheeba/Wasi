@@ -1,5 +1,14 @@
 # Testing
 
+## coming-soon-pages
+`server/test/comingSoonPages.test.js` (Playwright, :4000, local embedded
+Postgres): each of the 5 pages has a nav entry with a Soon badge, opens on
+click, updates the hash and says coming soon; none of the old fake figures
+remain in index.html; Flows/Ads/Ecommerce/Integrations are in the Agent
+hidden list, Instagram is not. 3/3. Regression: adminUiRedesign 9/9,
+chatUiPass 15/15, settingsRedesign 12/12, confirmPromptGroup23 6/6,
+modalInnerScrollGroup4 4/4.
+
 ## settings-forms-admin-redesign (steps 1-6, complete)
 `server/test/settingsRedesign.test.js` (Playwright, :4000, local embedded
 Postgres via TEST_DATABASE_URL, disposable client deleted in after()):

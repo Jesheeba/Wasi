@@ -1,5 +1,14 @@
 # Changelog
 
+## feat(coming-soon-pages): planned pages listed in the nav as "Coming soon"
+Instagram, WhatsApp Flows ("Forms"), Click-to-WhatsApp Ads ("Ad Leads"),
+Ecommerce and Integrations are back in the sidebar with a "Soon" badge and
+an honest Coming soon page each. Removed every fake figure the hidden
+placeholders carried (1,420 ad clicks, ₹14.20 CPL, sample products, fake
+flow submissions and cart rules) and the "Catalog synced" toast that did
+nothing. Management pages are hidden from Agents. First step of the
+placeholder-pages plan (PLAN.md 2026-11-23).
+
 ## feat(settings-redesign): admin summary tiles, invite drawer, client strip
 Step 6 (last). Clients: five summary tiles (all / active / pending setup /
 suspended / unpaid) that filter the table; "Unpaid" filters on

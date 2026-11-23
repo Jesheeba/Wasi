@@ -659,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // the server is the real gate; this just avoids offering a 403).
     document.querySelectorAll('[data-manage-only]').forEach((el) => { el.hidden = isAgent; });
 
-    const agentHiddenViews = ['campaigns', 'template-library', 'automation', 'analytics'];
+    const agentHiddenViews = ['campaigns', 'template-library', 'automation', 'analytics', 'whatsapp-flows', 'ctwa', 'ecommerce', 'integrations'];
     agentHiddenViews.forEach((view) => {
       const navEl = document.querySelector(`.nav-item[data-view="${view}"]`);
       if (navEl) navEl.style.display = isAgent ? 'none' : '';
@@ -7892,11 +7892,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       refreshIcons();
     });
-  });
-
-  // --- Simple Confirmation Actions ---
-  document.getElementById('sync-catalog-btn')?.addEventListener('click', () => {
-    showToast('Catalog synced successfully');
   });
 
   document.getElementById('refresh-reports-btn')?.addEventListener('click', async () => {
