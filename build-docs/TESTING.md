@@ -1,5 +1,22 @@
 # Testing
 
+## automation-rule-view-edit
+`server/test/automationRuleViewEdit.test.js` (Playwright + API, :4000, local
+embedded Postgres via TEST_DATABASE_URL, disposable clients deleted in
+after(), no WhatsApp send - engine test stubs messagingService). AC1+2 row
+opens a prefilled drawer, full reply in the bubble, live preview, edit
+PATCHes (no duplicate row); AC3 table switch disables, persists across
+reload, re-enables, never opens the drawer; drawer switch saves Disabled on
+create; AC4 disabled rule not matched by automationEngine; AC5 action/flow_id
+stay exclusive both ways, both at once 400, status 'Active' 400; AC6 another
+client's flow_id 400. 6/6 pass first run. Screenshots at 1440 + 375 found the
+sixth "View" column clipped off the card at 1440, so it was dropped (the row
+opens the drawer), and the one-line reply input became a textarea; re-run
+6/6. Regression (`.wasi-toggle` moved to design-system.css, Create Rule
+drawer changed): settingsRedesign 12/12, adminUiRedesign 9/9,
+adminSummaryRedesign 4/4, confirmPromptGroup23 6/6, modalInnerScrollGroup4
+4/4.
+
 ## coming-soon-pages
 `server/test/comingSoonPages.test.js` (Playwright, :4000, local embedded
 Postgres): each of the 5 pages has a nav entry with a Soon badge, opens on

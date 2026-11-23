@@ -437,3 +437,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand-dark); }
 .icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
 
 .page-title-bar > .btn-compact { width: auto; padding-left: 18px; padding-right: 18px; }
+
+/* ------------------------------------------- Toggle switch (admin Service/Payment, automation rules) */
+.wasi-toggle { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.wasi-toggle input { appearance: none; -webkit-appearance: none; width: 38px; height: 22px; border-radius: 999px; background: var(--border-strong); position: relative; cursor: pointer; outline: none; transition: background 0.15s ease; flex-shrink: 0; }
+.wasi-toggle input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s ease; }
+.wasi-toggle input:checked { background: var(--brand); }
+.wasi-toggle input:checked::before { transform: translateX(16px); }
+.wasi-toggle input:focus-visible { box-shadow: var(--focus-ring); }
+.wasi-toggle input:disabled { opacity: 0.5; cursor: not-allowed; }
+.wasi-toggle-label { font-size: var(--fs-body); font-weight: 600; }
+.wasi-toggle.wasi-toggle-danger input:checked { background: var(--danger-solid); }

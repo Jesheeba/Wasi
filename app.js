@@ -3626,17 +3626,55 @@ document.addEventListener('DOMContentLoaded', () => {
       const responds = rule.flow_id
         ? `<span class="automation-target"><i data-lucide="workflow" class="icon-14"></i> Starts flow: <strong>${esc(flowName)}</strong></span>`
         : `<span class="automation-reply" title="${esc(rule.action || '')}">${esc(rule.action || '')}</span>`;
-      const isActive = String(rule.status || '').toLowerCase() === 'active';
+      // automationEngine runs only rules whose status is exactly 'Enabled'.
+      const isEnabled = rule.status === 'Enabled';
       return `
-        <tr>
-          <td data-label="Rule"><span class="automation-name">${esc(rule.title)}</span></td>
+        <tr class="automation-rule-row" data-rule-id="${esc(rule.id)}" tabindex="0" aria-label="Open rule ${esc(rule.title)}">
+          <td data-label="Rule"><span class="automation-name" title="${esc(rule.title)}">${esc(rule.title)}</span></td>
           <td data-label="Trigger"><span class="automation-trigger">${esc(rule.trigger)}</span></td>
           <td data-label="Responds with">${responds}</td>
-          <td data-label="Status"><span class="badge ${isActive ? 'badge-success' : 'badge-neutral'}">${esc(rule.status)}</span></td>
+          <td data-label="Status">
+            <label class="wasi-toggle" title="${isEnabled ? 'Disable' : 'Enable'} this rule">
+              <input type="checkbox" data-rule-toggle="${esc(rule.id)}" ${isEnabled ? 'checked' : ''} aria-label="${esc(rule.title)} enabled" />
+              <span class="wasi-toggle-label">${isEnabled ? 'Enabled' : 'Disabled'}</span>
+            </label>
+          </td>
           <td data-label="Created" class="automation-date">${esc(formatAutomationDate(rule.created_at))}</td>
         </tr>`;
     }).join('');
+    body.querySelectorAll('[data-rule-id]').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.wasi-toggle')) return;
+        openRuleDrawer(state.automationRules.find((r) => r.id === row.dataset.ruleId));
+      });
+      row.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); row.click(); }
+      });
+    });
+    body.querySelectorAll('[data-rule-toggle]').forEach((input) => {
+      input.addEventListener('change', () => setRuleStatus(input.dataset.ruleToggle, input.checked, input));
+    });
     refreshIcons();
+  }
+
+  // Enable/disable straight from the table. The switch is locked while the
+  // PATCH is in flight and reverted if it fails, so it never shows a state
+  // the server did not accept.
+  async function setRuleStatus(ruleId, enabled, input) {
+    input.disabled = true;
+    try {
+      const updated = await authFetch(`/api/automation-rules/${encodeURIComponent(ruleId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: enabled ? 'Enabled' : 'Disabled' }),
+      });
+      state.automationRules = state.automationRules.map((r) => (r.id === ruleId ? updated : r));
+      showToast(`Rule ${enabled ? 'enabled' : 'disabled'}`, 'success');
+      renderAutomation();
+    } catch (err) {
+      input.checked = !enabled;
+      input.disabled = false;
+      reportError(err);
+    }
   }
 
   // --- Flows (step-list editor) ---
@@ -7632,17 +7670,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- Create Automation Rule Modal ---
-  document.getElementById('open-create-rule-modal')?.addEventListener('click', () => {
-    const flowSelect = document.getElementById('new-rule-flow-id');
-    flowSelect.innerHTML = state.flows.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
-    document.getElementById('modal-create-rule')?.classList.add('open');
-  });
+  // --- Create / View / Edit Automation Rule drawer ---
+  // One drawer for both: editingRuleId null = create (POST), set = edit (PATCH).
+  let editingRuleId = null;
 
-  document.getElementById('new-rule-kind')?.addEventListener('change', (e) => {
-    const isFlow = e.target.value === 'flow';
+  function syncRuleKind() {
+    const isFlow = document.getElementById('new-rule-kind').value === 'flow';
     document.getElementById('new-rule-action-group').style.display = isFlow ? 'none' : '';
     document.getElementById('new-rule-flow-group').style.display = isFlow ? '' : 'none';
+    updateRulePreview();
+  }
+
+  function updateRulePreview() {
+    const isFlow = document.getElementById('new-rule-kind').value === 'flow';
+    const text = document.getElementById('new-rule-action').value;
+    const bubble = document.getElementById('rule-reply-preview');
+    document.getElementById('rule-reply-preview-wrap').hidden = isFlow;
+    bubble.textContent = text.trim() ? text : 'Your reply will appear here.';
+    bubble.classList.toggle('placeholder', !text.trim());
+    const flowId = document.getElementById('new-rule-flow-id').value;
+    document.getElementById('rule-flow-preview').hidden = !isFlow;
+    document.getElementById('rule-flow-preview-name').textContent = state.flows.find((f) => f.id === flowId)?.name || 'No flow selected';
+    document.getElementById('rule-open-flow-btn').disabled = !flowId;
+    const toggle = document.getElementById('rule-status-toggle');
+    toggle.nextElementSibling.textContent = toggle.checked ? 'Enabled' : 'Disabled';
+  }
+
+  // rule: a row from state.automationRules to view/edit, or null to create.
+  function openRuleDrawer(rule) {
+    if (rule === undefined) return; // clicked row is no longer in state
+    document.getElementById('create-rule-form').reset();
+    editingRuleId = rule ? rule.id : null;
+    const flowSelect = document.getElementById('new-rule-flow-id');
+    flowSelect.innerHTML = state.flows.map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
+    document.getElementById('create-rule-title').textContent = rule ? 'Automation Rule' : 'Create Automation Rule';
+    document.getElementById('rule-submit-btn').textContent = rule ? 'Save Changes' : 'Save Rule';
+    if (rule) {
+      document.getElementById('new-rule-title').value = rule.title || '';
+      document.getElementById('new-rule-trigger').value = rule.trigger || '';
+      document.getElementById('new-rule-kind').value = rule.flow_id ? 'flow' : 'text';
+      document.getElementById('new-rule-action').value = rule.action || '';
+      if (rule.flow_id) flowSelect.value = rule.flow_id;
+      document.getElementById('rule-status-toggle').checked = rule.status === 'Enabled';
+    }
+    syncRuleKind();
+    document.getElementById('modal-create-rule')?.classList.add('open');
+  }
+
+  document.getElementById('open-create-rule-modal')?.addEventListener('click', () => openRuleDrawer(null));
+  document.getElementById('new-rule-kind')?.addEventListener('change', syncRuleKind);
+  document.getElementById('new-rule-action')?.addEventListener('input', updateRulePreview);
+  document.getElementById('new-rule-flow-id')?.addEventListener('change', updateRulePreview);
+  document.getElementById('rule-status-toggle')?.addEventListener('change', updateRulePreview);
+  document.getElementById('rule-open-flow-btn')?.addEventListener('click', () => {
+    const flowId = document.getElementById('new-rule-flow-id').value;
+    if (!flowId) return;
+    document.getElementById('modal-create-rule')?.classList.remove('open');
+    openFlowEditor(flowId);
   });
 
   document.getElementById('create-rule-form')?.addEventListener('submit', async (e) => {
@@ -7657,18 +7741,33 @@ document.addEventListener('DOMContentLoaded', () => {
       : { title, trigger, action: document.getElementById('new-rule-action').value.trim() };
     if (kind === 'flow' && !body.flow_id) { showToast('Create a flow first, then pick it here.'); return; }
     if (kind !== 'flow' && !body.action) return;
+    const status = document.getElementById('rule-status-toggle').checked ? 'Enabled' : 'Disabled';
 
-    const restoreSubmit = withSubmitLoading(e.target, 'Creating…');
+    const restoreSubmit = withSubmitLoading(e.target, editingRuleId ? 'Saving…' : 'Creating…');
     try {
-      await authFetch('/api/automation-rules', {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
+      if (editingRuleId) {
+        await authFetch(`/api/automation-rules/${encodeURIComponent(editingRuleId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ ...body, status }),
+        });
+      } else {
+        const created = await authFetch('/api/automation-rules', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        // POST always creates an Enabled rule; honour the switch if it was turned off.
+        if (status === 'Disabled') {
+          await authFetch(`/api/automation-rules/${encodeURIComponent(created.id)}`, {
+            method: 'PATCH', body: JSON.stringify({ status }),
+          });
+        }
+      }
+      showToast(editingRuleId ? 'Rule saved' : 'Rule created', 'success');
       await refreshAutomationRules();
       renderAutomation();
       e.target.reset();
-      document.getElementById('new-rule-action-group').style.display = '';
-      document.getElementById('new-rule-flow-group').style.display = 'none';
+      editingRuleId = null;
+      syncRuleKind();
       document.getElementById('modal-create-rule')?.classList.remove('open');
     } catch (err) {
       reportError(err);

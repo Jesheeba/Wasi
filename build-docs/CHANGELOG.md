@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(automation-rules): view, edit and enable/disable rules
+The Rules table was read-only: no way to open a rule, read its full reply,
+edit it or turn it off. Rows now open the Create Rule drawer in edit mode,
+with a WhatsApp bubble preview of the reply and an Open flow link for flow
+rules. Each row and the drawer have an Enabled/Disabled switch. PATCH
+`/api/automation-rules/:id` now also takes action, flow_id (switching kind
+clears the other, so the XOR constraint holds; a foreign flow_id is 400)
+and status (Enabled|Disabled). Fixed: the status badge compared to 'active',
+so every real 'Enabled' rule showed grey. Delete not built (no route).
+
 ## feat(coming-soon-pages): planned pages listed in the nav as "Coming soon"
 Instagram, WhatsApp Flows ("Forms"), Click-to-WhatsApp Ads ("Ad Leads"),
 Ecommerce and Integrations are back in the sidebar with a "Soon" badge and

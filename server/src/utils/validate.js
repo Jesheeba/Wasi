@@ -293,9 +293,18 @@ const automationRuleCreateSchema = z.object({
   }
 });
 
+// automationEngine only runs rules whose status is exactly 'Enabled'.
+// Sending action switches a rule to a text reply (flow_id cleared) and
+// flow_id switches it to a flow (action cleared), keeping the DB's
+// automation_rules_action_xor_flow constraint satisfied.
 const automationRuleUpdateSchema = z.object({
-  title: z.string().min(1).optional(),
-  trigger: z.string().min(1).optional(),
+  title: z.string().trim().min(1).optional(),
+  trigger: z.string().trim().min(1).optional(),
+  action: z.string().trim().min(1).optional(),
+  flow_id: uuid.optional(),
+  status: z.enum(['Enabled', 'Disabled']).optional(),
+}).refine((val) => !(val.action && val.flow_id), {
+  message: 'Provide "action" or "flow_id", not both.',
 });
 
 const automationFlowCreateSchema = z.object({

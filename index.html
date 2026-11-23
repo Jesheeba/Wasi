@@ -2444,7 +2444,7 @@
           </div>
           <div class="form-group" id="new-rule-action-group">
             <label class="form-label" for="new-rule-action">Reply text</label>
-            <input type="text" id="new-rule-action" class="form-input" placeholder="e.g. Send Business Hours Template" />
+            <textarea id="new-rule-action" class="form-input" rows="4" placeholder="e.g. We are open Monday to Saturday, 9am to 7pm."></textarea>
           </div>
           <div class="form-group" id="new-rule-flow-group" style="display: none;">
             <label class="form-label" for="new-rule-flow-id">Flow to start</label>
@@ -2452,10 +2452,27 @@
           </div>
         </div>
 
+        <div class="form-section">
+          <div class="form-section-eyebrow">3 &middot; Preview</div>
+          <div class="wa-preview" id="rule-reply-preview-wrap" aria-hidden="true"><div class="wa-bubble out placeholder" id="rule-reply-preview">Your reply will appear here.</div></div>
+          <div class="rule-flow-preview" id="rule-flow-preview" hidden>
+            <span class="automation-target"><i data-lucide="workflow" class="icon-14"></i> Starts flow: <strong id="rule-flow-preview-name"></strong></span>
+            <button type="button" class="btn-secondary btn-auto" id="rule-open-flow-btn">Open flow</button>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <label class="wasi-toggle" for="rule-status-toggle">
+            <input type="checkbox" id="rule-status-toggle" checked />
+            <span class="wasi-toggle-label">Enabled</span>
+          </label>
+          <div class="form-hint">A disabled rule is kept but never replies.</div>
+        </div>
+
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-rule">Cancel</button>
-          <button type="submit" class="btn-primary btn-auto">Save Rule</button>
+          <button type="submit" class="btn-primary btn-auto" id="rule-submit-btn">Save Rule</button>
         </div>
       </form>
     </div>

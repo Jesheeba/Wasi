@@ -2993,6 +2993,12 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .automation-reply { display: block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--neutral); }
 .automation-target { display: block; color: var(--neutral); max-width: 340px; }
 .automation-target svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.automation-rule-row { cursor: pointer; }
+.automation-rule-row:hover td { background: var(--neutral-bg); }
+.automation-rule-row:hover .automation-name, .automation-rule-row:focus-visible .automation-name { color: var(--brand); text-decoration: underline; }
+.automation-rule-row .wasi-toggle-label { font-size: var(--fs-label); font-weight: 500; color: var(--text-muted); }
+.rule-flow-preview { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.rule-flow-preview[hidden], .wa-preview[hidden] { display: none; }
 .automation-date { white-space: nowrap; color: var(--text-muted); font-size: var(--fs-label); }
 .automation-col-actions { width: 170px; text-align: right; }
 .automation-actions { white-space: nowrap; display: inline-flex; gap: var(--sp-1); justify-content: flex-end; }

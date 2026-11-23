@@ -21,14 +21,21 @@ async function create(db, clientId, { title, trigger, action, flow_id }) {
   return rows[0];
 }
 
-async function update(db, clientId, id, { title, trigger }) {
+// action and flow_id are mutually exclusive (DB constraint): setting one
+// clears the other; passing neither leaves the rule's kind unchanged.
+async function update(db, clientId, id, { title, trigger, action, flow_id, status }) {
   const { rows } = await db.query(
     `update automation_rules set
        title = coalesce($3, title),
-       trigger = coalesce($4, trigger)
+       trigger = coalesce($4, trigger),
+       action = case when $5::text is not null then $5
+                     when $6::uuid is not null then null else action end,
+       flow_id = case when $6::uuid is not null then $6
+                      when $5::text is not null then null else flow_id end,
+       status = coalesce($7, status)
      where id = $1 and client_id = $2
      returning *`,
-    [id, clientId, title || null, trigger || null]
+    [id, clientId, title || null, trigger || null, action || null, flow_id || null, status || null]
   );
   return rows[0];
 }
