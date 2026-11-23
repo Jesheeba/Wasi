@@ -121,6 +121,37 @@ curl -X POST https://<wasi-host>/api/v1/messages \
 `type: "template"` send; submitted templates go through the normal
 approval turnaround (minutes to a day, per Meta).
 
+### API versioning & deprecation policy
+
+The Hub API is versioned in its path (`/api/v1/...`) and this policy governs
+what can change under that version without breaking your integration, and
+what requires a new one.
+
+**Non-breaking (ships any time, no notice needed):**
+- Adding a new optional request field.
+- Adding a new field to a response.
+- Adding a new endpoint.
+- Loosening a validation rule (accepting something that used to be rejected).
+
+**Breaking (requires the deprecation process below, never shipped silently):**
+- Removing a response field, or changing its type or meaning.
+- Removing an endpoint, or making an optional request field required.
+- Tightening a validation rule (rejecting something that used to be
+  accepted).
+
+**The deprecation process, when a breaking change is unavoidable:** the old
+behavior keeps working, but every response from the deprecated
+endpoint/field carries:
+- `X-Wasi-API-Deprecation: true`
+- `X-Wasi-API-Deprecation-Sunset: <YYYY-MM-DD>` — the date it stops working
+- `X-Wasi-API-Deprecation-Info` — what to migrate to, when present
+
+Minimum notice: **90 days** between the first response carrying these
+headers and the sunset date. Check for `X-Wasi-API-Deprecation` on your
+responses periodically rather than finding out at the sunset date itself.
+
+As of this writing, nothing in `/api/v1/*` is deprecated.
+
 ## 3. Inbound forwarding (replies, template/account status)
 
 So the client's CRM finds out when a customer replies, or when one of its
