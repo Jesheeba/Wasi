@@ -1,5 +1,48 @@
 # WhatsApp Flows (native interactive forms)
 
+## Status (2026-11-23)
+Built and tested against a faked Meta API (see TESTING.md). **Not yet tried
+against the real Meta API**: this machine cannot decrypt the demo account's
+WhatsApp token (CLAUDE.md, SERVER_SECRET Known Gap), and deploys are paused
+while the repo is public. First live check, on the demo account to
+9092766740 only (owner-approved): create a draft, send it in draft mode,
+submit it, and confirm the `nfm_reply` shape.
+
+As built (scope answered by the owner: fixed set, not a designer):
+- Three types (lead, booking, survey) in `server/src/utils/whatsappFlowTemplates.js`.
+  Only components Meta documents: TextInput, Dropdown, DatePicker and
+  Footer. Flow JSON 7.3, kept in one constant because Meta freezes old
+  versions.
+- Tables `whatsapp_flows` and `whatsapp_flow_responses` (migration 095).
+  They are deliberately not named `flows`: `automation_flows` is
+  unrelated.
+- Lifecycle: create as a draft on Meta (JSON inline) -> edit (drafts only,
+  re-upload `flow.json`) -> publish -> retire (Meta "deprecate").
+  Published forms can't be edited on Meta, so the UI offers Duplicate.
+  Delete: drafts are deleted on Meta first; published forms must be retired
+  first; retired forms are deleted locally only.
+- Sending: the chat menu's "Send form" calls `POST /api/chats/:id/forms`.
+  It lives in `routes/chats.js` because a person sending a form is a human
+  reply, and `markAgentReplyNonFatal` may only be called there. Only inside
+  the 24h window. Drafts go out with `mode: draft` (Meta shows a draft
+  banner). A failed form is never retried as plain text
+  (`cannot_retry_form`).
+- Receiving: `nfm_reply` -> a readable chat message plus a response row,
+  idempotent on the Meta message id. Meta's reply has no flow id, so ours
+  rides in `flow_token` (`wasi_flow:<id>`). Dropdown answers come back as
+  `opt_N` and are mapped to their text. Field order comes from the form
+  type, because jsonb reorders keys.
+
+Not built yet (follow-ups):
+- A FLOW button inside a template, for sending outside the 24h window.
+- Mapping answers into contact attributes.
+- Exporting responses as CSV.
+- Data-endpoint flows.
+
+Meta requirements: publishing needs a Meta-verified business with good
+message quality. Whether Flows work on Coexistence numbers is not
+confirmed in Meta's docs.
+
 ## Purpose
 Part of the CRM-wide messaging audit (2026-11-16), scoped to templates/
 messaging after the carousel-template gap was found. AiSensy, WATI, and

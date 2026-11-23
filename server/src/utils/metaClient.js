@@ -1060,7 +1060,70 @@ function parseTemplateComponents(components) {
   };
 }
 
+// --- WhatsApp Flows ("Forms") - build-docs/features/whatsapp-flows.md ---
+// Shapes from Meta's Flows API reference (checked 2026-11-23). Static flows
+// only: no endpoint_uri, so no encryption key is needed.
+
+// Creates the flow as a DRAFT with its JSON inline. Meta returns
+// { id, success, validation_errors } - success can be true even when the
+// JSON has validation errors, so callers must check that list.
+async function createFlow(wabaId, accessToken, { name, categories, flowJson }) {
+  return graphFetch(`/${wabaId}/flows`, {
+    method: 'POST', accessToken,
+    body: { name, categories, flow_json: JSON.stringify(flowJson) },
+  });
+}
+
+// Replaces a DRAFT flow's JSON (published flows can't be changed).
+async function updateFlowJson(flowId, accessToken, flowJson) {
+  const form = new FormData();
+  form.append('file', new Blob([JSON.stringify(flowJson)], { type: 'application/json' }), 'flow.json');
+  form.append('name', 'flow.json');
+  form.append('asset_type', 'FLOW_JSON');
+  const res = await fetchWithTimeout(`${GRAPH_BASE}/${flowId}/assets`, {
+    method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form,
+  }, UPLOAD_TIMEOUT_MS);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(data?.error?.message || `Meta flow upload failed (${res.status})`);
+    error.metaError = data?.error || null;
+    throw error;
+  }
+  return data; // { success, validation_errors }
+}
+
+const publishFlow = (flowId, accessToken) => graphFetch(`/${flowId}/publish`, { method: 'POST', accessToken });
+const deprecateFlow = (flowId, accessToken) => graphFetch(`/${flowId}/deprecate`, { method: 'POST', accessToken });
+const deleteFlow = (flowId, accessToken) => graphFetch(`/${flowId}`, { method: 'DELETE', accessToken });
+const getFlow = (flowId, accessToken) => graphFetch(`/${flowId}?fields=id,name,status,validation_errors,preview`, { accessToken });
+
+// Interactive flow message - free-form, so only inside the 24h window
+// (messagingService enforces it). flow_message_version "3" is required.
+// mode 'draft' lets an unpublished flow be tested; it shows a draft banner.
+async function sendFlowMessage(phoneNumberId, accessToken, toPhone, { bodyText, cta, flowId, flowToken, screen, mode }) {
+  const parameters = {
+    flow_message_version: '3', flow_token: flowToken, flow_id: flowId, flow_cta: cta,
+    flow_action: 'navigate', flow_action_payload: { screen },
+  };
+  if (mode === 'draft') parameters.mode = 'draft';
+  const data = await graphFetch(`/${phoneNumberId}/messages`, {
+    method: 'POST', accessToken,
+    body: {
+      messaging_product: 'whatsapp', to: toPhone, type: 'interactive',
+      interactive: { type: 'flow', body: { text: bodyText }, action: { name: 'flow', parameters } },
+    },
+  });
+  return data.messages?.[0]?.id;
+}
+
 module.exports = {
+  createFlow,
+  updateFlowJson,
+  publishFlow,
+  deprecateFlow,
+  deleteFlow,
+  getFlow,
+  sendFlowMessage,
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   debugToken,

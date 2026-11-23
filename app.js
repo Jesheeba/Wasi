@@ -1029,6 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'payments') renderPaymentsTable();
     if (targetView === 'ctwa') renderCtwaView();
     if (targetView === 'integrations') renderIntegrations();
+    if (targetView === 'whatsapp-flows') renderWaForms();
     // The Whatsapp sub-tab ships marked active by default (index.html) but
     // previously only rendered real data on an explicit sub-nav click -
     // landing here from the main nav showed static placeholder markup
@@ -8596,6 +8597,282 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ctwa-chats-back')?.addEventListener('click', () => {
     document.getElementById('ctwa-chats-card').hidden = true;
     document.getElementById('ctwa-ads-card').hidden = false;
+  });
+
+  // --- Forms = WhatsApp Flows (build-docs/features/whatsapp-flows.md) ---
+  // Fixed form types (lead / booking / survey) with editable wording. Meta
+  // lifecycle: draft -> published -> retired; a published form can't be
+  // edited on WhatsApp, so the UI offers Duplicate instead.
+  const WA_FORM_STATUS = {
+    draft: { cls: 'badge-neutral', text: 'Draft' },
+    published: { cls: 'badge-success', text: 'Published' },
+    deprecated: { cls: 'badge-neutral', text: 'Retired' },
+    blocked: { cls: 'badge-danger', text: 'Blocked' },
+    throttled: { cls: 'badge-warning', text: 'Throttled' },
+  };
+  const WA_KIND_ICON = { lead: 'user-plus', booking: 'calendar', survey: 'star' };
+  const waFormState = { forms: [], kinds: [], editing: null, kind: 'lead' };
+  const canManageForms = () => state.actorRole !== 'Agent';
+
+  async function loadWaFormKinds() {
+    if (!waFormState.kinds.length) waFormState.kinds = await authFetch('/api/whatsapp-flows/kinds');
+    return waFormState.kinds;
+  }
+
+  function waFormRow(fm, manage) {
+    const st = WA_FORM_STATUS[fm.status] || WA_FORM_STATUS.draft;
+    const actions = [];
+    if (manage && fm.status === 'draft') actions.push(['edit', 'Edit'], ['publish', 'Publish']);
+    if (manage && fm.status !== 'draft') actions.push(['duplicate', 'Duplicate']);
+    if (manage && fm.status === 'published') actions.push(['retire', 'Retire']);
+    if (manage && fm.status !== 'published') actions.push(['delete', 'Delete']);
+    const error = fm.last_error ? `<div class="wa-form-error">WhatsApp reported: ${esc(fm.last_error)}</div>` : '';
+    const buttons = actions.map(([a, label]) => `<button type="button" class="btn-secondary btn-sm" data-wa-form-action="${a}" data-wa-form-id="${esc(fm.id)}">${label}</button>`).join('');
+    return `
+      <tr>
+        <td data-label="Form"><span class="analytics-name">${esc(fm.name)}</span>${error}</td>
+        <td data-label="Type">${esc(fm.kindLabel || fm.kind)}</td>
+        <td data-label="Status"><span class="badge ${st.cls}">${esc(st.text)}</span></td>
+        <td data-label="Responses"><button type="button" class="btn-ghost btn-sm" data-wa-form-responses="${esc(fm.id)}" aria-label="View responses for ${esc(fm.name)}">${esc(formatCount(fm.response_count))}</button></td>
+        <td data-label=""><span class="wa-form-actions">${buttons}</span></td>
+      </tr>`;
+  }
+
+  async function renderWaForms() {
+    const tbody = document.getElementById('wa-forms-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = analyticsLoadingRow(5);
+    try {
+      waFormState.forms = await authFetch('/api/whatsapp-flows');
+      if (state.currentView !== 'whatsapp-flows') return;
+      const manage = canManageForms();
+      tbody.innerHTML = waFormState.forms.length
+        ? waFormState.forms.map((fm) => waFormRow(fm, manage)).join('')
+        : analyticsEmptyRow(5, 'No forms yet', manage ? 'Create a lead, booking or feedback form, then send it from any open chat.' : 'Ask an admin to create a form.');
+    } catch (err) {
+      tbody.innerHTML = analyticsErrorRow(5, err.message || 'Could not load forms.', 'wa-forms-retry');
+      document.getElementById('wa-forms-retry')?.addEventListener('click', renderWaForms);
+    }
+    refreshIcons();
+  }
+
+  function waFormCurrentConfig() {
+    const fields = {};
+    document.querySelectorAll('#wa-form-fields [data-wa-field]').forEach((box) => {
+      const field = {
+        label: box.querySelector('[data-wa-field-label]').value,
+        required: box.querySelector('[data-wa-field-required]').checked,
+      };
+      const opts = box.querySelector('[data-wa-field-options]');
+      if (opts) field.options = opts.value.split('\n').map((o) => o.trim()).filter(Boolean);
+      fields[box.dataset.waField] = field;
+    });
+    return {
+      title: document.getElementById('wa-form-title').value,
+      submitLabel: document.getElementById('wa-form-submit').value,
+      fields,
+    };
+  }
+
+  function waKindDef() {
+    return waFormState.kinds.find((k) => k.kind === waFormState.kind);
+  }
+
+  function renderWaFormPreview() {
+    const cfg = waFormCurrentConfig();
+    const defs = waKindDef()?.defaults.fields || {};
+    const rows = Object.entries(cfg.fields).map(([key, fdef]) => {
+      const type = defs[key]?.type;
+      const hint = type === 'choice' ? `${fdef.options?.[0] || 'Choose'} ▾` : type === 'date' ? 'Pick a date' : '';
+      return `<div class="wa-form-preview-field"><span>${esc(fdef.label)}${fdef.required ? '' : ' (optional)'}</span><span class="wa-form-preview-input">${esc(hint)}</span></div>`;
+    }).join('');
+    document.getElementById('wa-form-preview').innerHTML =
+      `<div class="wa-form-preview-title">${esc(cfg.title)}</div>${rows}<div class="wa-form-preview-btn">${esc(cfg.submitLabel)}</div>`;
+  }
+
+  function renderWaFormFields(config) {
+    const kindDef = waKindDef();
+    const cfg = config || kindDef.defaults;
+    document.getElementById('wa-form-title').value = cfg.title;
+    document.getElementById('wa-form-submit').value = cfg.submitLabel;
+    document.getElementById('wa-form-fields').innerHTML = Object.entries(kindDef.defaults.fields).map(([key, base]) => {
+      const fdef = cfg.fields?.[key] || base;
+      const id = `wa-field-${key}`;
+      const kindLabel = base.type === 'choice' ? 'Choice question' : base.type === 'date' ? 'Date question' : 'Text question';
+      const options = base.type === 'choice'
+        ? `<div class="form-group"><label class="form-label" for="${id}-opts">Choices, one per line (up to 30 characters each)</label><textarea id="${id}-opts" class="form-input" rows="3" data-wa-field-options>${esc((fdef.options || base.options).join('\n'))}</textarea></div>`
+        : '';
+      return `<fieldset class="wa-form-field" data-wa-field="${key}">
+        <div class="form-group">
+          <label class="form-label" for="${id}">${kindLabel}</label>
+          <input type="text" id="${id}" class="form-input" maxlength="${base.type === 'date' ? 40 : 20}" value="${esc(fdef.label)}" data-wa-field-label />
+        </div>
+        ${options}
+        <label class="wa-form-required"><input type="checkbox" data-wa-field-required ${fdef.required ? 'checked' : ''} /> Required</label>
+      </fieldset>`;
+    }).join('');
+    renderWaFormPreview();
+  }
+
+  async function openWaFormDrawer(form) {
+    try { await loadWaFormKinds(); } catch (err) { reportError(err); return; }
+    waFormState.editing = form || null;
+    waFormState.kind = form?.kind || 'lead';
+    document.getElementById('wa-form-drawer-title').textContent = form ? 'Edit draft form' : 'New form';
+    document.getElementById('wa-form-save').textContent = form ? 'Save draft' : 'Create draft';
+    document.getElementById('wa-form-name').value = form?.name || '';
+    document.getElementById('wa-form-errors').hidden = true;
+    document.getElementById('wa-form-kinds').innerHTML = waFormState.kinds.map((k) => `
+      <label class="option-card"><input type="radio" name="wa-form-kind" value="${k.kind}" ${k.kind === waFormState.kind ? 'checked' : ''} ${form ? 'disabled' : ''}>
+        <span class="option-card-body"><span class="option-card-title"><i data-lucide="${WA_KIND_ICON[k.kind] || 'clipboard-list'}"></i> ${esc(k.label)}</span></span></label>`).join('');
+    renderWaFormFields(form?.config);
+    document.getElementById('modal-wa-form').classList.add('open');
+    refreshIcons();
+  }
+
+  document.getElementById('wa-form-kinds')?.addEventListener('change', (e) => {
+    if (e.target.name !== 'wa-form-kind') return;
+    waFormState.kind = e.target.value;
+    renderWaFormFields();
+  });
+  document.getElementById('wa-form-form')?.addEventListener('input', renderWaFormPreview);
+  document.getElementById('open-wa-form-drawer')?.addEventListener('click', () => openWaFormDrawer(null));
+
+  document.getElementById('wa-form-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorsBox = document.getElementById('wa-form-errors');
+    errorsBox.hidden = true;
+    const name = document.getElementById('wa-form-name').value.trim();
+    if (!name) { errorsBox.textContent = 'Give the form a name.'; errorsBox.hidden = false; return; }
+    const saveBtn = document.getElementById('wa-form-save');
+    saveBtn.disabled = true;
+    try {
+      const editing = waFormState.editing;
+      const body = { name, config: waFormCurrentConfig() };
+      const saved = editing
+        ? await authFetch(`/api/whatsapp-flows/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) })
+        : await authFetch('/api/whatsapp-flows', { method: 'POST', body: JSON.stringify({ ...body, kind: waFormState.kind }) });
+      document.getElementById('modal-wa-form').classList.remove('open');
+      if (saved.last_error) showToast('Saved, but WhatsApp reported a problem. See the form list.', 'warning');
+      else showToast(editing ? 'Draft saved' : 'Draft form created', 'success');
+      renderWaForms();
+    } catch (err) {
+      const details = err.body?.details;
+      if (Array.isArray(details) && details.length) {
+        errorsBox.innerHTML = `<ul>${details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>`;
+        errorsBox.hidden = false;
+      } else {
+        reportError(err);
+        renderWaForms();
+      }
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  async function openWaFormResponses(id) {
+    const form = waFormState.forms.find((x) => x.id === id);
+    document.getElementById('wa-form-responses-title').textContent = `Responses: ${form?.name || ''}`;
+    const list = document.getElementById('wa-form-responses-list');
+    list.innerHTML = '<span class="skeleton analytics-skeleton"></span>';
+    document.getElementById('modal-wa-form-responses').classList.add('open');
+    try {
+      const rows = await authFetch(`/api/whatsapp-flows/${id}/responses`);
+      list.innerHTML = rows.length ? rows.map((r) => `
+        <div class="wa-form-response">
+          <div class="wa-form-response-head"><strong>${esc(r.contactName || r.phone || 'Unknown contact')}</strong><span>${esc(formatShortDate(r.createdAt))}</span></div>
+          <dl>${r.answers.map((a) => `<dt>${esc(a.label)}</dt><dd>${esc(a.value)}</dd>`).join('')}</dl>
+        </div>`).join('')
+        : '<div class="empty-state"><div class="empty-title">No responses yet</div><div>Send this form from a chat. Answers show up here and in the chat.</div></div>';
+    } catch (err) {
+      list.innerHTML = `<div class="error-state">${esc(err.message || 'Could not load responses.')}</div>`;
+    }
+  }
+
+  document.getElementById('wa-forms-tbody')?.addEventListener('click', (e) => {
+    const resp = e.target.closest('[data-wa-form-responses]');
+    if (resp) { openWaFormResponses(resp.dataset.waFormResponses); return; }
+    const btn = e.target.closest('[data-wa-form-action]');
+    if (!btn) return;
+    const id = btn.dataset.waFormId;
+    const form = waFormState.forms.find((x) => x.id === id);
+    if (!form) return;
+    const run = async (method, path, okMsg) => {
+      try {
+        await authFetch(`/api/whatsapp-flows/${id}${path}`, { method });
+        showToast(okMsg, 'success');
+      } catch (err) {
+        reportError(err);
+      }
+      renderWaForms();
+    };
+    const action = btn.dataset.waFormAction;
+    if (action === 'edit') openWaFormDrawer(form);
+    else if (action === 'duplicate') run('POST', '/duplicate', 'Copy created as a draft');
+    else if (action === 'publish') showConfirm({
+      title: 'Publish this form?', danger: false, confirmLabel: 'Publish',
+      body: 'Once published, WhatsApp does not allow changes. To change it later you will duplicate it. Publishing needs a Meta-verified business.',
+      onConfirm: () => run('POST', '/publish', 'Form published'),
+    });
+    else if (action === 'retire') showConfirm({
+      title: 'Retire this form?', confirmLabel: 'Retire',
+      body: 'Customers will no longer be able to open it, including forms already sent. This cannot be undone.',
+      onConfirm: () => run('POST', '/deprecate', 'Form retired'),
+    });
+    else if (action === 'delete') showConfirm({
+      title: 'Delete this form?', confirmLabel: 'Delete',
+      body: 'Responses already received are kept. This cannot be undone.',
+      onConfirm: () => run('DELETE', '', 'Form deleted'),
+    });
+  });
+
+  // Chat > More actions > Send form.
+  document.getElementById('chat-send-form-btn')?.addEventListener('click', async () => {
+    if (!state.activeChatId) return;
+    const select = document.getElementById('send-form-select');
+    const hint = document.getElementById('send-form-hint');
+    try {
+      waFormState.forms = await authFetch('/api/whatsapp-flows');
+    } catch (err) { reportError(err); return; }
+    const sendable = waFormState.forms.filter((x) => x.meta_flow_id && (x.status === 'draft' || x.status === 'published'));
+    if (!sendable.length) {
+      showToast('No forms to send yet. Create one under Forms first.', 'warning');
+      return;
+    }
+    select.innerHTML = sendable.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}${x.status === 'draft' ? ' (draft: test only)' : ''}</option>`).join('');
+    const updateHint = () => {
+      const chosen = sendable.find((x) => x.id === select.value);
+      hint.textContent = chosen?.status === 'draft' ? 'Draft forms show a "draft" banner to the customer. Use them for testing only.' : '';
+    };
+    select.onchange = updateHint;
+    updateHint();
+    document.getElementById('modal-send-form').classList.add('open');
+  });
+
+  document.getElementById('send-form-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const chatId = state.activeChatId;
+    if (!chatId) return;
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    try {
+      await authFetch(`/api/chats/${chatId}/forms`, {
+        method: 'POST',
+        body: JSON.stringify({
+          flowId: document.getElementById('send-form-select').value,
+          body: document.getElementById('send-form-body').value,
+          cta: document.getElementById('send-form-cta').value,
+        }),
+      });
+      document.getElementById('modal-send-form').classList.remove('open');
+      showToast('Form sent', 'success');
+      const chat = state.chats.find((c) => c.id === chatId);
+      if (chat && state.activeChatId === chatId) await openActiveChat(chat);
+    } catch (err) {
+      reportError(err);
+    } finally {
+      submitBtn.disabled = false;
+    }
   });
 
   // --- Integrations (build-docs/features/integrations-page.md) ---

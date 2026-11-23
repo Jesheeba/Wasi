@@ -155,6 +155,13 @@ four are live and wired into `enqueueForwards`
 `message.status` wasn't forwarded yet; that was corrected once it shipped
 (migration `032_widen_forward_events.js`).
 
+**Completed WhatsApp Forms** arrive as a normal `message.received`. Its
+`body` is readable text ("Form submitted: <form>" followed by one
+"Label: answer" line per field). Its `interactive` field is
+`{ "type": "nfm_reply", "flow_token": "wasi_flow:<form id>", "response": { ...raw answers } }`.
+Dropdown answers in `response` are option ids (`opt_1`, `opt_2`, ...);
+`body` already shows the option text.
+
 ## 4. What's still manual per client
 
 - **Inbound forwarding URL** — inherently client-specific, can't be

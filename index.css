@@ -3278,3 +3278,24 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .integration-line { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
 .integration-line.is-warn { color: var(--danger, #B91C1C); }
 .integration-card .btn-sm { align-self: flex-start; margin-top: auto; }
+
+/* Forms page = WhatsApp Flows (build-docs/features/whatsapp-flows.md). */
+#view-whatsapp-flows > * { flex-shrink: 0; }
+.wa-forms-note { margin: -0.5rem 0 1rem; }
+.wa-form-error { margin-top: 4px; font-size: 0.78rem; color: var(--danger, #B91C1C); }
+.wa-form-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.wa-form-field { border: 1px solid var(--border-light); border-radius: 10px; padding: 12px; margin: 0 0 12px; min-width: 0; }
+.wa-form-field .form-group:last-of-type { margin-bottom: 8px; }
+.wa-form-required { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-muted); }
+#wa-form-errors[hidden] { display: none; }
+#wa-form-errors ul { margin: 0; padding-left: 1.1rem; }
+.wa-form-preview { max-width: 320px; margin: 0 auto; padding: 14px; border-radius: 14px; background: var(--neutral-bg, #F1F5F9); display: flex; flex-direction: column; gap: 10px; }
+.wa-form-preview-title { font-weight: 600; text-align: center; }
+.wa-form-preview-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-muted); }
+.wa-form-preview-input { min-height: 34px; padding: 8px 10px; border: 1px solid var(--border-light); border-radius: 8px; background: #fff; color: var(--text-faint, #94A3B8); }
+.wa-form-preview-btn { margin-top: 4px; padding: 9px; border-radius: 20px; text-align: center; font-weight: 600; color: #fff; background: #1DAA61; }
+.wa-form-response { padding: 12px 0; border-bottom: 1px solid var(--border-light); }
+.wa-form-response-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 0.85rem; }
+.wa-form-response dl { display: grid; grid-template-columns: minmax(90px, 40%) 1fr; gap: 4px 12px; margin: 0; font-size: 0.85rem; }
+.wa-form-response dt { color: var(--text-muted); }
+.wa-form-response dd { margin: 0; overflow-wrap: anywhere; }

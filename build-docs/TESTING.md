@@ -1,5 +1,26 @@
 # Testing
 
+## whatsapp-flows
+`server/test/whatsappFlows.test.js` (API, Meta faked via global.fetch,
+local Postgres): builder output (7.3, complete footer, `${form.x}`
+payload, opt ids), limits and duplicate/empty options, token round-trip;
+create sends LEAD_GENERATION + inline JSON; bad wording 400s with no Meta
+call; Meta validation errors stored and block publish; draft edit uploads
+multipart flow.json; send refused outside 24h; draft sends with mode draft
+and our token and sets last_agent_reply_at; emoji CTA rejected; failed
+form retry -> cannot_retry_form with no send; publish -> edit 409 ->
+duplicate copies wording; published sends without draft mode; delete rules
+(published 409, retired local-only, draft deletes on Meta); nfm_reply ->
+readable message + one response despite redelivery; malformed reply still
+stored. 17/17 (first run caught answers coming back in jsonb key order).
+`whatsappFlowsUI.test.js` (Playwright): empty state, booking form with live
+preview, payload sent to Meta, publish via confirm (Duplicate replaces
+Edit), wording errors shown in the drawer, chat Send form, 375px fit. 4/4.
+Regression: chatsLastAgentReplyAt 17, metaWebhookDispatch 3,
+metaWebhookEchoRouting 9, webhookForwarding 8, apiV1 14,
+coexistenceEchoIngestion 9, messageReferral 3, consentHardeningPhase1 8,
+chatUiPass 15, flowEngine* 29, aiAgentEnqueue 7, chatSlaLogs 10, all green.
+
 ## automation-rule-view-edit: audit fixes
 Bugs A and B reproduced first against local Postgres (flow delete: check-
 constraint error; `*` vs a normal message: not handled). Added 6 tests to

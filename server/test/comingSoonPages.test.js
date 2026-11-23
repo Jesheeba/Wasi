@@ -20,7 +20,7 @@ const { pool } = require('../src/db/pool');
 const BASE = `http://localhost:${PORT}`;
 const EMAIL = `test-suite-comingsoon-${Date.now()}@wasi.local`;
 const PASSWORD = 'test-suite-password-12345';
-const SOON = ['instagram', 'whatsapp-flows', 'ecommerce'];
+const SOON = ['instagram', 'ecommerce'];
 const MANAGEMENT = ['whatsapp-flows', 'ctwa', 'ecommerce', 'integrations'];
 let server, browser, token;
 

@@ -1,5 +1,11 @@
 # Project memory
 
+## 2026-11-23 - Flows testing, Instagram on hold
+- Owner: test WhatsApp Flows on the demo account, demo names, and send test
+  messages only to 9092766740. No other recipient.
+- Owner: Instagram stays "Coming soon". Instagram App Review is submitted;
+  build only after approval. Do not rebase the instagram branch until then.
+
 ## 2026-11-23 - placeholder pages approved
 Owner approved building the 5 hidden placeholder pages in this order:
 CTWA Ads, Integrations, Ecommerce, WhatsApp Flows, Instagram (PLAN.md).

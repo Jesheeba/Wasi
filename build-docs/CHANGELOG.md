@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(whatsapp-flows): Forms - native WhatsApp lead, booking and survey forms
+"Forms" in the nav (no longer Soon). Clients create a form from three
+types, change the wording and choices with a live preview, publish it,
+send it from a chat (More actions > Send form) and see the answers in the
+chat and under Responses. Migration 095 (`whatsapp_flows`,
+`whatsapp_flow_responses`, RLS + wasi_app grants). Webhook `nfm_reply`
+support; forwards carry `interactive.type = "nfm_reply"`. A failed form
+send can't be retried as plain text. Tested against a faked Meta; live
+check pending (see the feature doc).
+
 ## fix(automation-rules): audit fixes - "*" catch-all, whole-word match, flow delete
 Deleting a flow that any rule started always failed (constraint error);
 those rules are now deleted with it, named in the confirm. Trigger "*" was a

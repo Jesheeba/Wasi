@@ -187,10 +187,9 @@
           <i data-lucide="bot"></i>
           <span class="nav-text">Automation</span>
         </a>
-        <a class="nav-item" data-view="whatsapp-flows" role="button" tabindex="0" title="WhatsApp Flows (in-chat forms) - coming soon">
+        <a class="nav-item" data-view="whatsapp-flows" role="button" tabindex="0" title="Forms (WhatsApp Flows)">
           <i data-lucide="clipboard-list"></i>
           <span class="nav-text">Forms</span>
-          <span class="nav-soon">Soon</span>
         </a>
         <a class="nav-item" data-view="ctwa" role="button" tabindex="0" title="Click-to-WhatsApp Ads">
           <i data-lucide="target"></i>
@@ -355,6 +354,9 @@
                         </button>
                         <button type="button" id="chat-notes-toggle-btn" class="menu-item" role="menuitem">
                           <i data-lucide="sticky-note" class="icon-14"></i> Internal notes
+                        </button>
+                        <button type="button" id="chat-send-form-btn" class="menu-item" role="menuitem">
+                          <i data-lucide="clipboard-list" class="icon-14"></i> Send form
                         </button>
                       </div>
                     </div>
@@ -836,22 +838,25 @@
           </div>
         </div>
 
-        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
-             this page is listed in the nav so clients know it is planned. -->
+        <!-- WhatsApp Flows, shown as "Forms" (build-docs/features/whatsapp-flows.md).
+             Not the Automation flow builder: these are Meta's native in-chat
+             forms. Rendered by renderWaForms() in app.js. -->
         <div id="view-whatsapp-flows" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">WhatsApp Flows <span class="badge badge-info">Coming soon</span></h1>
-              <p class="page-subtitle">Forms your customers fill in inside WhatsApp</p>
+              <h1 class="page-title">Forms</h1>
+              <p class="page-subtitle">Lead, booking and feedback forms your customers fill in inside WhatsApp</p>
+            </div>
+            <div class="page-actions">
+              <button type="button" class="btn-primary btn-auto" id="open-wa-form-drawer" data-manage-only><i data-lucide="plus"></i> New form</button>
             </div>
           </div>
-          <div class="table-card" id="whatsapp-flows-content">
-            <div class="empty-state">
-              <i data-lucide="clipboard-list" class="empty-icon" aria-hidden="true"></i>
-              <div class="empty-title">WhatsApp Flows is coming soon</div>
-              <p>Lead forms, appointment booking and feedback surveys that open inside WhatsApp. Answers are saved to the contact automatically.</p>
-              <p class="empty-example">Looking for chatbots? Those are already live under Automation.</p>
-            </div>
+          <p class="form-hint wa-forms-note">New forms start as drafts you can send to yourself to try. Publishing needs a Meta-verified business. Send a form from any open chat: More actions &gt; Send form.</p>
+          <div class="table-card">
+            <table class="data-table stack-mobile">
+              <thead><tr><th>Form</th><th>Type</th><th>Status</th><th>Responses</th><th></th></tr></thead>
+              <tbody id="wa-forms-tbody"></tbody>
+            </table>
           </div>
         </div>
 
@@ -2172,6 +2177,97 @@
   </div>
 
   <!-- item 4/5.5 -->
+  <!-- Forms: create / edit drawer (renderWaFormDrawer in app.js) -->
+  <div id="modal-wa-form" class="modal-overlay as-drawer">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="wa-form-drawer-title">New form</h3>
+          <p class="modal-subtitle">Change the wording and choices. The form layout is fixed per type.</p>
+        </div>
+        <button class="close-modal-btn" data-close-modal="modal-wa-form"><i data-lucide="x"></i></button>
+      </div>
+      <form id="wa-form-form" novalidate>
+        <div class="drawer-content">
+          <div class="drawer-section" id="wa-form-kind-section">
+            <div class="drawer-section-title">Type</div>
+            <div class="option-cards" id="wa-form-kinds" role="radiogroup" aria-label="Form type"></div>
+          </div>
+          <div class="drawer-section">
+            <div class="form-group">
+              <label class="form-label" for="wa-form-name">Name (only you see this)</label>
+              <input type="text" id="wa-form-name" class="form-input" maxlength="100" required placeholder="Admissions enquiry" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="wa-form-title">Form title (customers see this)</label>
+              <input type="text" id="wa-form-title" class="form-input" maxlength="30" />
+            </div>
+            <div id="wa-form-fields"></div>
+            <div class="form-group">
+              <label class="form-label" for="wa-form-submit">Submit button text</label>
+              <input type="text" id="wa-form-submit" class="form-input" maxlength="35" />
+            </div>
+          </div>
+          <div class="drawer-section">
+            <div class="drawer-section-title">Preview</div>
+            <div class="wa-form-preview" id="wa-form-preview" aria-hidden="true"></div>
+          </div>
+          <div class="alert alert-danger" id="wa-form-errors" role="alert" hidden></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-modal="modal-wa-form">Cancel</button>
+          <button type="submit" class="btn-primary btn-auto" id="wa-form-save">Create draft</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Forms: responses drawer -->
+  <div id="modal-wa-form-responses" class="modal-overlay as-drawer">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="wa-form-responses-title">Responses</h3>
+          <p class="modal-subtitle">Newest first</p>
+        </div>
+        <button class="close-modal-btn" data-close-modal="modal-wa-form-responses"><i data-lucide="x"></i></button>
+      </div>
+      <div class="drawer-content" id="wa-form-responses-list" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- Chat: send a form -->
+  <div id="modal-send-form" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Send a form</h3>
+        <button class="close-modal-btn" data-close-modal="modal-send-form"><i data-lucide="x"></i></button>
+      </div>
+      <form id="send-form-form">
+        <div class="modal-inner-scroll">
+          <div class="form-group">
+            <label class="form-label" for="send-form-select">Form</label>
+            <select id="send-form-select" class="form-input" required></select>
+            <div class="form-hint" id="send-form-hint"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="send-form-body">Message</label>
+            <textarea id="send-form-body" class="form-input" rows="3" maxlength="1024" required>Please fill in this short form so we can help you.</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="send-form-cta">Button text</label>
+            <input type="text" id="send-form-cta" class="form-input" maxlength="30" required value="Open form" />
+            <div class="form-hint">Up to 30 characters, no emoji. Works only within 24 hours of the customer's last message.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-modal="modal-send-form">Cancel</button>
+          <button type="submit" class="btn-primary btn-auto">Send form</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="modal-add-canned-response" class="modal-overlay as-drawer">
     <div class="modal-box">
       <div class="modal-header">

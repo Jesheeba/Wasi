@@ -50,10 +50,10 @@ separately, in build order:
    recovery needs a store integration (Shopify) and is NOT in scope; that
    section is marked "Coming soon". VERIFY: needs `catalog_management`
    permission on the Meta app.
-4. [whatsapp-flows](features/whatsapp-flows.md) - large. Fixed set of
+4. [whatsapp-flows](features/whatsapp-flows.md) - **built 2026-11-23, live Meta check pending.** large. Fixed set of
    authored Flow templates (lead form, booking, survey), send + store
    `nfm_reply`. Open question in the doc still needs an answer.
-5. [instagram-dm](features/instagram-dm.md) - medium engineering, blocked
+5. [instagram-dm](features/instagram-dm.md) - **on hold (owner, 2026-11-23): stays "Coming soon" until Meta approves the submitted Instagram review.** Medium engineering, blocked
    on Meta App Review + rebasing a 2-month-old branch and renumbering its
    migrations. Engineering can start; going live cannot until Meta approves.
 

@@ -12,6 +12,8 @@ const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
 const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
 const messageStatusForwardsRepo = require('../repositories/messageStatusForwardsRepo');
 const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo');
+const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
+const flowTemplates = require('../utils/whatsappFlowTemplates');
 const flowEngine = require('../services/flowEngine');
 const aiAgentRunner = require('../services/aiAgentRunner');
 const forwardRunner = require('../services/forwardRunner');
@@ -135,6 +137,31 @@ async function enqueueForwards(waba, event, payload) {
   }
 }
 
+// A completed WhatsApp Form arrives as interactive.nfm_reply, with the
+// answers in response_json (a JSON *string*) and no flow id - Wasi puts its
+// own form id in flow_token (whatsappFlowTemplates.makeFlowToken). Returns
+// null for any other message. Never throws: a malformed reply or a failed
+// lookup still lets the message itself be stored (as "Form submitted").
+async function parseFormReply(clientId, msg) {
+  const nfm = msg.interactive?.nfm_reply;
+  if (!nfm) return null;
+  let response = {};
+  try { response = JSON.parse(nfm.response_json || '{}') || {}; } catch { response = {}; }
+  const flowToken = typeof response.flow_token === 'string' ? response.flow_token : null;
+  let flow = null;
+  const flowId = flowTemplates.flowIdFromToken(flowToken);
+  if (flowId) {
+    try { flow = await whatsappFlowsRepo.findById(pool, clientId, flowId); } catch (err) {
+      console.error('metaWebhook: form lookup failed (reply still stored):', err.message);
+    }
+  }
+  const answers = flowTemplates.describeResponse(flow, response);
+  const title = flow ? `Form submitted: ${flow.name}` : 'Form submitted';
+  const lines = answers.map((a) => `${a.label}: ${a.value}`);
+  const body = [title, ...lines].join('\n');
+  return { flow, flowToken, response, body };
+}
+
 // New customer message: upsert the contact, find/open their chat, insert
 // (idempotent on Meta's message id), then let automation rules react.
 // Takes the resolved waba row (not just clientId) - build plan Phase 5's
@@ -165,7 +192,8 @@ async function handleInboundMessages(waba, value) {
     // buttons above. Reading .text here is what lets an automation rule's
     // trigger keyword match the button's label (e.g. "Received").
     const templateButtonText = msg.button?.text;
-    const body = msg.text?.body || buttonReply?.title || listReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+    const formReply = await parseFormReply(clientId, msg);
+    const body = msg.text?.body || formReply?.body || buttonReply?.title || listReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
 
     // Forwarded verbatim alongside `body` in message.received (see below) -
     // body alone only ever carried the reply's title (e.g. "Yes"), never
@@ -179,7 +207,11 @@ async function handleInboundMessages(waba, value) {
       ? { type: 'button_reply', id: buttonReply.id, title: buttonReply.title }
       : listReply
         ? { type: 'list_reply', id: listReply.id, title: listReply.title, description: listReply.description ?? null }
-        : null;
+        : formReply
+          // A completed form: the raw answers plus the token Wasi sent, so a
+          // receiving CRM can use them directly.
+          ? { type: 'nfm_reply', flow_token: formReply.flowToken, response: formReply.response }
+          : null;
 
     // Capture-and-verify: interactive.button_reply's exact shape (id/title
     // field names, whether other fields are present) was inferred from
@@ -222,6 +254,21 @@ async function handleInboundMessages(waba, value) {
 
     if (inserted) {
       await usageRepo.incrementReceived(pool, clientId);
+
+      // Completed form -> whatsapp_flow_responses. Isolated like the blocks
+      // below: the message insert is idempotent, so a throw here would make
+      // Meta's retry skip forwarding for good. The response insert is itself
+      // idempotent on the Meta message id.
+      if (formReply) {
+        try {
+          await whatsappFlowsRepo.recordResponse(pool, {
+            clientId, flowId: formReply.flow?.id || null, chatId: chat.id, contactId: contact.id,
+            metaMessageId: msg.id, flowToken: formReply.flowToken, response: formReply.response,
+          });
+        } catch (err) {
+          console.error('metaWebhook: storing form response failed (message itself is stored):', { clientId, metaMessageId: msg.id, error: err.message });
+        }
+      }
 
       // Opt-out (build plan Phase 4) - recorded before automation runs, so
       // the consent_events row exists regardless of whatever a client's own

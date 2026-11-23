@@ -5,6 +5,9 @@ const teamMembersRepo = require('../repositories/teamMembersRepo');
 const chatNotesRepo = require('../repositories/chatNotesRepo');
 const chatSlaLogsRepo = require('../repositories/chatSlaLogsRepo');
 const messagingService = require('../services/messagingService');
+const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
+const flowTemplates = require('../utils/whatsappFlowTemplates');
+const { z } = require('zod');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, chatCreateSchema, chatUpdateSchema, chatAssignSchema, chatNoteCreateSchema, messageSendSchema } = require('../utils/validate');
 const { requireRole } = require('../middleware/requireRole');
@@ -226,6 +229,47 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
       // err.metaError comment) lets the client translate this into the same
       // plain English the sendability banner uses (server/src/utils/
       // sendabilityMessages.js) instead of showing Meta's raw string.
+      return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
+    }
+    throw err;
+  }
+}));
+
+// Send a WhatsApp Form (build-docs/features/whatsapp-flows.md) into this
+// chat. Lives here, not in routes/whatsappFlows.js, because a person sending
+// a form from the inbox is a human reply and markAgentReplyNonFatal may only
+// be called from this file (test/chatsLastAgentReplyAt.test.js). Drafts go
+// out in Meta's draft mode (with its "draft" banner) so a form can be tried
+// before it is published.
+const formSendSchema = z.object({
+  flowId: z.string().uuid(),
+  body: z.string().trim().min(1).max(1024),
+  cta: z.string().trim().min(1).max(30).refine((v) => !/\p{Extended_Pictographic}/u.test(v), 'Button text cannot contain emoji'),
+});
+router.post('/:id/forms', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const chat = await chatsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!chat) return res.status(404).json({ error: 'Not found' });
+  if (!chat.phone) return res.status(400).json({ error: 'This chat has no phone number to send to.' });
+  const data = formSendSchema.parse(req.body);
+  const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, data.flowId);
+  if (!flow) return res.status(404).json({ error: 'Form not found' });
+  if (!flow.meta_flow_id || !['draft', 'published'].includes(flow.status)) {
+    return res.status(409).json({ error: "This form can't be sent: WhatsApp never accepted it, or it has been retired." });
+  }
+  await chatsRepo.markAgentReplyNonFatal(req.db, req.clientId, chat.id);
+  try {
+    const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, {
+      type: 'flow', body: data.body,
+      flow: {
+        name: flow.name, metaFlowId: flow.meta_flow_id, flowToken: flowTemplates.makeFlowToken(flow.id),
+        cta: data.cta, screen: flowTemplates.KINDS[flow.kind].screen, mode: flow.status === 'draft' ? 'draft' : 'published',
+      },
+    }, { release: req.commitAndRelease, reacquire: req.reacquireDb });
+    res.status(201).json(message);
+  } catch (err) {
+    if (err instanceof messagingService.MessagingError) {
+      const status = err.code === 'send_failed' ? 502 : 409;
       return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
     }
     throw err;
