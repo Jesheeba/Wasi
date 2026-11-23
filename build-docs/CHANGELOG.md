@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(android-no-checkout): no subscription checkout inside the Android app
+Google Play requires Play Billing (15% on subscriptions) for anything sold in
+the app and does not allow linking out to pay in India. The Android app now
+tags its user agent `WasiAndroidApp` (capacitor.config.json, native build
+1.0.1 / versionCode 2) and the CRM hides Settings > Subscription, the plan
+picker and the suspended screen's Pay button when it sees the tag; a suspended
+owner sees "This account's subscription is not active." with no link. The
+website is unchanged. Also fixes a stray control character in the detection
+regex. Test: `server/test/androidNoInAppCheckout.test.js` + browser check.
+
 ## feat(whatsapp-flows-live): booking forms that show only free slots
 New form type "Booking with live slots".
 - The client sets days, hours, slot length, people per slot and days ahead.

@@ -11,7 +11,8 @@
     ]
   },
   "android": {
-    "allowMixedContent": false
+    "allowMixedContent": false,
+    "appendUserAgent": "WasiAndroidApp"
   },
   "plugins": {
     "SplashScreen": {

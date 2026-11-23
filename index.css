@@ -3355,3 +3355,9 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .live-days { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0 12px; }
 .live-day { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; }
 .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0 12px; }
+
+/* Android app: no in-app checkout (Play payments policy). See IS_ANDROID_APP in app.js. */
+.in-android-app [data-sec-view="subscription"],
+.in-android-app #sec-view-subscription,
+.in-android-app #modal-choose-plan,
+.in-android-app #suspended-view-pay-btn { display: none !important; }

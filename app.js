@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Android app (mobile/, user agent tag set in capacitor.config.json) shows no
   // checkout at all; clients subscribe on the website. CSS hides the entry
   // points via html.in-android-app; openChoosePlanModal refuses as a backstop.
-  const IS_ANDROID_APP = /WasiAndroidApp/.test(navigator.userAgent)
+  const IS_ANDROID_APP = /WasiAndroidApp/.test(navigator.userAgent)
     || window.Capacitor?.getPlatform?.() === 'android';
   if (IS_ANDROID_APP) document.documentElement.classList.add('in-android-app');
 
