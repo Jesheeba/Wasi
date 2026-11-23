@@ -534,11 +534,11 @@ router.post('/:id/header-media/:assetId/default', requireRole('Admin', 'Manager'
   res.json({ id: updated.id, filename: updated.filename, isDefault: updated.is_default, cardIndex: updated.card_index });
 }));
 
-// Edits an existing template's content - body/header[NONE|TEXT only]/
-// footer/buttons/samples, or auth_options for Authentication. name/
-// category/language are fixed once a template exists (Meta's own edit
-// endpoint doesn't accept them either - they're what identifies the
-// template in the first place). Two real states this acts on:
+// Edits an existing template's content - body/header/footer/buttons/
+// samples, or auth_options for Authentication. name/category/language are
+// fixed once a template exists (Meta's own edit endpoint doesn't accept
+// them either - they're what identifies the template in the first place).
+// Two real states this acts on:
 //  - meta_template_id set, not orphaned: the template is live on Meta -
 //    this calls Meta's real "edit message template" endpoint, which
 //    re-reviews the NEW content while the OLD approved content keeps
@@ -550,10 +550,24 @@ router.post('/:id/header-media/:assetId/default', requireRole('Admin', 'Manager'
 // An orphaned row (was live, Meta no longer has it - see markOrphaned's
 // comment) is rejected: there's nothing left on Meta to edit, and quietly
 // re-creating it here would blur this route with POST /'s own job.
-// Delete + recreate (DELETE /:id, then POST /) is still the path for that
-// case, and for changing a template's media header - both explicitly out
-// of scope for this route for now.
-router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+// Delete + recreate (DELETE /:id, then POST /) is still the path for that.
+//
+// Media-header edit (2026-11-23, closing a prior Known Gap): Meta's edit
+// endpoint is a full-replace PATCH - this app's own edit flow already
+// proved that for NONE/TEXT (every edit resends header explicitly, even as
+// NONE, confirmed working since the edit feature shipped). A media header
+// component needs a fresh upload handle every time (buildTemplateCreatePayload),
+// and a handle's lifetime past its one upload session is undocumented by
+// Meta (see the media-header investigation referenced elsewhere in this
+// codebase) - so rather than guess whether an old handle (or the cached
+// media id, which is a send-time reference, not a template-definition one)
+// can be resent, this route always requires a FRESH file upload whenever
+// the saved OR requested header.type is a media type, using the exact same
+// createUploadSession/uploadFileBytes/uploadMedia dance POST / already
+// uses and has verified. This means editing so much as the footer on a
+// media-header template still requires re-selecting its file - a real UX
+// cost, but an honest one: it never assumes undocumented Meta behavior.
+router.put('/:id', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const template = await messageTemplatesRepo.findById(req.db, req.clientId, req.params.id);
   if (!template) return res.status(404).json({ error: 'Not found' });
@@ -565,7 +579,17 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
     });
   }
 
-  const data = messageTemplateUpdateSchema.parse(req.body);
+  const headerFile = req.files?.headerFile?.[0];
+  let rawBody = req.body;
+  if (headerFile) {
+    try {
+      rawBody = JSON.parse(req.body.data || '{}');
+    } catch (err) {
+      return res.status(400).json({ error: 'Malformed request', detail: 'The "data" field must be valid JSON.' });
+    }
+  }
+  const data = messageTemplateUpdateSchema.parse(rawBody);
+  const isMediaHeader = mediaHeaderService.isMediaHeaderType(data.header?.type);
 
   if (template.category === 'Authentication') {
     if (data.body || data.header || data.footer || data.buttons) {
@@ -579,6 +603,29 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
     }
     const validationError = validateStandardTemplateFields(data);
     if (validationError) return res.status(validationError.status).json(validationError.body);
+
+    if (isMediaHeader) {
+      const limits = MEDIA_HEADER_LIMITS[data.header.type];
+      if (!headerFile) {
+        return res.status(400).json({
+          error: 'Missing header media',
+          detail: `An ${data.header.type.toLowerCase()} file is required to save this template - Meta's edit endpoint needs a fresh upload every time, even if the picture isn't changing.`,
+        });
+      }
+      const mimeType = limits.mimeTypes[headerFile.mimetype];
+      if (!mimeType) {
+        return res.status(400).json({
+          error: 'Unsupported file type',
+          detail: `${data.header.type} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.`,
+        });
+      }
+      if (headerFile.size > limits.maxBytes) {
+        return res.status(400).json({
+          error: 'File too large',
+          detail: `${data.header.type} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.`,
+        });
+      }
+    }
   }
 
   // buildTemplateCreatePayload (used by metaClient.updateMessageTemplate)
@@ -586,6 +633,8 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
   // language come from the existing row since the edit schema doesn't
   // carry them at all.
   const templateData = { ...data, name: template.name, category: template.category, language: template.language };
+
+  let seededMedia = null;
 
   if (template.meta_template_id) {
     const waba = await wabasRepo.findByClientId(req.clientId);
@@ -606,11 +655,34 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
       });
     }
 
-    // Same reasoning as POST /'s commitAndRelease - this Meta edit call can
-    // take seconds; don't pin a tenant connection idle-in-transaction for
-    // it. A rejection below returns straight away with no further req.db
-    // use, so only the success path needs to reacquire before updateContent.
+    // Same reasoning as POST /'s commitAndRelease - this Meta edit call
+    // (plus, now, a possible media upload first) can take seconds; don't
+    // pin a tenant connection idle-in-transaction for it. A rejection below
+    // returns straight away with no further req.db use, so only the
+    // success path needs to reacquire before updateContent.
     await req.commitAndRelease();
+
+    if (isMediaHeader) {
+      if (!process.env.META_APP_ID) {
+        return res.status(502).json({ error: 'META_APP_ID is not configured for this environment' });
+      }
+      const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[headerFile.mimetype];
+      try {
+        const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
+          fileName: headerFile.originalname || data.header.type.toLowerCase(),
+          fileLength: headerFile.size,
+          fileType: mimeType,
+        });
+        const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, headerFile.buffer);
+        if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
+        templateData.header.handle = uploadedHandle.h;
+
+        const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, headerFile.buffer, mimeType, headerFile.originalname);
+        seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (headerFile.originalname || null) : null };
+      } catch (err) {
+        return res.status(502).json({ error: 'Could not upload header media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
+      }
+    }
 
     try {
       await metaClient.updateMessageTemplate(template.meta_template_id, accessToken, templateData);
@@ -625,6 +697,13 @@ router.put('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res
   }
 
   const updated = await messageTemplatesRepo.updateContent(req.db, req.clientId, template.id, templateData);
+  if (seededMedia) {
+    // Replaces this template's default media cache row (upsert is keyed on
+    // template_id + is_default, migration 030) with the asset just
+    // uploaded - the picture that was actually resubmitted to Meta is the
+    // one a future send should default to, not whatever was there before.
+    await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, seededMedia);
+  }
   // Same non-blocking signal as POST /'s - see that route's comment.
   const categoryCheck = checkCategoryContentMismatch(templateData.body, templateData.category);
   res.json(categoryCheck.mismatch ? { ...updated, warnings: [categoryCheck.warning] } : updated);

@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // only time we need an absolute cross-port URL is local dev, where the
   // static files are served separately via `npm start` (:3000) from the API
   // (:4000, `npm run dev` in server/).
+  // Google Play's payments policy: a subscription bought inside the Android app
+  // must use Play Billing (15% fee) and the app may not link out to pay. So the
+  // Android app (mobile/, user agent tag set in capacitor.config.json) shows no
+  // checkout at all; clients subscribe on the website. CSS hides the entry
+  // points via html.in-android-app; openChoosePlanModal refuses as a backstop.
+  const IS_ANDROID_APP = /WasiAndroidApp/.test(navigator.userAgent)
+    || window.Capacitor?.getPlatform?.() === 'android';
+  if (IS_ANDROID_APP) document.documentElement.classList.add('in-android-app');
+
   const API_BASE = (['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '4000')
     ? 'http://localhost:4000'
     : '';
@@ -396,7 +405,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgEl = document.getElementById('suspended-view-message');
     if (payBtn) payBtn.style.display = isOwner ? '' : 'none';
     if (msgEl) {
-      msgEl.textContent = isOwner
+      msgEl.textContent = isOwner && IS_ANDROID_APP
+        ? "This account's subscription is not active."
+        : isOwner
         ? 'Pay to continue using Wasi.'
         : 'Ask your account owner to renew the subscription to continue using Wasi.';
     }
@@ -5032,15 +5043,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const headerSelect = document.getElementById('new-template-header-type');
     headerSelect.value = template.header_type || 'NONE';
-    MEDIA_HEADER_TYPES.forEach((type) => {
-      const option = headerSelect.querySelector(`option[value="${type}"]`);
-      if (option) option.disabled = true;
-    });
-    // A template that already HAS a media header can't have its header
-    // touched at all in edit v1 (no re-upload path in this route) - lock
-    // the whole dropdown, not just the other media options, so there's
-    // nowhere to switch it to or from.
-    headerSelect.disabled = MEDIA_HEADER_TYPES.includes(template.header_type);
+    // Media-header edit (2026-11-23): the dropdown is no longer locked -
+    // switching to, from, or between media types is allowed via PUT /:id
+    // (server/src/routes/templates.js), same as any other field.
 
     if (template.category !== 'Authentication') {
       document.getElementById('new-template-header-text').value = template.header_type === 'TEXT' ? (template.header_content || '') : '';
@@ -5055,6 +5060,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('modal-create-template')?.classList.add('open');
     syncTemplateFormUI();
+
+    // Overrides syncTemplateFormUI's generic media-header hint - Meta's
+    // edit endpoint needs a fresh upload handle on every save whenever the
+    // header is a media type, so there is no way to "keep the current
+    // picture" without re-selecting its file (routes/templates.js's own
+    // comment explains why: an upload handle's lifetime past its one
+    // session is undocumented by Meta).
+    if (MEDIA_HEADER_TYPES.includes(template.header_type)) {
+      const hint = document.getElementById('template-header-media-hint');
+      if (hint) hint.textContent = `This template already has an ${template.header_type.toLowerCase()} header - re-select its file (or a new one) to save any change here, Meta requires a fresh upload on every edit.`;
+    }
 
     if (template.category !== 'Authentication') {
       const examples = template.body_param_examples || {};
@@ -6825,13 +6841,18 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const category = document.getElementById('new-template-category').value;
 
-    // Edit mode (openEditTemplateModal set this) - a completely separate
-    // path from create below: no name/category/language (fixed once a
-    // template exists - see routes/templates.js's PUT /:id), no media
-    // header support yet (that route's schema only accepts NONE/TEXT), so
-    // this never needs the FormData/headerFile branch create's path does.
+    // Edit mode (openEditTemplateModal set this) - a mostly separate path
+    // from create below: no name/category/language (fixed once a template
+    // exists - see routes/templates.js's PUT /:id). Media-header edit
+    // (2026-11-23) reuses the same FormData/headerFile shape create's path
+    // below builds - Meta's edit endpoint needs a fresh upload handle on
+    // every save whenever the header is a media type, so a file is
+    // required even if the picture isn't changing (routes/templates.js's
+    // own comment explains why: a handle's lifetime past its one upload
+    // session is undocumented).
     if (editingTemplateId) {
       const payload = {};
+      let headerFile = null;
       if (category === 'Authentication') {
         const expiration = document.getElementById('new-template-auth-expiration').value;
         if (expiration) payload.codeExpirationMinutes = Number(expiration);
@@ -6843,9 +6864,18 @@ document.addEventListener('DOMContentLoaded', () => {
         payload.body = body;
         payload.bodyParamExamples = getTemplateSampleValues();
         const headerType = document.getElementById('new-template-header-type').value;
-        payload.header = headerType === 'TEXT'
-          ? { type: headerType, text: document.getElementById('new-template-header-text').value.trim() }
-          : { type: 'NONE' };
+        if (headerType === 'TEXT') {
+          payload.header = { type: headerType, text: document.getElementById('new-template-header-text').value.trim() };
+        } else if (MEDIA_HEADER_TYPES.includes(headerType)) {
+          headerFile = document.getElementById('new-template-header-file').files[0] || null;
+          if (!headerFile) {
+            showToast(`Choose a file for the ${headerType.toLowerCase()} header - Meta's edit endpoint needs a fresh upload every time, even if the picture isn't changing.`);
+            return;
+          }
+          payload.header = { type: headerType };
+        } else {
+          payload.header = { type: 'NONE' };
+        }
         const footer = document.getElementById('new-template-footer').value.trim();
         if (footer) payload.footer = footer;
         if (templateButtons.length > 0) {
@@ -6857,9 +6887,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      const restoreSubmit = withSubmitLoading(e.target, 'Submitting…');
+      const restoreSubmit = withSubmitLoading(e.target, headerFile ? 'Uploading & submitting…' : 'Submitting…');
       try {
-        const result = await authFetch(`/api/templates/${editingTemplateId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        const requestBody = headerFile
+          ? (() => {
+              const form = new FormData();
+              form.append('data', JSON.stringify(payload));
+              form.append('headerFile', headerFile);
+              return form;
+            })()
+          : JSON.stringify(payload);
+        const result = await authFetch(`/api/templates/${editingTemplateId}`, {
+          method: 'PUT',
+          body: requestBody,
+          // Same reasoning as create's own media-header timeout override -
+          // the upload session/bytes/media dance is several sequential Meta
+          // calls before the edit call even starts.
+          ...(headerFile ? { timeoutMs: 90_000 } : {}),
+        });
         await refreshTemplates();
         renderTemplates();
         e.target.reset();
@@ -7454,6 +7499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentPlansForModal = [];
 
   function openChoosePlanModal(plans, currentPlanId) {
+    if (IS_ANDROID_APP) return;
     selectedPlanId = null;
     appliedCouponCode = null;
     currentPlansForModal = plans;

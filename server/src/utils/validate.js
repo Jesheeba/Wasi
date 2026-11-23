@@ -546,10 +546,17 @@ const messageTemplateCreateSchema = z.object({
 // language are fixed once a template exists (routes/templates.js's
 // PUT /:id reads those three from the existing row instead; Meta's own
 // edit endpoint doesn't accept them either, since the template id already
-// identifies all three). header.type is narrowed to NONE/TEXT - a media
-// header (IMAGE/VIDEO/DOCUMENT) can't be changed via edit yet, only via
-// delete + recreate, so this schema simply doesn't accept those values
-// rather than accepting and rejecting them deeper in the route.
+// identifies all three). header.type accepts IMAGE/VIDEO/DOCUMENT as of the
+// media-header edit feature (2026-11-23) - same shape as
+// messageTemplateCreateSchema's header, since Meta's edit endpoint is a
+// full-replace PATCH (confirmed by this app's own existing edit behavior:
+// a NONE/TEXT edit always resends header explicitly, even as NONE) and a
+// media header component requires a fresh upload handle on every call
+// regardless of whether the picture is actually changing - routes/
+// templates.js's PUT /:id is the real authoritative boundary for the
+// actual upload requirement (a file is required whenever header.type is a
+// media type and the template is live on Meta - multer populates req.files
+// outside this JSON-only schema, same as POST /).
 //
 // The button-count/url/phone-required checks below are duplicated from
 // messageTemplateCreateSchema's superRefine rather than shared - that
@@ -562,7 +569,7 @@ const messageTemplateUpdateSchema = z.object({
   body: z.string().min(1).max(1024).optional(),
   bodyParamExamples: z.record(z.string()).optional(),
   header: z.object({
-    type: z.enum(['NONE', 'TEXT']),
+    type: z.enum(['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT']),
     text: z.string().max(60).optional(),
   }).optional(),
   footer: z.string().max(60).optional(),
