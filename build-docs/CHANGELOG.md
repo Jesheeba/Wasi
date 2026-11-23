@@ -26,6 +26,11 @@ New form type "Booking with live slots".
 - Customers' carts show in the chat as readable items and a total.
 - Failed product sends can't be retried as plain text.
 - Migration 100.
+## fix(automation-rules): remove the temporary test lock
+Reverts 63572a3 after the live test passed on production (catch-all replied
+once to 9092766740, then stayed silent within 24h). Once deployed, "*" rules
+work for every client - including NUSI's "New contact auto-reply", which has
+never fired before.
 
 ## feat(ctwa-conversions): report ad leads and sales back to Meta
 Ad Leads > an ad: each chat gets "Mark as lead" and "Mark sale" (with an
