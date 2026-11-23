@@ -82,19 +82,78 @@ router.get('/sla', asyncHandler(async (req, res) => {
 // headline) rather than source_id alone - a real ad account can run more
 // than one headline against the same underlying ad/source, and this
 // shouldn't silently merge them into one count.
+//
+// leadCount = distinct chats an ad started. totals.leads is counted across
+// all ads separately (a chat that came in from two ads is one lead overall,
+// so summing per-ad leadCount would double count). Ad clicks/spend/CPL are
+// deliberately absent: they live in Meta's Marketing API, which this app
+// has no access to (build-docs/features/ctwa-ads-page.md).
+function parseSince(req, res) {
+  if (!req.query.since) return null;
+  const since = new Date(req.query.since);
+  if (Number.isNaN(since.getTime())) {
+    res.status(400).json({ error: 'since must be a valid date' });
+    return undefined;
+  }
+  return since;
+}
+
+const CTWA_WHERE = `client_id = $1 and direction = 'in' and referral is not null
+       and ($2::timestamptz is null or sent_at > $2)`;
+
 router.get('/ctwa', asyncHandler(async (req, res) => {
-  const since = req.query.since ? new Date(req.query.since) : null;
+  const since = parseSince(req, res);
+  if (since === undefined) return;
+  const [{ rows }, totals] = await Promise.all([
+    req.db.query(
+      `select referral->>'source_id' as source_id, referral->>'headline' as headline,
+              max(referral->>'source_url') as source_url, max(referral->>'source_type') as source_type,
+              count(*)::int as message_count, count(distinct chat_id)::int as lead_count,
+              min(sent_at) as first_at, max(sent_at) as last_at
+       from messages
+       where ${CTWA_WHERE}
+       group by referral->>'source_id', referral->>'headline'
+       order by lead_count desc, message_count desc`,
+      [req.clientId, since]
+    ),
+    req.db.query(
+      `select count(distinct chat_id)::int as leads, count(*)::int as messages
+       from messages where ${CTWA_WHERE}`,
+      [req.clientId, since]
+    ),
+  ]);
+  res.json({
+    totals: { ...totals.rows[0], ads: rows.length },
+    bySource: rows.map((r) => ({
+      sourceId: r.source_id, headline: r.headline, sourceUrl: r.source_url, sourceType: r.source_type,
+      messageCount: r.message_count, leadCount: r.lead_count, firstAt: r.first_at, lastAt: r.last_at,
+    })),
+  });
+}));
+
+// The chats one ad started. sourceId/headline omitted (or empty) match an
+// ad Meta sent without that field, so "Unnamed ad" rows can be opened too.
+router.get('/ctwa/chats', asyncHandler(async (req, res) => {
+  const since = parseSince(req, res);
+  if (since === undefined) return;
+  const field = (name) => {
+    const v = req.query[name];
+    return typeof v === 'string' && v !== '' ? v.slice(0, 500) : null;
+  };
   const { rows } = await req.db.query(
-    `select referral->>'source_id' as source_id, referral->>'headline' as headline, count(*)::int as message_count
-     from messages
-     where client_id = $1 and direction = 'in' and referral is not null
-       and ($2::timestamptz is null or sent_at > $2)
-     group by referral->>'source_id', referral->>'headline'
-     order by message_count desc`,
-    [req.clientId, since]
+    `select m.chat_id, ch.name, ch.phone, min(m.sent_at) as first_at, count(*)::int as message_count
+     from messages m join chats ch on ch.id = m.chat_id
+     where m.client_id = $1 and m.direction = 'in' and m.referral is not null
+       and ($2::timestamptz is null or m.sent_at > $2)
+       and (m.referral->>'source_id') is not distinct from $3
+       and (m.referral->>'headline') is not distinct from $4
+     group by m.chat_id, ch.name, ch.phone
+     order by first_at desc
+     limit 500`,
+    [req.clientId, since, field('sourceId'), field('headline')]
   );
   res.json({
-    bySource: rows.map((r) => ({ sourceId: r.source_id, headline: r.headline, messageCount: r.message_count })),
+    chats: rows.map((r) => ({ chatId: r.chat_id, name: r.name, phone: r.phone, firstAt: r.first_at, messageCount: r.message_count })),
   });
 }));
 

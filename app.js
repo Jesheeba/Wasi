@@ -1027,6 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'support') renderTickets();
     if (targetView === 'analytics') renderMessageAnalytics();
     if (targetView === 'payments') renderPaymentsTable();
+    if (targetView === 'ctwa') renderCtwaView();
     // The Whatsapp sub-tab ships marked active by default (index.html) but
     // previously only rendered real data on an explicit sub-nav click -
     // landing here from the main nav showed static placeholder markup
@@ -8535,6 +8536,106 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('tag-analytics-retry')?.addEventListener('click', renderTagAnalytics);
     }
   }
+
+  // --- Click-to-WhatsApp Ads (build-docs/features/ctwa-ads-page.md) ---
+  // GET /api/analytics/ctwa groups ad-started chats by (sourceId, headline).
+  // No clicks/spend/CPL: Meta's Marketing API is not connected to this app.
+  const ctwaSince = () => {
+    const days = document.getElementById('ctwa-range')?.value;
+    return days && days !== 'all' ? new Date(Date.now() - Number(days) * 86400000).toISOString() : '';
+  };
+  const ctwaAdName = (ad) => ad.headline || ad.sourceId || 'Unnamed ad';
+
+  async function renderCtwaView() {
+    const tbody = document.getElementById('ctwa-ads-tbody');
+    const stats = document.getElementById('ctwa-stats');
+    if (!tbody || !stats) return;
+    document.getElementById('ctwa-chats-card').hidden = true;
+    document.getElementById('ctwa-ads-card').hidden = false;
+    tbody.innerHTML = analyticsLoadingRow(5);
+    const since = ctwaSince();
+    try {
+      const { totals, bySource } = await authFetch(`/api/analytics/ctwa${since ? `?since=${encodeURIComponent(since)}` : ''}`);
+      if (state.currentView !== 'ctwa') return;
+      stats.innerHTML = [
+        statTile('user-plus', 'Leads from ads', formatCount(totals.leads), 'Chats started from an ad'),
+        statTile('megaphone', 'Ads with leads', formatCount(totals.ads)),
+        statTile('message-square', 'Ad messages', formatCount(totals.messages)),
+      ].join('');
+      state.ctwaAds = bySource;
+      tbody.innerHTML = bySource.length ? bySource.map((ad, i) => `
+        <tr class="ctwa-ad-row" data-ctwa-ad="${i}" tabindex="0" aria-label="Show chats from ${esc(ctwaAdName(ad))}">
+          <td data-label="Ad"><span class="analytics-name">${esc(ctwaAdName(ad))}</span>${ad.sourceUrl && /^https?:/i.test(ad.sourceUrl) ? ` <a href="${esc(ad.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="ctwa-ad-link" aria-label="Open the ad">View ad</a>` : ''}</td>
+          <td data-label="Leads">${esc(formatCount(ad.leadCount))}</td>
+          <td data-label="Messages">${esc(formatCount(ad.messageCount))}</td>
+          <td data-label="First lead">${esc(formatShortDate(ad.firstAt))}</td>
+          <td data-label="Latest lead">${esc(formatShortDate(ad.lastAt))}</td>
+        </tr>`).join('')
+        : analyticsEmptyRow(5, 'No chats from ads yet', 'When someone taps a Click-to-WhatsApp ad and messages you, the chat shows up here automatically.');
+      tbody.querySelectorAll('[data-ctwa-ad]').forEach((row) => {
+        const open = (e) => { if (!e.target.closest('a')) renderCtwaChats(state.ctwaAds[row.dataset.ctwaAd]); };
+        row.addEventListener('click', open);
+        row.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); open(e); } });
+      });
+    } catch (err) {
+      stats.innerHTML = '';
+      tbody.innerHTML = analyticsErrorRow(5, err.message || 'Couldn’t load ad leads.', 'ctwa-retry');
+      document.getElementById('ctwa-retry')?.addEventListener('click', renderCtwaView);
+    }
+    refreshIcons();
+  }
+
+  async function renderCtwaChats(ad) {
+    if (!ad) return;
+    const card = document.getElementById('ctwa-chats-card');
+    const tbody = document.getElementById('ctwa-chats-tbody');
+    document.getElementById('ctwa-ads-card').hidden = true;
+    card.hidden = false;
+    document.getElementById('ctwa-chats-title').textContent = ctwaAdName(ad);
+    tbody.innerHTML = analyticsLoadingRow(5);
+    const params = new URLSearchParams();
+    if (ad.sourceId) params.set('sourceId', ad.sourceId);
+    if (ad.headline) params.set('headline', ad.headline);
+    const since = ctwaSince();
+    if (since) params.set('since', since);
+    try {
+      const { chats } = await authFetch(`/api/analytics/ctwa/chats?${params}`);
+      tbody.innerHTML = chats.length ? chats.map((c) => `
+        <tr>
+          <td data-label="Contact" class="analytics-name">${esc(c.name || c.phone || '-')}</td>
+          <td data-label="Phone">${esc(c.phone || '-')}</td>
+          <td data-label="Came in">${esc(formatShortDate(c.firstAt))}</td>
+          <td data-label="Ad messages">${esc(formatCount(c.messageCount))}</td>
+          <td data-label=""><button type="button" class="btn-secondary btn-sm" data-ctwa-open-chat="${esc(c.chatId)}">Open chat</button></td>
+        </tr>`).join('') : analyticsEmptyRow(5, 'No chats in this date range', '');
+      tbody.querySelectorAll('[data-ctwa-open-chat]').forEach((btn) => {
+        btn.addEventListener('click', () => openChatById(btn.dataset.ctwaOpenChat));
+      });
+    } catch (err) {
+      tbody.innerHTML = analyticsErrorRow(5, err.message || 'Couldn’t load chats for this ad.', 'ctwa-chats-retry');
+      document.getElementById('ctwa-chats-retry')?.addEventListener('click', () => renderCtwaChats(ad));
+    }
+    refreshIcons();
+  }
+
+  async function openChatById(chatId) {
+    try {
+      const raw = await authFetch(`/api/chats/${encodeURIComponent(chatId)}`);
+      let chat = state.chats.find((c) => c.id === raw.id);
+      if (!chat) { chat = adaptChat(raw); state.chats.unshift(chat); }
+      switchView('chat');
+      await openActiveChat(chat);
+      renderChatList(state.chatTagFilter);
+    } catch (err) {
+      reportError(err);
+    }
+  }
+
+  document.getElementById('ctwa-range')?.addEventListener('change', renderCtwaView);
+  document.getElementById('ctwa-chats-back')?.addEventListener('click', () => {
+    document.getElementById('ctwa-chats-card').hidden = true;
+    document.getElementById('ctwa-ads-card').hidden = false;
+  });
 
   async function renderCampaignAnalytics() {
     const tbody = document.getElementById('campaign-analytics-tbody');

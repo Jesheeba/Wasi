@@ -1,5 +1,17 @@
 # Testing
 
+## ctwa-ads-page
+`server/test/ctwaAdsPage.test.js` (Playwright + API, :4000, local embedded
+Postgres): AC2 leads are distinct chats, totals don't double count across
+ads, organic excluded, 30-day range filters, bad `since` 400s; AC3 chats per
+ad incl. an ad with no source_id/headline; AC6 empty client zeros + tenant
+isolation; AC5 route sits behind the Admin/Manager gate; AC1-4 UI: nav,
+tiles, range, `javascript:` ad link not rendered, drill-down, Open chat lands
+in Chat; AC6 UI empty state. 6/6. Mobile 375px checked by screenshot (cards
+stack, no overflow). Regression: comingSoonPages 3/3, messageReferral 3/3,
+analyticsTagsMultiTag 3/3, chatSlaLogs 10/10, conversationPricing 7/7,
+teamMemberAuth 12/12, chatUiPass 15/15.
+
 ## automation-rule-view-edit
 `server/test/automationRuleViewEdit.test.js` (Playwright + API, :4000, local
 embedded Postgres via TEST_DATABASE_URL, disposable clients deleted in

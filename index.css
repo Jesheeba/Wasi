@@ -3276,3 +3276,13 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .plan-option-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 .plan-option-price { font-weight: 700; color: var(--color-dark); font-size: 1.05rem; white-space: nowrap; }
 .plan-option-price small { font-weight: 500; font-size: 0.72rem; color: var(--text-muted); }
+
+/* Click-to-WhatsApp Ads page (build-docs/features/ctwa-ads-page.md). */
+#view-ctwa > * { flex-shrink: 0; } /* same header-shrink fix as .templates-page-header */
+#view-ctwa .stat-tiles { margin-bottom: 1rem; }
+.ctwa-ad-row { cursor: pointer; }
+.ctwa-ad-row:hover td { background: var(--neutral-bg, #F8FAFC); }
+.ctwa-ad-link { margin-left: 8px; font-size: 0.75rem; }
+.ctwa-chats-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-light); }
+.ctwa-chats-head .settings-card-title { margin: 0; }
+.ctwa-note { margin-top: 0.75rem; }

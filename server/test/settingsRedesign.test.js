@@ -137,7 +137,7 @@ test('attribute: drawer saves with a lowercase type (was a 400 on every save)', 
 
 test('375px: redesigned sections and drawers have no horizontal overflow', async () => {
   const page = await openSettings(375);
-  for (const s of ['tags', 'canned-responses', 'attributes', 'wallet', 'subscription', 'billing', 'team', 'webhook', 'whatsapp']) {
+  for (const s of ['tags', 'canned-responses', 'attributes', 'subscription', 'billing', 'team', 'webhook', 'whatsapp']) {
     await goSection(page, s);
     await page.waitForTimeout(500);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${s} overflows`);
@@ -146,21 +146,6 @@ test('375px: redesigned sections and drawers have no horizontal overflow', async
   await page.waitForTimeout(300);
   const box = await page.evaluate(() => document.querySelector('#modal-add-attribute .modal-box').getBoundingClientRect().width);
   assert.ok(box <= 375 && box >= 370, `drawer is full width on a phone (got ${box})`);
-  await page.close();
-});
-
-test('wallet: preset chips fill the amount and quick recharge uses the existing recharge call', async () => {
-  const page = await openSettings();
-  await goSection(page, 'wallet');
-  await page.waitForFunction(() => document.querySelectorAll('#wallet-stats .stat-tile').length === 3);
-  assert.match(await page.textContent('#wallet-transactions'), /No top-ups yet/, 'teaching empty state');
-  await page.click('[data-recharge-amount="2000"]');
-  assert.equal(await page.inputValue('#wallet-quick-amount'), '2000');
-  assert.equal(await page.getAttribute('[data-recharge-amount="2000"]', 'aria-pressed'), 'true');
-  assert.equal(await page.getAttribute('[data-recharge-amount="1000"]', 'aria-pressed'), 'false');
-  const req = page.waitForRequest((r) => r.url().endsWith('/api/wallet/recharge') && r.method() === 'POST');
-  await page.click('#wallet-quick-recharge button[type="submit"]');
-  assert.deepEqual(JSON.parse((await req).postData()), { amount_inr: 2000 });
   await page.close();
 });
 

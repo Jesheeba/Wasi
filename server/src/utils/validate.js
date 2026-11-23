@@ -686,10 +686,6 @@ const paymentLinkCreateSchema = z.object({
   amount_inr: z.number().int().positive(),
 });
 
-const walletRechargeSchema = z.object({
-  amount_inr: z.number().int().positive(),
-});
-
 // events is required, not defaulted - see migration
 // 015_explicit_forward_events.js for why: a subscription that doesn't say
 // which events it wants isn't implicitly "all of them," it's invalid.
@@ -958,7 +954,6 @@ module.exports = {
   contactSegmentCreateSchema,
   contactSegmentPreviewSchema,
   paymentLinkCreateSchema,
-  walletRechargeSchema,
   clientWebhookSchema,
   hubForwardConfigSchema,
   consentEventCreateSchema,

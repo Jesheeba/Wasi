@@ -37,7 +37,7 @@ WhatsApp Flows, Instagram, CTWA, Integrations). They are very different in
 size and two are blocked outside engineering, so they are planned
 separately, in build order:
 
-1. [ctwa-ads-page](features/ctwa-ads-page.md) - small. Server data already
+1. [ctwa-ads-page](features/ctwa-ads-page.md) - **done 2026-11-23**. small. Server data already
    captured (`messages.referral`, `/api/analytics/ctwa`); UI only + 2
    additive fields. Shows leads per ad, never invented clicks/spend/CPL
    (no Marketing API access).

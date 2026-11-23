@@ -1,11 +1,3 @@
-async function createPending(db, clientId, amountInr, razorpayOrderId) {
-  const { rows } = await db.query(
-    `insert into wallet_transactions (client_id, amount_inr, razorpay_order_id) values ($1, $2, $3) returning *`,
-    [clientId, amountInr, razorpayOrderId]
-  );
-  return rows[0];
-}
-
 // Razorpay-webhook-triggered - looked up by order id, not a known client_id,
 // so this always runs on the privileged connection.
 async function markStatusByOrderId(db, orderId, status) {
@@ -31,4 +23,4 @@ async function listByClientId(db, clientId) {
   return rows;
 }
 
-module.exports = { createPending, markStatusByOrderId, balance, listByClientId };
+module.exports = { markStatusByOrderId, balance, listByClientId };

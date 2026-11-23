@@ -1,5 +1,24 @@
 # Changelog
 
+## feat(wallet-removal): remove wallet top-ups from the client app
+Message costs can't be metered per client, so a prepaid balance had nothing
+to pay for. Removed Settings > Wallet (nav item, page, quick recharge, the
+Recharge modal and their handlers and CSS) and the server's
+`POST /api/wallet/recharge` (plus its schema and `walletRepo.createPending`).
+`GET /api/wallet` and the Razorpay webhook's wallet branch stay, so any
+already-pending top-up still settles. This also removes one of the two
+in-app Razorpay payment flows the Play Store payments policy could object to;
+Subscription checkout remains. Test: `server/test/walletTopUpRemoved.test.js`.
+
+## feat(ctwa-ads-page): Click-to-WhatsApp Ads page
+"Ad Leads" in the nav (no longer Soon). Summary tiles (leads, ads, ad
+messages), a per-ad table (leads = distinct chats, messages, first/latest
+lead, "View ad" only for http(s) links), 7/30/90/all-time range, drill into
+an ad's chats and open any chat. Server: `/api/analytics/ctwa` gains
+totals + leadCount/firstAt/lastAt/sourceUrl/sourceType (additive) and a
+400 for an invalid `since` (was a 500); new `/api/analytics/ctwa/chats`.
+Both stay Admin/Manager only. No clicks/spend/CPL: no Marketing API access.
+
 ## feat(automation-rules): view, edit and enable/disable rules
 The Rules table was read-only: no way to open a rule, read its full reply,
 edit it or turn it off. Rows now open the Create Rule drawer in edit mode,
