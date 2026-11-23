@@ -214,10 +214,9 @@
           <i data-lucide="life-buoy"></i>
           <span class="nav-text">Support</span>
         </a>
-        <a class="nav-item" data-view="integrations" role="button" tabindex="0" title="Integrations - coming soon">
+        <a class="nav-item" data-view="integrations" role="button" tabindex="0" title="Integrations">
           <i data-lucide="plug"></i>
           <span class="nav-text">Integrations</span>
-          <span class="nav-soon">Soon</span>
         </a>
       </nav>
 
@@ -916,23 +915,18 @@
           <p class="form-hint ctwa-note">Ad clicks, spend and cost per lead are in Meta Ads Manager. Wasi shows the chats each ad started.</p>
         </div>
 
-        <!-- Coming soon (PLAN.md 2026-11-23, build-docs/features). No fake data:
-             this page is listed in the nav so clients know it is planned. -->
+        <!-- Integrations (build-docs/features/integrations-page.md): live status
+             of integrations that already work elsewhere, from
+             GET /api/integrations/status. Shopify is the one planned card. -->
         <div id="view-integrations" class="view-container" style="padding: 1.5rem;">
           <div class="page-title-bar">
             <div>
-              <h1 class="page-title">Integrations <span class="badge badge-info">Coming soon</span></h1>
+              <h1 class="page-title">Integrations</h1>
               <p class="page-subtitle">Everything Wasi connects to, in one place</p>
             </div>
           </div>
-          <div class="table-card" id="integrations-content">
-            <div class="empty-state">
-              <i data-lucide="plug" class="empty-icon" aria-hidden="true"></i>
-              <div class="empty-title">Integrations is coming soon</div>
-              <p>See the live status of your webhooks, Zapier, API keys and payment links on one page.</p>
-              <p class="empty-example">All of these already work today. Set them up under Settings &gt; Developer and Settings &gt; Webhook.</p>
-            </div>
-          </div>
+          <div class="alert alert-warning" id="integrations-no-waba" hidden>Connect your WhatsApp number first. Webhooks and Zapier only receive events from a connected number.</div>
+          <div class="integrations-grid" id="integrations-grid" aria-live="polite"></div>
         </div>
 
         <!-- 11. PAYMENTS VIEW -->

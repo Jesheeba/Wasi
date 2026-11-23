@@ -1,5 +1,16 @@
 # Testing
 
+## integrations-page
+`server/test/integrationsPage.test.js` (Playwright + API, :4000, local
+embedded Postgres): AC1/AC4 status reflects seeded key, webhook, Zap,
+deliveries (newest wins; webhook vs Zapier told apart by URL) and payment
+links, with no secret/hash/raw key/URL in the body; empty client all-off;
+AC5 Admin/Manager gate + Agent nav hidden; AC1-3 UI badges (Failing,
+Connected, Coming soon), Shopify has no button, Manage/Create key/Open
+Payments navigate to the right section; empty client sees Not set up + the
+connect-WhatsApp notice. 5/5 (first run caught the notice always showing).
+Regression: apiKeysSelfServe 9/9, apiV1Subscriptions 6/6, webhookForwarding 8/8.
+
 ## ctwa-ads-page
 `server/test/ctwaAdsPage.test.js` (Playwright + API, :4000, local embedded
 Postgres): AC2 leads are distinct chats, totals don't double count across

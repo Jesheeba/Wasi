@@ -31,6 +31,7 @@ const automationFlowsRouter = require('./routes/automationFlows');
 const templatesRouter = require('./routes/templates');
 const supportTicketsRouter = require('./routes/supportTickets');
 const analyticsRouter = require('./routes/analytics');
+const integrationsRouter = require('./routes/integrations');
 const teamMembersRouter = require('./routes/teamMembers');
 const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
@@ -180,6 +181,7 @@ function createApp() {
   app.use('/api/templates', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, templatesRouter);
   app.use('/api/support-tickets', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, supportTicketsRouter);
   app.use('/api/analytics', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, analyticsRouter);
+  app.use('/api/integrations', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, integrationsRouter);
   app.use('/api/team-members', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, teamMembersRouter);
   app.use('/api/contact-attributes', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactAttributesRouter);
   app.use('/api/payment-links', requireClientAuth, requireActiveSubscription, withTenantContext, paymentLinksRouter);

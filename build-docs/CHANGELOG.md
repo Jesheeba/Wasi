@@ -1,5 +1,14 @@
 # Changelog
 
+## feat(integrations-page): live status of existing integrations
+Integrations (no longer Soon): Webhooks, Zapier, API & AI assistants and
+Razorpay payment links as cards with their real state (configured, last
+delivery incl. failures, active Zaps/keys, links created), each linking to
+where it is set up. Shopify card is "Coming soon" with no action. New
+read-only `GET /api/integrations/status` (Admin/Manager), selects no
+secret, hash or URL. Fixed while testing: `.alert`'s display overrode the
+`hidden` attribute, so the connect-WhatsApp notice showed for everyone.
+
 ## feat(wallet-removal): remove wallet top-ups from the client app
 Message costs can't be metered per client, so a prepaid balance had nothing
 to pay for. Removed Settings > Wallet (nav item, page, quick recharge, the

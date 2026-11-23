@@ -1028,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'analytics') renderMessageAnalytics();
     if (targetView === 'payments') renderPaymentsTable();
     if (targetView === 'ctwa') renderCtwaView();
+    if (targetView === 'integrations') renderIntegrations();
     // The Whatsapp sub-tab ships marked active by default (index.html) but
     // previously only rendered real data on an explicit sub-nav click -
     // landing here from the main nav showed static placeholder markup
@@ -8534,6 +8535,88 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('ctwa-chats-card').hidden = true;
     document.getElementById('ctwa-ads-card').hidden = false;
   });
+
+  // --- Integrations (build-docs/features/integrations-page.md) ---
+  // Read-only status of integrations configured elsewhere; each card links
+  // to where it is set up. Shopify is planned, so it has no action.
+  function integrationDeliveryLine(d) {
+    if (!d) return 'No deliveries yet';
+    const when = formatShortDate(d.at);
+    if (d.status === 'failed') return `Last delivery failed (${when})`;
+    if (d.status === 'pending') return `Delivery retrying (since ${when})`;
+    return `Last delivered ${when}`;
+  }
+  function integrationCard({ icon, name, desc, badge, lines = [], action }) {
+    return `<div class="integration-card">
+      <div class="integration-card-head"><span class="integration-icon"><i data-lucide="${icon}"></i></span>
+        <h2 class="integration-name">${esc(name)}</h2><span class="badge ${badge.cls}">${esc(badge.text)}</span></div>
+      <p class="integration-desc">${esc(desc)}</p>
+      ${lines.map((l) => `<p class="integration-line${l.warn ? ' is-warn' : ''}">${esc(l.text)}</p>`).join('')}
+      ${action ? `<button type="button" class="btn-secondary btn-sm" data-integration-go="${action.go}">${esc(action.label)}</button>` : ''}
+    </div>`;
+  }
+  const plural = (n, word) => `${formatCount(n)} ${word}${n === 1 ? '' : 's'}`;
+
+  async function renderIntegrations() {
+    const grid = document.getElementById('integrations-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="integration-card"><span class="skeleton analytics-skeleton"></span></div>'.repeat(3);
+    try {
+      const st = await authFetch('/api/integrations/status');
+      if (state.currentView !== 'integrations') return;
+      document.getElementById('integrations-no-waba').hidden = st.whatsappConnected;
+      const on = { cls: 'badge-success', text: 'Connected' };
+      const off = { cls: 'badge-neutral', text: 'Not set up' };
+      const failing = { cls: 'badge-danger', text: 'Failing' };
+      const failed = (d) => d?.status === 'failed';
+      grid.innerHTML = [
+        integrationCard({
+          icon: 'share-2', name: 'Webhooks', desc: 'Send incoming messages and delivery updates to your own system.',
+          badge: !st.webhook.configured ? off : failed(st.webhook.lastDelivery) ? failing : on,
+          lines: st.webhook.configured ? [{ text: integrationDeliveryLine(st.webhook.lastDelivery), warn: failed(st.webhook.lastDelivery) }] : [],
+          action: { go: 'webhook', label: st.webhook.configured ? 'Manage' : 'Set up' },
+        }),
+        integrationCard({
+          icon: 'zap', name: 'Zapier', desc: 'Start Zaps when a customer messages you, and send WhatsApp messages from Zaps.',
+          badge: !st.zapier.activeZaps ? off : failed(st.zapier.lastDelivery) ? failing : on,
+          lines: st.zapier.activeZaps
+            ? [{ text: plural(st.zapier.activeZaps, 'active Zap') }, { text: integrationDeliveryLine(st.zapier.lastDelivery), warn: failed(st.zapier.lastDelivery) }]
+            : [{ text: 'Zapier connects with a Wasi API key.' }],
+          action: { go: 'developer', label: 'API keys' },
+        }),
+        integrationCard({
+          icon: 'terminal', name: 'API & AI assistants', desc: 'Send messages and read data from your own apps, or from AI assistants through the MCP server.',
+          badge: st.api.activeKeys ? on : off,
+          lines: st.api.activeKeys
+            ? [{ text: plural(st.api.activeKeys, 'active key') }, { text: st.api.lastUsedAt ? `Last used ${formatShortDate(st.api.lastUsedAt)}` : 'Not used yet' }]
+            : [],
+          action: { go: 'developer', label: st.api.activeKeys ? 'Manage keys' : 'Create a key' },
+        }),
+        integrationCard({
+          icon: 'credit-card', name: 'Razorpay payment links', desc: 'Send payment links in chat. Ready to use, nothing to connect.',
+          badge: { cls: 'badge-success', text: 'Available' },
+          lines: [{ text: st.paymentLinks.created ? `${plural(st.paymentLinks.created, 'link')} created` : 'No links created yet' }],
+          action: { go: 'payments', label: 'Open Payments' },
+        }),
+        integrationCard({
+          icon: 'shopping-bag', name: 'Shopify', desc: 'Sync orders and recover abandoned carts on WhatsApp.',
+          badge: { cls: 'badge-info', text: 'Coming soon' },
+        }),
+      ].join('');
+      grid.querySelectorAll('[data-integration-go]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const go = btn.dataset.integrationGo;
+          if (go === 'payments') { switchView('payments'); return; }
+          switchView('settings');
+          document.querySelector(`.sec-nav-item[data-sec-view="${go}"]`)?.click();
+        });
+      });
+    } catch (err) {
+      grid.innerHTML = `<div class="error-state"><div>${esc(err.message || 'Could not load integrations.')}</div><button type="button" class="btn-secondary btn-auto" id="integrations-retry">Try again</button></div>`;
+      document.getElementById('integrations-retry')?.addEventListener('click', renderIntegrations);
+    }
+    refreshIcons();
+  }
 
   async function renderCampaignAnalytics() {
     const tbody = document.getElementById('campaign-analytics-tbody');

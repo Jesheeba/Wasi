@@ -3259,3 +3259,17 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .ctwa-chats-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-light); }
 .ctwa-chats-head .settings-card-title { margin: 0; }
 .ctwa-note { margin-top: 0.75rem; }
+
+/* Integrations page (build-docs/features/integrations-page.md). */
+#view-integrations > * { flex-shrink: 0; }
+#integrations-no-waba { margin-bottom: 1rem; } #integrations-no-waba[hidden] { display: none; }
+.integrations-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.integration-card { display: flex; flex-direction: column; gap: 6px; padding: 1.25rem; background: var(--surface, #fff); border: 1px solid var(--border-light); border-radius: 12px; }
+.integration-card-head { display: flex; align-items: center; gap: 10px; }
+.integration-icon { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; background: var(--neutral-bg, #F1F5F9); flex-shrink: 0; }
+.integration-icon svg { width: 18px; height: 18px; }
+.integration-name { flex: 1; min-width: 0; margin: 0; font-size: 1rem; font-weight: 600; }
+.integration-desc { margin: 0 0 4px; font-size: 0.85rem; color: var(--text-muted); }
+.integration-line { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+.integration-line.is-warn { color: var(--danger, #B91C1C); }
+.integration-card .btn-sm { align-self: flex-start; margin-top: auto; }

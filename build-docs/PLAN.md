@@ -41,7 +41,7 @@ separately, in build order:
    captured (`messages.referral`, `/api/analytics/ctwa`); UI only + 2
    additive fields. Shows leads per ad, never invented clicks/spend/CPL
    (no Marketing API access).
-2. [integrations-page](features/integrations-page.md) - small. Real status
+2. [integrations-page](features/integrations-page.md) - **done 2026-11-23**. small. Real status
    of integrations that already work (webhooks, Zapier, API/MCP, Razorpay
    links). Shopify card marked "Coming soon".
 3. [catalog-product-messages](features/catalog-product-messages.md) -
