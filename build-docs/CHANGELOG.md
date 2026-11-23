@@ -1,5 +1,13 @@
 # Changelog
 
+## feat(google-login): Continue with Google for signup and login
+New customers can create their account with Google on signup step 1 (business
+name still required) and continue the usual plan and WhatsApp steps; existing
+customers can log in with Google (linked by email the first time). ID token
+verified against Google's keys; no client secret. Hidden until GOOGLE_CLIENT_ID
+is set. Migration 104 (clients.google_sub). Fixed: login screen Signup link
+went nowhere.
+
 ## feat(android-no-checkout): no subscription checkout inside the Android app
 Google Play requires Play Billing (15% on subscriptions) for anything sold in
 the app and does not allow linking out to pay in India. The Android app now

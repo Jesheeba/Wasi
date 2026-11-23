@@ -55,6 +55,15 @@
 
             <div class="form-error-banner" id="step1-error"></div>
 
+            <!-- "Continue with Google" (build-docs/features/google-login.md). Shown only
+                 when the server has GOOGLE_CLIENT_ID set; the business name field
+                 below is still required for a new account. -->
+            <div class="google-signin" id="google-signin" hidden>
+              <div id="google-signin-button"></div>
+              <p class="google-signin-hint" id="google-signin-hint">Enter your business name below, then continue with Google - or use email and password.</p>
+              <div class="or-divider"><span>or</span></div>
+            </div>
+
             <form id="step1-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="businessName">Business name</label>
@@ -66,7 +75,7 @@
                 <input class="form-input" type="email" id="email" name="email" placeholder="you@business.com" autocomplete="email" required />
                 <div class="field-error" data-error-for="email"></div>
               </div>
-              <div class="form-group">
+              <div class="form-group" id="password-group">
                 <label class="form-label" for="password">Password</label>
                 <input class="form-input" type="password" id="password" name="password" placeholder="At least 8 characters" autocomplete="new-password" required minlength="8" />
                 <div class="field-error" data-error-for="password"></div>
@@ -168,6 +177,7 @@
   <script src="/embeddedSignup.js?v=20261104a"></script>
   <script src="/marketing/plans.js"></script>
   <script>WasiPlans.renderSignupOptions(document.getElementById('plan-options'));</script>
-  <script src="/marketing/signup.js?v=20260908b"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
+  <script src="/marketing/signup.js?v=20261123g"></script>
 </body>
 </html>

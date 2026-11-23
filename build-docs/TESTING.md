@@ -1,5 +1,26 @@
 # Testing
 
+## google-login
+`server/test/googleLogin.test.js` (API + Playwright on own port 4108 opened as
+http://[::1]; a test RSA key stands in for Google's signing key, so the real
+verifier runs; Google's gsi/client script is replaced by a stub in the browser).
+AC1 config + no button without GOOGLE_CLIENT_ID; AC2 new account verified,
+password-less, pending_setup, internal columns never returned, session works,
+UI goes Google -> business name -> plan step; AC3 no business name / login
+intent never create; AC4 existing account linked across email case, password
+still works, found by Google id after email change, 409 on takeover, UI login
+enters the app and unknown account goes to signup; AC5 forged tokens (wrong
+aud/iss, expired, other key, unknown kid, unverified email, HS256, garbage) all
+rejected; limiter: 21st attempt is 429. 9/9, stable x3. First runs caught the
+auth limiter (20/15 min/IP) blocking the test's own later calls - fixed by
+giving API calls their own X-Forwarded-For (app trusts one proxy hop).
+Regression (private-port copies): teamMemberAuth 12, tenantIsolation 4,
+marketingBannersGroup5 6 pass. Pre-existing on plain master, unrelated: api
+onboarding test (stale, CLAUDE.md), chatUiPass test 10 (CSV import),
+embeddedSignupConnectRuntime runtime 1 (CLAUDE.md), crossTabTenantIsolation
+0/2 (waits for #app-shell visible, which Playwright misreads in this layout;
+same 0/2 on master 1685bd2).
+
 ## whatsapp-flows phase 2 (live booking)
 `flowLiveBooking.test.js` (Meta faked, real RSA/AES encryption), 9/9:
 - Config limits; open days, today excluded, capacity filtering.

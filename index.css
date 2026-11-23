@@ -3501,3 +3501,9 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .chat-ai-note { font-size: var(--fs-caption); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
 .chat-ai-note.is-handover { color: var(--warning, #B45309); font-weight: 600; }
 .chat-ai-note.is-muted { font-style: italic; }
+
+/* "Continue with Google" on the login screen (build-docs/features/google-login.md). */
+.google-login { display: grid; justify-items: center; gap: 14px; margin-bottom: 16px; }
+.google-login[hidden] { display: none; }
+.auth-or-divider { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--text-muted); font-size: var(--fs-label); }
+.auth-or-divider::before, .auth-or-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }

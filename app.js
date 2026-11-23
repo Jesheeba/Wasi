@@ -770,6 +770,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // "Continue with Google" on the login screen (build-docs/features/google-login.md).
+  // Signs in an existing account (linking Google if the email matches); an
+  // unknown Google account is sent to signup, never created here.
+  async function initGoogleLogin() {
+    let clientId = null;
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/google/config`);
+      ({ clientId } = await res.json());
+    } catch (_) { return; }
+    if (!clientId) return;
+    for (let i = 0; i < 50 && !(window.google && google.accounts && google.accounts.id); i += 1) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    if (!(window.google && google.accounts && google.accounts.id)) return;
+    google.accounts.id.initialize({
+      client_id: clientId,
+      ux_mode: 'popup',
+      callback: async ({ credential }) => {
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/google`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential, intent: 'login' }),
+          });
+          const data = await res.json();
+          if (res.status === 404 && data.code === 'no_account') {
+            showToast('No Wasi account uses this Google account yet. Opening signup…', 'info');
+            setTimeout(() => { window.location.href = '/marketing/signup.html'; }, 1200);
+            return;
+          }
+          if (!res.ok) throw new Error(data.error || 'Google sign-in failed');
+          localStorage.setItem('client_token', data.token);
+          localStorage.setItem('actor_type', 'owner');
+          await enterApp(data.client, { type: 'owner', role: 'Owner', id: data.client.id });
+        } catch (err) {
+          reportError(err);
+        }
+      },
+    });
+    google.accounts.id.renderButton(document.getElementById('google-login-button'), {
+      theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill', width: 300,
+    });
+    document.getElementById('google-login').hidden = false;
+  }
+  initGoogleLogin();
+
   // item 5.5 - team-member login (PLAN.md item 1's other login surface).
   // Reuses the SAME localStorage['client_token'] key as the owner flow, not
   // a second key - authFetch already sends whatever's there with no

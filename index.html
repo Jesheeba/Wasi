@@ -42,6 +42,12 @@
       <!-- Owner login (unchanged) -->
       <div class="auth-card" id="owner-login-card">
         <h3 class="auth-title">Log In</h3>
+        <!-- "Continue with Google" (build-docs/features/google-login.md); shown only
+             when the server has GOOGLE_CLIENT_ID. Never creates an account here. -->
+        <div class="google-login" id="google-login" hidden>
+          <div id="google-login-button"></div>
+          <div class="auth-or-divider"><span>or</span></div>
+        </div>
         <form id="login-form">
           <div class="form-group">
             <label class="form-label">Email</label>
@@ -61,7 +67,7 @@
           </div>
           <button type="submit" class="btn-primary">Login</button>
           <div style="text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-main);">
-            New to Wasi? <a href="#" style="color: var(--color-primary-600); font-weight: 600; text-decoration: none;">Signup</a>
+            New to Wasi? <a href="/marketing/signup.html" style="color: var(--color-primary-600); font-weight: 600; text-decoration: none;">Signup</a>
           </div>
           <div style="text-align: center; margin-top: 0.75rem; font-size: 0.8rem;">
             <a href="#" id="show-team-login-link" style="color: var(--text-main); font-weight: 600; text-decoration: none;">Log in as a team member</a>
@@ -3246,5 +3252,6 @@
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
   <script src="app.js?v=20261123a"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
 </body>
 </html>
