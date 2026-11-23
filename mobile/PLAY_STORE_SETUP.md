@@ -17,13 +17,23 @@ Done in the repo:
   to upload: `C:\Users\JESHEEBA\wasi-android-signing\builds\wasi-1.0-vc1.aab`.
 - Listing graphics: `mobile/store-listing/app-icon-512.png`,
   `mobile/store-listing/feature-graphic-1024x500.png`.
+- Screenshots (2026-11-23): `mobile/store-listing/screenshots/` - `phone-*` (1080x1920),
+  `tablet7-*` (1200x1920), `tablet10-*` (1600x2560). Taken from the synthetic
+  "Vetri Academy (Demo)" client (`server/src/db/seedLandingDemo.js`) seeded into the
+  LOCAL embedded Postgres only, never production, so no real client data appears.
+  Re-take: seed it locally, then serve with `createApp()` on port 4000 and capture with
+  Playwright using a locally signed client token.
+- Trader status details (from sirahdigital.in/contact): Sirah Digital, 8th Floor,
+  Innovate, Featherlite - The Address, Pallavaram, Chennai 600044, Tamil Nadu, India;
+  +91 97899 61631; support@sirahdigital.in.
+- Wallet top-ups removed from the app (2026-11-23), so the only in-app payment left is
+  Settings > Subscription checkout (Razorpay). Play's payments policy may still query it.
 
 Still yours:
 - Read the privacy policy and deletion page once. They describe what the code does today
   and make two commitments you must keep: deletion within 30 days of a confirmed request,
   and email notice of significant policy changes. Legal review is still recommended.
 - The pages must be **deployed** before you paste the URLs into Play Console.
-- Phone screenshots (2 minimum) from the real app, signed in.
 - Everything from section 1 down that happens inside Play Console.
 
 ## 1. Confirm your Play Console account is in good standing
