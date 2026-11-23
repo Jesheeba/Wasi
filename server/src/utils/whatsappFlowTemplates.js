@@ -8,15 +8,21 @@
 // title <= 30 and 1-200 options, Footer label <= 35. Flow JSON version is
 // kept in one constant so a future freeze only needs one change.
 const FLOW_JSON_VERSION = '7.3';
+const liveBooking = require('./flowLiveBooking');
 
 // The flow_token Wasi sends carries our own form id, because Meta's
 // nfm_reply webhook does not include the flow id.
 const TOKEN_PREFIX = 'wasi_flow:';
-const makeFlowToken = (flowId) => `${TOKEN_PREFIX}${flowId}`;
+const makeFlowToken = (flowId, chatId) => `${TOKEN_PREFIX}${flowId}${chatId ? `:${chatId}` : ''}`;
 function flowIdFromToken(token) {
   if (typeof token !== 'string' || !token.startsWith(TOKEN_PREFIX)) return null;
-  const id = token.slice(TOKEN_PREFIX.length);
+  const id = token.slice(TOKEN_PREFIX.length, TOKEN_PREFIX.length + 36);
   return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+// Live booking tokens carry the chat too: wasi_flow:<flowId>:<chatId>.
+function chatIdFromToken(token) {
+  const m = /^wasi_flow:[0-9a-f-]{36}:([0-9a-f-]{36})$/i.exec(token || '');
+  return m ? m[1] : null;
 }
 
 // type: text | email | date | choice. maxLabel follows Meta's per-component cap.
@@ -67,12 +73,27 @@ const KINDS = {
   },
 };
 
+// booking_live (phase 2) is answered by Wasi's Flows endpoint with real free
+// slots; its config and Flow JSON live in flowLiveBooking.js. `fields` here
+// only gives the answer labels and order for describeResponse.
+KINDS.booking_live = {
+  label: 'Booking with live slots',
+  category: 'APPOINTMENT_BOOKING',
+  screen: 'DATE',
+  endpoint: true,
+  defaults: {
+    ...liveBooking.DEFAULTS,
+    fields: { name: { type: 'text', label: 'Name' }, date: { type: 'date', label: 'Date' }, slot: { type: 'text', label: 'Time' } },
+  },
+};
+
 const LIMITS = { title: 30, submitLabel: 35, text: 20, email: 20, choice: 20, date: 40, option: 30, maxOptions: 200 };
 
 // Merges a client's edits onto the kind's defaults. Only labels, options and
 // required may change; field keys and types are fixed per kind. Returns
 // { config, errors } - errors are client-readable strings.
 function normalizeConfig(kind, input = {}) {
+  if (kind === 'booking_live') return liveBooking.normalizeConfig(input);
   const def = KINDS[kind];
   if (!def) return { config: null, errors: [`Unknown form type "${kind}".`] };
   const errors = [];
@@ -103,6 +124,7 @@ function normalizeConfig(kind, input = {}) {
 }
 
 function buildFlowJson(kind, config) {
+  if (kind === 'booking_live') return liveBooking.buildFlowJson(config);
   const def = KINDS[kind];
   const children = [];
   const payload = {};
@@ -129,7 +151,7 @@ function buildFlowJson(kind, config) {
 // Turns a parsed nfm_reply response_json into readable label/value pairs.
 // Dropdown answers arrive as option ids (opt_N); map them back to the text.
 function describeResponse(flow, response) {
-  const fields = flow?.config?.fields || {};
+  const fields = flow?.config?.fields || KINDS[flow?.kind]?.defaults.fields || {};
   const rows = [];
   // The form type's field order first: config and responses are stored as
   // jsonb, which reorders keys, so neither can be trusted for order.
@@ -150,4 +172,4 @@ function describeResponse(flow, response) {
   return rows;
 }
 
-module.exports = { FLOW_JSON_VERSION, KINDS, LIMITS, normalizeConfig, buildFlowJson, describeResponse, makeFlowToken, flowIdFromToken };
+module.exports = { FLOW_JSON_VERSION, KINDS, LIMITS, normalizeConfig, buildFlowJson, describeResponse, makeFlowToken, flowIdFromToken, chatIdFromToken };

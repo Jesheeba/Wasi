@@ -1,5 +1,14 @@
 # Changelog
 
+## feat(whatsapp-flows-live): booking forms that show only free slots
+New form type "Booking with live slots".
+- The client sets days, hours, slot length, people per slot and days ahead.
+- In WhatsApp the customer picks a date and sees only the free times,
+  served by Wasi's new Flows endpoint (encrypted and signed per Meta).
+- The booking is saved under a lock, so a slot can't be overbooked.
+- The first live form creates the number's key pair: public half uploaded
+  to Meta, private half stored encrypted. Migration 101.
+
 ## feat(catalog-product-messages): send products from the Meta catalog in chat
 - Ecommerce page: set the Meta catalog ID (typed, or found via Meta when
   allowed).

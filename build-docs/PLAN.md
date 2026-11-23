@@ -45,7 +45,7 @@ steps added to build-docs/MANUAL_TESTS.md.
 6. **Built 2026-11-23**: Ad lead feedback to Meta (Conversions API) - [ctwa-conversions](features/ctwa-conversions.md)
 7. Green-tick application - same doc as 1-4
 8. **Built 2026-11-23**: Product messages from the Meta catalog - [catalog-product-messages](features/catalog-product-messages.md)
-9. Forms with a live data endpoint - [whatsapp-flows](features/whatsapp-flows.md), phase 2
+9. **Built 2026-11-23**: Forms with a live data endpoint - [whatsapp-flows](features/whatsapp-flows.md), phase 2
 
 ## Proposed (awaiting approval) - placeholder pages, 2026-11-23
 

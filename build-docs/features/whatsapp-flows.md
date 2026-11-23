@@ -33,6 +33,35 @@ As built (scope answered by the owner: fixed set, not a designer):
   `opt_N` and are mapped to their text. Field order comes from the form
   type, because jsonb reorders keys.
 
+## Phase 2: live booking (built 2026-11-23, live check pending)
+A fourth form type, "Booking with live slots" (`booking_live`), answered by
+Wasi's own Flows endpoint so customers only see free times.
+
+- **Availability:** days, opening and closing time, slot length, people per
+  slot, days ahead (1-90). Bookings start tomorrow, India time.
+  `utils/flowLiveBooking.js`.
+- **Flow JSON:** `data_api_version 3.0`, routing DATE -> SLOTS, and both
+  footers use `data_exchange`. The sent message opens with
+  `flow_action: data_exchange`. Its token is `wasi_flow:<form>:<chat>`,
+  so a booking knows the chat.
+- **Key:** an RSA-2048 key per number is created the first time a live form
+  is made. The public half is uploaded to Meta (form-urlencoded); the
+  private half is stored encrypted (`wabas.flows_private_key_encrypted`,
+  migration 101).
+- **Endpoint:** `POST /webhooks/flows/:flowId`.
+  - Meta's HMAC signature is required; returns 432 without it.
+  - A request that can't be decrypted returns 421; a token for another
+    form returns 427.
+  - Handles ping, INIT/BACK (date window), DATE (free slots, or "No free
+    times" on a closed day), and SLOTS (books, then SUCCESS with the
+    answers).
+  - Booking runs under a per-slot advisory lock and checks capacity:
+    "just taken" sends the customer back to the free slots.
+- **Records:** bookings go in `whatsapp_flow_bookings`. The final
+  `nfm_reply` arrives as a normal form response (name, date, time).
+- **Not built:** cancelling or rescheduling a booking, a bookings calendar
+  view, and reminders.
+
 Not built yet (follow-ups):
 - A FLOW button inside a template, for sending outside the 24h window.
 - Mapping answers into contact attributes.

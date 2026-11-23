@@ -1,5 +1,26 @@
 # Testing
 
+## whatsapp-flows phase 2 (live booking)
+`flowLiveBooking.test.js` (Meta faked, real RSA/AES encryption), 9/9:
+- Config limits; open days, today excluded, capacity filtering.
+- Flow JSON: data_api_version, routing model, data_exchange footers.
+- Encryption round trip matches Meta's scheme.
+- First live form uploads the key form-urlencoded, sets endpoint_uri, and
+  stores the private key encrypted; the key is uploaded only once.
+- Endpoint: unsigned 432, wrong key 421, ping, a foreign token 427; INIT
+  date window; free slots only; booking -> SUCCESS with the chat linked; a
+  taken slot is refused with the remaining slots.
+- 3 simultaneous bookings of the last place: exactly 1 wins.
+- Out-of-hours slots and past dates are refused.
+- Chat send uses data_exchange with the chat in the token.
+
+Regression, all green: whatsappFlows 17, whatsappFlowsUI 4,
+productMessages 6, chatsLastAgentReplyAt 17, metaWebhookDispatch 3,
+webhookForwarding 8, apiV1 14, whatsappQuickWins 11, woocommerce 13,
+chatUiPass 15. chatUiPass first showed 2 failures, then a port-in-use
+abort: the other Claude session was starting its own server on :4000
+mid-run. A clean re-run passed 15/15.
+
 ## catalog-product-messages
 `productMessages.test.js` (Meta faked), 6/6:
 - Builder: product, list (deduplicated, 30 max, heading required, section

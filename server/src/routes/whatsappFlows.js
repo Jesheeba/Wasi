@@ -9,7 +9,8 @@ const { requireRole } = require('../middleware/requireRole');
 const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
-const { decrypt } = require('../utils/encryption');
+const { encrypt, decrypt } = require('../utils/encryption');
+const liveBooking = require('../utils/flowLiveBooking');
 const tpl = require('../utils/whatsappFlowTemplates');
 
 const router = Router();
@@ -17,7 +18,7 @@ const manage = requireRole('Admin', 'Manager');
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['lead', 'booking', 'survey']),
+  kind: z.enum(['lead', 'booking', 'survey', 'booking_live']),
   config: z.record(z.any()).optional(),
 });
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100).optional(), config: z.record(z.any()).optional() });
@@ -38,6 +39,20 @@ async function wabaWithToken(clientId) {
   const waba = await wabasRepo.findByClientId(clientId);
   if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) return null;
   return { waba, token: decrypt(waba.access_token_encrypted) };
+}
+
+// Live forms (booking_live): Meta encrypts calls to Wasi's endpoint with a
+// per-number RSA key. Created and uploaded once, the first time it's needed;
+// the private half is stored encrypted. The endpoint URL must be public https.
+async function ensureLiveFormSetup(conn) {
+  const base = String(process.env.APP_URL || '').replace(/\/+$/, '');
+  if (!base.startsWith('https://')) throw new Error('This Wasi server has no public https address (APP_URL), so WhatsApp cannot reach live forms.');
+  if (!conn.waba.flows_private_key_encrypted) {
+    const { publicKey, privateKey } = liveBooking.generateKeyPair();
+    await metaClient.uploadFlowsPublicKey(conn.waba.phone_number_id, conn.token, publicKey);
+    await wabasRepo.setFlowsKey(conn.waba.id, encrypt(privateKey));
+  }
+  return base;
 }
 
 const shape = (f) => ({ ...f, kindLabel: tpl.KINDS[f.kind]?.label, screen: tpl.KINDS[f.kind]?.screen });
@@ -61,8 +76,9 @@ async function createForm(req, res, input) {
   const flow = await whatsappFlowsRepo.create(req.db, req.clientId, { name: input.name, kind: input.kind, config });
   const flowJson = tpl.buildFlowJson(input.kind, config);
   try {
+    const endpointUri = tpl.KINDS[input.kind].endpoint ? `${await ensureLiveFormSetup(conn)}/webhooks/flows/${flow.id}` : undefined;
     const created = await metaClient.createFlow(conn.waba.waba_id, conn.token, {
-      name: input.name, categories: [tpl.KINDS[input.kind].category], flowJson,
+      name: input.name, categories: [tpl.KINDS[input.kind].category], flowJson, endpointUri,
     });
     const saved = await whatsappFlowsRepo.update(req.db, req.clientId, flow.id, {
       meta_flow_id: created.id, flow_json: flowJson, status: 'draft', last_error: validationText(created.validation_errors),

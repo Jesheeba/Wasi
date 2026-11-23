@@ -92,7 +92,13 @@ async function setCommerceCatalogId(id, catalogId) {
   await pool.query('update wabas set commerce_catalog_id = $2 where id = $1', [id, catalogId]);
 }
 
+// Forms with live data: encrypted private key for the Flows endpoint (101).
+async function setFlowsKey(id, privateKeyEncrypted) {
+  await pool.query('update wabas set flows_private_key_encrypted = $2, flows_key_uploaded_at = now() where id = $1', [id, privateKeyEncrypted]);
+}
+
 module.exports = {
+  setFlowsKey,
   setCommerceCatalogId,
   setCtwaDatasetId,
   markTemplateInsightsEnabled, findByClientId, findById, findByWabaId, findAnyConnected, listAllWithClient, upsertForClient };

@@ -371,7 +371,11 @@ router.post('/:id/forms', requireRole('Admin', 'Manager', 'Agent'), asyncHandler
     const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, {
       type: 'flow', body: data.body,
       flow: {
-        name: flow.name, metaFlowId: flow.meta_flow_id, flowToken: flowTemplates.makeFlowToken(flow.id),
+        // Live forms (endpoint kinds) carry the chat in the token so a booking
+        // knows who made it, and open with data_exchange (endpoint INIT).
+        name: flow.name, metaFlowId: flow.meta_flow_id,
+        flowToken: flowTemplates.makeFlowToken(flow.id, flowTemplates.KINDS[flow.kind].endpoint ? chat.id : undefined),
+        action: flowTemplates.KINDS[flow.kind].endpoint ? 'data_exchange' : 'navigate',
         cta: data.cta, screen: flowTemplates.KINDS[flow.kind].screen, mode: flow.status === 'draft' ? 'draft' : 'published',
       },
     }, { release: req.commitAndRelease, reacquire: req.reacquireDb });

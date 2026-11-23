@@ -1067,11 +1067,28 @@ function parseTemplateComponents(components) {
 // Creates the flow as a DRAFT with its JSON inline. Meta returns
 // { id, success, validation_errors } - success can be true even when the
 // JSON has validation errors, so callers must check that list.
-async function createFlow(wabaId, accessToken, { name, categories, flowJson }) {
+async function createFlow(wabaId, accessToken, { name, categories, flowJson, endpointUri }) {
   return graphFetch(`/${wabaId}/flows`, {
     method: 'POST', accessToken,
-    body: { name, categories, flow_json: JSON.stringify(flowJson) },
+    body: { name, categories, flow_json: JSON.stringify(flowJson), ...(endpointUri ? { endpoint_uri: endpointUri } : {}) },
   });
+}
+
+// Forms with live data: the public half of the key Meta encrypts endpoint
+// calls with. Meta requires a form-urlencoded body here, not JSON.
+async function uploadFlowsPublicKey(phoneNumberId, accessToken, publicKeyPem) {
+  const res = await fetchWithTimeout(`${GRAPH_BASE}/${phoneNumberId}/whatsapp_business_encryption`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ business_public_key: publicKeyPem }).toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(data?.error?.message || `Meta key upload failed (${res.status})`);
+    error.metaError = data?.error || null;
+    throw error;
+  }
+  return data;
 }
 
 // Replaces a DRAFT flow's JSON (published flows can't be changed).
@@ -1100,10 +1117,12 @@ const getFlow = (flowId, accessToken) => graphFetch(`/${flowId}?fields=id,name,s
 // Interactive flow message - free-form, so only inside the 24h window
 // (messagingService enforces it). flow_message_version "3" is required.
 // mode 'draft' lets an unpublished flow be tested; it shows a draft banner.
-async function sendFlowMessage(phoneNumberId, accessToken, toPhone, { bodyText, cta, flowId, flowToken, screen, mode }) {
+// action 'data_exchange' (live forms): WhatsApp asks Wasi's endpoint for the
+// first screen (INIT) instead of opening a fixed screen.
+async function sendFlowMessage(phoneNumberId, accessToken, toPhone, { bodyText, cta, flowId, flowToken, screen, mode, action = 'navigate' }) {
   const parameters = {
-    flow_message_version: '3', flow_token: flowToken, flow_id: flowId, flow_cta: cta,
-    flow_action: 'navigate', flow_action_payload: { screen },
+    flow_message_version: '3', flow_token: flowToken, flow_id: flowId, flow_cta: cta, flow_action: action,
+    ...(action === 'navigate' ? { flow_action_payload: { screen } } : {}),
   };
   if (mode === 'draft') parameters.mode = 'draft';
   const data = await graphFetch(`/${phoneNumberId}/messages`, {
@@ -1252,6 +1271,7 @@ module.exports = {
   getOfficialBusinessAccount,
   applyOfficialBusinessAccount,
   createFlow,
+  uploadFlowsPublicKey,
   updateFlowJson,
   publishFlow,
   deprecateFlow,

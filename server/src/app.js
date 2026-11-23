@@ -36,6 +36,7 @@ const whatsappFlowsRouter = require('./routes/whatsappFlows');
 const ecommerceRouter = require('./routes/ecommerce');
 const wooWebhookRouter = require('./routes/wooWebhook');
 const whatsappToolsRouter = require('./routes/whatsappTools');
+const flowsEndpointRouter = require('./routes/flowsEndpoint');
 const teamMembersRouter = require('./routes/teamMembers');
 const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
@@ -203,6 +204,7 @@ function createApp() {
   app.use('/webhooks/meta', webhookLimiter, metaWebhookRouter);
   app.use('/webhooks/razorpay', webhookLimiter, razorpayWebhookRouter);
   app.use('/webhooks/woocommerce', webhookLimiter, wooWebhookRouter);
+  app.use('/webhooks/flows', webhookLimiter, flowsEndpointRouter);
 
   // Admin-only: internal team, gated by admin JWT.
   app.use('/api/clients', requireAdminAuth(), clientsRouter);

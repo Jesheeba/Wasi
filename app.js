@@ -8662,7 +8662,7 @@ document.addEventListener('DOMContentLoaded', () => {
     blocked: { cls: 'badge-danger', text: 'Blocked' },
     throttled: { cls: 'badge-warning', text: 'Throttled' },
   };
-  const WA_KIND_ICON = { lead: 'user-plus', booking: 'calendar', survey: 'star' };
+  const WA_KIND_ICON = { lead: 'user-plus', booking: 'calendar', survey: 'star', booking_live: 'calendar-clock' };
   const waFormState = { forms: [], kinds: [], editing: null, kind: 'lead' };
   const canManageForms = () => state.actorRole !== 'Agent';
 
@@ -8708,7 +8708,49 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshIcons();
   }
 
+  // Live booking forms (booking_live): availability instead of field wording.
+  const LIVE_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function renderLiveFields(config) {
+    const def = waKindDef().defaults;
+    const c = { ...def, ...(config || {}) };
+    document.getElementById('wa-form-title').value = c.title;
+    document.getElementById('wa-form-submit').value = c.submitLabel;
+    document.getElementById('wa-form-fields').innerHTML = `
+      <fieldset class="wa-form-field" data-live-fields>
+        <legend class="form-label">When can people book?</legend>
+        <div class="live-days" role="group" aria-label="Booking days">
+          ${LIVE_DAYS.map((d, i) => `<label class="live-day"><input type="checkbox" data-live-day="${i}" ${c.days.includes(i) ? 'checked' : ''} /> ${d}</label>`).join('')}
+        </div>
+        <div class="live-grid">
+          <div class="form-group"><label class="form-label" for="live-start">Opens</label><input type="time" id="live-start" class="form-input" value="${esc(c.start)}" /></div>
+          <div class="form-group"><label class="form-label" for="live-end">Closes</label><input type="time" id="live-end" class="form-input" value="${esc(c.end)}" /></div>
+          <div class="form-group"><label class="form-label" for="live-slot">Slot length</label>
+            <select id="live-slot" class="form-input">${[15, 20, 30, 45, 60, 90, 120].map((m) => `<option value="${m}" ${m === c.slotMinutes ? 'selected' : ''}>${m} minutes</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label" for="live-capacity">People per slot</label><input type="number" id="live-capacity" class="form-input" min="1" max="50" value="${esc(c.capacity)}" /></div>
+          <div class="form-group"><label class="form-label" for="live-ahead">Bookable days ahead</label><input type="number" id="live-ahead" class="form-input" min="1" max="90" value="${esc(c.daysAhead)}" /></div>
+        </div>
+        <p class="form-hint">Customers see only free times. Bookings start from tomorrow (India time).</p>
+      </fieldset>
+      <fieldset class="wa-form-field">
+        <div class="form-group"><label class="form-label" for="live-date-label">Date question</label><input type="text" id="live-date-label" class="form-input" maxlength="40" value="${esc(c.dateLabel)}" /></div>
+        <div class="form-group"><label class="form-label" for="live-slot-label">Time question</label><input type="text" id="live-slot-label" class="form-input" maxlength="20" value="${esc(c.slotLabel)}" /></div>
+        <div class="form-group"><label class="form-label" for="live-name-label">Name question</label><input type="text" id="live-name-label" class="form-input" maxlength="20" value="${esc(c.nameLabel)}" /></div>
+      </fieldset>`;
+    renderWaFormPreview();
+  }
+  function readLiveConfig() {
+    const v = (id) => document.getElementById(id).value;
+    return {
+      title: v('wa-form-title'), submitLabel: v('wa-form-submit'),
+      dateLabel: v('live-date-label'), slotLabel: v('live-slot-label'), nameLabel: v('live-name-label'),
+      days: [...document.querySelectorAll('[data-live-day]:checked')].map((x) => Number(x.dataset.liveDay)),
+      start: v('live-start'), end: v('live-end'),
+      slotMinutes: Number(v('live-slot')), capacity: Number(v('live-capacity')), daysAhead: Number(v('live-ahead')),
+    };
+  }
+
   function waFormCurrentConfig() {
+    if (waFormState.kind === 'booking_live') return readLiveConfig();
     const fields = {};
     document.querySelectorAll('#wa-form-fields [data-wa-field]').forEach((box) => {
       const field = {
@@ -8732,6 +8774,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderWaFormPreview() {
     const cfg = waFormCurrentConfig();
+    if (waFormState.kind === 'booking_live') {
+      document.getElementById('wa-form-preview').innerHTML = `<div class="wa-form-preview-title">${esc(cfg.title)}</div>
+        <div class="wa-form-preview-field"><span>${esc(cfg.dateLabel)}</span><span class="wa-form-preview-input">Pick a date</span></div>
+        <div class="wa-form-preview-field"><span>${esc(cfg.slotLabel)}</span><span class="wa-form-preview-input">Only free times, e.g. ${esc(cfg.start)} ▾</span></div>
+        <div class="wa-form-preview-field"><span>${esc(cfg.nameLabel)}</span><span class="wa-form-preview-input"></span></div>
+        <div class="wa-form-preview-btn">${esc(cfg.submitLabel)}</div>`;
+      return;
+    }
     const defs = waKindDef()?.defaults.fields || {};
     const rows = Object.entries(cfg.fields).map(([key, fdef]) => {
       const type = defs[key]?.type;
@@ -8743,6 +8793,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderWaFormFields(config) {
+    if (waFormState.kind === 'booking_live') { renderLiveFields(config); return; }
     const kindDef = waKindDef();
     const cfg = config || kindDef.defaults;
     document.getElementById('wa-form-title').value = cfg.title;

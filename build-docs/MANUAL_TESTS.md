@@ -181,3 +181,26 @@ least 2 products and their SKUs (content IDs).
    - Expect: the chat in Wasi shows "Cart sent" with the item and total.
 
 Status: PENDING
+
+## 13. Booking forms with live free slots
+Deploy first (migration 101). Do test 1 (basic Forms) first: this builds
+on it.
+1. Forms > New form > "Booking with live slots". Name it "Wasi Demo
+   Booking". Pick days, 10:00-12:00, 30 minutes, 1 person per slot. Click
+   Create draft.
+   - Expect: a Draft row with no "WhatsApp reported" line. If there is one,
+     send me the text: it is Meta checking the form.
+2. From 9092766740, send "hi" to the demo number. In Wasi, open the chat >
+   More actions > Send form > pick it > Send.
+3. On the phone, open the form and pick tomorrow.
+   - Expect: only 10:00, 10:30, 11:00 and 11:30 appear.
+4. Pick 10:00, enter a name, and book.
+   - Expect: a confirmation in WhatsApp, and "Form submitted" with name,
+     date and time in the Wasi chat.
+5. Send the form again, pick the same day.
+   - Expect: 10:00 is gone.
+
+If step 3 shows an error inside WhatsApp, tell me what it says: it usually
+means Meta could not reach or decrypt the endpoint.
+
+Status: PENDING

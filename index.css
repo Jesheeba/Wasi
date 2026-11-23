@@ -3350,3 +3350,8 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .catalog-card .settings-inline-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .catalog-card .settings-inline-row .form-input { flex: 1 1 220px; min-width: 0; }
 #send-products-form [hidden] { display: none; }
+
+/* Live booking forms (build-docs/features/whatsapp-flows.md, phase 2). */
+.live-days { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0 12px; }
+.live-day { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; }
+.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0 12px; }

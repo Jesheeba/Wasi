@@ -249,6 +249,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     } else if (type === 'flow') {
       metaMessageId = await metaClient.sendFlowMessage(waba.phone_number_id, accessToken, toPhone, {
         bodyText: body, cta: flow.cta, flowId: flow.metaFlowId, flowToken: flow.flowToken, screen: flow.screen, mode: flow.mode,
+        action: flow.action,
       });
     } else if (type === 'interactive') {
       // Two distinct interactive shapes share type: 'interactive' - a
