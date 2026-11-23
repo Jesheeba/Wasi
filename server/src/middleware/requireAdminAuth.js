@@ -45,4 +45,20 @@ function requireAdminAuth() {
   };
 }
 
-module.exports = { requireAdminAuth };
+// `admin_users.role` (super_admin/support/billing/platform_admin, migration
+// 017) was validated on create but never checked by any route - every admin
+// token had identical access regardless of role (CLAUDE.md Known Gaps). This
+// is the enforcement point: mount after requireAdminAuth() (which sets
+// req.adminRole from the token) on any route that should be narrower than
+// "any admin". super_admin/platform_admin are expected to be in every
+// allowList this app defines - they're the two full-access roles.
+function requireAdminRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!allowedRoles.includes(req.adminRole)) {
+      return res.status(403).json({ error: 'Your admin role does not have access to this action' });
+    }
+    next();
+  };
+}
+
+module.exports = { requireAdminAuth, requireAdminRole };

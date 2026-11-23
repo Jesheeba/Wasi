@@ -9,10 +9,21 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, clientCreateSchema, clientUpdateSchema } = require('../utils/validate');
 const { hashPassword } = require('../utils/auth');
 const { slugify } = require('../utils/slug');
+const { requireAdminRole } = require('../middleware/requireAdminAuth');
 
 const router = Router();
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+// Role policy, same decision as routes/admin.js: client visibility, creation
+// and status management is routine support/operational work; resetting a
+// client's login password and deleting a client outright are the two most
+// destructive actions on this router (credential issuance and irreversible
+// data loss, respectively), restricted to the full-access roles; marking a
+// client paid/unpaid is billing policy.
+const supportOrFull = requireAdminRole('super_admin', 'platform_admin', 'support');
+const billingOrFull = requireAdminRole('super_admin', 'platform_admin', 'billing');
+const fullOnly = requireAdminRole('super_admin', 'platform_admin');
 
 // clientsRepo.findById/create/update already exclude password_hash from
 // what they select/return (see clientsRepo.js) - this is now a no-op
@@ -26,11 +37,11 @@ function generatePassword() {
   return crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
 }
 
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', supportOrFull, asyncHandler(async (req, res) => {
   res.json((await clientsRepo.list(pool)).map(omitPasswordHash));
 }));
 
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', supportOrFull, asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const client = await clientsRepo.findById(pool, req.params.id);
   if (!client) return res.status(404).json({ error: 'Not found' });
@@ -43,7 +54,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 // (auto-generated if omitted). The plaintext password is returned exactly
 // once in this response, never stored or logged, so the admin can hand it
 // to the client immediately.
-router.post('/', asyncHandler(async (req, res) => {
+router.post('/', supportOrFull, asyncHandler(async (req, res) => {
   const data = clientCreateSchema.parse(req.body);
 
   const existing = await clientsRepo.findByEmail(pool, data.email);
@@ -102,7 +113,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // field on PATCH - clientUpdateSchema has no password_hash column to set
 // (see validate.js) and this should never be reachable by silently including
 // a password in an otherwise-unrelated update.
-router.post('/:id/reset-password', asyncHandler(async (req, res) => {
+router.post('/:id/reset-password', fullOnly, asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const existing = await clientsRepo.findById(pool, req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -126,7 +137,7 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
 // flipping Service off/on is exactly the kind of action that needs a paper
 // trail (see this feature's own visible-not-just-reachable requirement for
 // pending suspensions).
-router.patch('/:id', asyncHandler(async (req, res) => {
+router.patch('/:id', supportOrFull, asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const data = clientUpdateSchema.parse(req.body);
   const existing = await clientsRepo.findById(pool, req.params.id);
@@ -171,7 +182,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
 // Service if THIS mechanism, not an unrelated manual suspension, was what
 // suspended it - see auto_suspended_for_nonpayment's own comment above and
 // in migration 068).
-router.post('/:id/payment-status', asyncHandler(async (req, res) => {
+router.post('/:id/payment-status', billingOrFull, asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const paid = z.boolean().parse(req.body.paid);
   const existing = await clientsRepo.findById(pool, req.params.id);
@@ -204,7 +215,7 @@ router.post('/:id/payment-status', asyncHandler(async (req, res) => {
 // NOTE: deletes cascade to every tenant table for this client (contacts, chats,
 // messages, everything). Fine for a dev scaffold - a real admin panel needs a
 // soft-delete/confirmation gate before this ships.
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', fullOnly, asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
   const deleted = await clientsRepo.remove(pool, req.params.id);
   if (!deleted) return res.status(404).json({ error: 'Not found' });

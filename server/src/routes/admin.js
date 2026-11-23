@@ -29,9 +29,25 @@ const { hashPassword } = require('../utils/auth');
 const { sendEmail } = require('../utils/emailService');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { templateStatusUpdateSchema, ticketStatusUpdateSchema, hubForwardConfigSchema, resolveWabaSchema } = require('../utils/validate');
+const { requireAdminRole } = require('../middleware/requireAdminAuth');
 const { z } = require('zod');
 
 const router = Router();
+
+// Role policy (CLAUDE.md Known Gaps, closed here) - agreed with the account
+// owner, not guessed: super_admin/platform_admin keep full access to every
+// route unchanged. support gets client/operational visibility and actions;
+// billing gets billing/payment visibility and actions; neither gets
+// admin-user management, API key minting/revocation, webhook secret
+// regeneration, test alerts, data-deletion completion, or the Meta template
+// library's admin-triggered refresh - every one of those either grants
+// durable access, mints/rotates a credential, or can destroy data.
+const FULL_ROLES = ['super_admin', 'platform_admin'];
+const SUPPORT_ROLES = [...FULL_ROLES, 'support'];
+const BILLING_ROLES = [...FULL_ROLES, 'billing'];
+const fullOnly = requireAdminRole(...FULL_ROLES);
+const supportOrFull = requireAdminRole(...SUPPORT_ROLES);
+const billingOrFull = requireAdminRole(...BILLING_ROLES);
 
 // Strips both secrets a wabas row can carry (Meta access token, hub-forward
 // signing secret) from any response - used by every route that returns a
@@ -59,7 +75,7 @@ router.get('/overview', asyncHandler(async (req, res) => {
 }));
 
 // --- Onboarding queue: anyone not yet fully active ---
-router.get('/onboarding-queue', asyncHandler(async (req, res) => {
+router.get('/onboarding-queue', supportOrFull, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select c.id, c.name, c.email, c.status as client_status, c.created_at,
            s.status as subscription_status, s.plan,
@@ -87,7 +103,7 @@ router.get('/onboarding-queue', asyncHandler(async (req, res) => {
 }));
 
 // --- WABA health monitor across all tenants ---
-router.get('/wabas', asyncHandler(async (req, res) => {
+router.get('/wabas', supportOrFull, asyncHandler(async (req, res) => {
   const rows = await wabasRepo.listAllWithClient();
   res.json(rows.map(maskWaba));
 }));
@@ -118,7 +134,7 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
 }));
 
 // --- Manual retry: re-pull phone number status from Meta for a connected WABA ---
-router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => {
+router.post('/clients/:id/retry-provisioning', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
 
@@ -161,7 +177,7 @@ router.post('/clients/:id/retry-provisioning', asyncHandler(async (req, res) => 
 }));
 
 // --- Manual refresh: pull the real messaging tier from Meta right now ---
-router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res) => {
+router.post('/clients/:id/refresh-messaging-tier', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
   if (!waba || !waba.access_token_encrypted) {
@@ -188,7 +204,7 @@ router.post('/clients/:id/refresh-messaging-tier', asyncHandler(async (req, res)
 // (wabas.sendable is the combined verdict; wabas.probe_sendable is the raw
 // probe result alone - see migration 076's header comment for why both
 // exist). ---
-router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
+router.post('/clients/:id/check-sendability', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const waba = await wabasRepo.findByClientId(id);
   if (!waba || !waba.access_token_encrypted) {
@@ -216,7 +232,7 @@ router.post('/clients/:id/check-sendability', asyncHandler(async (req, res) => {
 // this route completes the connection with the SAME completion logic the
 // normal client-facing route uses (wabaConnectionService.completeWabaConnection),
 // just fed admin-chosen ids instead of discovered/popup-supplied ones.
-router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
+router.post('/clients/:id/resolve-waba', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { wabaId, phoneNumberId } = resolveWabaSchema.parse(req.body);
 
@@ -303,11 +319,11 @@ router.post('/clients/:id/resolve-waba', asyncHandler(async (req, res) => {
 }));
 
 // --- Meta data-deletion requests (spec §10 compliance) ---
-router.get('/data-deletion-requests', asyncHandler(async (req, res) => {
+router.get('/data-deletion-requests', fullOnly, asyncHandler(async (req, res) => {
   res.json(await dataDeletionRequestsRepo.listPending());
 }));
 
-router.post('/data-deletion-requests/:code/complete', asyncHandler(async (req, res) => {
+router.post('/data-deletion-requests/:code/complete', fullOnly, asyncHandler(async (req, res) => {
   const request = await dataDeletionRequestsRepo.markCompleted(req.params.code);
   if (!request) return res.status(404).json({ error: 'Unknown confirmation code' });
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'data_deletion_completed', target: req.params.code });
@@ -321,11 +337,11 @@ router.get('/audit-log', asyncHandler(async (req, res) => {
 }));
 
 // --- Admin team management ---
-router.get('/admin-users', asyncHandler(async (req, res) => {
+router.get('/admin-users', fullOnly, asyncHandler(async (req, res) => {
   res.json(await adminUsersRepo.list());
 }));
 
-router.post('/admin-users', asyncHandler(async (req, res) => {
+router.post('/admin-users', fullOnly, asyncHandler(async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
@@ -355,7 +371,7 @@ router.post('/admin-users', asyncHandler(async (req, res) => {
 }));
 
 // --- Billing (spec §5 "Billing" row) ---
-router.get('/billing/overview', asyncHandler(async (req, res) => {
+router.get('/billing/overview', billingOrFull, asyncHandler(async (req, res) => {
   const [subscriptions, plans] = await Promise.all([subscriptionsRepo.listAllWithClient(pool), plansRepo.list()]);
   const priceByPlan = Object.fromEntries(plans.map((p) => [p.id, p.price_inr]));
   const active = subscriptions.filter((s) => s.status === 'active');
@@ -377,12 +393,12 @@ router.get('/billing/overview', asyncHandler(async (req, res) => {
 // --- Templates Review (spec §5 "Templates Review" row) ---
 const TEMPLATE_STATUSES = ['approved', 'pending', 'rejected', 'paused', 'disabled', 'pending_deletion', 'in_appeal'];
 
-router.get('/templates', asyncHandler(async (req, res) => {
+router.get('/templates', supportOrFull, asyncHandler(async (req, res) => {
   const status = TEMPLATE_STATUSES.includes(req.query.status) ? req.query.status : null;
   res.json(await messageTemplatesRepo.listAll(pool, status));
 }));
 
-router.patch('/templates/:id', asyncHandler(async (req, res) => {
+router.patch('/templates/:id', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { status } = templateStatusUpdateSchema.parse(req.body);
   const template = await messageTemplatesRepo.updateStatus(pool, id, status);
@@ -392,12 +408,12 @@ router.patch('/templates/:id', asyncHandler(async (req, res) => {
 }));
 
 // --- Support / Tickets (spec §5 "Support / Tickets" row) ---
-router.get('/tickets', asyncHandler(async (req, res) => {
+router.get('/tickets', supportOrFull, asyncHandler(async (req, res) => {
   const status = ['open', 'in_progress', 'resolved', 'closed'].includes(req.query.status) ? req.query.status : null;
   res.json(await supportTicketsRepo.listAll(pool, status));
 }));
 
-router.patch('/tickets/:id', asyncHandler(async (req, res) => {
+router.patch('/tickets/:id', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { status } = ticketStatusUpdateSchema.parse(req.body);
   const ticket = await supportTicketsRepo.updateStatus(pool, id, status);
@@ -411,7 +427,7 @@ router.patch('/tickets/:id', asyncHandler(async (req, res) => {
 // same trust tier as creating an admin user above. Full list of keys across
 // every tenant, since this is inherently a cross-tenant admin view (spec
 // §6 "API keys - which app, which tenant, revoke").
-router.get('/api-keys', asyncHandler(async (req, res) => {
+router.get('/api-keys', fullOnly, asyncHandler(async (req, res) => {
   const clientId = req.query.client_id ? z.string().uuid().parse(req.query.client_id) : null;
   if (clientId) return res.json(await apiKeysRepo.listByClientId(pool, clientId));
   const { rows } = await pool.query(`
@@ -426,7 +442,7 @@ router.get('/api-keys', asyncHandler(async (req, res) => {
 // Raw key is returned exactly once, here - never retrievable again after
 // this response, same "show once" rule as everything else that generates a
 // secret in this codebase.
-router.post('/api-keys', asyncHandler(async (req, res) => {
+router.post('/api-keys', fullOnly, asyncHandler(async (req, res) => {
   const schema = z.object({ client_id: z.string().uuid(), app_name: z.string().min(1) });
   const { client_id, app_name } = schema.parse(req.body);
   const client = await clientsRepo.findById(pool, client_id);
@@ -449,7 +465,7 @@ router.post('/api-keys', asyncHandler(async (req, res) => {
 // Idempotent by construction: a client with any non-revoked key is skipped,
 // so clicking this twice (or after some clients already got one manually)
 // never creates a second live key for someone who's already covered.
-router.post('/api-keys/backfill', asyncHandler(async (req, res) => {
+router.post('/api-keys/backfill', fullOnly, asyncHandler(async (req, res) => {
   const { rows: allClients } = await pool.query(`select id, name from clients order by created_at asc`);
   const { rows: withActiveKey } = await pool.query(`select distinct client_id from api_keys where revoked_at is null`);
   const haveKey = new Set(withActiveKey.map((r) => r.client_id));
@@ -465,7 +481,7 @@ router.post('/api-keys/backfill', asyncHandler(async (req, res) => {
   res.json({ issued, alreadyHadKey: allClients.length - missing.length });
 }));
 
-router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
+router.post('/api-keys/:id/revoke', fullOnly, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const schema = z.object({ client_id: z.string().uuid() });
   const { client_id } = schema.parse(req.body);
@@ -481,7 +497,7 @@ router.post('/api-keys/:id/revoke', asyncHandler(async (req, res) => {
 // that never actually removes the row; that's intentional (see migration
 // 034_api_key_soft_delete.js) - DELETE is still the correct HTTP semantics
 // from the caller's point of view, since the key permanently leaves the list.
-router.delete('/api-keys/:id', asyncHandler(async (req, res) => {
+router.delete('/api-keys/:id', fullOnly, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const schema = z.object({ client_id: z.string().uuid() });
   const { client_id } = schema.parse(req.body);
@@ -500,7 +516,7 @@ router.delete('/api-keys/:id', asyncHandler(async (req, res) => {
 // above, since a hub-connected consuming app is set up by Sirah's own
 // team, not self-served. events is required (hubForwardConfigSchema),
 // not defaulted - see migration 015_explicit_forward_events.js.
-router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
+router.post('/clients/:id/hub-forward', supportOrFull, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const { forward_to_url, events } = hubForwardConfigSchema.parse(req.body);
 
@@ -521,7 +537,7 @@ router.post('/clients/:id/hub-forward', asyncHandler(async (req, res) => {
 // already queued keep using their snapshotted target_secret - see migration
 // 014_hub_capability.js's comment - only future deliveries are affected).
 // The frontend must warn before calling this.
-router.post('/clients/:id/hub-forward/regenerate-secret', asyncHandler(async (req, res) => {
+router.post('/clients/:id/hub-forward/regenerate-secret', fullOnly, asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const existing = await wabasRepo.findByClientId(id);
   if (!existing || !existing.forward_to_url) return res.status(404).json({ error: 'No hub forwarding configured for this client yet' });
@@ -575,7 +591,7 @@ router.get('/clients-overview', asyncHandler(async (req, res) => {
 // (see messagingTierRefreshRunner.js) - 'unknown' means Meta was checked but
 // didn't return the field, null means never checked yet; still never a
 // guessed value. ---
-router.get('/health', asyncHandler(async (req, res) => {
+router.get('/health', supportOrFull, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select c.id as client_id, c.name as client_name, c.tenant_slug,
            w.id as waba_row_id, w.waba_id, w.status as waba_status,
@@ -598,7 +614,7 @@ router.get('/health', asyncHandler(async (req, res) => {
 }));
 
 // --- Payment reminder audit ---
-router.get('/payment-notifications', asyncHandler(async (req, res) => {
+router.get('/payment-notifications', billingOrFull, asyncHandler(async (req, res) => {
   const { status, kind, clientId, limit } = req.query;
   const [rows, summary] = await Promise.all([
     paymentNotificationsRepo.list({ status, kind, clientId, limit }),
@@ -615,11 +631,11 @@ const scheduleCreateSchema = z.object({
   send_hour: z.number().int().min(0).max(23).default(10),
 });
 
-router.get('/payment-notifications/schedules', asyncHandler(async (req, res) => {
+router.get('/payment-notifications/schedules', billingOrFull, asyncHandler(async (req, res) => {
   res.json(await paymentReminderSchedulesRepo.list());
 }));
 
-router.post('/payment-notifications/schedules', asyncHandler(async (req, res) => {
+router.post('/payment-notifications/schedules', billingOrFull, asyncHandler(async (req, res) => {
   const body = scheduleCreateSchema.parse(req.body);
   const schedule = await paymentReminderSchedulesRepo.create({ ...body, created_by: req.adminId });
   await auditLogRepo.record({
@@ -629,7 +645,7 @@ router.post('/payment-notifications/schedules', asyncHandler(async (req, res) =>
   res.status(201).json(schedule);
 }));
 
-router.patch('/payment-notifications/schedules/:id', asyncHandler(async (req, res) => {
+router.patch('/payment-notifications/schedules/:id', billingOrFull, asyncHandler(async (req, res) => {
   const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
   const schedule = await paymentReminderSchedulesRepo.setEnabled(req.params.id, enabled);
   if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
@@ -640,7 +656,7 @@ router.patch('/payment-notifications/schedules/:id', asyncHandler(async (req, re
   res.json(schedule);
 }));
 
-router.delete('/payment-notifications/schedules/:id', asyncHandler(async (req, res) => {
+router.delete('/payment-notifications/schedules/:id', billingOrFull, asyncHandler(async (req, res) => {
   const ok = await paymentReminderSchedulesRepo.remove(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Schedule not found' });
   await auditLogRepo.record({
@@ -653,7 +669,7 @@ router.delete('/payment-notifications/schedules/:id', asyncHandler(async (req, r
 // Outward-facing, so the UI gates it behind an explicit confirm and this
 // route refuses without { confirm: true }. Sequential, with a per-client
 // failure boundary; every attempt (including a failed one) is logged.
-router.post('/payment-notifications/send-reminders', asyncHandler(async (req, res) => {
+router.post('/payment-notifications/send-reminders', billingOrFull, asyncHandler(async (req, res) => {
   if (req.body?.confirm !== true) return res.status(400).json({ error: 'Send requires { "confirm": true }.' });
   const clients = await clientsRepo.listActive(pool);
   let sent = 0;
@@ -687,7 +703,7 @@ router.get('/alerting-status', asyncHandler(async (req, res) => {
 // clearly-labeled alert and relays its real per-channel result - including
 // Resend's or Meta's exact error text - back to the admin UI, rather than
 // a bare success/failure toast.
-router.post('/alerts/test', asyncHandler(async (req, res) => {
+router.post('/alerts/test', fullOnly, asyncHandler(async (req, res) => {
   const result = await alertNotifier.notify({
     alert_type: 'test_alert',
     severity: 'info',
@@ -698,7 +714,7 @@ router.post('/alerts/test', asyncHandler(async (req, res) => {
 }));
 
 // --- Volume: sends per client per day ---
-router.get('/volume', asyncHandler(async (req, res) => {
+router.get('/volume', supportOrFull, asyncHandler(async (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
   const { rows } = await pool.query(
     `select u.client_id, c.name as client_name, u.date, u.messages_sent, u.messages_received, u.conversations_billed
@@ -715,7 +731,7 @@ router.get('/volume', asyncHandler(async (req, res) => {
 // Read-only aggregation over tables that already exist (usage_logs, clients,
 // webhook_deliveries, api_keys) - no new tables. `days` follows the same
 // clamped rolling-window convention as /volume above, for consistency. ---
-router.get('/stats', asyncHandler(async (req, res) => {
+router.get('/stats', supportOrFull, asyncHandler(async (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
 
   const [
@@ -787,7 +803,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
 
 // --- Failures: failed sends with Meta error codes, webhook_deliveries in
 // terminal failed state ---
-router.get('/failures/sends', asyncHandler(async (req, res) => {
+router.get('/failures/sends', supportOrFull, asyncHandler(async (req, res) => {
   const authOnly = req.query.auth_only === 'true';
   const { rows } = await pool.query(
     `select m.id, m.client_id, c.name as client_name, m.chat_id, m.body, m.error_reason, m.meta_error_code, m.sent_at
@@ -801,7 +817,7 @@ router.get('/failures/sends', asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
-router.get('/failures/webhook-deliveries', asyncHandler(async (req, res) => {
+router.get('/failures/webhook-deliveries', supportOrFull, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select wd.id, wd.client_id, c.name as client_name, wd.waba_id, wd.event, wd.target_url,
            wd.attempt_count, wd.last_error, wd.created_at
@@ -820,7 +836,7 @@ router.get('/failures/webhook-deliveries', asyncHandler(async (req, res) => {
 // DB to find out automation broke for a client (flow_events'
 // 'stalled' detail carries the actual MessagingError message/code, see
 // flowEngine.js's runToRest).
-router.get('/failures/stalled-flows', asyncHandler(async (req, res) => {
+router.get('/failures/stalled-flows', supportOrFull, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
     select cfs.id, cfs.client_id, c.name as client_name, ct.name as contact_name, ct.phone as contact_phone,
            af.name as flow_name, fn.type as node_type, cfs.updated_at, fe.detail as stall_detail
@@ -875,7 +891,7 @@ router.get('/settings', asyncHandler(async (req, res) => {
 // synchronously and returns the result inline, same "await it, no queue"
 // shape as every other admin-triggered action in this file - an admin
 // clicking "Refresh Catalog" expects to see the outcome, not poll for it.
-router.get('/template-library/meta/status', asyncHandler(async (req, res) => {
+router.get('/template-library/meta/status', supportOrFull, asyncHandler(async (req, res) => {
   const meta = await metaTemplateLibraryRepo.getRefreshMeta(pool);
   const cached = await metaTemplateLibraryRepo.listCached(pool, { includeParameterized: true });
   res.json({
@@ -887,7 +903,7 @@ router.get('/template-library/meta/status', asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/template-library/meta/refresh', asyncHandler(async (req, res) => {
+router.post('/template-library/meta/refresh', fullOnly, asyncHandler(async (req, res) => {
   try {
     const count = await metaTemplateLibraryRefreshRunner.refreshNow();
     await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'meta_template_library_refreshed', target: `${count} entries` });
