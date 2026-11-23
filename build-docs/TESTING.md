@@ -1,5 +1,17 @@
 # Testing
 
+## automation-rule-view-edit: live test on production (2026-11-23)
+Migration 094 applied to production (only 094; `up 1`). Deployed with a
+temporary lock (63572a3): demo-account rules replied only to 9092766740, and
+`*` stayed dormant for every other client. Playwright (headed, owner logged
+in as the demo account by hand; the harness aborted every send request)
+created two rules through the UI. Real WhatsApp from 9092766740 to the demo
+number: "Hi" at 13:46:15 IST got the catch-all reply at 13:46:18 (delivered,
+read); "Dont understand what?" at 13:47:14 got no reply (24h throttle,
+`chats.auto_reply_at` set). Both rules then deleted through the UI. Not
+exercised live: the keyword rule (message not sent in the window; covered by
+the automated tests). Lock removed afterwards by reverting 63572a3.
+
 ## ctwa-conversions
 `ctwaConversions.test.js` (Meta faked), 5/5:
 - No click id -> 409 with no call.
