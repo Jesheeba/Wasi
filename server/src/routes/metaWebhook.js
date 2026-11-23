@@ -174,6 +174,26 @@ async function handleInboundMessages(waba, value) {
   for (const msg of value.messages || []) {
     const phone = msg.from;
     const name = contactInfo?.profile?.name || phone;
+
+    // Emoji reactions (2026-11-23) - a genuinely separate inbound event
+    // shape (Meta's documented type:'reaction'), not a message with a body
+    // of its own: msg.reaction.{message_id, emoji}, message_id is the
+    // wamid of the message being reacted to, emoji is '' when the customer
+    // removed their reaction. Updates the target row in place rather than
+    // inserting a new messages row - there is nothing to insert, Meta
+    // never attaches a reaction's own id to anything this app would want
+    // to reference later the way a real message's wamid is used elsewhere.
+    // Scope note: a reaction to a message this app never saw (predates
+    // this feature, or targets a different client's chat entirely) finds
+    // nothing to update and is silently dropped - the same "harmless no-op
+    // on an unresolvable target" treatment the reply-context lookup below
+    // gets, not an error.
+    if (msg.type === 'reaction') {
+      const target = await chatsRepo.findByMetaMessageId(pool, clientId, msg.reaction?.message_id);
+      if (target) await chatsRepo.setReaction(pool, clientId, target.id, 'customer', msg.reaction?.emoji || '');
+      continue;
+    }
+
     // Free-form interactive button replies (see metaClient.sendInteractiveMessage)
     // come back as msg.interactive.button_reply.{id,title} - title is what a
     // human reads in the chat; id is the stable value the flow engine
@@ -252,11 +272,21 @@ async function handleInboundMessages(waba, value) {
     // from a Click-to-WhatsApp ad; undefined/absent for every organic
     // message. Parsing an already-arrived inbound webhook payload, not a
     // call to Meta.
+    // Reply/quote (2026-11-23) - msg.context.id is Meta's documented wamid
+    // of the message being replied to, present whenever the customer tapped
+    // Reply on a specific message in WhatsApp. Resolved to this tenant's own
+    // local row before insert, same lookup reaction handling below reuses -
+    // absent entirely for an ordinary (non-reply) message, and harmless
+    // (stores null) if the target was never seen by this app for any
+    // reason (a message that predates this feature, or arrived out of
+    // order).
+    const replyToMessage = msg.context?.id ? await chatsRepo.findByMetaMessageId(pool, clientId, msg.context.id) : null;
     const inserted = await chatsRepo.insertInbound(pool, clientId, chat.id, {
       metaMessageId: msg.id,
       body,
       sentAt: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null,
       referral: msg.referral || null,
+      replyToMessageId: replyToMessage?.id || null,
     });
 
     if (inserted) {
@@ -423,6 +453,16 @@ async function handleInboundMessages(waba, value) {
         // per this file's own webhook-contract convention rather than
         // relying on that.
         api_key_id: _apiKeyId,
+        // reply_to_message_id (migration 102) is a Wasi-internal message
+        // PK, same exclusion reasoning as id/chat_id above - meaningless to
+        // an external consumer without a Wasi-internal id to resolve it
+        // against. The two reaction columns are always null on THIS row
+        // (a reaction is its own separate inbound event type, never part
+        // of a text/media message's own insert) - same "always null here,
+        // pure noise" reasoning as error_reason/meta_error_code.
+        reply_to_message_id: _replyToMessageId,
+        customer_reaction_emoji: _customerReactionEmoji,
+        agent_reaction_emoji: _agentReactionEmoji,
         ...forwardableMessage
       } = inserted;
       await enqueueForwards(waba, 'message.received', {

@@ -178,15 +178,46 @@ async function findLastInboundMessage(db, clientId, chatId) {
 // apiKeyId (migration 090) is null for every non-Hub-API send (the inbox
 // reply route, flows, broadcasts, clientNotifier) - only
 // routes/apiV1Messages.js passes its caller's own req.apiKeyId.
-async function insertOutboundPending(db, clientId, chatId, body, apiKeyId = null) {
+async function insertOutboundPending(db, clientId, chatId, body, apiKeyId = null, replyToMessageId = null) {
   const { rows } = await db.query(
-    `insert into messages (chat_id, client_id, direction, body, status, api_key_id)
-     values ($1, $2, 'out', $3, 'pending', $4)
+    `insert into messages (chat_id, client_id, direction, body, status, api_key_id, reply_to_message_id)
+     values ($1, $2, 'out', $3, 'pending', $4, $5)
      returning *`,
-    [chatId, clientId, body, apiKeyId]
+    [chatId, clientId, body, apiKeyId, replyToMessageId]
   );
   await db.query(`update chats set last_message_at = now() where client_id = $1 and id = $2`, [clientId, chatId]);
   return rows[0];
+}
+
+// Resolves a Meta wamid back to this tenant's own local message row -
+// shared by reply-context resolution (an inbound reply's context.id, or an
+// outbound reply's target before sending) and reactions (both directions
+// target a message by its wamid). Scoped by client_id like every other
+// tenant-scoped lookup in this file, not just by the globally-unique wamid
+// alone, so one client's reply/reaction can never resolve to a different
+// client's row even in the (currently unreachable) case of an id
+// collision.
+async function findByMetaMessageId(db, clientId, metaMessageId) {
+  if (!metaMessageId) return null;
+  const { rows } = await db.query(
+    'select * from messages where client_id = $1 and meta_message_id = $2',
+    [clientId, metaMessageId]
+  );
+  return rows[0] || null;
+}
+
+// Sets (or, with emoji='', clears) which party reacted to a message -
+// 'customer' for an inbound reaction event, 'agent' for one the business
+// sent via sendReaction. Column name is resolved here, not left to the
+// caller, so a typo'd direction string can't silently target the wrong
+// column (or none at all).
+async function setReaction(db, clientId, messageId, direction, emoji) {
+  const column = direction === 'customer' ? 'customer_reaction_emoji' : 'agent_reaction_emoji';
+  const { rows } = await db.query(
+    `update messages set ${column} = $3 where client_id = $1 and id = $2 returning *`,
+    [clientId, messageId, emoji || null]
+  );
+  return rows[0] || null;
 }
 
 async function markSent(db, clientId, messageId, metaMessageId) {
@@ -239,13 +270,13 @@ async function markFailed(db, clientId, messageId, errorReason, metaErrorCode, m
 // source_type, source_id, headline, body, media_type, image_url/video_url,
 // ctwa_clid) - this app never edits or interprets its shape beyond reading
 // it back, so no per-field columns.
-async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt, referral }) {
+async function insertInbound(db, clientId, chatId, { metaMessageId, body, sentAt, referral, replyToMessageId }) {
   const { rows } = await db.query(
-    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at, referral)
-     values ($1, $2, 'in', $3, 'delivered', $4, coalesce($5, now()), $6)
+    `insert into messages (chat_id, client_id, direction, body, status, meta_message_id, sent_at, referral, reply_to_message_id)
+     values ($1, $2, 'in', $3, 'delivered', $4, coalesce($5, now()), $6, $7)
      on conflict (meta_message_id) do nothing
      returning *`,
-    [chatId, clientId, body, metaMessageId, sentAt || null, referral ? JSON.stringify(referral) : null]
+    [chatId, clientId, body, metaMessageId, sentAt || null, referral ? JSON.stringify(referral) : null, replyToMessageId || null]
   );
   if (rows[0]) {
     // last_inbound_at (migration 086) is the start of Meta's 24-hour customer
@@ -506,4 +537,6 @@ module.exports = {
   markAgentReplyNonFatal,
   updateStatusByMetaId,
   decideStatusTransition,
+  findByMetaMessageId,
+  setReaction,
 };

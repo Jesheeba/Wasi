@@ -1213,6 +1213,92 @@ body {
   gap: 5px;
 }
 
+/* Reply/quote + reactions (WhatsApp-parity, 2026-11-23). */
+.msg-quote {
+  border-left: 3px solid var(--wa-link, var(--color-primary-600));
+  padding: 3px 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+.msg-actions {
+  position: absolute;
+  top: -14px;
+  right: 6px;
+  display: none;
+  gap: 2px;
+  background: var(--bg-card, white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 2px;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
+}
+.msg-in .msg-actions { right: auto; left: 6px; }
+.msg-bubble:hover .msg-actions,
+.msg-bubble:focus-within .msg-actions { display: flex; }
+.msg-action-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer; border-radius: 6px;
+}
+.msg-action-btn:hover { background: var(--bg-muted, #F0F1ED); color: var(--text-main); }
+.msg-reactions {
+  position: absolute;
+  bottom: -10px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+}
+.msg-in .msg-reactions { right: auto; left: 8px; }
+.msg-reaction-badge {
+  font-size: 0.78rem;
+  background: var(--bg-card, white);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 1px 5px;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08));
+}
+
+.chat-reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-muted, #F0F1ED);
+  border-left: 3px solid var(--wa-link, var(--color-primary-600));
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+.chat-reply-banner-body { min-width: 0; display: flex; flex-direction: column; }
+.chat-reply-banner-label { font-size: 0.72rem; font-weight: 600; color: var(--wa-link, var(--color-primary-600)); }
+.chat-reply-banner-text {
+  font-size: 0.82rem; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.msg-quick-reaction-bar {
+  z-index: var(--z-popover, 60);
+  display: flex;
+  gap: 2px;
+  background: var(--bg-card, white);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 4px 6px;
+  box-shadow: var(--shadow-overlay, 0 4px 16px rgba(0, 0, 0, 0.15));
+}
+.msg-quick-reaction-btn {
+  border: none; background: transparent; font-size: 1.1rem;
+  cursor: pointer; padding: 2px 4px; border-radius: 50%;
+  transition: transform 0.1s ease;
+}
+.msg-quick-reaction-btn:hover { background: var(--bg-muted, #F0F1ED); transform: scale(1.15); }
+
 /* Coexistence echo (a reply sent from the WhatsApp Business app on the
    client's own phone, not through Wasi) - same bubble side/shape as any
    other outbound message, but visually distinct so it isn't mistaken for

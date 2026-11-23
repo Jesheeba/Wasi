@@ -81,10 +81,25 @@ const messageSendSchema = z.object({
   // for why this can't be validated here (needs the DB-fetched template
   // row, not just the request shape).
   limitedTimeOfferExpirationMs: z.number().int().positive().optional(),
+  // Reply/quote (2026-11-23) - the local message id being replied to;
+  // text sends only (see messagingService.sendChatMessage's own comment).
+  // A non-text type carrying this is simply ignored there rather than
+  // rejected here - no real caller sends it on a template, so there is
+  // nothing to validate against.
+  replyToMessageId: uuid.optional(),
 }).refine(
   (data) => (data.type === 'text' ? Boolean(data.body) : Boolean(data.templateName)),
   { message: "body is required for type 'text'; templateName is required for type 'template'" }
 );
+
+// '' is valid and means "remove the reaction" (Meta's own documented
+// convention, not this app's invention) - a real emoji is 1-8 code units
+// (covers multi-codepoint ones like skin-tone modifiers/ZWJ sequences)
+// with no further validation; Meta accepts any single emoji and rejects
+// anything else on its own side, so this isn't duplicated here.
+const reactionSchema = z.object({
+  emoji: z.string().max(8),
+});
 
 const registerSchema = z.object({
   businessName: z.string().min(1),
@@ -924,6 +939,7 @@ module.exports = {
   chatNoteCreateSchema,
   cannedResponseCreateSchema,
   messageSendSchema,
+  reactionSchema,
   registerSchema,
   loginSchema,
   forgotPasswordSchema,

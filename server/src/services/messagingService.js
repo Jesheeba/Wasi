@@ -106,7 +106,7 @@ async function assertWithinPlanLimit(db, clientId) {
 // connection right before the Meta network call below and reacquire()
 // opens a fresh one only for the final result write, so a slow Meta response
 // never pins a connection the pool's other concurrent requests need.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId, flow, product }, connectionHooks = {}) {
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId, flow, product, replyToMessageId }, connectionHooks = {}) {
   // type 'flow' (WhatsApp Flows / "Forms") is a free-form interactive message
   // too, so it shares the 24h window rule. flow = { metaFlowId, flowToken,
   // cta, screen, mode, name } - see routes/whatsappFlows.js.
@@ -236,14 +236,30 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     ];
   }
 
-  const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody, apiKeyId || null);
+  // Reply/quote (2026-11-23) - resolved before the pending message row is
+  // created, same pre-flight-check placement as the media-header/auth-code
+  // checks above, scoped to this chat/client so one chat's message id can
+  // never be used to reply "into" another chat. A target that doesn't
+  // resolve (wrong id, already-deleted-in-theory row, wrong chat) is
+  // silently treated as "not a reply" rather than rejecting the whole
+  // send - replying is a nice-to-have on top of an otherwise-normal
+  // message, not a hard requirement of it.
+  let replyContextMessageId = null;
+  if (type === 'text' && replyToMessageId) {
+    const replyTarget = await chatsRepo.findMessageByIdForClient(db, clientId, replyToMessageId);
+    if (replyTarget && replyTarget.chat_id === chat.id && replyTarget.meta_message_id) {
+      replyContextMessageId = replyTarget.meta_message_id;
+    }
+  }
+
+  const message = await chatsRepo.insertOutboundPending(db, clientId, chat.id, displayBody, apiKeyId || null, replyContextMessageId ? replyToMessageId : null);
 
   if (connectionHooks.release) await connectionHooks.release();
 
   let metaMessageId;
   try {
     if (type === 'text') {
-      metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body);
+      metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body, replyContextMessageId);
     } else if (type === 'product') {
       metaMessageId = await metaClient.sendProductMessage(waba.phone_number_id, accessToken, toPhone, product.interactive);
     } else if (type === 'flow') {
@@ -400,4 +416,36 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   return chatsRepo.markSent(db, clientId, message.id, metaMessageId);
 }
 
-module.exports = { MessagingError, canSendFreeform, sendChatMessage, retryMessage, SESSION_WINDOW_MS };
+// Sends (or, with emoji='', removes) an agent-side reaction to a specific
+// message in this chat - a lightweight interaction, not a new message, so
+// it deliberately does not go through sendChatMessage's full pipeline
+// (consent checks, plan-limit checks, a pending/sent message row of its
+// own). Still gated by the same 24h customer-service window as any other
+// free-form send - confirmed against Meta's docs, reactions are not
+// exempt from it. `messageId` is the LOCAL message row being reacted to;
+// its own meta_message_id (the wamid) is what Meta actually needs.
+async function sendReactionToMessage(db, clientId, chat, messageId, emoji) {
+  if (!(await canSendFreeform(db, clientId, chat.id))) {
+    throw new MessagingError(
+      'This chat is outside the 24-hour customer service window - reactions can only be sent inside it.',
+      'session_window_closed'
+    );
+  }
+  const target = await chatsRepo.findMessageByIdForClient(db, clientId, messageId);
+  if (!target || target.chat_id !== chat.id || !target.meta_message_id) {
+    throw new MessagingError('That message could not be found in this chat.', 'message_not_found');
+  }
+
+  const waba = await getSendableWaba(clientId);
+  const accessToken = decrypt(waba.access_token_encrypted);
+  try {
+    await metaClient.sendReaction(waba.phone_number_id, accessToken, chat.phone, target.meta_message_id, emoji);
+  } catch (err) {
+    const sendError = new MessagingError(err.message, 'send_failed');
+    sendError.metaError = err.metaError || null;
+    throw sendError;
+  }
+  return chatsRepo.setReaction(db, clientId, target.id, 'agent', emoji);
+}
+
+module.exports = { MessagingError, canSendFreeform, sendChatMessage, retryMessage, sendReactionToMessage, SESSION_WINDOW_MS };

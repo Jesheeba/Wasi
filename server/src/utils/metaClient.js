@@ -385,7 +385,12 @@ async function downloadMediaBytes(url, accessToken) {
 // outside that window with a real API error; callers should check
 // messagingService's session-window logic first rather than relying on that
 // error path, so the UI can explain *why* instead of showing a raw failure.
-async function sendTextMessage(phoneNumberId, accessToken, toPhone, body) {
+// `contextMessageId` (optional) is the Meta wamid of a message in this same
+// chat to reply to - Meta's documented `context: { message_id }` field,
+// stable across the Cloud API's message-send shapes for a long time (not
+// one of this codebase's "unconfirmed payload" cases like Coexistence
+// echoes). Renders as a quoted reply in WhatsApp on both sides.
+async function sendTextMessage(phoneNumberId, accessToken, toPhone, body, contextMessageId) {
   const data = await graphFetch(`/${phoneNumberId}/messages`, {
     method: 'POST',
     accessToken,
@@ -394,6 +399,27 @@ async function sendTextMessage(phoneNumberId, accessToken, toPhone, body) {
       to: toPhone,
       type: 'text',
       text: { body },
+      ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
+    },
+  });
+  return data.messages?.[0]?.id;
+}
+
+// Sends an emoji reaction to a specific message (Meta's documented
+// `type: 'reaction'` message shape) - messageId is the target's wamid.
+// An empty-string emoji REMOVES a previously-sent reaction (Meta's own
+// documented convention, not this app's invention). There is no reaction
+// "text" to validate/escape - Meta accepts any single emoji and silently
+// ignores/rejects anything else on its own side.
+async function sendReaction(phoneNumberId, accessToken, toPhone, messageId, emoji) {
+  const data = await graphFetch(`/${phoneNumberId}/messages`, {
+    method: 'POST',
+    accessToken,
+    body: {
+      messaging_product: 'whatsapp',
+      to: toPhone,
+      type: 'reaction',
+      reaction: { message_id: messageId, emoji: emoji || '' },
     },
   });
   return data.messages?.[0]?.id;
@@ -1297,6 +1323,7 @@ module.exports = {
   getMediaUrl,
   downloadMediaBytes,
   sendTextMessage,
+  sendReaction,
   sendInteractiveMessage,
   sendListMessage,
   sendTemplateMessage,

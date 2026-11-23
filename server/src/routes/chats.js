@@ -13,7 +13,7 @@ const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { z } = require('zod');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { uuid, chatCreateSchema, chatUpdateSchema, chatAssignSchema, chatNoteCreateSchema, messageSendSchema } = require('../utils/validate');
+const { uuid, chatCreateSchema, chatUpdateSchema, chatAssignSchema, chatNoteCreateSchema, messageSendSchema, reactionSchema } = require('../utils/validate');
 const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
@@ -233,6 +233,33 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
       // err.metaError comment) lets the client translate this into the same
       // plain English the sendability banner uses (server/src/utils/
       // sendabilityMessages.js) instead of showing Meta's raw string.
+      return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
+    }
+    throw err;
+  }
+}));
+
+// Emoji reaction (2026-11-23) - emoji '' removes a previously-sent
+// reaction (Meta's own documented convention). Deliberately not gated by
+// markAgentReplyNonFatal the way a real reply is above - reacting isn't a
+// substitute for a person actually answering the customer, so it shouldn't
+// silence the AI agent's gate-4 human-active signal the way a real send
+// does (docs/ai-agent/SPEC.md's own distinction, applied here even though
+// the agent isn't built yet, so this doesn't need revisiting later).
+router.post('/:id/messages/:messageId/react', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  uuid.parse(req.params.messageId);
+  const chat = await chatsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!chat) return res.status(404).json({ error: 'Not found' });
+  if (!chat.phone) return res.status(400).json({ error: 'This chat has no phone number to send to.' });
+
+  const { emoji } = reactionSchema.parse(req.body);
+  try {
+    const message = await messagingService.sendReactionToMessage(req.db, req.clientId, chat, req.params.messageId, emoji);
+    res.json(message);
+  } catch (err) {
+    if (err instanceof messagingService.MessagingError) {
+      const status = err.code === 'send_failed' ? 502 : err.code === 'message_not_found' ? 404 : 409;
       return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
     }
     throw err;

@@ -1192,6 +1192,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // does - statusBadge already only renders ticks for direction === 'out'
   // generally, which an echo also satisfies, but its status is always
   // hardcoded 'delivered' at insert, never 'pending'/'failed').
+  // Quick-reaction set - the same small, fixed palette WhatsApp's own
+  // long-press reaction bar offers (not an open emoji keyboard; Meta's API
+  // accepts any single emoji, but a short fixed set matches the real app's
+  // own UX and needs no picker library).
+  const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
   function renderMessageBubble(m, showMeta) {
     const bodyHtml = m.body.replace(/</g, '&lt;');
     const isEcho = m.source === 'whatsapp_app';
@@ -1201,10 +1207,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const metaHtml = showMeta
       ? `<div class="msg-time">${isEcho ? '<span class="msg-echo-label" title="Sent from the WhatsApp Business app on your phone, not through Wasi">📱 Sent from phone</span>' : sentViaAppHtml}<time class="msg-time-value" datetime="${m.sent_at}">${timeLabel(m.sent_at)}</time>${statusBadge(m)}</div>`
       : `<time class="sr-only" datetime="${m.sent_at}">${fullTimeLabel(m.sent_at)}</time>`;
+
+    // Reply/quote (2026-11-23) - the quoted message is looked up from the
+    // already-loaded state.activeChatMessages rather than a server round
+    // trip; a target outside the currently-loaded window (e.g. a reply to
+    // a much older message than the inbox has fetched) just shows nothing
+    // here rather than a broken reference - the real server-side link
+    // (messages.reply_to_message_id) is unaffected either way.
+    const replyTarget = m.reply_to_message_id
+      ? (state.activeChatMessages || []).find((x) => x.id === m.reply_to_message_id)
+      : null;
+    const quoteHtml = replyTarget
+      ? `<div class="msg-quote">${escapeHtml((replyTarget.body || '').slice(0, 120))}</div>`
+      : '';
+
+    // Each party has at most one active reaction on a message (Meta's own
+    // model - see migration 102's comment), so at most 2 badges ever show:
+    // the customer's and the agent's, never stacked beyond that.
+    const reactionBadges = [m.customer_reaction_emoji, m.agent_reaction_emoji].filter(Boolean);
+    const reactionHtml = reactionBadges.length
+      ? `<div class="msg-reactions">${reactionBadges.map((e) => `<span class="msg-reaction-badge">${escapeHtml(e)}</span>`).join('')}</div>`
+      : '';
+
+    // Hover-reveal action icons, matching WhatsApp's own convention - react
+    // opens the quick-reaction bar inline, reply sets the composer's
+    // reply-to state. Both are no-ops (hidden via CSS) on a message with
+    // no meta_message_id yet (still 'pending', nothing on Meta to target).
+    const actionsHtml = m.meta_message_id
+      ? `<div class="msg-actions">
+          <button type="button" class="msg-action-btn" data-react-message="${m.id}" title="React" aria-label="React to this message"><i data-lucide="smile-plus" class="icon-14"></i></button>
+          <button type="button" class="msg-action-btn" data-reply-message="${m.id}" title="Reply" aria-label="Reply to this message"><i data-lucide="reply" class="icon-14"></i></button>
+        </div>`
+      : '';
+
     return `
       <div class="msg-bubble ${m.direction === 'in' ? 'msg-in' : 'msg-out'}${isEcho ? ' msg-echo' : ''}" data-message-id="${m.id}" data-full-time="${escapeAttr(fullTimeLabel(m.sent_at))}" tabindex="0">
+        ${actionsHtml}
+        ${quoteHtml}
         <div>${bodyHtml}</div>
         ${metaHtml}
+        ${reactionHtml}
       </div>`;
   }
 
@@ -1333,6 +1375,19 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return;
     }
+
+    const replyBtn = e.target.closest('[data-reply-message]');
+    if (replyBtn) {
+      setComposerReplyTarget(replyBtn.dataset.replyMessage);
+      return;
+    }
+
+    const reactBtn = e.target.closest('[data-react-message]');
+    if (reactBtn) {
+      openQuickReactionBar(reactBtn.dataset.reactMessage, reactBtn);
+      return;
+    }
+
     // Tap-to-reveal (item 3/4): toggles the hover tooltip on a bubble or a
     // status-tick cluster for touch devices, which have no :hover. Ignored
     // when the tap landed on the retry button itself (handled above).
@@ -2207,11 +2262,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     chatMessageInput.value = '';
+    const replyToMessageId = state.composerReplyToMessageId || undefined;
+    clearComposerReplyTarget();
 
     try {
       await authFetch(`/api/chats/${state.activeChatId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ type: 'text', body: text })
+        body: JSON.stringify({ type: 'text', body: text, replyToMessageId })
       });
       await refreshActiveChatMessages();
     } catch (err) {
@@ -2220,8 +2277,81 @@ document.addEventListener('DOMContentLoaded', () => {
       // server's message as-is rather than a generic "request failed".
       reportError(err);
       chatMessageInput.value = text; // give the draft back so it isn't lost
+      if (replyToMessageId) setComposerReplyTarget(replyToMessageId); // give the reply target back too
     }
   }
+
+  // Reply/quote (2026-11-23) - the composer's "replying to X" banner.
+  // state.composerReplyToMessageId is read by sendCurrentMessage above and
+  // cleared on every send attempt (success or failure re-sets it from the
+  // caught error path, so a failed send doesn't silently drop the reply
+  // target along with the draft text).
+  function setComposerReplyTarget(messageId) {
+    const target = (state.activeChatMessages || []).find((m) => m.id === messageId);
+    if (!target) return;
+    state.composerReplyToMessageId = messageId;
+    const banner = document.getElementById('chat-reply-banner');
+    if (!banner) return;
+    document.getElementById('chat-reply-banner-text').textContent = (target.body || '').slice(0, 160);
+    banner.style.display = 'flex';
+    chatMessageInput?.focus();
+  }
+
+  function clearComposerReplyTarget() {
+    state.composerReplyToMessageId = null;
+    const banner = document.getElementById('chat-reply-banner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  document.getElementById('chat-reply-banner-close-btn')?.addEventListener('click', clearComposerReplyTarget);
+
+  // Emoji reactions (2026-11-23) - a small fixed popover anchored to the
+  // message bubble that triggered it, closed on an outside click/Escape or
+  // after a pick (handled by the delegated click listener above, which
+  // reads data-reaction-bar-for off this same element).
+  function closeQuickReactionBar() {
+    document.getElementById('msg-quick-reaction-bar')?.remove();
+  }
+
+  function openQuickReactionBar(messageId, anchorEl) {
+    closeQuickReactionBar();
+    const bar = document.createElement('div');
+    bar.id = 'msg-quick-reaction-bar';
+    bar.className = 'msg-quick-reaction-bar';
+    bar.innerHTML = QUICK_REACTIONS.map((e) => `<button type="button" class="msg-quick-reaction-btn" data-pick-reaction="${e}">${e}</button>`).join('');
+    // Appended to <body>, not #chat-messages-container, so it can float
+    // above the message list and never gets clipped by its scroll area -
+    // its own click listener is attached directly here rather than relying
+    // on that container's delegated listener, which this element sits
+    // outside of entirely.
+    bar.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-pick-reaction]');
+      if (!btn) return;
+      const emoji = btn.dataset.pickReaction;
+      closeQuickReactionBar();
+      if (state.activeChatId) {
+        try {
+          await authFetch(`/api/chats/${state.activeChatId}/messages/${messageId}/react`, {
+            method: 'POST',
+            body: JSON.stringify({ emoji }),
+          });
+          await refreshActiveChatMessages();
+        } catch (err) {
+          reportError(err);
+        }
+      }
+    });
+    document.body.appendChild(bar);
+    const rect = anchorEl.getBoundingClientRect();
+    bar.style.position = 'fixed';
+    bar.style.top = `${Math.max(8, rect.top - 44)}px`;
+    bar.style.left = `${Math.max(8, rect.left - 60)}px`;
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#msg-quick-reaction-bar') && !e.target.closest('[data-react-message]')) closeQuickReactionBar();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeQuickReactionBar(); });
 
   sendMsgBtn?.addEventListener('click', sendCurrentMessage);
   chatMessageInput?.addEventListener('keydown', (e) => {
