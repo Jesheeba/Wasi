@@ -15,6 +15,8 @@ const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo
 const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
 const flowTemplates = require('../utils/whatsappFlowTemplates');
 const productMessages = require('../utils/productMessages');
+const contactAttributeValuesRepo = require('../repositories/contactAttributeValuesRepo');
+const { validateContactAttributeValue } = require('../utils/validate');
 const flowEngine = require('../services/flowEngine');
 const aiAgentRunner = require('../services/aiAgentRunner');
 const forwardRunner = require('../services/forwardRunner');
@@ -163,6 +165,23 @@ async function parseFormReply(clientId, msg) {
   return { flow, flowToken, response, body };
 }
 
+// Forms phase 3: copy answers onto the contact's fields, per the form's
+// attribute_map. Same rule as the flow engine's Capture Reply: an answer
+// that doesn't fit the field's type (e.g. text into a number field) is
+// skipped, never stored.
+async function applyFormAnswersToContact(clientId, contactId, formReply) {
+  const map = formReply.flow?.attribute_map || {};
+  if (!Object.keys(map).length) return;
+  const answers = Object.fromEntries(flowTemplates.describeResponse(formReply.flow, formReply.response).map((a) => [a.key, a.value]));
+  const { rows } = await pool.query('select id, type from contact_attributes where client_id = $1 and id = any($2::uuid[])', [clientId, Object.values(map)]);
+  const types = Object.fromEntries(rows.map((r) => [r.id, r.type]));
+  for (const [field, attributeId] of Object.entries(map)) {
+    const value = String(answers[field] ?? '').trim();
+    if (!value || !types[attributeId] || !validateContactAttributeValue(types[attributeId], value)) continue;
+    await contactAttributeValuesRepo.upsert(pool, clientId, contactId, attributeId, value);
+  }
+}
+
 // New customer message: upsert the contact, find/open their chat, insert
 // (idempotent on Meta's message id), then let automation rules react.
 // Takes the resolved waba row (not just clientId) - build plan Phase 5's
@@ -304,6 +323,11 @@ async function handleInboundMessages(waba, value) {
           });
         } catch (err) {
           console.error('metaWebhook: storing form response failed (message itself is stored):', { clientId, metaMessageId: msg.id, error: err.message });
+        }
+        try {
+          await applyFormAnswersToContact(clientId, contact.id, formReply);
+        } catch (err) {
+          console.error('metaWebhook: saving form answers to contact fields failed:', { clientId, metaMessageId: msg.id, error: err.message });
         }
       }
 

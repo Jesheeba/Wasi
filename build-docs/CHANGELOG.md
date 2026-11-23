@@ -1,5 +1,16 @@
 # Changelog
 
+## feat(whatsapp-flows-phase3): contact fields, send anytime, CSV, bookings
+- Forms can save answers to contact fields.
+- Forms get a "Send anytime" template (an Open form button, reviewed by
+  Meta), used automatically when the customer is outside the 24 h window.
+- Responses download as CSV.
+- Live booking forms list upcoming bookings with Cancel.
+- Green tick: numbers on the WhatsApp Business app now get step-by-step
+  Meta Verified guidance (paid, bought in the app) instead of a dead end.
+- Fixed: booking dates were shown a day early in India.
+- Migration 104 (102 and 103 are taken by other branches).
+
 ## feat(android-no-checkout): no subscription checkout inside the Android app
 Google Play requires Play Billing (15% on subscriptions) for anything sold in
 the app and does not allow linking out to pay in India. The Android app now

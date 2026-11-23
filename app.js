@@ -8911,11 +8911,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (manage && fm.status !== 'draft') actions.push(['duplicate', 'Duplicate']);
     if (manage && fm.status === 'published') actions.push(['retire', 'Retire']);
     if (manage && fm.status !== 'published') actions.push(['delete', 'Delete']);
+    if (manage && fm.status !== 'deprecated') actions.push(['fields', 'Contact fields']);
+    if (manage && fm.meta_flow_id && !fm.template_name && fm.status !== 'deprecated') actions.push(['template', 'Send anytime']);
     const error = fm.last_error ? `<div class="wa-form-error">WhatsApp reported: ${esc(fm.last_error)}</div>` : '';
+    const tplLine = fm.template_name ? `<div class="settings-muted wa-form-tpl">Template: ${esc(fm.template_status || 'pending')}</div>` : '';
     const buttons = actions.map(([a, label]) => `<button type="button" class="btn-secondary btn-sm" data-wa-form-action="${a}" data-wa-form-id="${esc(fm.id)}">${label}</button>`).join('');
     return `
       <tr>
-        <td data-label="Form"><span class="analytics-name">${esc(fm.name)}</span>${error}</td>
+        <td data-label="Form"><span class="analytics-name">${esc(fm.name)}</span>${error}${tplLine}</td>
         <td data-label="Type">${esc(fm.kindLabel || fm.kind)}</td>
         <td data-label="Status"><span class="badge ${st.cls}">${esc(st.text)}</span></td>
         <td data-label="Responses"><button type="button" class="btn-ghost btn-sm" data-wa-form-responses="${esc(fm.id)}" aria-label="View responses for ${esc(fm.name)}">${esc(formatCount(fm.response_count))}</button></td>
@@ -9106,12 +9109,124 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- Forms phase 3 (build-docs/features/whatsapp-flows.md) ---
+  // Contact fields, a template to send anytime, CSV download, live bookings.
+  let waFormMapId = null;
+  async function openWaFormMapping(form) {
+    waFormMapId = form.id;
+    const box = document.getElementById('wa-form-map-fields');
+    box.innerHTML = '<span class="skeleton settings-skeleton-line"></span>';
+    document.getElementById('modal-wa-form-map').classList.add('open');
+    let attrs = [];
+    try {
+      attrs = await authFetch('/api/contact-attributes');
+      await loadWaFormKinds();
+    } catch (err) { box.innerHTML = `<p class="settings-muted">${esc(err.message)}</p>`; return; }
+    const fields = waFormState.kinds.find((k) => k.kind === form.kind)?.defaults.fields || {};
+    if (!attrs.length) {
+      box.innerHTML = '<p class="settings-muted">You have no contact fields yet. Add them under Settings > Attributes first.</p>';
+      return;
+    }
+    box.innerHTML = Object.entries(fields).map(([key, f]) => {
+      const label = form.config?.fields?.[key]?.label || f.label;
+      const current = form.attribute_map?.[key] || '';
+      return `<div class="form-group"><label class="form-label" for="wa-map-${esc(key)}">${esc(label)}</label>
+        <select id="wa-map-${esc(key)}" class="form-input" data-map-field="${esc(key)}">
+          <option value="">Don't save</option>
+          ${attrs.map((a) => `<option value="${esc(a.id)}" ${a.id === current ? 'selected' : ''}>${esc(a.name)} (${esc(a.type)})</option>`).join('')}
+        </select></div>`;
+    }).join('') + '<p class="form-hint">An answer that doesn\'t fit the field (e.g. text into a number field) is skipped.</p>';
+  }
+  document.getElementById('wa-form-map-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const map = {};
+    document.querySelectorAll('[data-map-field]').forEach((s) => { map[s.dataset.mapField] = s.value || null; });
+    try {
+      await authFetch(`/api/whatsapp-flows/${waFormMapId}/attribute-map`, { method: 'PUT', body: JSON.stringify({ map }) });
+      document.getElementById('modal-wa-form-map').classList.remove('open');
+      showToast('Contact fields saved', 'success');
+      renderWaForms();
+    } catch (err) { reportError(err); }
+  });
+
+  let waFormTemplateId = null;
+  function openWaFormTemplate(form) {
+    waFormTemplateId = form.id;
+    document.getElementById('wa-form-tpl-body').value = `Please fill in this short form: ${form.name}`;
+    document.getElementById('wa-form-tpl-button').value = form.kind === 'booking_live' ? 'Book now' : 'Open form';
+    document.getElementById('modal-wa-form-template').classList.add('open');
+  }
+  document.getElementById('wa-form-tpl-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await authFetch(`/api/whatsapp-flows/${waFormTemplateId}/template`, {
+        method: 'POST',
+        body: JSON.stringify({
+          category: document.querySelector('input[name="wa-form-tpl-category"]:checked').value,
+          body: document.getElementById('wa-form-tpl-body').value,
+          buttonText: document.getElementById('wa-form-tpl-button').value,
+        }),
+      });
+      document.getElementById('modal-wa-form-template').classList.remove('open');
+      showToast('Template sent to WhatsApp for approval', 'success');
+      renderWaForms();
+    } catch (err) { reportError(err); }
+  });
+
+  async function downloadWaFormCsv(form) {
+    const token = localStorage.getItem('client_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/whatsapp-flows/${form.id}/responses.csv`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${form.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase() || 'form'}_responses.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) { reportError(err); }
+  }
+
+  async function renderWaFormBookings(form) {
+    const box = document.getElementById('wa-form-bookings');
+    if (!box) return;
+    if (form.kind !== 'booking_live') { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<h4 class="settings-card-title">Upcoming bookings</h4><span class="skeleton analytics-skeleton"></span>';
+    try {
+      const rows = await authFetch(`/api/whatsapp-flows/${form.id}/bookings`);
+      const live = rows.filter((b) => b.status === 'booked');
+      box.innerHTML = '<h4 class="settings-card-title">Upcoming bookings</h4>' + (live.length ? live.map((b) => `
+        <div class="list-row wa-booking-row">
+          <div><strong>${esc(formatShortDate(b.date))} at ${esc(b.time)}</strong><div class="settings-muted">${esc(b.name || '-')}${b.phone ? ` · +${esc(b.phone)}` : ''}</div></div>
+          ${canManageForms() ? `<button type="button" class="btn-secondary btn-sm" data-cancel-booking="${esc(b.id)}">Cancel</button>` : ''}
+        </div>`).join('') : '<p class="settings-muted">No upcoming bookings.</p>');
+      box.querySelectorAll('[data-cancel-booking]').forEach((btn) => btn.addEventListener('click', () => showConfirm({
+        title: 'Cancel this booking?', confirmLabel: 'Cancel booking',
+        body: 'The time becomes free for others to book. The customer is not told automatically, so let them know in the chat.',
+        onConfirm: async () => {
+          try {
+            await authFetch(`/api/whatsapp-flows/${form.id}/bookings/${btn.dataset.cancelBooking}/cancel`, { method: 'POST' });
+            showToast('Booking cancelled', 'success');
+          } catch (err) { reportError(err); }
+          renderWaFormBookings(form);
+        },
+      })));
+    } catch (err) {
+      box.innerHTML = `<p class="settings-muted">${esc(err.message || 'Could not load bookings.')}</p>`;
+    }
+  }
+
   async function openWaFormResponses(id) {
     const form = waFormState.forms.find((x) => x.id === id);
     document.getElementById('wa-form-responses-title').textContent = `Responses: ${form?.name || ''}`;
     const list = document.getElementById('wa-form-responses-list');
     list.innerHTML = '<span class="skeleton analytics-skeleton"></span>';
     document.getElementById('modal-wa-form-responses').classList.add('open');
+    document.getElementById('wa-form-responses-csv').onclick = () => form && downloadWaFormCsv(form);
+    if (form) renderWaFormBookings(form);
     try {
       const rows = await authFetch(`/api/whatsapp-flows/${id}/responses`);
       list.innerHTML = rows.length ? rows.map((r) => `
@@ -9144,6 +9259,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const action = btn.dataset.waFormAction;
     if (action === 'edit') openWaFormDrawer(form);
+    else if (action === 'fields') openWaFormMapping(form);
+    else if (action === 'template') openWaFormTemplate(form);
     else if (action === 'duplicate') run('POST', '/duplicate', 'Copy created as a draft');
     else if (action === 'publish') showConfirm({
       title: 'Publish this form?', danger: false, confirmLabel: 'Publish',
@@ -9178,7 +9295,8 @@ document.addEventListener('DOMContentLoaded', () => {
     select.innerHTML = sendable.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}${x.status === 'draft' ? ' (draft: test only)' : ''}</option>`).join('');
     const updateHint = () => {
       const chosen = sendable.find((x) => x.id === select.value);
-      hint.textContent = chosen?.status === 'draft' ? 'Draft forms show a "draft" banner to the customer. Use them for testing only.' : '';
+      const tplNote = chosen?.template_name ? (chosen.template_status === 'approved' ? ' If they haven\'t messaged in 24 hours, it goes out as its approved template.' : ` Its template is ${chosen.template_status || 'pending'}.`) : '';
+      hint.textContent = (chosen?.status === 'draft' ? 'Draft forms show a "draft" banner to the customer. Use them for testing only.' : '') + tplNote;
     };
     select.onchange = updateHint;
     updateHint();
@@ -9624,7 +9742,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!st.eligible) {
-      box.innerHTML = '<p class="settings-muted">This number also runs on the WhatsApp Business app, so it can\'t apply for the green tick. Meta Verified, inside the WhatsApp Business app, is the option for it.</p>';
+      // Meta doesn't grant the free badge (OBA) to WhatsApp Business app
+      // numbers. Their route is Meta Verified: a paid monthly subscription
+      // bought only inside the app, with no API for Wasi to start it.
+      box.innerHTML = `
+        <p>This number also runs on the WhatsApp Business app, so Meta won't give it the free badge. It can get a verified badge through <strong>Meta Verified</strong> instead, a paid monthly subscription from Meta.</p>
+        <ol class="connect-steps">
+          <li>On the phone with this number, open the <strong>WhatsApp Business app</strong>.</li>
+          <li>Go to <strong>Settings &gt; Tools &gt; Meta Verified</strong> (or tap your business name &gt; Meta Verified).</li>
+          <li>Pick a plan and pay. Meta checks your business documents, then the badge appears.</li>
+        </ol>
+        <p class="form-hint">Meta sets the price and handles payment and support. Wasi can't buy or manage it for you. <a href="https://whatsappbusiness.com/resources/resource-library/meta-verified-business/" target="_blank" rel="noopener noreferrer">About Meta Verified</a></p>`;
       return;
     }
     const canApply = ['NOT_STARTED', 'REJECTED', 'EXPIRED', 'CANCELLED'].includes(String(st.status).toUpperCase());

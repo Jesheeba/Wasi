@@ -1,5 +1,24 @@
 # Testing
 
+## whatsapp-flows phase 3
+`whatsappFlowsPhase3.test.js` (Meta faked), 6/6:
+- Attribute map: an unknown field or a foreign attribute is 400.
+- A completed form copies the choice as text into a text field and skips
+  text into a number field.
+- CSV header and row.
+- Template: emoji 400; FLOW button with navigate + screen (and
+  data_exchange for live forms); a `message_templates` row; a second one
+  409.
+- Sending outside 24 h: a pending template is refused with no call; an
+  approved one goes out as the template with the flow-token button
+  parameter.
+- Bookings: listed, cancelled once, no longer counted.
+
+The first run caught the booking date being shown a day early.
+Regression, all green: whatsappFlows 17, flowLiveBooking 9,
+chatsLastAgentReplyAt 17, metaWebhookDispatch 3, webhookForwarding 8,
+productMessages 6, whatsappQuickWins 11.
+
 ## whatsapp-flows phase 2 (live booking)
 `flowLiveBooking.test.js` (Meta faked, real RSA/AES encryption), 9/9:
 - Config limits; open days, today excluded, capacity filtering.

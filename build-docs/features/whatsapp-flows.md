@@ -62,10 +62,38 @@ Wasi's own Flows endpoint so customers only see free times.
 - **Not built:** cancelling or rescheduling a booking, a bookings calendar
   view, and reminders.
 
+## Phase 3 (built 2026-11-23, live check pending)
+- **Contact fields:** per form, each answer can be saved to a contact
+  attribute (`whatsapp_flows.attribute_map`, migration 104).
+  - Choice answers are saved as their text.
+  - An answer that doesn't fit the field's type is skipped (same rule as
+    the flow engine's Capture Reply).
+- **Send anytime:** "Send anytime" creates a Marketing or Utility template
+  whose button opens the form.
+  - The FLOW button uses `navigate` + first screen, or `data_exchange` for
+    live forms.
+  - The template is stored as `whatsapp_flows.template_name` and a
+    `message_templates` row, and Meta reviews it.
+  - Outside the 24 h window, the chat's Send form goes out as that approved
+    template, with the flow token in the button parameter. If it isn't
+    approved yet, the send is refused with a clear reason.
+- **CSV:** `GET /:id/responses.csv`, one row per response with labelled
+  columns.
+- **Live bookings:** upcoming bookings are listed in the Responses drawer.
+  Cancel frees the slot; the customer is not told automatically.
+- **Fixed while testing:** booking dates were shifted a day back in India (a
+  pg `date` read as a JS Date at local midnight, then `toISOString()`). The
+  query now returns the date as text.
+
+## Pricing (corrected 2026-11-23)
+Since **2026-10-01** Meta charges non-template ("service") messages, at
+utility rates, with **1,000 free per business number per month**. A form
+sent inside the 24 h window therefore counts as a service message: free
+within those 1,000, charged after. A form sent through its template is
+charged at the template's category rate. Meta documents no separate Flows
+or data-endpoint fee (inferred; Meta's pricing pages don't mention Flows).
+
 Not built yet (follow-ups):
-- A FLOW button inside a template, for sending outside the 24h window.
-- Mapping answers into contact attributes.
-- Exporting responses as CSV.
 - Data-endpoint flows.
 
 Meta requirements: publishing needs a Meta-verified business with good

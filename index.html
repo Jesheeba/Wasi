@@ -2359,7 +2359,53 @@
         </div>
         <button class="close-modal-btn" data-close-modal="modal-wa-form-responses"><i data-lucide="x"></i></button>
       </div>
-      <div class="drawer-content" id="wa-form-responses-list" aria-live="polite"></div>
+      <div class="drawer-content">
+        <div class="wa-form-responses-actions"><button type="button" class="btn-secondary btn-sm" id="wa-form-responses-csv"><i data-lucide="download" class="icon-14"></i> Download CSV</button></div>
+        <section id="wa-form-bookings" hidden></section>
+        <div id="wa-form-responses-list" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forms: save answers to contact fields -->
+  <div id="modal-wa-form-map" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Save answers to contact fields</h3>
+        <button class="close-modal-btn" data-close-modal="modal-wa-form-map"><i data-lucide="x"></i></button>
+      </div>
+      <form id="wa-form-map-form">
+        <div class="modal-inner-scroll" id="wa-form-map-fields"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-modal="modal-wa-form-map">Cancel</button>
+          <button type="submit" class="btn-primary btn-auto">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Forms: template so the form can be sent anytime -->
+  <div id="modal-wa-form-template" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Send this form anytime</h3>
+        <button class="close-modal-btn" data-close-modal="modal-wa-form-template"><i data-lucide="x"></i></button>
+      </div>
+      <form id="wa-form-tpl-form">
+        <div class="modal-inner-scroll">
+          <p class="form-hint">WhatsApp only allows a plain form within 24 hours of the customer's last message. A template with a button that opens the form can be sent anytime, once WhatsApp approves it (usually minutes to a day). Template messages are charged by WhatsApp.</p>
+          <fieldset class="form-group"><legend class="form-label">Template type</legend>
+            <label class="wa-form-required"><input type="radio" name="wa-form-tpl-category" value="MARKETING" checked /> Marketing (offers, surveys, lead forms)</label>
+            <label class="wa-form-required"><input type="radio" name="wa-form-tpl-category" value="UTILITY" /> Utility (about an existing order or booking)</label>
+          </fieldset>
+          <div class="form-group"><label class="form-label" for="wa-form-tpl-body">Message</label><textarea id="wa-form-tpl-body" class="form-input" rows="3" maxlength="1024" required></textarea></div>
+          <div class="form-group"><label class="form-label" for="wa-form-tpl-button">Button text</label><input type="text" id="wa-form-tpl-button" class="form-input" maxlength="25" required /></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-modal="modal-wa-form-template">Cancel</button>
+          <button type="submit" class="btn-primary btn-auto">Send for approval</button>
+        </div>
+      </form>
     </div>
   </div>
 

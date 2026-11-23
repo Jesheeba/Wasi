@@ -1,12 +1,13 @@
 // WhatsApp Flows ("Forms") - build-docs/features/whatsapp-flows.md.
 // Tenant reads/writes take `db` (req.db, RLS-scoped). The webhook's
 // response write runs on the privileged pool, so it scopes by client_id.
-const COLUMNS = 'id, client_id, name, kind, config, flow_json, meta_flow_id, status, last_error, published_at, created_at, updated_at';
+const COLUMNS = 'id, client_id, name, kind, config, flow_json, meta_flow_id, status, last_error, published_at, created_at, updated_at, attribute_map, template_name';
 
 async function list(db, clientId) {
   const { rows } = await db.query(
     `select ${COLUMNS},
-            (select count(*)::int from whatsapp_flow_responses r where r.flow_id = f.id) as response_count
+            (select count(*)::int from whatsapp_flow_responses r where r.flow_id = f.id) as response_count,
+            (select t.status from message_templates t where t.client_id = f.client_id and t.name = f.template_name order by t.created_at desc limit 1) as template_status
      from whatsapp_flows f where client_id = $1 order by created_at desc`,
     [clientId]
   );
@@ -28,11 +29,11 @@ async function create(db, clientId, { name, kind, config }) {
 
 // Partial update of the Meta-side state after a create/upload/publish step.
 async function update(db, clientId, id, fields) {
-  const allowed = ['name', 'config', 'flow_json', 'meta_flow_id', 'status', 'last_error', 'published_at'];
+  const allowed = ['name', 'config', 'flow_json', 'meta_flow_id', 'status', 'last_error', 'published_at', 'attribute_map', 'template_name'];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (!keys.length) return findById(db, clientId, id);
   const sets = keys.map((k, i) => `${k} = $${i + 3}`);
-  const values = keys.map((k) => (k === 'config' || k === 'flow_json') && fields[k] != null ? JSON.stringify(fields[k]) : fields[k]);
+  const values = keys.map((k) => (k === 'config' || k === 'flow_json' || k === 'attribute_map') && fields[k] != null ? JSON.stringify(fields[k]) : fields[k]);
   const { rows } = await db.query(
     `update whatsapp_flows set ${sets.join(', ')}, updated_at = now() where client_id = $1 and id = $2 returning ${COLUMNS}`,
     [clientId, id, ...values]
@@ -74,4 +75,26 @@ async function listResponses(db, clientId, flowId) {
   return rows;
 }
 
-module.exports = { list, findById, create, update, remove, findByMetaFlowId, recordResponse, listResponses };
+// Live booking: upcoming bookings for one form (newest slot first by date).
+async function listBookings(db, clientId, flowId) {
+  const { rows } = await db.query(
+    `select b.id, b.slot_date::text as slot_date, b.slot_time, b.name, b.status, b.created_at, ch.phone, ch.id as chat_id
+     from whatsapp_flow_bookings b left join chats ch on ch.id = b.chat_id
+     where b.client_id = $1 and b.flow_id = $2 and b.slot_date >= current_date
+     order by b.slot_date, b.slot_time limit 500`,
+    [clientId, flowId]
+  );
+  return rows;
+}
+
+async function cancelBooking(db, clientId, flowId, bookingId) {
+  const { rowCount } = await db.query(
+    `update whatsapp_flow_bookings set status = 'cancelled' where client_id = $1 and flow_id = $2 and id = $3 and status = 'booked'`,
+    [clientId, flowId, bookingId]
+  );
+  return rowCount > 0;
+}
+
+module.exports = {
+  listBookings,
+  cancelBooking, list, findById, create, update, remove, findByMetaFlowId, recordResponse, listResponses };

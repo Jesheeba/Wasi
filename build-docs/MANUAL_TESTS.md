@@ -204,3 +204,23 @@ If step 3 shows an error inside WhatsApp, tell me what it says: it usually
 means Meta could not reach or decrypt the endpoint.
 
 Status: PENDING
+
+## 14. Forms: contact fields, send anytime, CSV, bookings
+Deploy first (migration 104).
+1. Settings > Attributes: add a text field "Course". Forms > your Lead form
+   > Contact fields > "Interested in" -> Course > Save.
+2. Send the form to 9092766740 and submit it.
+   - Expect: the contact's Course field shows your choice (Contacts > open
+     the contact).
+3. Forms > the form > Send anytime > Marketing > Send for approval.
+   - Expect: "Template: pending" under the form; "approved" after Meta
+     reviews it (minutes to a day).
+4. After approval, open a chat whose last customer message is older than 24
+   hours > Send form.
+   - Expect: the phone receives the template with an Open form button.
+5. Forms > click the Responses number > Download CSV. Expect a spreadsheet
+   with one row per answer.
+6. For a live booking form: Responses shows "Upcoming bookings". Cancel one.
+   Expect that time to become bookable again.
+
+Status: PENDING

@@ -1,5 +1,18 @@
 # Project memory
 
+## 2026-11-23 - pricing correction, migration numbers
+- Meta charges service (non-template) messages from 2026-10-01, at utility
+  rates, with 1,000 free per business number per month. In-window Forms are
+  not unconditionally free any more. This also affects the AI-agent spec's
+  per-reply Meta fee assumption (SPEC decision 27): its owner should
+  re-check it.
+- Migration 104 was taken because the `ai-agent` and `google-login`
+  branches both hold 102_messages_reply_and_reactions and 103_ai_agent. If
+  ai-agent merges after 104 is applied in production, its 103 must be
+  renumbered (node-pg-migrate refuses out-of-order migrations).
+- Green tick: OBA has no fee documented by Meta. Meta Verified is paid and
+  bought only in the WhatsApp Business app; Wasi can only show the steps.
+
 ## 2026-11-23 - WooCommerce first
 - Owner: "Add woocommerce for now - build". The Ecommerce page is
   WooCommerce order messages. Shopify, abandoned carts and catalog product

@@ -3447,3 +3447,10 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .in-android-app #sec-view-subscription,
 .in-android-app #modal-choose-plan,
 .in-android-app #suspended-view-pay-btn { display: none !important; }
+
+/* Forms phase 3 (build-docs/features/whatsapp-flows.md). */
+.wa-form-responses-actions { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }
+#wa-form-bookings { margin-bottom: 1.25rem; }
+#wa-form-bookings[hidden] { display: none; }
+.wa-booking-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.wa-form-tpl { font-size: 0.75rem; margin-top: 2px; }

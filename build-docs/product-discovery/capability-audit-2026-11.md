@@ -8,6 +8,11 @@ committing to it.
 
 ## Read this first
 
+- **Pricing change (found 2026-11-23):** since 2026-10-01 Meta charges
+  non-template service messages at utility rates, with 1,000 free per
+  number per month. So replies, Forms and product messages sent inside the
+  24 h window are free only up to that allowance.
+
 - **Coexistence limits some features.** 7 of Wasi's 10 connected numbers
   also run the WhatsApp Business app (Coexistence). Calling and the Marketing
   Messages API require a number that is on Cloud API only, so most current

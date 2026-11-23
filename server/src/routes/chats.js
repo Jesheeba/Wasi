@@ -393,15 +393,36 @@ router.post('/:id/forms', requireRole('Admin', 'Manager', 'Agent'), asyncHandler
   if (!flow.meta_flow_id || !['draft', 'published'].includes(flow.status)) {
     return res.status(409).json({ error: "This form can't be sent: WhatsApp never accepted it, or it has been retired." });
   }
+  // Live forms (endpoint kinds) carry the chat in the token so a booking
+  // knows who made it, and open with data_exchange (endpoint INIT).
+  const flowToken = flowTemplates.makeFlowToken(flow.id, flowTemplates.KINDS[flow.kind].endpoint ? chat.id : undefined);
+
+  // Outside the 24h window a form can only go out inside its approved
+  // template (whatsapp-flows.md phase 3); inside it, the free interactive message.
+  const windowOpen = await messagingService.canSendFreeform(req.db, req.clientId, chat.id);
+  let template = null;
+  if (!windowOpen) {
+    if (!flow.template_name) {
+      return res.status(409).json({ error: "This customer hasn't messaged in the last 24 hours. Make a template for this form on the Forms page to send it anytime.", code: 'session_window_closed' });
+    }
+    const t = await req.db.query('select name, language, status from message_templates where client_id = $1 and name = $2 order by created_at desc limit 1', [req.clientId, flow.template_name]);
+    template = t.rows[0];
+    if (!template || template.status !== 'approved') {
+      return res.status(409).json({ error: `This customer hasn't messaged in the last 24 hours, and the form's template is ${template ? template.status : 'missing'}. It can be sent once WhatsApp approves it.`, code: 'template_not_approved' });
+    }
+  }
   await chatsRepo.markAgentReplyNonFatal(req.db, req.clientId, chat.id);
   try {
-    const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, {
+    const message = template
+      ? await messagingService.sendChatMessage(req.db, req.clientId, chat, {
+        type: 'template', templateName: template.name, templateLanguage: template.language,
+        templateComponents: [{ type: 'button', sub_type: 'flow', index: '0', parameters: [{ type: 'action', action: { flow_token: flowToken } }] }],
+      }, { release: req.commitAndRelease, reacquire: req.reacquireDb })
+      : await messagingService.sendChatMessage(req.db, req.clientId, chat, {
       type: 'flow', body: data.body,
       flow: {
-        // Live forms (endpoint kinds) carry the chat in the token so a booking
-        // knows who made it, and open with data_exchange (endpoint INIT).
         name: flow.name, metaFlowId: flow.meta_flow_id,
-        flowToken: flowTemplates.makeFlowToken(flow.id, flowTemplates.KINDS[flow.kind].endpoint ? chat.id : undefined),
+        flowToken,
         action: flowTemplates.KINDS[flow.kind].endpoint ? 'data_exchange' : 'navigate',
         cta: data.cta, screen: flowTemplates.KINDS[flow.kind].screen, mode: flow.status === 'draft' ? 'draft' : 'published',
       },

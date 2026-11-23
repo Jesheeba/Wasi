@@ -11,6 +11,7 @@ const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
 const { encrypt, decrypt } = require('../utils/encryption');
 const liveBooking = require('../utils/flowLiveBooking');
+const { toCsv } = require('../utils/csvExport');
 const tpl = require('../utils/whatsappFlowTemplates');
 
 const router = Router();
@@ -180,6 +181,97 @@ router.get('/:id/responses', asyncHandler(async (req, res) => {
     id: r.id, createdAt: r.created_at, chatId: r.chat_id, contactName: r.contact_name, phone: r.phone,
     answers: tpl.describeResponse(flow, r.response),
   })));
+}));
+
+// ---------- Phase 3 (build-docs/features/whatsapp-flows.md) ----------
+
+// Which contact field each answer is saved to. { field: attributeId|null }.
+router.put('/:id/attribute-map', manage, asyncHandler(async (req, res) => {
+  const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!flow) return res.status(404).json({ error: 'Form not found' });
+  const input = z.record(z.string().uuid().nullable()).parse(req.body?.map || {});
+  const fields = Object.keys(tpl.KINDS[flow.kind].defaults.fields);
+  const unknown = Object.keys(input).filter((k) => !fields.includes(k));
+  if (unknown.length) return res.status(400).json({ error: `Unknown form field: ${unknown.join(', ')}` });
+  const ids = [...new Set(Object.values(input).filter(Boolean))];
+  if (ids.length) {
+    const { rows } = await req.db.query('select id from contact_attributes where client_id = $1 and id = any($2::uuid[])', [req.clientId, ids]);
+    if (rows.length !== ids.length) return res.status(400).json({ error: 'One of the contact fields no longer exists.' });
+  }
+  const map = Object.fromEntries(Object.entries(input).filter(([, v]) => v));
+  res.json(shape(await whatsappFlowsRepo.update(req.db, req.clientId, flow.id, { attribute_map: map })));
+}));
+
+// A template with an "open form" button, so the form can be sent to someone
+// who hasn't messaged in the last 24 hours. Meta reviews it like any template.
+const templateSchema = z.object({
+  category: z.enum(['MARKETING', 'UTILITY']),
+  body: z.string().trim().min(1).max(1024),
+  buttonText: z.string().trim().min(1).max(25).refine((v) => !/\p{Extended_Pictographic}/u.test(v), 'Button text cannot contain emoji'),
+});
+router.post('/:id/template', manage, asyncHandler(async (req, res) => {
+  const input = templateSchema.parse(req.body);
+  const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!flow) return res.status(404).json({ error: 'Form not found' });
+  if (!flow.meta_flow_id || !['draft', 'published'].includes(flow.status)) return res.status(409).json({ error: 'This form was never accepted by WhatsApp, or has been retired.' });
+  if (flow.template_name) return res.status(409).json({ error: 'This form already has a template.' });
+  const conn = await wabaWithToken(req.clientId);
+  if (!conn) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  const slug = flow.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'form';
+  const name = `${slug}_form_${flow.id.slice(0, 6)}`;
+  const kind = tpl.KINDS[flow.kind];
+  let created;
+  try {
+    created = await metaClient.createFlowTemplate(conn.waba.waba_id, conn.token, {
+      name, category: input.category, language: 'en', body: input.body, buttonText: input.buttonText,
+      flowId: flow.meta_flow_id, screen: kind.screen, endpoint: Boolean(kind.endpoint),
+    });
+  } catch (err) {
+    return metaFailure(res, err, 'WhatsApp did not accept the template');
+  }
+  await req.db.query(
+    `insert into message_templates (client_id, name, category, status, body, language, meta_template_id, buttons)
+     values ($1, $2, $3, $4, $5, 'en', $6, $7)`,
+    [req.clientId, name, input.category, String(created.status || 'pending').toLowerCase(), input.body, created.id || null,
+      JSON.stringify([{ type: 'FLOW', text: input.buttonText }])]
+  );
+  res.status(201).json(shape(await whatsappFlowsRepo.update(req.db, req.clientId, flow.id, { template_name: name })));
+}));
+
+router.get('/:id/responses.csv', asyncHandler(async (req, res) => {
+  const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!flow) return res.status(404).json({ error: 'Form not found' });
+  const rows = await whatsappFlowsRepo.listResponses(req.db, req.clientId, flow.id);
+  const fields = Object.entries(tpl.KINDS[flow.kind].defaults.fields).map(([key, f]) => ({ key, header: flow.config?.fields?.[key]?.label || f.label }));
+  const columns = [{ key: 'submitted', header: 'Submitted' }, { key: 'contact', header: 'Contact' }, { key: 'phone', header: 'Phone' }, ...fields];
+  const data = rows.map((r) => {
+    const answers = Object.fromEntries(tpl.describeResponse(flow, r.response).map((a) => [a.key, a.value]));
+    return { submitted: new Date(r.created_at).toISOString(), contact: r.contact_name || '', phone: r.phone || '', ...answers };
+  });
+  const safeName = flow.name.replace(/[^a-z0-9]+/gi, '_').slice(0, 40) || 'form';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}_responses.csv"`);
+  res.send(toCsv(columns, data));
+}));
+
+router.get('/:id/bookings', asyncHandler(async (req, res) => {
+  const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!flow) return res.status(404).json({ error: 'Form not found' });
+  const rows = await whatsappFlowsRepo.listBookings(req.db, req.clientId, flow.id);
+  res.json(rows.map((b) => ({
+    // slot_date comes back as text: a JS Date for a pg `date` is local
+    // midnight, and toISOString() shifted it a day back in India.
+    id: b.id, date: b.slot_date,
+    time: b.slot_time, name: b.name, phone: b.phone, chatId: b.chat_id, status: b.status,
+  })));
+}));
+
+// Cancelling frees the slot straight away (free slots only count 'booked').
+router.post('/:id/bookings/:bookingId/cancel', manage, asyncHandler(async (req, res) => {
+  z.string().uuid().parse(req.params.bookingId);
+  const ok = await whatsappFlowsRepo.cancelBooking(req.db, req.clientId, req.params.id, req.params.bookingId);
+  if (!ok) return res.status(404).json({ error: 'Booking not found or already cancelled' });
+  res.json({ cancelled: true });
 }));
 
 module.exports = router;

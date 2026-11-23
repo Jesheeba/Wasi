@@ -1279,7 +1279,20 @@ async function sendProductMessage(phoneNumberId, accessToken, toPhone, interacti
   return data.messages?.[0]?.id;
 }
 
+// Forms phase 3: a template whose button opens a form, so the form can be
+// sent outside the 24h window. Live forms open with data_exchange (the
+// endpoint serves the first screen); others navigate to their first screen.
+async function createFlowTemplate(wabaId, accessToken, { name, category, language, body, buttonText, flowId, screen, endpoint }) {
+  const button = { type: 'FLOW', text: buttonText, flow_id: flowId, flow_action: endpoint ? 'data_exchange' : 'navigate' };
+  if (!endpoint) button.navigate_screen = screen;
+  return graphFetch(`/${wabaId}/message_templates`, {
+    method: 'POST', accessToken,
+    body: { name, category, language, components: [{ type: 'BODY', text: body }, { type: 'BUTTONS', buttons: [button] }] },
+  });
+}
+
 module.exports = {
+  createFlowTemplate,
   listWabaCatalogs,
   sendProductMessage,
   getOrCreateCtwaDataset,
