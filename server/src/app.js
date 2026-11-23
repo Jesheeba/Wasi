@@ -35,6 +35,7 @@ const integrationsRouter = require('./routes/integrations');
 const whatsappFlowsRouter = require('./routes/whatsappFlows');
 const ecommerceRouter = require('./routes/ecommerce');
 const wooWebhookRouter = require('./routes/wooWebhook');
+const whatsappToolsRouter = require('./routes/whatsappTools');
 const teamMembersRouter = require('./routes/teamMembers');
 const contactAttributesRouter = require('./routes/contactAttributes');
 const paymentLinksRouter = require('./routes/paymentLinks');
@@ -187,6 +188,7 @@ function createApp() {
   app.use('/api/integrations', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, integrationsRouter);
   app.use('/api/whatsapp-flows', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, whatsappFlowsRouter);
   app.use('/api/ecommerce', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, ecommerceRouter);
+  app.use('/api/whatsapp-tools', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, whatsappToolsRouter);
   app.use('/api/team-members', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, teamMembersRouter);
   app.use('/api/contact-attributes', requireClientOrTeamAuth, requireActiveSubscription, withTenantContext, contactAttributesRouter);
   app.use('/api/payment-links', requireClientAuth, requireActiveSubscription, withTenantContext, paymentLinksRouter);

@@ -1,5 +1,30 @@
 # Testing
 
+## whatsapp-quick-wins
+`server/test/whatsappQuickWins.test.js` (API, Meta faked), 11/11:
+- Read ticks: no inbound message -> no call; marks the newest inbound;
+  typing adds the indicator; a Meta error still answers 200.
+- Block: a 24h refusal (failed_users 131047) gives 409 with the reason and
+  marks nothing; block/unblock use POST/DELETE with "+phone" and track
+  state.
+- QR: 141 characters -> 400 with no call; create stores the image URL;
+  edit; delete works even when Meta already removed the code.
+- Starters: read mapping; 5 prompts, emoji and duplicate commands are
+  refused before Meta; "/hours" is saved as "hours".
+- Green tick: status; 4 links -> 400; fields mapped; app-registered
+  numbers are refused.
+- request_welcome -> "Opened the chat"; role gates.
+
+`whatsappQuickWinsUI.test.js` (Playwright), 2/2: opening a chat sends one
+read call; typing is throttled to one indicator; Block via the menu flips
+to Unblock; QR create shows the image and link; starters save the right
+Meta body; green-tick status and form shown.
+
+Regression, all green: chatUiPass 15, settingsRedesign 11,
+confirmPromptGroup23 6, modalInnerScrollGroup4 4, chatsLastAgentReplyAt 17,
+metaWebhookDispatch 3, webhookForwarding 8, coexistenceEchoIngestion 9,
+whatsappFlows 17, whatsappFlowsUI 4, apiV1 14.
+
 ## woocommerce-integration
 `server/test/woocommerce.test.js` (fake store + fake Meta via global.fetch,
 fake DNS via publicUrl.resolver, local Postgres), 13/13:

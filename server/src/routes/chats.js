@@ -7,6 +7,9 @@ const chatSlaLogsRepo = require('../repositories/chatSlaLogsRepo');
 const messagingService = require('../services/messagingService');
 const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
 const flowTemplates = require('../utils/whatsappFlowTemplates');
+const wabasRepo = require('../repositories/wabasRepo');
+const metaClient = require('../utils/metaClient');
+const { decrypt } = require('../utils/encryption');
 const { z } = require('zod');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, chatCreateSchema, chatUpdateSchema, chatAssignSchema, chatNoteCreateSchema, messageSendSchema } = require('../utils/validate');
@@ -234,6 +237,85 @@ router.post('/:id/messages', requireRole('Admin', 'Manager', 'Agent'), asyncHand
     throw err;
   }
 }));
+
+// --- WhatsApp quick wins: read ticks, typing, block
+// (build-docs/features/whatsapp-quick-wins.md) ---
+async function chatWaba(clientId) {
+  const waba = await wabasRepo.findByClientId(clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) return null;
+  return { waba, token: decrypt(waba.access_token_encrypted) };
+}
+
+async function newestInboundMetaId(db, clientId, chatId) {
+  const { rows } = await db.query(
+    `select meta_message_id from messages
+     where client_id = $1 and chat_id = $2 and direction = 'in' and meta_message_id is not null
+     order by sent_at desc limit 1`,
+    [clientId, chatId]
+  );
+  return rows[0]?.meta_message_id || null;
+}
+
+// Best effort: a failure here must never get in the way of the inbox, so
+// the answer is always 200 with { sent, reason }.
+async function readOrTyping(req, res, typing) {
+  uuid.parse(req.params.id);
+  const chat = await chatsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!chat) return res.status(404).json({ error: 'Not found' });
+  const messageId = await newestInboundMetaId(req.db, req.clientId, chat.id);
+  if (!messageId) return res.json({ sent: false, reason: 'no_inbound_message' });
+  const conn = await chatWaba(req.clientId);
+  if (!conn) return res.json({ sent: false, reason: 'waba_not_connected' });
+  try {
+    await metaClient.markReadAndTyping(conn.waba.phone_number_id, conn.token, messageId, { typing });
+    return res.json({ sent: true });
+  } catch (err) {
+    return res.json({ sent: false, reason: err.message });
+  }
+}
+router.post('/:id/read', requireRole('Admin', 'Manager', 'Agent'), asyncHandler((req, res) => readOrTyping(req, res, false)));
+router.post('/:id/typing', requireRole('Admin', 'Manager', 'Agent'), asyncHandler((req, res) => readOrTyping(req, res, true)));
+
+async function blockOrUnblock(req, res, unblock) {
+  uuid.parse(req.params.id);
+  const chat = await chatsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!chat) return res.status(404).json({ error: 'Not found' });
+  if (!chat.phone) return res.status(400).json({ error: 'This chat has no phone number.' });
+  const conn = await chatWaba(req.clientId);
+  if (!conn) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  let result;
+  try {
+    result = await metaClient.setBlockedUsers(conn.waba.phone_number_id, conn.token, [chat.phone], { unblock });
+  } catch (err) {
+    return res.status(502).json({ error: unblock ? 'WhatsApp did not unblock this contact' : 'WhatsApp did not block this contact', detail: err.message });
+  }
+  if (!result.done.length) {
+    const e = result.failed[0]?.errors?.[0];
+    const detail = e?.code === 131047
+      ? 'WhatsApp only allows blocking someone who messaged you in the last 24 hours.'
+      : (e?.error_data?.details || e?.message || 'WhatsApp did not accept the request.');
+    return res.status(409).json({ error: detail, metaErrorCode: e?.code ?? null });
+  }
+  if (chat.contact_id) {
+    await req.db.query(
+      'update contacts set whatsapp_blocked_at = $3 where client_id = $1 and id = $2',
+      [req.clientId, chat.contact_id, unblock ? null : new Date().toISOString()]
+    );
+  }
+  res.json({ blocked: !unblock });
+}
+router.get('/:id/block', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const { rows } = await req.db.query(
+    `select co.whatsapp_blocked_at from chats ch left join contacts co on co.id = ch.contact_id
+     where ch.client_id = $1 and ch.id = $2`,
+    [req.clientId, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json({ blocked: Boolean(rows[0].whatsapp_blocked_at) });
+}));
+router.post('/:id/block', requireRole('Admin', 'Manager'), asyncHandler((req, res) => blockOrUnblock(req, res, false)));
+router.delete('/:id/block', requireRole('Admin', 'Manager'), asyncHandler((req, res) => blockOrUnblock(req, res, true)));
 
 // Send a WhatsApp Form (build-docs/features/whatsapp-flows.md) into this
 // chat. Lives here, not in routes/whatsappFlows.js, because a person sending

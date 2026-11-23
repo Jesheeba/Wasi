@@ -3318,3 +3318,18 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .woo-coming-soon { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 1.5rem; }
 .woo-coming-soon > div { padding: 12px 14px; border: 1px dashed var(--border-light); border-radius: 10px; font-size: 0.85rem; }
 .woo-coming-soon p { margin: 4px 0 0; color: var(--text-muted); font-size: 0.8rem; }
+
+/* WhatsApp quick wins (build-docs/features/whatsapp-quick-wins.md). */
+#chat-block-btn[hidden] { display: none; }
+.wa-qr-section, .wa-starters, .wa-green-tick { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-light); }
+.wa-qr-section .settings-inline-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.wa-qr-section .settings-inline-row .form-input { flex: 1 1 220px; min-width: 0; }
+.wa-qr-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wa-qr-img { width: 72px; height: 72px; border: 1px solid var(--border-light); border-radius: 8px; background: #fff; }
+.wa-qr-text { flex: 1 1 200px; min-width: 0; font-size: 0.85rem; }
+.wa-qr-text a { display: block; overflow-wrap: anywhere; font-size: 0.78rem; }
+.wa-qr-message { font-weight: 500; overflow-wrap: anywhere; }
+.wa-qr-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.wa-prompt { margin-bottom: 6px; }
+.wa-cmd-row { display: grid; grid-template-columns: minmax(90px, 30%) 1fr auto; gap: 6px; margin-bottom: 6px; }
+@media (max-width: 640px) { .wa-cmd-row { grid-template-columns: 1fr auto; } .wa-cmd-row [data-cmd-desc] { grid-column: 1 / -1; grid-row: 2; } }

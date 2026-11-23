@@ -1,5 +1,18 @@
 # Changelog
 
+## feat(whatsapp-quick-wins): read ticks, typing, block, QR codes, starters, green tick
+- Opening a chat marks the customer's newest message read (blue ticks).
+- Typing a reply shows "typing..." to the customer (at most every 20 s).
+- Chat menu: Block / Unblock contact (Admin/Manager). Meta's 24-hour rule
+  is explained in plain words.
+- Settings > WhatsApp > Message Link: create, edit, copy, download and
+  delete QR codes.
+- Settings > WhatsApp > Settings: ice breakers (4), /commands (30), the
+  welcome-message switch, and the green-tick application (blocked, with an
+  explanation, for numbers also on the WhatsApp Business app).
+- `request_welcome` is stored as "Opened the chat".
+- Migration 097 (`contacts.whatsapp_blocked_at`, `whatsapp_qr_codes`).
+
 ## feat(woocommerce): order messages from WooCommerce stores
 Ecommerce page (no longer Soon). Clients connect a WooCommerce store, either
 by one-click approval in the store or with REST keys. Wasi creates signed

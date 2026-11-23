@@ -1415,6 +1415,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openActiveChat(chat) {
     state.activeChatId = chat.id;
+    sendChatReadReceipt(chat.id);
     // Snapshot the unread count and reset the divider before anything below
     // (including the unread_count=0 PATCH further down) can touch either -
     // this is the one moment the "how many are unread" guess is taken; it's
@@ -9075,6 +9076,258 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- WhatsApp quick wins (build-docs/features/whatsapp-quick-wins.md) ---
+  // Read ticks when a chat is opened; "typing..." while staff write a reply
+  // (at most every 20 s, Meta shows it for up to 25 s). Best effort: these
+  // never show an error.
+  function sendChatReadReceipt(chatId) {
+    authFetch(`/api/chats/${chatId}/read`, { method: 'POST' }).catch(() => {});
+  }
+  const typingSentAt = new Map();
+  document.getElementById('chat-message-input')?.addEventListener('input', (e) => {
+    const chatId = state.activeChatId;
+    if (!chatId || !e.target.value.trim()) return;
+    const last = typingSentAt.get(chatId) || 0;
+    if (Date.now() - last < 20000) return;
+    typingSentAt.set(chatId, Date.now());
+    authFetch(`/api/chats/${chatId}/typing`, { method: 'POST' }).catch(() => {});
+  });
+
+  // Block / unblock from the chat menu. The label is refreshed whenever the
+  // menu is opened.
+  const chatBlockBtn = document.getElementById('chat-block-btn');
+  let chatBlocked = false;
+  document.getElementById('chat-more-menu-btn')?.addEventListener('click', async () => {
+    if (!chatBlockBtn || !state.activeChatId || state.actorRole === 'Agent') return;
+    try {
+      const { blocked } = await authFetch(`/api/chats/${state.activeChatId}/block`);
+      chatBlocked = blocked;
+      chatBlockBtn.querySelector('span').textContent = blocked ? 'Unblock contact' : 'Block contact';
+    } catch { /* leave the last label */ }
+  });
+  chatBlockBtn?.addEventListener('click', () => {
+    const chatId = state.activeChatId;
+    if (!chatId) return;
+    const unblock = chatBlocked;
+    showConfirm({
+      title: unblock ? 'Unblock this contact?' : 'Block this contact?',
+      confirmLabel: unblock ? 'Unblock' : 'Block',
+      danger: !unblock,
+      body: unblock
+        ? 'They will be able to message your WhatsApp number again.'
+        : 'They will not be able to message your WhatsApp number. WhatsApp only allows blocking someone who messaged you in the last 24 hours.',
+      onConfirm: async () => {
+        try {
+          await authFetch(`/api/chats/${chatId}/block`, { method: unblock ? 'DELETE' : 'POST' });
+          showToast(unblock ? 'Contact unblocked' : 'Contact blocked', 'success');
+        } catch (err) { reportError(err); }
+      },
+    });
+  });
+
+  // Settings > WhatsApp > Message Link: QR codes and short links.
+  async function renderQrCodes() {
+    const box = document.getElementById('wa-qr-section');
+    if (!box) return;
+    const list = box.querySelector('#wa-qr-list');
+    list.innerHTML = '<span class="skeleton settings-skeleton-line"></span>';
+    try {
+      const codes = await authFetch('/api/whatsapp-tools/qr-codes');
+      list.innerHTML = codes.length ? codes.map((c) => `
+        <div class="list-row wa-qr-row">
+          ${c.qr_image_url ? `<img class="wa-qr-img" src="${esc(c.qr_image_url)}" alt="QR code for: ${esc(c.prefilled_message)}" loading="lazy" />` : ''}
+          <div class="wa-qr-text">
+            <div class="wa-qr-message">${esc(c.prefilled_message)}</div>
+            <a href="${esc(c.deep_link_url)}" target="_blank" rel="noopener noreferrer" class="settings-mono">${esc(c.deep_link_url)}</a>
+          </div>
+          <span class="wa-qr-actions">
+            ${c.qr_image_url ? `<a class="btn-secondary btn-sm" href="${esc(c.qr_image_url)}" target="_blank" rel="noopener noreferrer" download>Download</a>` : ''}
+            <button type="button" class="btn-secondary btn-sm" data-qr-copy="${esc(c.deep_link_url)}">Copy link</button>
+            <button type="button" class="btn-secondary btn-sm" data-qr-edit="${esc(c.code)}" data-qr-message="${esc(c.prefilled_message)}">Edit</button>
+            <button type="button" class="btn-secondary btn-sm" data-qr-delete="${esc(c.code)}">Delete</button>
+          </span>
+        </div>`).join('') : '<p class="settings-muted">No QR codes yet.</p>';
+    } catch (err) {
+      list.innerHTML = `<p class="settings-muted">${esc(err.message || 'Could not load QR codes.')}</p>`;
+    }
+  }
+
+  function mountQrSection(linkEl) {
+    if (!linkEl || state.actorRole === 'Agent') return;
+    linkEl.insertAdjacentHTML('beforeend', `
+      <section id="wa-qr-section" class="wa-qr-section" aria-labelledby="wa-qr-title">
+        <h3 class="settings-card-title" id="wa-qr-title">QR codes</h3>
+        <p class="settings-help">Print these on posters, packaging or cards. Scanning opens WhatsApp with your message ready to send.</p>
+        <form id="wa-qr-form" class="settings-inline-row">
+          <label class="sr-only" for="wa-qr-message">Message the customer will send</label>
+          <input type="text" id="wa-qr-message" class="form-input" maxlength="140" placeholder="Hi, I saw your poster" required />
+          <button type="submit" class="btn-primary btn-auto">Create QR code</button>
+        </form>
+        <div id="wa-qr-list" class="list-card"></div>
+      </section>`);
+    document.getElementById('wa-qr-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('wa-qr-message');
+      try {
+        await authFetch('/api/whatsapp-tools/qr-codes', { method: 'POST', body: JSON.stringify({ message: input.value }) });
+        input.value = '';
+        showToast('QR code created', 'success');
+        renderQrCodes();
+      } catch (err) { reportError(err); }
+    });
+    document.getElementById('wa-qr-list').addEventListener('click', (e) => {
+      const copy = e.target.closest('[data-qr-copy]');
+      if (copy) {
+        navigator.clipboard.writeText(copy.dataset.qrCopy).then(() => showToast('Link copied', 'success')).catch(() => showToast('Could not copy'));
+        return;
+      }
+      const edit = e.target.closest('[data-qr-edit]');
+      if (edit) {
+        showPrompt({
+          title: 'Edit QR code message', label: 'Message the customer will send (up to 140 characters)',
+          placeholder: edit.dataset.qrMessage, confirmLabel: 'Save',
+          onConfirm: async (value) => {
+            try {
+              await authFetch(`/api/whatsapp-tools/qr-codes/${encodeURIComponent(edit.dataset.qrEdit)}`, { method: 'PATCH', body: JSON.stringify({ message: value }) });
+              showToast('QR code updated', 'success');
+              renderQrCodes();
+            } catch (err) { reportError(err); }
+          },
+        });
+        return;
+      }
+      const del = e.target.closest('[data-qr-delete]');
+      if (del) {
+        showConfirm({
+          title: 'Delete this QR code?', confirmLabel: 'Delete',
+          body: 'Printed copies will stop working. This cannot be undone.',
+          onConfirm: async () => {
+            try {
+              await authFetch(`/api/whatsapp-tools/qr-codes/${encodeURIComponent(del.dataset.qrDelete)}`, { method: 'DELETE' });
+              showToast('QR code deleted', 'success');
+              renderQrCodes();
+            } catch (err) { reportError(err); }
+          },
+        });
+      }
+    });
+    renderQrCodes();
+  }
+
+  // Settings > WhatsApp > Settings: ice breakers, commands, welcome message,
+  // and the green tick application.
+  function commandRow(cmd = { name: '', description: '' }) {
+    return `<div class="wa-cmd-row">
+      <input type="text" class="form-input" data-cmd-name maxlength="33" placeholder="/hours" value="${esc(cmd.name ? `/${cmd.name}` : '')}" aria-label="Command" />
+      <input type="text" class="form-input" data-cmd-desc maxlength="256" placeholder="Our opening hours" value="${esc(cmd.description)}" aria-label="What it does" />
+      <button type="button" class="btn-ghost btn-sm" data-cmd-remove aria-label="Remove command"><i data-lucide="x" class="icon-14"></i></button>
+    </div>`;
+  }
+
+  async function mountChatStarters(settingsEl, waba) {
+    if (!settingsEl || state.actorRole === 'Agent') return;
+    settingsEl.insertAdjacentHTML('beforeend', `
+      <form id="wa-starters-form" class="wa-starters" aria-labelledby="wa-starters-title">
+        <h3 class="settings-card-title" id="wa-starters-title">Conversation starters</h3>
+        <p class="settings-help">Shown to people opening a chat with you for the first time. Tapping one sends it, so your automation rules can answer.</p>
+        <div id="wa-starters-body"><span class="skeleton settings-skeleton-line"></span></div>
+      </form>
+      <section id="wa-green-tick" class="wa-green-tick" aria-labelledby="wa-green-tick-title">
+        <h3 class="settings-card-title" id="wa-green-tick-title">Green tick (Official Business Account)</h3>
+        <div id="wa-green-tick-body"><span class="skeleton settings-skeleton-line"></span></div>
+      </section>`);
+    const body = document.getElementById('wa-starters-body');
+    try {
+      const a = await authFetch('/api/whatsapp-tools/conversational-automation');
+      const prompts = [...a.prompts, '', '', '', ''].slice(0, 4);
+      body.innerHTML = `
+        <div class="form-group"><span class="form-label">Ice breakers (up to 4, 80 characters each)</span>
+          ${prompts.map((p, i) => `<input type="text" class="form-input wa-prompt" data-prompt maxlength="80" value="${esc(p)}" placeholder="${['What are your fees?', 'Batch timings?', 'Where are you located?', 'Talk to someone'][i]}" aria-label="Ice breaker ${i + 1}" />`).join('')}
+        </div>
+        <div class="form-group"><span class="form-label">Commands (people type / to see them)</span>
+          <div id="wa-cmd-list">${a.commands.map(commandRow).join('')}</div>
+          <button type="button" class="btn-secondary btn-sm" id="wa-cmd-add"><i data-lucide="plus" class="icon-14"></i> Add command</button>
+        </div>
+        <label class="wa-form-required"><input type="checkbox" id="wa-welcome-toggle" ${a.enableWelcomeMessage ? 'checked' : ''} /> Tell Wasi when someone opens a new chat (shows as "Opened the chat")</label>
+        <div class="settings-inline-row"><button type="submit" class="btn-primary btn-auto">Save starters</button></div>`;
+      refreshIcons();
+      document.getElementById('wa-cmd-add').addEventListener('click', () => {
+        if (document.querySelectorAll('#wa-cmd-list .wa-cmd-row').length >= 30) { showToast('Up to 30 commands', 'warning'); return; }
+        document.getElementById('wa-cmd-list').insertAdjacentHTML('beforeend', commandRow());
+        refreshIcons();
+      });
+      document.getElementById('wa-cmd-list').addEventListener('click', (e) => {
+        if (e.target.closest('[data-cmd-remove]')) e.target.closest('.wa-cmd-row').remove();
+      });
+    } catch (err) {
+      body.innerHTML = `<p class="settings-muted">${esc(err.body?.detail || err.message || 'Could not load from WhatsApp.')}</p>`;
+    }
+    document.getElementById('wa-starters-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const prompts = [...document.querySelectorAll('[data-prompt]')].map((x) => x.value.trim()).filter(Boolean);
+      const commands = [...document.querySelectorAll('#wa-cmd-list .wa-cmd-row')]
+        .map((r) => ({ name: r.querySelector('[data-cmd-name]').value.trim(), description: r.querySelector('[data-cmd-desc]').value.trim() }))
+        .filter((c) => c.name || c.description);
+      try {
+        await authFetch('/api/whatsapp-tools/conversational-automation', {
+          method: 'PUT',
+          body: JSON.stringify({ enableWelcomeMessage: document.getElementById('wa-welcome-toggle').checked, prompts, commands }),
+        });
+        showToast('Conversation starters saved', 'success');
+      } catch (err) { reportError(err); }
+    });
+    renderGreenTick(waba);
+  }
+
+  async function renderGreenTick() {
+    const box = document.getElementById('wa-green-tick-body');
+    if (!box) return;
+    let st;
+    try {
+      st = await authFetch('/api/whatsapp-tools/green-tick');
+    } catch (err) {
+      box.innerHTML = `<p class="settings-muted">${esc(err.body?.detail || err.message || 'Could not load the status.')}</p>`;
+      return;
+    }
+    if (!st.eligible) {
+      box.innerHTML = '<p class="settings-muted">This number also runs on the WhatsApp Business app, so it can\'t apply for the green tick. Meta Verified, inside the WhatsApp Business app, is the option for it.</p>';
+      return;
+    }
+    const canApply = ['NOT_STARTED', 'REJECTED', 'EXPIRED', 'CANCELLED'].includes(String(st.status).toUpperCase());
+    box.innerHTML = `
+      <p>Status: <span class="badge ${/APPROVED/i.test(st.status) ? 'badge-success' : /REJECT/i.test(st.status) ? 'badge-danger' : 'badge-neutral'}">${esc(String(st.status).replace(/_/g, ' ').toLowerCase())}</span></p>
+      <p class="settings-help">Meta needs a verified business, an approved display name, two-step verification on the number and 30 days of use. After a rejection, Meta makes you wait 30 days before applying again.</p>
+      ${canApply ? `
+      <form id="wa-oba-form">
+        <div class="form-group"><label class="form-label" for="oba-website">Business website</label><input type="url" id="oba-website" class="form-input" required placeholder="https://yourbusiness.com" /></div>
+        <div class="form-group"><label class="form-label" for="oba-country">Main country of operation</label><input type="text" id="oba-country" class="form-input" required value="India" /></div>
+        <div class="form-group"><label class="form-label" for="oba-language">Main language (optional)</label><input type="text" id="oba-language" class="form-input" placeholder="English" /></div>
+        <div class="form-group"><label class="form-label" for="oba-links">5 to 10 links about your business, one per line (news, social pages, reviews)</label><textarea id="oba-links" class="form-input" rows="6" required></textarea></div>
+        <div class="form-group"><label class="form-label" for="oba-parent">Parent business or brand (optional)</label><input type="text" id="oba-parent" class="form-input" /></div>
+        <div class="form-group"><label class="form-label" for="oba-notes">Anything else for Meta (optional)</label><textarea id="oba-notes" class="form-input" rows="3" maxlength="1000"></textarea></div>
+        <button type="submit" class="btn-primary btn-auto">Apply for the green tick</button>
+      </form>` : ''}`;
+    document.getElementById('wa-oba-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const links = document.getElementById('oba-links').value.split('\n').map((x) => x.trim()).filter(Boolean);
+      try {
+        await authFetch('/api/whatsapp-tools/green-tick', {
+          method: 'POST',
+          body: JSON.stringify({
+            websiteUrl: document.getElementById('oba-website').value,
+            country: document.getElementById('oba-country').value,
+            language: document.getElementById('oba-language').value,
+            supportingLinks: links,
+            parentBrand: document.getElementById('oba-parent').value,
+            notes: document.getElementById('oba-notes').value,
+          }),
+        });
+        showToast('Application sent to Meta', 'success');
+        renderGreenTick();
+      } catch (err) { reportError(err); }
+    });
+  }
+
   // --- Integrations (build-docs/features/integrations-page.md) ---
   // Read-only status of integrations configured elsewhere; each card links
   // to where it is set up. Shopify is planned, so it has no action.
@@ -9515,6 +9768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         msg.addEventListener('input', update);
         update();
+        mountQrSection(linkEl);
         document.getElementById('wa-link-copy').addEventListener('click', () => {
           navigator.clipboard.writeText(out.value)
             .then(() => showToast('Link copied', 'success'))
@@ -9531,6 +9785,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <input type="text" class="form-input" readonly value="${attrEscape(name)}" />
         </div>
       `;
+      mountChatStarters(settingsEl, waba);
     }
   }
 

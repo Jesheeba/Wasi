@@ -1116,7 +1116,69 @@ async function sendFlowMessage(phoneNumberId, accessToken, toPhone, { bodyText, 
   return data.messages?.[0]?.id;
 }
 
+// --- WhatsApp quick wins - build-docs/features/whatsapp-quick-wins.md ---
+// Shapes from Meta's Cloud API docs, checked 2026-11-23.
+
+// Marks an inbound message read (blue ticks). With typing: true it also shows
+// "typing..." for up to 25 s or until the next reply. Meta: typing always
+// marks read, and should only be sent when a reply is coming.
+async function markReadAndTyping(phoneNumberId, accessToken, messageId, { typing = false } = {}) {
+  const body = { messaging_product: 'whatsapp', status: 'read', message_id: messageId };
+  if (typing) body.typing_indicator = { type: 'text' };
+  return graphFetch(`/${phoneNumberId}/messages`, { method: 'POST', accessToken, body });
+}
+
+// Block or unblock. Meta answers 200 even when some users failed, with the
+// failures in block_users.failed_users, so callers must read both lists.
+async function setBlockedUsers(phoneNumberId, accessToken, phones, { unblock = false } = {}) {
+  const data = await graphFetch(`/${phoneNumberId}/block_users`, {
+    method: unblock ? 'DELETE' : 'POST', accessToken,
+    body: { messaging_product: 'whatsapp', block_users: phones.map((p) => ({ user: `+${String(p).replace(/^\+/, '')}` })) },
+  });
+  const lists = data.block_users || {};
+  return { done: lists.added_users || lists.removed_users || [], failed: lists.failed_users || [] };
+}
+
+// QR codes / short links (message_qrdls). The image URL is only returned on create.
+const createQrCode = (phoneNumberId, accessToken, prefilledMessage) => graphFetch(`/${phoneNumberId}/message_qrdls`, {
+  method: 'POST', accessToken, body: { prefilled_message: prefilledMessage, generate_qr_image: 'PNG' },
+});
+const updateQrCode = (phoneNumberId, accessToken, code, prefilledMessage) => graphFetch(`/${phoneNumberId}/message_qrdls`, {
+  method: 'POST', accessToken, body: { code, prefilled_message: prefilledMessage },
+});
+const deleteQrCode = (phoneNumberId, accessToken, code) => graphFetch(`/${phoneNumberId}/message_qrdls/${encodeURIComponent(code)}`, {
+  method: 'DELETE', accessToken,
+});
+
+// Ice breakers ("prompts"), /commands and the welcome-message switch.
+async function getConversationalAutomation(phoneNumberId, accessToken) {
+  const data = await graphFetch(`/${phoneNumberId}?fields=conversational_automation`, { accessToken });
+  return data.conversational_automation || {};
+}
+const setConversationalAutomation = (phoneNumberId, accessToken, { enableWelcomeMessage, prompts, commands }) => graphFetch(
+  `/${phoneNumberId}/conversational_automation`,
+  { method: 'POST', accessToken, body: { enable_welcome_message: enableWelcomeMessage, prompts, commands } }
+);
+
+// Official Business Account (green tick).
+async function getOfficialBusinessAccount(phoneNumberId, accessToken) {
+  const data = await graphFetch(`/${phoneNumberId}?fields=official_business_account`, { accessToken });
+  return data.official_business_account || {};
+}
+const applyOfficialBusinessAccount = (phoneNumberId, accessToken, fields) => graphFetch(
+  `/${phoneNumberId}/official_business_account`, { method: 'POST', accessToken, body: fields }
+);
+
 module.exports = {
+  markReadAndTyping,
+  setBlockedUsers,
+  createQrCode,
+  updateQrCode,
+  deleteQrCode,
+  getConversationalAutomation,
+  setConversationalAutomation,
+  getOfficialBusinessAccount,
+  applyOfficialBusinessAccount,
   createFlow,
   updateFlowJson,
   publishFlow,

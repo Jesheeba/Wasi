@@ -30,6 +30,23 @@ This file tracks features built under the global build workflow going forward.
   exist in the DOM (hidden) so the existing, already-tested mutual-
   exclusion/validation logic reading their state is untouched.
 
+## Approved 2026-11-23 - "build them all" (no new Meta permission needed)
+
+Owner: "okay build them all and for testing give me steps after building".
+From build-docs/product-discovery/capability-audit-2026-11.md, in order. One
+commit per feature, each with automated tests (Meta faked) and live test
+steps added to build-docs/MANUAL_TESTS.md.
+
+1. **Built 2026-11-23** (1-4 and 7 together): Typing indicator + read ticks when staff reply - [whatsapp-quick-wins](features/whatsapp-quick-wins.md)
+2. Block a contact - same doc
+3. QR codes and short links - same doc
+4. Ice breakers, commands, welcome message - same doc
+5. Real Meta cost + template analytics - [meta-analytics](features/meta-analytics.md)
+6. Ad lead feedback to Meta (Conversions API) - [ctwa-conversions](features/ctwa-conversions.md)
+7. Green-tick application - same doc as 1-4
+8. Product messages from the Meta catalog - [catalog-product-messages](features/catalog-product-messages.md)
+9. Forms with a live data endpoint - [whatsapp-flows](features/whatsapp-flows.md), phase 2
+
 ## Proposed (awaiting approval) - placeholder pages, 2026-11-23
 
 Owner asked to "develop" the 5 hidden placeholder pages (Ecommerce,

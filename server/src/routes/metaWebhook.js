@@ -193,7 +193,10 @@ async function handleInboundMessages(waba, value) {
     // trigger keyword match the button's label (e.g. "Received").
     const templateButtonText = msg.button?.text;
     const formReply = await parseFormReply(clientId, msg);
-    const body = msg.text?.body || formReply?.body || buttonReply?.title || listReply?.title || templateButtonText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+    // request_welcome: sent when a customer opens a new chat while the
+    // welcome message is on (whatsapp-quick-wins.md); shown as plain words.
+    const welcomeOpen = msg.type === 'request_welcome' ? 'Opened the chat' : null;
+    const body = msg.text?.body || formReply?.body || buttonReply?.title || listReply?.title || templateButtonText || welcomeOpen || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
 
     // Forwarded verbatim alongside `body` in message.received (see below) -
     // body alone only ever carried the reply's title (e.g. "Yes"), never
