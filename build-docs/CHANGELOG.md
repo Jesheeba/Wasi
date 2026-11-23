@@ -1,5 +1,15 @@
 # Changelog
 
+## fix(automation-rules): audit fixes - "*" catch-all, whole-word match, flow delete
+Deleting a flow that any rule started always failed (constraint error);
+those rules are now deleted with it, named in the confirm. Trigger "*" was a
+literal asterisk, so catch-all rules never fired: it now replies to any
+message no keyword rule matched, at most once per chat per 24h, never inside
+an active flow (migration 094 `chats.auto_reply_at`). Keywords match whole
+words ("hi" no longer fires on "this"). Rules pointing at a draft/archived
+flow show a warning; duplicate keywords warn in the drawer; rules can be
+deleted; blank triggers and bad ids are 400 instead of saved/500.
+
 ## feat(integrations-page): live status of existing integrations
 Integrations (no longer Soon): Webhooks, Zapier, API & AI assistants and
 Razorpay payment links as cards with their real state (configured, last

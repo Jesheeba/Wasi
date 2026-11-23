@@ -280,9 +280,9 @@ const contactListCreateSchema = z.object({
 // layer, so a bad request 400s with a clear message instead of reaching
 // Postgres and surfacing a raw constraint-violation error.
 const automationRuleCreateSchema = z.object({
-  title: z.string().min(1),
-  trigger: z.string().min(1),
-  action: z.string().min(1).optional(),
+  title: z.string().trim().min(1),
+  trigger: z.string().trim().min(1),
+  action: z.string().trim().min(1).optional(),
   flow_id: uuid.optional(),
 }).superRefine((val, ctx) => {
   if (Boolean(val.action) === Boolean(val.flow_id)) {

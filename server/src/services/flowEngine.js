@@ -528,7 +528,9 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
     });
   }
 
-  const ruleOutcome = await automationEngine.evaluate(db, clientId, chat, inboundBody, contact);
+  // A "*" catch-all must not talk into a flow the contact is in the middle of;
+  // keyword rules still can (global override, e.g. "agent").
+  const ruleOutcome = await automationEngine.evaluate(db, clientId, chat, inboundBody, contact, { allowWildcard: !flowState });
   if (ruleOutcome && ruleOutcome.handled) return ruleOutcome;
   // An active flow that recognised nothing and no rule claimed the message:
   // not handled, but the agent must not speak into a flow it cannot see.

@@ -2,7 +2,7 @@ const { Router } = require('express');
 const automationRulesRepo = require('../repositories/automationRulesRepo');
 const automationFlowsRepo = require('../repositories/automationFlowsRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { automationRuleCreateSchema, automationRuleUpdateSchema } = require('../utils/validate');
+const { uuid, automationRuleCreateSchema, automationRuleUpdateSchema } = require('../utils/validate');
 const { requireRole } = require('../middleware/requireRole');
 
 const router = Router();
@@ -18,6 +18,7 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
 }));
 
 router.patch('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
   const data = automationRuleUpdateSchema.parse(req.body);
   // The FK check bypasses RLS, so confirm the flow is this client's own.
   if (data.flow_id && !(await automationFlowsRepo.findById(req.db, req.clientId, data.flow_id))) {
@@ -26,6 +27,13 @@ router.patch('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, r
   const rule = await automationRulesRepo.update(req.db, req.clientId, req.params.id, data);
   if (!rule) return res.status(404).json({ error: 'Rule not found' });
   res.json(rule);
+}));
+
+router.delete('/:id', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const deleted = await automationRulesRepo.remove(req.db, req.clientId, req.params.id);
+  if (!deleted) return res.status(404).json({ error: 'Rule not found' });
+  res.status(204).send();
 }));
 
 module.exports = router;

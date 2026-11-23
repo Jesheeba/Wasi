@@ -40,4 +40,9 @@ async function update(db, clientId, id, { title, trigger, action, flow_id, statu
   return rows[0];
 }
 
-module.exports = { list, create, update };
+async function remove(db, clientId, id) {
+  const { rowCount } = await db.query('delete from automation_rules where id = $1 and client_id = $2', [id, clientId]);
+  return rowCount > 0;
+}
+
+module.exports = { list, create, update, remove };

@@ -169,3 +169,135 @@ test('AC6: another client\'s flow_id is rejected', async () => {
   const saved = (await api('/api/automation-rules').then((r) => r.json())).find((r) => r.id === rule.id);
   assert.equal(saved.flow_id, null);
 });
+
+// ---------------------------------------------------------------- audit fixes
+// Letters in test names refer to the audit items in the feature doc.
+
+async function makeChat(name) {
+  const contact = (await pool.query(
+    'insert into contacts (client_id, name, phone) values ($1, $2, $3) returning id',
+    [clientId, name, `9190${Date.now()}${Math.floor(Math.random() * 1000)}`]
+  )).rows[0];
+  return (await pool.query(
+    'insert into chats (client_id, name, contact_id) values ($1, $2, $3) returning id',
+    [clientId, name, contact.id]
+  )).rows[0];
+}
+
+async function withStubbedSend(fn, { fail = false } = {}) {
+  const original = messagingService.sendChatMessage;
+  const sent = [];
+  messagingService.sendChatMessage = async (db, c, chat, msg) => {
+    if (fail) throw new Error('stub send failure');
+    sent.push(msg.body);
+  };
+  try { return await fn(sent); } finally { messagingService.sendChatMessage = original; }
+}
+
+const disableAll = () => pool.query("update automation_rules set status = 'Disabled' where client_id = $1", [clientId]);
+
+test('H: keywords match whole words and phrases, case-insensitive', () => {
+  const m = automationEngine.matchesTrigger;
+  assert.equal(m('hi', 'Hi there'), true);
+  assert.equal(m('hi', 'this is shipping'), false, 'no match inside another word');
+  assert.equal(m('price list', 'send the PRICE   list please'), true, 'phrase, any whitespace');
+  assert.equal(m('Hello! Can I get more info on this?', 'Hello! Can I get more info on this?'), true, 'punctuation in trigger');
+  assert.equal(m('fees', 'fees?'), true);
+  assert.equal(m('கட்டணம்', 'கட்டணம் எவ்வளவு'), true, 'Tamil word');
+  assert.equal(m('கட்ட', 'கட்டணம்'), false, 'no match inside a Tamil word');
+  assert.equal(m('*', 'anything'), false, '"*" is handled as a wildcard, never as a keyword');
+});
+
+test('B: "*" replies to any message, once per chat per 24h, after keyword rules', async () => {
+  await disableAll();
+  await createRule({ title: `${SUITE_PREFIX}star`, trigger: '*', action: 'catch-all reply' });
+  // Created after "*", so it is first in list order: keyword rules must still win regardless.
+  await createRule({ title: `${SUITE_PREFIX}kw`, trigger: 'fees', action: 'fees reply' });
+  const chat = await makeChat(`${SUITE_PREFIX}chat-b`);
+  await withStubbedSend(async (sent) => {
+    const kw = await automationEngine.evaluate(pool, clientId, chat, 'what are the fees', null);
+    assert.equal(kw.how, 'rule_text_reply');
+    const first = await automationEngine.evaluate(pool, clientId, chat, 'hello there', null);
+    assert.equal(first.how, 'rule_text_reply');
+    const second = await automationEngine.evaluate(pool, clientId, chat, 'another message', null);
+    assert.equal(second.handled, false, 'no second catch-all within 24h');
+    assert.deepEqual(sent, ['fees reply', 'catch-all reply']);
+    await pool.query("update chats set auto_reply_at = now() - interval '25 hours' where id = $1", [chat.id]);
+    await automationEngine.evaluate(pool, clientId, chat, 'next day', null);
+    assert.deepEqual(sent, ['fees reply', 'catch-all reply', 'catch-all reply'], 'fires again after 24h');
+  });
+});
+
+test('B: "*" never fires inside an active flow, and a failed send does not use up the 24h', async () => {
+  await disableAll();
+  await createRule({ title: `${SUITE_PREFIX}star2`, trigger: '*', action: 'catch-all' });
+  const chat = await makeChat(`${SUITE_PREFIX}chat-b2`);
+  await withStubbedSend(async (sent) => {
+    const inFlow = await automationEngine.evaluate(pool, clientId, chat, 'hi', null, { allowWildcard: false });
+    assert.equal(inFlow.handled, false);
+    assert.equal(sent.length, 0);
+  });
+  await withStubbedSend(async () => {
+    const out = await automationEngine.evaluate(pool, clientId, chat, 'hi', null);
+    assert.equal(out.how, 'rule_text_reply_failed');
+  }, { fail: true });
+  const { rows } = await pool.query('select auto_reply_at from chats where id = $1', [chat.id]);
+  assert.equal(rows[0].auto_reply_at, null, 'claim released after the failed send');
+  await withStubbedSend(async (sent) => {
+    await automationEngine.evaluate(pool, clientId, chat, 'hi again', null);
+    assert.deepEqual(sent, ['catch-all'], 'retry succeeds');
+  });
+});
+
+test('A: deleting a flow that a rule starts succeeds and removes that rule', async () => {
+  const flow = await createFlow(`${SUITE_PREFIX}flow-del`);
+  const rule = await createRule({ title: `${SUITE_PREFIX}flow-rule`, trigger: 'flowdel', flow_id: flow.id });
+  const res = await api(`/api/automation-flows/${flow.id}`, { method: 'DELETE' });
+  assert.equal(res.status, 204);
+  const rules = await api('/api/automation-rules').then((r) => r.json());
+  assert.equal(rules.some((r) => r.id === rule.id), false);
+});
+
+test('I+F: rules can be deleted; ids and blank triggers are validated', async () => {
+  const rule = await createRule({ title: `${SUITE_PREFIX}del`, trigger: 'deleteme', action: 'x' });
+  assert.equal((await api(`/api/automation-rules/${rule.id}`, { method: 'DELETE' })).status, 204);
+  assert.equal((await api(`/api/automation-rules/${rule.id}`, { method: 'DELETE' })).status, 404);
+  assert.equal((await api('/api/automation-rules/not-a-uuid', { method: 'DELETE' })).status, 400);
+  assert.equal((await api('/api/automation-rules/not-a-uuid', { method: 'PATCH', body: '{"status":"Enabled"}' })).status, 400);
+  const blank = await api('/api/automation-rules', { method: 'POST', body: JSON.stringify({ title: 't', trigger: '   ', action: 'x' }) });
+  assert.equal(blank.status, 400);
+  const mine = await createRule({ title: `${SUITE_PREFIX}mine`, trigger: 'mine', action: 'x' });
+  assert.equal((await api(`/api/automation-rules/${mine.id}`, { method: 'DELETE' }, otherToken)).status, 404, 'cannot delete another client rule');
+});
+
+test('D+G+I (UI): draft-flow warning, duplicate-keyword warning, delete from the drawer', async () => {
+  await disableAll();
+  const draft = await createFlow(`${SUITE_PREFIX}draft-flow`);
+  const flowRule = await createRule({ title: `${SUITE_PREFIX}draft-rule`, trigger: 'draftkw', flow_id: draft.id });
+  const dup = await createRule({ title: `${SUITE_PREFIX}dup`, trigger: 'samekw', action: 'one' });
+  const page = await openAutomation();
+  assert.match(await page.textContent(`[data-rule-id="${flowRule.id}"] .automation-flow-warning`), /draft/i);
+
+  await page.click(`[data-rule-id="${flowRule.id}"] .automation-name`);
+  await page.waitForSelector('#modal-create-rule.open');
+  assert.match(await page.textContent('#new-rule-flow-warning'), /draft/i);
+  await page.click('#create-rule-form [data-close-modal="modal-create-rule"]');
+  await page.waitForFunction(() => !document.getElementById('modal-create-rule').classList.contains('open'));
+
+  await page.click('#open-create-rule-modal');
+  await page.waitForSelector('#modal-create-rule.open');
+  assert.equal(await page.isHidden('#rule-delete-btn'), true, 'no delete when creating');
+  await page.fill('#new-rule-trigger', 'SameKW');
+  assert.match(await page.textContent('#new-rule-trigger-warning'), new RegExp(`${SUITE_PREFIX}dup`));
+  await page.evaluate(() => { document.getElementById('create-rule-form').reset(); document.getElementById('modal-create-rule').classList.remove('open'); });
+
+  await page.click(`[data-rule-id="${dup.id}"] .automation-name`);
+  await page.waitForSelector('#modal-create-rule.open');
+  await page.click('#rule-delete-btn');
+  await page.waitForSelector('#modal-confirm.open');
+  await page.click('#modal-confirm-action-btn');
+  await page.waitForFunction((id) => !document.querySelector(`[data-rule-id="${id}"]`), dup.id);
+  const rules = await api('/api/automation-rules').then((r) => r.json());
+  assert.equal(rules.some((r) => r.id === dup.id), false);
+  await page.close();
+});

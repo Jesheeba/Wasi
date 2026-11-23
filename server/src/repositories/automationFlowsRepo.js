@@ -35,7 +35,13 @@ async function update(db, clientId, id, fields) {
   return rows[0] || null;
 }
 
+// Rules that start this flow are deleted with it. automation_rules.flow_id is
+// ON DELETE SET NULL, but a rule with neither action nor flow_id violates
+// automation_rules_action_xor_flow, so without this the flow delete failed
+// outright for any flow a rule pointed at. req.db is one transaction, so the
+// two deletes commit or roll back together.
 async function remove(db, clientId, id) {
+  await db.query('delete from automation_rules where client_id = $1 and flow_id = $2', [clientId, id]);
   const { rowCount } = await db.query(
     'delete from automation_flows where client_id = $1 and id = $2',
     [clientId, id]

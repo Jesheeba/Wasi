@@ -463,7 +463,29 @@ async function updateStatusByMetaId(db, clientId, metaMessageId, status, errorRe
   return rows[0] || null;
 }
 
+// Throttle for "*" automation rules (migration 094): at most one catch-all
+// auto-reply per chat per 24h. One conditional UPDATE, so two messages
+// arriving together can't both claim it. Returns true if this caller may send.
+async function claimAutoReply(db, clientId, chatId) {
+  const { rowCount } = await db.query(
+    `update chats set auto_reply_at = now()
+     where id = $1 and client_id = $2
+       and (auto_reply_at is null or auto_reply_at < now() - interval '24 hours')`,
+    [chatId, clientId]
+  );
+  return rowCount === 1;
+}
+
+// Undo a claim when nothing was actually sent, so a failed send doesn't
+// silence the catch-all for a day. Any earlier claim was already >24h old
+// (or the claim above would have failed), so null is equivalent.
+async function releaseAutoReply(db, clientId, chatId) {
+  await db.query('update chats set auto_reply_at = null where id = $1 and client_id = $2', [chatId, clientId]);
+}
+
 module.exports = {
+  claimAutoReply,
+  releaseAutoReply,
   list,
   findById,
   create,

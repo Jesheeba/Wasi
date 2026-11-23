@@ -1,5 +1,24 @@
 # Testing
 
+## automation-rule-view-edit: audit fixes
+Bugs A and B reproduced first against local Postgres (flow delete: check-
+constraint error; `*` vs a normal message: not handled). Added 6 tests to
+`server/test/automationRuleViewEdit.test.js`: H whole-word/phrase/Tamil
+matching; B catch-all after keyword rules, once per 24h, again after 24h;
+B never inside a flow, claim released on a failed send; A flow delete 204
+and its rule gone; I+F delete 204/404, bad id 400 on DELETE and PATCH, blank
+trigger 400, other client's rule 404; D+G+I UI draft-flow badge and drawer
+warning, duplicate-keyword warning, delete from drawer. 12/12. Sends are
+stubbed; nothing reaches Meta. Regression (every suite touching rules,
+flows or the engine): aiAgentEnqueue 7, broadcastTagAudienceMultiTag 4,
+chatSlaLogs 10, chatsLastAgentReplyAt 17, consentHardeningPhase1 8,
+contactTimeline 4, flowEngine 19, flowEngineCaptureReply 6,
+flowEngineCaptureReplyEndToEnd 4, flowEngineOutcome 17, flowEngineRunToRest
+3, mediaHeaderService 11, metaWebhookEchoRouting 9, settingsRedesign 11,
+templateLanguageHardcodeFixes 4, templateParamMapping 12,
+confirmPromptGroup23 6 - all pass. api 12/13: the one failure is the known
+stale onboarding test (unstubbed listPhoneNumbers, see CLAUDE.md), unrelated.
+
 ## integrations-page
 `server/test/integrationsPage.test.js` (Playwright + API, :4000, local
 embedded Postgres): AC1/AC4 status reflects seeded key, webhook, Zap,

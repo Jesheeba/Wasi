@@ -3624,16 +3624,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     body.innerHTML = state.automationRules.map((rule) => {
-      const flowName = rule.flow_id ? (state.flows.find((f) => f.id === rule.flow_id)?.name || 'Unknown flow') : null;
+      const flow = rule.flow_id ? state.flows.find((f) => f.id === rule.flow_id) : null;
+      const flowName = rule.flow_id ? (flow?.name || 'Unknown flow') : null;
+      const flowWarning = rule.flow_id ? ruleFlowWarning(flow) : '';
       const responds = rule.flow_id
-        ? `<span class="automation-target"><i data-lucide="workflow" class="icon-14"></i> Starts flow: <strong>${esc(flowName)}</strong></span>`
+        ? `<span class="automation-target"><i data-lucide="workflow" class="icon-14"></i> Starts flow: <strong>${esc(flowName)}</strong></span>${flowWarning ? `<span class="badge badge-warning automation-flow-warning">${esc(flowWarning)}</span>` : ''}`
         : `<span class="automation-reply" title="${esc(rule.action || '')}">${esc(rule.action || '')}</span>`;
       // automationEngine runs only rules whose status is exactly 'Enabled'.
       const isEnabled = rule.status === 'Enabled';
       return `
         <tr class="automation-rule-row" data-rule-id="${esc(rule.id)}" tabindex="0" aria-label="Open rule ${esc(rule.title)}">
           <td data-label="Rule"><span class="automation-name" title="${esc(rule.title)}">${esc(rule.title)}</span></td>
-          <td data-label="Trigger"><span class="automation-trigger">${esc(rule.trigger)}</span></td>
+          <td data-label="Trigger">${String(rule.trigger || '').trim() === '*' ? '<span class="automation-trigger" title="Replies at most once per conversation every 24 hours, after keyword rules">* Any message</span>' : `<span class="automation-trigger">${esc(rule.trigger)}</span>`}</td>
           <td data-label="Responds with">${responds}</td>
           <td data-label="Status">
             <label class="wasi-toggle" title="${isEnabled ? 'Disable' : 'Enable'} this rule">
@@ -3657,6 +3659,14 @@ document.addEventListener('DOMContentLoaded', () => {
       input.addEventListener('change', () => setRuleStatus(input.dataset.ruleToggle, input.checked, input));
     });
     refreshIcons();
+  }
+
+  // A rule that starts a flow only does anything if that flow is active
+  // (automationEngine checks flow.status === 'active'). Returns '' when fine.
+  function ruleFlowWarning(flow) {
+    if (!flow) return 'Flow not found - this rule does nothing';
+    if (flow.status !== 'active') return `Flow is ${flow.status} - this rule does nothing until it is activated`;
+    return '';
   }
 
   // Enable/disable straight from the table. The switch is locked while the
@@ -3772,13 +3782,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // "contacts currently in this flow exit it" warning either way.
   function confirmAndDeleteFlow(flowId, onDeleted) {
     const flow = state.flows.find(f => f.id === flowId) || (state.currentFlowGraph?.id === flowId ? state.currentFlowGraph : null);
+    // The server deletes rules that start this flow along with it (a rule
+    // can't exist with neither a reply nor a flow), so name them here.
+    const rules = state.automationRules.filter((r) => r.flow_id === flowId);
+    const rulesNote = rules.length
+      ? ` <strong>${rules.length === 1 ? 'This rule starts it and will also be deleted' : `These ${rules.length} rules start it and will also be deleted`}:</strong> ${rules.map((r) => esc(r.title)).join(', ')}.`
+      : '';
     showConfirm({
       title: `Delete "${flow?.name || 'this flow'}"?`,
-      body: 'This permanently deletes the flow and all its nodes and branches. Any contact currently in this flow will exit it. This cannot be undone.',
+      body: `This permanently deletes the flow and all its nodes and branches. Any contact currently in this flow will exit it.${rulesNote} This cannot be undone.`,
       confirmLabel: 'Delete',
       onConfirm: async () => {
         try {
           await authFetch(`/api/automation-flows/${flowId}`, { method: 'DELETE' });
+          state.automationRules = state.automationRules.filter((r) => r.flow_id !== flowId);
+          renderAutomation();
           showToast('Flow deleted');
           onDeleted();
         } catch (err) {
@@ -7594,6 +7612,27 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('rule-open-flow-btn').disabled = !flowId;
     const toggle = document.getElementById('rule-status-toggle');
     toggle.nextElementSibling.textContent = toggle.checked ? 'Enabled' : 'Disabled';
+
+    const flowWarn = document.getElementById('new-rule-flow-warning');
+    flowWarn.textContent = isFlow && flowId ? ruleFlowWarning(state.flows.find((f) => f.id === flowId)) : '';
+    flowWarn.hidden = !flowWarn.textContent;
+    updateRuleTriggerWarning();
+  }
+
+  // automationEngine fires only the first matching rule (newest first, "*"
+  // after every keyword rule), so an enabled rule sharing this keyword with
+  // another enabled rule means one of them never replies. Warn, don't block.
+  function updateRuleTriggerWarning() {
+    const warn = document.getElementById('new-rule-trigger-warning');
+    const trigger = document.getElementById('new-rule-trigger').value.trim().toLowerCase();
+    const other = trigger && document.getElementById('rule-status-toggle').checked
+      ? state.automationRules.find((r) => r.id !== editingRuleId && r.status === 'Enabled'
+          && String(r.trigger || '').trim().toLowerCase() === trigger)
+      : null;
+    warn.textContent = other
+      ? `"${other.title}" already uses this ${trigger === '*' ? 'catch-all' : 'keyword'}. Only the newer of the two rules will ever reply.`
+      : '';
+    warn.hidden = !other;
   }
 
   // rule: a row from state.automationRules to view/edit, or null to create.
@@ -7602,9 +7641,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('create-rule-form').reset();
     editingRuleId = rule ? rule.id : null;
     const flowSelect = document.getElementById('new-rule-flow-id');
-    flowSelect.innerHTML = state.flows.map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
+    flowSelect.innerHTML = state.flows.map((f) => `<option value="${esc(f.id)}">${esc(f.name)}${f.status === 'active' ? '' : ` (${esc(f.status)})`}</option>`).join('');
     document.getElementById('create-rule-title').textContent = rule ? 'Automation Rule' : 'Create Automation Rule';
     document.getElementById('rule-submit-btn').textContent = rule ? 'Save Changes' : 'Save Rule';
+    document.getElementById('rule-delete-btn').hidden = !rule;
     if (rule) {
       document.getElementById('new-rule-title').value = rule.title || '';
       document.getElementById('new-rule-trigger').value = rule.trigger || '';
@@ -7620,6 +7660,28 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('open-create-rule-modal')?.addEventListener('click', () => openRuleDrawer(null));
   document.getElementById('new-rule-kind')?.addEventListener('change', syncRuleKind);
   document.getElementById('new-rule-action')?.addEventListener('input', updateRulePreview);
+  document.getElementById('new-rule-trigger')?.addEventListener('input', updateRuleTriggerWarning);
+  document.getElementById('rule-delete-btn')?.addEventListener('click', () => {
+    const rule = state.automationRules.find((r) => r.id === editingRuleId);
+    if (!rule) return;
+    showConfirm({
+      title: `Delete "${rule.title}"?`,
+      body: 'The rule stops replying immediately and cannot be restored. To pause it instead, turn it off with the Enabled switch.',
+      confirmLabel: 'Delete rule',
+      onConfirm: async () => {
+        try {
+          await authFetch(`/api/automation-rules/${encodeURIComponent(rule.id)}`, { method: 'DELETE' });
+          state.automationRules = state.automationRules.filter((r) => r.id !== rule.id);
+          editingRuleId = null;
+          document.getElementById('modal-create-rule')?.classList.remove('open');
+          renderAutomation();
+          showToast('Rule deleted', 'success');
+        } catch (err) {
+          reportError(err);
+        }
+      },
+    });
+  });
   document.getElementById('new-rule-flow-id')?.addEventListener('change', updateRulePreview);
   document.getElementById('rule-status-toggle')?.addEventListener('change', updateRulePreview);
   document.getElementById('rule-open-flow-btn')?.addEventListener('click', () => {

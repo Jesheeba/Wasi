@@ -2367,8 +2367,9 @@
           <div class="form-section-eyebrow">1 &middot; Trigger</div>
           <div class="form-group">
             <label class="form-label" for="new-rule-trigger">When a message contains this keyword</label>
-            <input type="text" id="new-rule-trigger" class="form-input" placeholder="e.g. hours" required />
-            <div class="form-hint">Matches anywhere in the customer's message, not case-sensitive.</div>
+            <input type="text" id="new-rule-trigger" class="form-input" placeholder="e.g. hours" required aria-describedby="new-rule-trigger-hint new-rule-trigger-warning" />
+            <div class="form-hint" id="new-rule-trigger-hint">Matches the whole word or phrase, not case-sensitive ("hi" matches "Hi there", not "this"). Use <code>*</code> to reply to any message no keyword rule matched - at most once per conversation every 24 hours, and never in the middle of a flow.</div>
+            <div class="form-hint form-hint-warning" id="new-rule-trigger-warning" role="status" hidden></div>
           </div>
         </div>
 
@@ -2392,7 +2393,8 @@
           </div>
           <div class="form-group" id="new-rule-flow-group" style="display: none;">
             <label class="form-label" for="new-rule-flow-id">Flow to start</label>
-            <select id="new-rule-flow-id" class="form-input"></select>
+            <select id="new-rule-flow-id" class="form-input" aria-describedby="new-rule-flow-warning"></select>
+            <div class="form-hint form-hint-warning" id="new-rule-flow-warning" role="status" hidden></div>
           </div>
         </div>
 
@@ -2415,6 +2417,7 @@
 
         </div>
         <div class="modal-footer">
+          <button type="button" class="btn-ghost tpl-action-danger rule-delete-btn" id="rule-delete-btn" hidden><i data-lucide="trash-2" class="icon-14"></i> Delete rule</button>
           <button type="button" class="btn-secondary" data-close-modal="modal-create-rule">Cancel</button>
           <button type="submit" class="btn-primary btn-auto" id="rule-submit-btn">Save Rule</button>
         </div>
