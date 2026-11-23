@@ -2972,6 +2972,51 @@
     </div>
   </div>
 
+  <!-- CSV import consent step (consent hardening Phase 3) - opened when a
+       CSV is chosen via #import-contacts-csv-file, before the file is
+       actually uploaded. Opting in is OFF by default (just importing
+       contacts needs none of this); checking "Mark contacts as opted in"
+       reveals the same method+statement confirmation bulk opt-in already
+       requires, plus the file-level "every row in this file" override -
+       per-row opt-in instead comes from the file's own "opt_in" column,
+       with no UI needed for that case. -->
+  <div id="modal-import-contacts-csv" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Import Contacts</h3>
+        <button class="close-modal-btn" data-close-modal="modal-import-contacts-csv"><i data-lucide="x"></i></button>
+      </div>
+      <p id="modal-import-contacts-csv-filename" style="font-size:0.85rem; color:var(--text-muted); margin:-8px 0 14px;"></p>
+      <label style="display:flex; gap:8px; align-items:flex-start; font-size:0.85rem; margin-bottom:14px; cursor:pointer;">
+        <input type="checkbox" id="import-csv-opt-in-enable" style="margin-top:2px;">
+        <span>Mark contacts as opted in from this import</span>
+      </label>
+      <div id="import-csv-opt-in-fields" style="display:none;">
+        <div id="import-csv-opt-in-statement" style="font-size:0.85rem; color:var(--text-main); line-height:1.5; background:#F8FAFC; border:1px solid var(--border-light); border-radius:8px; padding:10px 12px; margin-bottom:14px;"></div>
+        <label style="display:flex; gap:8px; align-items:flex-start; font-size:0.85rem; margin-bottom:14px; cursor:pointer;">
+          <input type="checkbox" id="import-csv-opt-in-confirm-checkbox" style="margin-top:2px;">
+          <span>I confirm the statement above.</span>
+        </label>
+        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">How was this permission collected?</label>
+        <select class="form-input" id="import-csv-opt-in-method" style="margin-bottom:14px;">
+          <option value="">Select a method…</option>
+          <option value="website_form">Website sign-up form</option>
+          <option value="in_store">In-store / in-person</option>
+          <option value="existing_customer_agreement">Existing customer agreement</option>
+          <option value="other">Other</option>
+        </select>
+        <label style="display:flex; gap:8px; align-items:flex-start; font-size:0.85rem; margin-bottom:14px; cursor:pointer;">
+          <input type="checkbox" id="import-csv-opt-in-all-rows">
+          <span>Every row in this file is opted in (otherwise, only rows with an "opt_in" column value of yes/true/1 are marked opted in)</span>
+        </label>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" class="btn-secondary" data-close-modal="modal-import-contacts-csv">Cancel</button>
+        <button type="button" class="btn-primary btn-auto" id="import-csv-confirm-btn">Import</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Error dialog - the themed-modal shell from the Group 2/3 dialog above,
        for a caught error that's too long or too structured (a Meta
        rejection's real wording, embedded-signup guidance, a multi-reason

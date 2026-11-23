@@ -8398,23 +8398,35 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('import-contacts-csv-btn')?.addEventListener('click', () => {
     document.getElementById('import-contacts-csv-file').click();
   });
-  document.getElementById('import-contacts-csv-file')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
+
+  let pendingImportFile = null;
+
+  async function runContactsImport(file, { optInConfirmed, optInMethod, allRowsOptedIn, optInNote } = {}) {
     const status = document.getElementById('import-contacts-csv-status');
-    if (!file) return;
     status.style.color = 'var(--text-muted)';
     status.textContent = 'Importing…';
     try {
       const form = new FormData();
       form.append('file', file);
+      if (optInConfirmed) {
+        form.append('optInConfirmed', 'true');
+        form.append('optInMethod', optInMethod);
+        if (optInNote) form.append('optInNote', optInNote);
+      }
+      if (allRowsOptedIn) form.append('allRowsOptedIn', 'true');
       const report = await authFetch('/api/contacts/import', { method: 'POST', body: form });
       await refreshContacts();
       renderContacts();
       // report.errors can be non-empty (e.g. an ignored "tags" column) even
       // when failedCount is 0 - every row succeeded, but there's still
       // something the user should see, not silently dropped either place.
-      const summary = `Imported ${report.importedCount} contact${report.importedCount === 1 ? '' : 's'}` +
+      let summary = `Imported ${report.importedCount} contact${report.importedCount === 1 ? '' : 's'}` +
         (report.failedCount > 0 ? `, ${report.failedCount} rejected` : '') + '.';
+      if (report.optIn) {
+        summary += ` ${report.optIn.updated} marked opted in` +
+          (report.optIn.alreadyOptedIn ? `, ${report.optIn.alreadyOptedIn} already opted in` : '') +
+          (report.optIn.skippedOptedOut ? `, ${report.optIn.skippedOptedOut} skipped (opted out)` : '') + '.';
+      }
       status.style.color = report.failedCount > 0 ? '#B45309' : (report.errors.length ? '#B45309' : '#166534');
       status.textContent = report.errors.length
         ? `${summary} ${report.errors.slice(0, 3).map(e => `row ${e.row}: ${e.reason}`).join('; ')}${report.errors.length > 3 ? '…' : ''}`
@@ -8422,9 +8434,54 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       status.style.color = '#B91C1C';
       status.textContent = `Import failed: ${err.message}`;
-    } finally {
-      e.target.value = '';
     }
+  }
+
+  // Consent hardening Phase 3 - a CSV import that wants to mark anyone
+  // opted in needs the same explicit method+statement confirmation every
+  // other opt-in path already requires (CLAUDE.md's approved decision).
+  // Importing without opting anyone in needs none of this, so the modal
+  // opens on every file pick but importing proceeds immediately if the
+  // "mark as opted in" checkbox is never touched.
+  document.getElementById('import-contacts-csv-file')?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    pendingImportFile = file;
+    document.getElementById('modal-import-contacts-csv-filename').textContent = file.name;
+    document.getElementById('import-csv-opt-in-statement').textContent =
+      window.consentStatement?.CONSENT_STATEMENT || 'Confirm you have permission to message these contacts.';
+    document.getElementById('import-csv-opt-in-enable').checked = false;
+    document.getElementById('import-csv-opt-in-fields').style.display = 'none';
+    document.getElementById('import-csv-opt-in-confirm-checkbox').checked = false;
+    document.getElementById('import-csv-opt-in-method').value = '';
+    document.getElementById('import-csv-opt-in-all-rows').checked = false;
+    document.getElementById('modal-import-contacts-csv')?.classList.add('open');
+  });
+
+  document.getElementById('import-csv-opt-in-enable')?.addEventListener('change', (e) => {
+    document.getElementById('import-csv-opt-in-fields').style.display = e.target.checked ? '' : 'none';
+  });
+
+  document.getElementById('import-csv-confirm-btn')?.addEventListener('click', async () => {
+    if (!pendingImportFile) return;
+    const optInEnabled = document.getElementById('import-csv-opt-in-enable').checked;
+    if (optInEnabled) {
+      const confirmed = document.getElementById('import-csv-opt-in-confirm-checkbox').checked;
+      const method = document.getElementById('import-csv-opt-in-method').value;
+      if (!confirmed || !method) {
+        showToast('Confirm the consent statement and pick a method before importing with opt-in.');
+        return;
+      }
+    }
+    const file = pendingImportFile;
+    pendingImportFile = null;
+    document.getElementById('modal-import-contacts-csv')?.classList.remove('open');
+    await runContactsImport(file, optInEnabled ? {
+      optInConfirmed: true,
+      optInMethod: document.getElementById('import-csv-opt-in-method').value,
+      allRowsOptedIn: document.getElementById('import-csv-opt-in-all-rows').checked,
+    } : {});
   });
 
   // --- Contacts Export CSV ---

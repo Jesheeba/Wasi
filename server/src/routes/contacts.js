@@ -13,6 +13,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const {
   uuid, contactCreateSchema, contactUpdateSchema, consentEventCreateSchema,
   bulkConsentOptInSchema, contactAttributeValueSetSchema, validateContactAttributeValue, contactTagAddSchema,
+  CONSENT_METHODS,
 } = require('../utils/validate');
 const { requireRole } = require('../middleware/requireRole');
 const { parseContactsCsv } = require('../utils/csvContacts');
@@ -57,11 +58,46 @@ router.post('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (r
 // name is find-or-created (tagsRepo.findOrCreateByName) then additively
 // attached (contactTagsRepo.add) - never touches contacts.tag_id, the
 // permanent primary tag, matching item 8's own additive-only design.
+//
+// Consent hardening Phase 3 (CSV opt-in, 2026-11-23) - the approved shape
+// (CLAUDE.md's consent Known Gaps entry): a per-row "opt_in" column, or a
+// file-level "all rows in this file are opted in" option, both gated by
+// the SAME explicit confirmation this app already requires for bulk/
+// per-contact opt-in (bulkConsentOptInSchema's method+confirmed, the
+// CONSENT_STATEMENT, Admin/Manager only - never Agent, matching the
+// already-approved "who may attest" decision). These are plain multipart
+// form fields (optInMethod/optInConfirmed/allRowsOptedIn), not JSON - this
+// route has never had a JSON `data` field the way templates.js's media
+// routes do, and adding one here for 3 small fields isn't worth the extra
+// parsing layer. Nothing about consent is inferred from the column's mere
+// presence: csvContacts.js's parser itself refuses to even READ the
+// opt_in column unless includeOptIn is passed, which only happens below
+// once optInConfirmed is genuinely true - the column is otherwise reported
+// as an ignored, unrecognized one (see that file's own comment), so a
+// CSV with a stray "opt_in" header can never silently opt anyone in.
 router.post('/import', requireRole('Admin', 'Manager', 'Agent'), uploadCsv.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded - expected a "file" field containing a CSV.' });
   }
-  const { validRows, errors } = parseContactsCsv(req.file.buffer.toString('utf8'), { includeTags: true });
+
+  const optInConfirmed = req.body.optInConfirmed === 'true';
+  const optInMethod = req.body.optInMethod;
+  const allRowsOptedIn = req.body.allRowsOptedIn === 'true';
+
+  if (optInConfirmed || allRowsOptedIn) {
+    if (req.actorType === 'team_member' && req.actorRole === 'Agent') {
+      return res.status(403).json({ error: 'Agents can import contacts, but not mark them opted in from a CSV - that needs Admin, Manager, or Owner.' });
+    }
+    if (!optInConfirmed) {
+      return res.status(400).json({ error: '"All rows in this file are opted in" requires the same explicit consent confirmation as marking individual rows opted in.' });
+    }
+    if (!CONSENT_METHODS.includes(optInMethod)) {
+      return res.status(400).json({ error: `optInMethod must be one of: ${CONSENT_METHODS.join(', ')}` });
+    }
+  }
+  const includeOptIn = optInConfirmed;
+
+  const { validRows, errors } = parseContactsCsv(req.file.buffer.toString('utf8'), { includeTags: true, includeOptIn });
   const imported = await contactsRepo.importFromRows(req.db, req.clientId, validRows);
 
   const contactIdByPhone = Object.fromEntries(imported.map((c) => [c.phone, c.id]));
@@ -74,6 +110,71 @@ router.post('/import', requireRole('Admin', 'Manager', 'Agent'), uploadCsv.singl
     }
   }
 
+  let optInResult = null;
+  if (includeOptIn) {
+    const rowsToOptIn = validRows.filter((row) => allRowsOptedIn || row.optIn);
+    const batchId = crypto.randomUUID();
+    const actorType = req.actorType;
+    const actorId = req.actorType === 'team_member' ? req.actorId : null;
+    const evidence = { statement: CONSENT_STATEMENT, method: optInMethod, note: req.body.optInNote || null, source: 'csv_import' };
+
+    // importFromRows only returns {id, phone} - fetched separately here
+    // (not a gate, just an honest updated/alreadyOptedIn split; same
+    // caveat as bulk-consent above: recordEvent's own row lock is the
+    // real authority on whether a write is allowed, not this pre-fetch).
+    const optInIds = rowsToOptIn.map((row) => contactIdByPhone[row.phone]);
+    const currentStatusById = optInIds.length
+      ? Object.fromEntries((await contactsRepo.findManyByIds(req.db, req.clientId, optInIds)).map((c) => [c.id, c.opt_in_status]))
+      : {};
+
+    // A real bug, found live (not reasoned about) while verifying this
+    // feature: req.db runs this whole request inside one transaction
+    // (tenantContext.js, BEGIN at request start, COMMIT after the handler
+    // returns), but consentRepo.recordEvent opens its OWN separate
+    // connection and transaction. Calling it here, before req.db's
+    // transaction has committed, means its `select ... for update` on a
+    // contact row THIS SAME REQUEST just inserted finds nothing - a brand
+    // new row is invisible across connections until its own transaction
+    // commits. recordEvent then silently ROLLBACKs and returns null (its
+    // documented "not found" behavior), which this route was counting as
+    // a success. Same fix templates.js already established for a Meta
+    // call that needs to see data written earlier in the same request:
+    // commit and release req.db before anything that needs a separate
+    // connection to see it. Nothing after this point in the route uses
+    // req.db, so there is no reacquire.
+    await req.commitAndRelease();
+
+    let updated = 0;
+    let alreadyOptedIn = 0;
+    let skippedOptedOut = 0;
+    for (const row of rowsToOptIn) {
+      const contactId = contactIdByPhone[row.phone];
+      if (currentStatusById[contactId] === 'opted_in') { alreadyOptedIn += 1; continue; }
+      try {
+        // recordEvent returns null (not a thrown error) if it can't find
+        // the contact row - checked explicitly so that case can never
+        // again be silently miscounted as a success (see the comment above
+        // this loop for the real bug this guards against recurring).
+        const result = await consentRepo.recordEvent(req.clientId, contactId, {
+          event: 'opted_in', source: 'csv_import', evidence, actorType, actorId, batchId,
+        });
+        if (result) updated += 1;
+      } catch (err) {
+        if (err instanceof consentRepo.ConsentBlockedError) { skippedOptedOut += 1; continue; }
+        throw err;
+      }
+    }
+    optInResult = { batchId, total: rowsToOptIn.length, updated, alreadyOptedIn, skippedOptedOut };
+
+    if (updated > 0) {
+      await auditLogRepo.record({
+        actor_type: 'client', actor_id: req.clientId,
+        action: 'contacts_csv_opt_in',
+        target: `${req.clientId}: ${updated} contact(s) marked opted in via CSV import, batch ${batchId}`,
+      });
+    }
+  }
+
   // A header-level 'unrecognized_column' notice (e.g. an ignored
   // truly-unknown column) is still shown in errors below, but doesn't
   // correspond to any one failed row - excluded from failedCount so it
@@ -83,6 +184,7 @@ router.post('/import', requireRole('Admin', 'Manager', 'Agent'), uploadCsv.singl
     importedCount: validRows.length,
     failedCount: failedRows.length,
     errors,
+    optIn: optInResult,
   });
 }));
 
