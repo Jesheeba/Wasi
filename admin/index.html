@@ -1012,6 +1012,27 @@ without printing WASI_API_KEY or WASI_WEBHOOK_SECRET anywhere.</pre>
     </div>
   </div>
 
+  <!-- ===================== ERROR DIALOG ===================== -->
+  <!-- Admin's port of the root CRM app's #modal-error-dialog (CLAUDE.md
+       Known Gaps: "admin has the same showToast-only problem" - the root
+       app's long/actionable errors (Meta rejection wording, embedded-signup
+       guidance, a multi-reason details array) were unreadable in an
+       auto-dismissing toast; same gap existed here. reportError()
+       (app.js) picks this or the plain toast per error. -->
+  <div id="modal-error-dialog" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-error-dialog-title">Something went wrong</h2>
+        <button class="close-modal-btn" data-close-error-dialog aria-label="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div id="modal-error-dialog-body" class="modal-inner-scroll error-dialog-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="modal-error-dialog-copy-btn">Copy details</button>
+        <button type="button" class="btn-primary btn-auto" data-close-error-dialog>Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== CONFIRM DIALOG ===================== -->
   <div id="confirm-modal" class="modal-overlay">
     <div class="modal-box confirm-box">

@@ -354,6 +354,11 @@ body {
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .confirm-warning { color: var(--danger); font-weight: 600; }
 
+/* Error dialog (port of the root CRM app's #modal-error-dialog). */
+.modal-inner-scroll { max-height: var(--modal-inner-scroll-height, 260px); overflow-y: auto; }
+.error-dialog-body { font-size: var(--fs-body); color: var(--text); line-height: 1.55; white-space: pre-line; margin-bottom: 1.25rem; }
+.error-dialog-body ul { margin: 0; padding-left: 1.25rem; }
+
 .spin { animation: admin-spin 1s linear infinite; }
 @keyframes admin-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 

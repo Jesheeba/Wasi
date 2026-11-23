@@ -507,6 +507,78 @@ function closeConfirm() {
 }
 
 /* ---------------------------------------------------------------
+   Error dialog - port of the root CRM app's #modal-error-dialog/
+   reportError (CLAUDE.md Known Gaps: admin had the identical
+   showToast-only problem for a long/structured error - a real Meta
+   rejection's wording, or a multi-reason validation `details` array -
+   unreadable in an auto-dismissing toast). Same 100-char threshold,
+   same reasoning: short/generic admin errors ("Failed to update
+   status: Not found") run well under it; a real Meta rejection or a
+   multi-item details array runs well over it.
+   --------------------------------------------------------------- */
+const ERROR_DIALOG_LENGTH_THRESHOLD = 100;
+
+function shouldUseErrorDialog(message, details) {
+  if (details && details.length > 1) return true;
+  if (!message) return false;
+  return message.length > ERROR_DIALOG_LENGTH_THRESHOLD || message.includes('\n');
+}
+
+function showErrorDialog({ title = 'Something went wrong', message, details }) {
+  document.getElementById('modal-error-dialog-title').textContent = title;
+  const body = document.getElementById('modal-error-dialog-body');
+  if (details && details.length) {
+    body.innerHTML = `<ul>${details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>`;
+  } else {
+    body.textContent = message;
+  }
+
+  // Re-cloned on every open, same reason showConfirm's action button is -
+  // a previous call's click listener must never stack.
+  const copyBtn = document.getElementById('modal-error-dialog-copy-btn');
+  const newCopyBtn = copyBtn.cloneNode(true);
+  copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+  const copyText = details && details.length ? details.join('\n') : message;
+  newCopyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(copyText);
+      const original = newCopyBtn.textContent;
+      newCopyBtn.textContent = 'Copied!';
+      setTimeout(() => { newCopyBtn.textContent = original; }, 1500);
+    } catch (_err) {
+      showToast('Could not copy - clipboard permission denied', 'error');
+    }
+  });
+
+  document.getElementById('modal-error-dialog').classList.add('open');
+}
+
+function closeErrorDialog() {
+  document.getElementById('modal-error-dialog').classList.remove('open');
+}
+
+// The replacement for admin's handful of `showToast('<prefix>: ' + err.message, 'error')`
+// catch sites - decides toast vs. dialog per-error instead of forcing every
+// call site to. `prefix` (e.g. "Failed to save forwarding config") becomes
+// the dialog's title when it opens; a plain error with no body.detail/
+// details just shows err.message either way, toast or dialog depending on
+// its own length.
+function reportError(err, prefix) {
+  const hasDetails = !!(err?.body && Array.isArray(err.body.details) && err.body.details.length && err.body.details.every((d) => typeof d === 'string'));
+  const details = hasDetails ? err.body.details : null;
+  const detailText = (err?.body && typeof err.body.detail === 'string' && err.body.detail) || null;
+  const category = err?.message || 'Something went wrong.';
+  const measureText = details ? details.join(' ') : (detailText || category);
+  const toastMessage = prefix ? `${prefix}: ${measureText}` : measureText;
+
+  if (shouldUseErrorDialog(toastMessage, details)) {
+    showErrorDialog({ title: prefix || category, message: detailText || category, details });
+  } else {
+    showToast(toastMessage, 'error');
+  }
+}
+
+/* ---------------------------------------------------------------
    Auth: login / logout
    --------------------------------------------------------------- */
 async function handleLoginSubmit(e) {
@@ -1297,7 +1369,7 @@ async function loadClientDetail(clientId, { quiet = false } = {}) {
   } catch (err) {
     if (err.status === 401) return;
     if (quiet) {
-      showToast('Could not refresh this client: ' + err.message, 'error');
+      reportError(err, 'Could not refresh this client');
       return;
     }
     errEl.style.display = 'block';
@@ -1848,7 +1920,7 @@ async function saveHubForward(clientId) {
   } catch (err) {
     if (err.status === 401) return;
     resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(err.message)}</div>`;
-    showToast('Failed to save forwarding config: ' + err.message, 'error');
+    reportError(err, 'Failed to save forwarding config');
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -1879,7 +1951,7 @@ function toggleClientService(client, checkboxEl) {
       if (err.status === 401) return;
       checkboxEl.checked = !turningOn; // revert the toggle's visual state on failure
       resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(err.message)}</div>`;
-      showToast('Failed to update Service: ' + err.message, 'error');
+      reportError(err, 'Failed to update Service');
     });
     return;
   }
@@ -1911,7 +1983,7 @@ function toggleClientPayment(client, checkboxEl) {
     if (err.status === 401) return;
     checkboxEl.checked = !paid;
     resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(err.message)}</div>`;
-    showToast('Failed to update payment status: ' + err.message, 'error');
+    reportError(err, 'Failed to update payment status');
   });
 }
 
@@ -1935,7 +2007,7 @@ async function saveClientStatus(clientId) {
   } catch (err) {
     if (err.status === 401) return;
     resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(err.message)}</div>`;
-    showToast('Failed to update status: ' + err.message, 'error');
+    reportError(err, 'Failed to update status');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Save';
@@ -2480,7 +2552,7 @@ async function loadPaymentSchedules() {
     box.querySelectorAll('[data-sched-toggle]').forEach((el) => el.addEventListener('change', async () => {
       try {
         await apiFetch(`/api/admin/payment-notifications/schedules/${el.getAttribute('data-sched-toggle')}`, { method: 'PATCH', body: JSON.stringify({ enabled: el.checked }) });
-      } catch (err) { showToast(err.message, 'error'); loadPaymentSchedules(); }
+      } catch (err) { reportError(err); loadPaymentSchedules(); }
     }));
     box.querySelectorAll('[data-sched-delete]').forEach((el) => el.addEventListener('click', () => {
       showConfirm({
@@ -2506,7 +2578,7 @@ async function addPaymentSchedule() {
     await apiFetch('/api/admin/payment-notifications/schedules', { method: 'POST', body: JSON.stringify({ day_of_month: day, send_hour: hour }) });
     showToast('Schedule added.', 'success');
     loadPaymentSchedules();
-  } catch (err) { showToast(err.message, 'error'); }
+  } catch (err) { reportError(err); }
 }
 
 function paymentRemindersVisibleRows() {
@@ -2599,7 +2671,7 @@ async function confirmSendRemindersToAllActive() {
     active = clients.filter((c) => c.status === 'active');
   } catch (err) {
     if (err.status === 401) return;
-    showToast('Could not load the recipient list: ' + err.message, 'error');
+    reportError(err, 'Could not load the recipient list');
     return;
   }
 
@@ -3207,7 +3279,7 @@ async function handleBackfillApiKeys() {
     if (err.status === 401) return;
     resultEl.style.display = 'block';
     resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(err.message)}</div>`;
-    showToast('Failed to backfill API keys: ' + err.message, 'error');
+    reportError(err, 'Failed to backfill API keys');
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
@@ -3344,7 +3416,7 @@ async function setTicketStatus(ticketId, status) {
     renderTickets();
   } catch (err) {
     if (err.status === 401) return;
-    showToast('Failed to update ticket: ' + err.message, 'error');
+    reportError(err, 'Failed to update ticket');
     loadTickets();
   }
 }
@@ -3722,6 +3794,13 @@ function initEventListeners() {
   });
   on('confirm-modal', 'click', (e) => {
     if (e.target.id === 'confirm-modal') closeConfirm();
+  });
+
+  document.querySelectorAll('[data-close-error-dialog]').forEach((btn) => {
+    btn.addEventListener('click', closeErrorDialog);
+  });
+  on('modal-error-dialog', 'click', (e) => {
+    if (e.target.id === 'modal-error-dialog') closeErrorDialog();
   });
 }
 
