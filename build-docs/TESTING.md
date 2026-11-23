@@ -1,5 +1,22 @@
 # Testing
 
+## meta-analytics
+`metaAnalytics.test.js` (Meta faked), 4/4:
+- The exact `pricing_analytics` field syntax and the 7-day window.
+- Category, free-message and per-day totals; the 11.78 rounding case (it
+  failed first, then was fixed).
+- A bad period falls back to 30 days; a Meta error gives 502 with its text.
+- The template switch refused without confirm; then sent and recorded.
+- 12 templates fetched in batches of 10 and summed; only `amount_spent`
+  counted as cost.
+
+`metaAnalyticsUI.test.js` (Playwright), 1/1: the cost tile and table; the
+template tab's Turn on stays disabled until the box is ticked, then shows
+numbers.
+
+Regression, all green: analyticsTagsMultiTag 3, chatSlaLogs 10,
+conversationPricing 7, ctwaAdsPage 6, messageReferral 3.
+
 ## whatsapp-quick-wins
 `server/test/whatsappQuickWins.test.js` (API, Meta faked), 11/11:
 - Read ticks: no inbound message -> no call; marks the newest inbound;

@@ -7963,6 +7963,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeRepKey === 'tags') await renderTagAnalytics();
     else if (activeRepKey === 'campaign') await renderCampaignAnalytics();
     else if (activeRepKey === 'sla') await renderSlaAnalytics();
+    else if (activeRepKey === 'cost') await renderMetaCost();
+    else if (activeRepKey === 'templates') await renderTemplateInsights();
     else await renderMessageAnalytics();
     showToast('Report data refreshed');
   });
@@ -8422,6 +8424,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (repKey === 'tags') renderTagAnalytics();
     if (repKey === 'campaign') renderCampaignAnalytics();
     if (repKey === 'sla') renderSlaAnalytics();
+    if (repKey === 'cost') renderMetaCost();
+    if (repKey === 'templates') renderTemplateInsights();
     refreshIcons();
   }
 
@@ -9415,6 +9419,85 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     refreshIcons();
   }
+
+  // --- Meta analytics (build-docs/features/meta-analytics.md) ---
+  const META_CATEGORY_LABEL = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Authentication', AUTHENTICATION_INTERNATIONAL: 'Authentication (international)', SERVICE: 'Service (replies)', MARKETING_LITE: 'Marketing (Marketing Messages API)', REFERRAL_CONVERSION: 'Free from ads' };
+  const formatMoney = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  async function renderMetaCost() {
+    const tiles = document.getElementById('meta-cost-tiles');
+    const catBody = document.getElementById('meta-cost-category-tbody');
+    const dayBody = document.getElementById('meta-cost-day-tbody');
+    if (!tiles) return;
+    catBody.innerHTML = analyticsLoadingRow(4);
+    dayBody.innerHTML = analyticsLoadingRow(3);
+    const days = document.getElementById('meta-cost-days').value;
+    try {
+      const d = await authFetch(`/api/analytics/meta-cost?days=${encodeURIComponent(days)}`);
+      tiles.innerHTML = [
+        statTile('wallet', 'Charged by WhatsApp', formatMoney(d.totals.cost), `Last ${d.days} days`),
+        statTile('send', 'Messages counted', formatCount(d.totals.volume)),
+      ].join('');
+      catBody.innerHTML = d.byCategory.length ? d.byCategory.map((c) => `<tr>
+        <td data-label="Message type" class="analytics-name">${esc(META_CATEGORY_LABEL[c.category] || c.category)}</td>
+        <td data-label="Messages">${esc(formatCount(c.volume))}</td>
+        <td data-label="Free">${esc(formatCount(c.freeVolume))}</td>
+        <td data-label="Cost">${esc(formatMoney(c.cost))}</td></tr>`).join('')
+        : analyticsEmptyRow(4, 'No charges in this period', 'Meta has not counted any messages for this WhatsApp number yet.');
+      dayBody.innerHTML = d.byDay.length ? d.byDay.map((r) => `<tr>
+        <td data-label="Day">${esc(formatShortDate(r.day))}</td>
+        <td data-label="Messages">${esc(formatCount(r.volume))}</td>
+        <td data-label="Cost">${esc(formatMoney(r.cost))}</td></tr>`).join('') : analyticsEmptyRow(3, 'No days to show', '');
+    } catch (err) {
+      tiles.innerHTML = '';
+      catBody.innerHTML = analyticsErrorRow(4, err.body?.detail || err.message || 'Could not load costs.', 'meta-cost-retry');
+      dayBody.innerHTML = '';
+      document.getElementById('meta-cost-retry')?.addEventListener('click', renderMetaCost);
+    }
+    refreshIcons();
+  }
+  document.getElementById('meta-cost-days')?.addEventListener('change', renderMetaCost);
+
+  async function renderTemplateInsights() {
+    const off = document.getElementById('template-insights-off');
+    const on = document.getElementById('template-insights-on');
+    const body = document.getElementById('template-insights-tbody');
+    if (!off) return;
+    body.innerHTML = analyticsLoadingRow(6);
+    try {
+      const d = await authFetch('/api/analytics/template-insights');
+      off.hidden = d.enabled;
+      on.hidden = !d.enabled;
+      if (!d.enabled) return;
+      body.innerHTML = d.templates.length ? d.templates.map((t) => `<tr>
+        <td data-label="Template" class="analytics-name">${esc(t.name)}</td>
+        <td data-label="Sent">${esc(formatCount(t.sent))}</td>
+        <td data-label="Delivered">${esc(formatCount(t.delivered))}</td>
+        <td data-label="Read">${esc(formatCount(t.read))}</td>
+        <td data-label="Clicks">${esc(formatCount(t.clicked))}</td>
+        <td data-label="Cost">${esc(formatMoney(t.cost))}</td></tr>`).join('')
+        : analyticsEmptyRow(6, 'No templates synced from WhatsApp yet', 'Sync your templates under Templates first.');
+    } catch (err) {
+      off.hidden = true;
+      on.hidden = false;
+      body.innerHTML = analyticsErrorRow(6, err.body?.detail || err.message || 'Could not load template performance.', 'template-insights-retry');
+      document.getElementById('template-insights-retry')?.addEventListener('click', renderTemplateInsights);
+    }
+  }
+  document.getElementById('template-insights-confirm')?.addEventListener('change', (e) => {
+    document.getElementById('template-insights-enable').disabled = !e.target.checked;
+  });
+  document.getElementById('template-insights-enable')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await authFetch('/api/analytics/template-insights/enable', { method: 'POST', body: JSON.stringify({ confirm: true }) });
+      showToast('Template performance is on', 'success');
+      renderTemplateInsights();
+    } catch (err) {
+      reportError(err);
+      e.target.disabled = false;
+    }
+  });
 
   async function renderCampaignAnalytics() {
     const tbody = document.getElementById('campaign-analytics-tbody');

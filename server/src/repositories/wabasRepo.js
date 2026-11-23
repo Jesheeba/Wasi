@@ -77,4 +77,10 @@ async function upsertForClient(clientId, fields) {
   return rows[0];
 }
 
-module.exports = { findByClientId, findById, findByWabaId, findAnyConnected, listAllWithClient, upsertForClient };
+// Meta analytics: the one-way "template insights on" switch (migration 098).
+async function markTemplateInsightsEnabled(id) {
+  await pool.query('update wabas set template_insights_enabled_at = coalesce(template_insights_enabled_at, now()) where id = $1', [id]);
+}
+
+module.exports = {
+  markTemplateInsightsEnabled, findByClientId, findById, findByWabaId, findAnyConnected, listAllWithClient, upsertForClient };

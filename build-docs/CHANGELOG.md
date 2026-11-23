@@ -1,5 +1,17 @@
 # Changelog
 
+## feat(meta-analytics): real WhatsApp cost and template performance
+Analytics has two new tabs:
+- **WhatsApp cost:** what Meta charged, per category and per day, from
+  `pricing_analytics`.
+- **Template performance:** sent, delivered, read, clicks and cost per
+  template, from `template_analytics`. It needs a one-way switch (Meta: it
+  can't be undone), which sits behind an explicit confirmation and is
+  recorded in `wabas.template_insights_enabled_at` (migration 098).
+
+Fixed while testing: money totals are summed in integer micro-units, since
+7.85 + 3.925 rounded down to 11.77 in floating point.
+
 ## feat(whatsapp-quick-wins): read ticks, typing, block, QR codes, starters, green tick
 - Opening a chat marks the customer's newest message read (blue ticks).
 - Typing a reply shows "typing..." to the customer (at most every 20 s).

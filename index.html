@@ -1055,6 +1055,8 @@
                  applyRoleGating, app.js), matching GET /api/analytics/sla's
                  own server-side role gate. -->
             <button type="button" class="tab" role="tab" id="rep-tab-sla" data-rep-view="sla" aria-selected="false" aria-controls="rep-view-sla" tabindex="-1">Team / SLA</button>
+            <button type="button" class="tab" role="tab" id="rep-tab-cost" data-rep-view="cost" aria-selected="false" aria-controls="rep-view-cost" tabindex="-1">WhatsApp cost</button>
+            <button type="button" class="tab" role="tab" id="rep-tab-templates" data-rep-view="templates" aria-selected="false" aria-controls="rep-view-templates" tabindex="-1">Template performance</button>
           </div>
 
           <!-- MESSAGE -->
@@ -1117,6 +1119,47 @@
                   <tr class="analytics-state-row"><td colspan="4" class="analytics-state-cell"><span class="skeleton analytics-skeleton"></span></td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- WHATSAPP COST (build-docs/features/meta-analytics.md): what Meta actually charged -->
+          <div id="rep-view-cost" class="rep-content-view" role="tabpanel" aria-labelledby="rep-tab-cost" hidden>
+            <div class="analytics-toolbar">
+              <p class="analytics-range-note">From Meta's own billing data. Amounts are in your WhatsApp account's currency.</p>
+              <label class="sr-only" for="meta-cost-days">Period</label>
+              <select id="meta-cost-days" class="form-input btn-auto"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select>
+            </div>
+            <div class="stat-tiles" id="meta-cost-tiles" aria-live="polite"></div>
+            <div class="table-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>Message type</th><th>Messages</th><th>Free</th><th>Cost</th></tr></thead>
+                <tbody id="meta-cost-category-tbody"></tbody>
+              </table>
+            </div>
+            <div class="table-card meta-cost-days-card">
+              <table class="data-table stack-mobile">
+                <thead><tr><th>Day</th><th>Messages</th><th>Cost</th></tr></thead>
+                <tbody id="meta-cost-day-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- TEMPLATE PERFORMANCE (Meta template_analytics; one-way switch to turn on) -->
+          <div id="rep-view-templates" class="rep-content-view" role="tabpanel" aria-labelledby="rep-tab-templates" hidden>
+            <div id="template-insights-off" class="profile-form-card" hidden>
+              <h3 class="settings-card-title">Turn on template performance</h3>
+              <p class="settings-help">Meta then tracks sent, delivered, read, button clicks and cost for each template, and link clicks in templates. <strong>Meta does not allow turning this off again.</strong></p>
+              <label class="wa-form-required"><input type="checkbox" id="template-insights-confirm" /> I understand this cannot be turned off</label>
+              <div><button type="button" class="btn-primary btn-auto" id="template-insights-enable" disabled>Turn on</button></div>
+            </div>
+            <div id="template-insights-on" hidden>
+              <p class="analytics-range-note">Last 30 days, from Meta. Read and click numbers are kept by Meta for 7 days after sending.</p>
+              <div class="table-card">
+                <table class="data-table stack-mobile">
+                  <thead><tr><th>Template</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Clicks</th><th>Cost</th></tr></thead>
+                  <tbody id="template-insights-tbody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

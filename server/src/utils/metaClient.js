@@ -1169,7 +1169,34 @@ const applyOfficialBusinessAccount = (phoneNumberId, accessToken, fields) => gra
   `/${phoneNumberId}/official_business_account`, { method: 'POST', accessToken, body: fields }
 );
 
+// --- Meta analytics - build-docs/features/meta-analytics.md ---
+// pricing_analytics replaced conversation_analytics (removed 2026-11-01).
+// start/end are unix seconds. Returns the flat list of data points.
+async function getPricingAnalytics(wabaId, accessToken, { start, end }) {
+  const field = `pricing_analytics.start(${start}).end(${end}).granularity(DAILY).dimensions(PRICING_CATEGORY,PRICING_TYPE)`;
+  const data = await graphFetch(`/${wabaId}?fields=${encodeURIComponent(field)}`, { accessToken });
+  return (data.pricing_analytics?.data || []).flatMap((d) => d.data_points || []);
+}
+
+// One-way switch: Meta says template insights cannot be disabled again.
+const enableTemplateInsights = (wabaId, accessToken) => graphFetch(`/${wabaId}`, {
+  method: 'POST', accessToken, body: { is_enabled_for_insights: true },
+});
+
+// Max 10 template ids per call, daily only, 90-day lookback.
+async function getTemplateAnalytics(wabaId, accessToken, { start, end, templateIds }) {
+  const q = new URLSearchParams({
+    start: String(start), end: String(end), granularity: 'daily',
+    metric_types: 'sent,delivered,read,clicked,cost', template_ids: JSON.stringify(templateIds),
+  });
+  const data = await graphFetch(`/${wabaId}/template_analytics?${q}`, { accessToken });
+  return (data.data || []).flatMap((d) => d.data_points || []);
+}
+
 module.exports = {
+  getPricingAnalytics,
+  enableTemplateInsights,
+  getTemplateAnalytics,
   markReadAndTyping,
   setBlockedUsers,
   createQrCode,

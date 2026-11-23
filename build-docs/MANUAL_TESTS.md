@@ -134,3 +134,19 @@ Status: PENDING
      Meta replies by email in a few days.
 
 Status: PENDING
+
+## 10. WhatsApp cost and template performance
+Deploy first (migration 098).
+1. Analytics > WhatsApp cost.
+   - Expect: totals for the last 30 days that match WhatsApp Manager >
+     Insights for the demo account, give or take a day of delay.
+2. Analytics > Template performance: tick "I understand this cannot be
+   turned off" > Turn on.
+   - This is permanent for the demo account's WhatsApp account.
+   - Expect: a table of templates. Sent, delivered and read appear for
+     templates used in the last 30 days.
+3. Tell me whether the Cost column shows numbers. Its field name is
+   unconfirmed, so if it is always 0.00 while Meta shows costs, I need to
+   fix the mapping.
+
+Status: PENDING

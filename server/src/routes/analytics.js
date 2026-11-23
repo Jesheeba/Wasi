@@ -1,4 +1,7 @@
 const { Router } = require('express');
+const wabasRepo = require('../repositories/wabasRepo');
+const metaClient = require('../utils/metaClient');
+const { decrypt } = require('../utils/encryption');
 const chatSlaLogsRepo = require('../repositories/chatSlaLogsRepo');
 const conversationPricingRepo = require('../repositories/conversationPricingRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -200,6 +203,117 @@ router.get('/cost-estimate', asyncHandler(async (req, res) => {
     rateInr: rateConfigured ? Number(rateInr) : null,
     estimatedInr: rateConfigured ? Number((conversationsBilled * rateInr).toFixed(2)) : null,
   });
+}));
+
+// --- Meta analytics (build-docs/features/meta-analytics.md) ---
+// Real numbers from Meta: what WhatsApp actually charged (pricing_analytics)
+// and per-template performance (template_analytics). Admin/Manager, from the
+// router.use above. Fetched live; Meta owns this data.
+const metaAnalyticsDays = (q, max) => {
+  const n = Number(q);
+  return Number.isInteger(n) && n >= 1 && n <= max ? n : 30;
+};
+async function analyticsWaba(clientId) {
+  const waba = await wabasRepo.findByClientId(clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) return null;
+  return { waba, token: decrypt(waba.access_token_encrypted) };
+}
+function analyticsMetaFailure(res, err, fallback) {
+  const m = err.metaError;
+  const detail = m && (m.error_user_title || m.error_user_msg) ? [m.error_user_title, m.error_user_msg].filter(Boolean).join(' - ') : err.message;
+  return res.status(502).json({ error: fallback, detail });
+}
+
+router.get('/meta-cost', asyncHandler(async (req, res) => {
+  const days = metaAnalyticsDays(req.query.days, 365);
+  const conn = await analyticsWaba(req.clientId);
+  if (!conn) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - days * 86400;
+  let points;
+  try {
+    points = await metaClient.getPricingAnalytics(conn.waba.waba_id, conn.token, { start, end });
+  } catch (err) {
+    return analyticsMetaFailure(res, err, 'Could not load costs from WhatsApp');
+  }
+  const byDay = new Map();
+  const byCategory = new Map();
+  let totalVolume = 0;
+  let totalCost = 0;
+  for (const p of points) {
+    const day = new Date(p.start * 1000).toISOString().slice(0, 10);
+    const cat = String(p.pricing_category || 'OTHER');
+    const volume = Number(p.volume) || 0;
+    // Money is summed in integer micro-units so totals round correctly
+    // (7.85 + 3.925 is 11.7749999... in floating point).
+    const cost = Math.round((Number(p.cost) || 0) * 1e6);
+    const free = p.pricing_type && p.pricing_type !== 'REGULAR';
+    totalVolume += volume;
+    totalCost += cost;
+    const d = byDay.get(day) || { day, volume: 0, cost: 0 };
+    d.volume += volume; d.cost += cost; byDay.set(day, d);
+    const c = byCategory.get(cat) || { category: cat, volume: 0, freeVolume: 0, cost: 0 };
+    c.volume += volume; c.cost += cost; if (free) c.freeVolume += volume; byCategory.set(cat, c);
+  }
+  const round = (micro) => Math.round(micro / 1e4) / 100;
+  res.json({
+    days,
+    totals: { volume: totalVolume, cost: round(totalCost) },
+    byCategory: [...byCategory.values()].map((c) => ({ ...c, cost: round(c.cost) })).sort((a, b) => b.cost - a.cost || b.volume - a.volume),
+    byDay: [...byDay.values()].map((d) => ({ ...d, cost: round(d.cost) })).sort((a, b) => b.day.localeCompare(a.day)),
+  });
+}));
+
+router.get('/template-insights', asyncHandler(async (req, res) => {
+  const conn = await analyticsWaba(req.clientId);
+  if (!conn) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  if (!conn.waba.template_insights_enabled_at) return res.json({ enabled: false, templates: [] });
+  const days = metaAnalyticsDays(req.query.days, 90);
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - days * 86400;
+  const { rows } = await req.db.query(
+    `select name, language, meta_template_id from message_templates
+     where client_id = $1 and meta_template_id is not null and orphaned_at is null order by name`,
+    [req.clientId]
+  );
+  const byId = new Map(rows.map((t) => [String(t.meta_template_id), { name: t.name, language: t.language, sent: 0, delivered: 0, read: 0, clicked: 0, cost: 0 }]));
+  const ids = [...byId.keys()];
+  try {
+    for (let i = 0; i < ids.length; i += 10) {
+      const points = await metaClient.getTemplateAnalytics(conn.waba.waba_id, conn.token, { start, end, templateIds: ids.slice(i, i + 10) });
+      for (const p of points) {
+        const t = byId.get(String(p.template_id));
+        if (!t) continue;
+        t.sent += Number(p.sent) || 0;
+        t.delivered += Number(p.delivered) || 0;
+        t.read += Number(p.read) || 0;
+        t.clicked += (p.clicked || []).reduce((n, c) => n + (Number(c.count) || 0), 0);
+        t.cost += (p.cost || []).filter((c) => c.type === 'amount_spent').reduce((n, c) => n + Math.round((Number(c.value) || 0) * 1e6), 0);
+      }
+    }
+  } catch (err) {
+    return analyticsMetaFailure(res, err, 'Could not load template analytics from WhatsApp');
+  }
+  res.json({
+    enabled: true,
+    enabledAt: conn.waba.template_insights_enabled_at,
+    days,
+    templates: [...byId.values()].map((t) => ({ ...t, cost: Math.round(t.cost / 1e4) / 100 })).sort((a, b) => b.sent - a.sent),
+  });
+}));
+
+// Meta: "cannot be disabled" once on. The client must confirm explicitly.
+router.post('/template-insights/enable', asyncHandler(async (req, res) => {
+  if (req.body?.confirm !== true) return res.status(400).json({ error: 'Confirm that template analytics cannot be turned off again.' });
+  const conn = await analyticsWaba(req.clientId);
+  if (!conn) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  try {
+    await metaClient.enableTemplateInsights(conn.waba.waba_id, conn.token);
+  } catch (err) {
+    return analyticsMetaFailure(res, err, 'WhatsApp did not turn on template analytics');
+  }
+  await wabasRepo.markTemplateInsightsEnabled(conn.waba.id);
+  res.json({ enabled: true });
 }));
 
 module.exports = router;
