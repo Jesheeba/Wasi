@@ -196,6 +196,46 @@ async function withStubbedSend(fn, { fail = false } = {}) {
 
 const disableAll = () => pool.query("update automation_rules set status = 'Disabled' where client_id = $1", [clientId]);
 
+// The engine ships with a temporary TEST_LOCK for the live test. Every other
+// test here checks the behaviour once the lock is removed (lock = null); the
+// lock test below turns it on explicitly.
+const originalLock = automationEngine.TEST_LOCK;
+before(() => { automationEngine.TEST_LOCK = null; });
+after(() => { automationEngine.TEST_LOCK = originalLock; });
+
+test('LOCK: only the locked number gets replies on the locked client; "*" dormant for other clients', async () => {
+  await disableAll();
+  await createRule({ title: `${SUITE_PREFIX}lock-star`, trigger: '*', action: 'locked catch-all' });
+  await createRule({ title: `${SUITE_PREFIX}lock-kw`, trigger: 'lockkw', action: 'locked keyword' });
+  const allowedChat = await makeChat(`${SUITE_PREFIX}lock-allowed`);
+  const otherChat = await makeChat(`${SUITE_PREFIX}lock-other`);
+  const phoneOf = async (chat) => (await pool.query(
+    'select ct.phone from chats c join contacts ct on ct.id = c.contact_id where c.id = $1', [chat.id])).rows[0].phone;
+  const allowedPhone = await phoneOf(allowedChat);
+  const otherPhone = await phoneOf(otherChat);
+  try {
+    automationEngine.TEST_LOCK = { clientId, phone: allowedPhone.slice(-10) };
+    await withStubbedSend(async (sent) => {
+      assert.equal((await automationEngine.evaluate(pool, clientId, otherChat, 'lockkw', { phone: otherPhone })).handled, false);
+      assert.equal((await automationEngine.evaluate(pool, clientId, otherChat, 'hello', { phone: otherPhone })).handled, false);
+      assert.equal((await automationEngine.evaluate(pool, clientId, allowedChat, 'hello', { phone: `+91 ${allowedPhone}` })).how, 'rule_text_reply');
+      assert.deepEqual(sent, ['locked catch-all'], 'only the locked number got a reply');
+    });
+
+    automationEngine.TEST_LOCK = { clientId: '00000000-0000-0000-0000-00000000ffff', phone: '9092766740' };
+    await pool.query('update chats set auto_reply_at = null where id = $1', [otherChat.id]);
+    await withStubbedSend(async (sent) => {
+      assert.equal((await automationEngine.evaluate(pool, clientId, otherChat, 'hello', { phone: otherPhone })).handled, false,
+        '"*" stays dormant for a client the lock is not on');
+      assert.equal((await automationEngine.evaluate(pool, clientId, otherChat, 'lockkw', { phone: otherPhone })).how, 'rule_text_reply',
+        'keyword rules keep working for other clients');
+      assert.deepEqual(sent, ['locked keyword']);
+    });
+  } finally {
+    automationEngine.TEST_LOCK = null;
+  }
+});
+
 test('H: keywords match whole words and phrases, case-insensitive', () => {
   const m = automationEngine.matchesTrigger;
   assert.equal(m('hi', 'Hi there'), true);

@@ -38,11 +38,30 @@ function matchesTrigger(trigger, text) {
   return new RegExp(`(?<![\\p{L}\\p{M}\\p{N}])${escaped}(?![\\p{L}\\p{M}\\p{N}])`, 'iu').test(text || '');
 }
 
+// TEMPORARY TEST LOCK (2026-11-23) - remove after the live end-to-end test
+// of the "*" catch-all (owner instruction: the test may only reach one
+// customer number). While set:
+//  1. no rule on the lock's client (the Wasi Demo Client) replies to any
+//     number except the lock's phone;
+//  2. "*" fires only for that client - every other client's "*" stays
+//     dormant, exactly as before this change (it never matched anything).
+// Set to null to remove. Exported so tests can point it at their own client.
+const TEST_LOCK = { clientId: '00000000-0000-0000-0000-000000000001', phone: '9092766740' };
+
+function testLockBlocks(clientId, contact) {
+  const lock = module.exports.TEST_LOCK;
+  return Boolean(lock) && clientId === lock.clientId
+    && !String(contact?.phone || '').replace(/\D/g, '').endsWith(lock.phone);
+}
+
 async function evaluate(db, clientId, chat, inboundBody, contact, { allowWildcard = true } = {}) {
+  if (testLockBlocks(clientId, contact)) return { handled: false, how: null };
+  const lock = module.exports.TEST_LOCK;
+  const wildcardAllowed = allowWildcard && Boolean(chat?.id) && (!lock || clientId === lock.clientId);
   const rules = await automationRulesRepo.list(db, clientId);
   const enabled = rules.filter((r) => r.status === 'Enabled');
   const rule = enabled.find((r) => !isWildcard(r) && matchesTrigger(r.trigger, inboundBody))
-    || (allowWildcard && chat?.id ? enabled.find(isWildcard) : undefined);
+    || (wildcardAllowed ? enabled.find(isWildcard) : undefined);
   if (!rule) return { handled: false, how: null };
 
   const wildcard = isWildcard(rule);
@@ -89,4 +108,4 @@ async function evaluate(db, clientId, chat, inboundBody, contact, { allowWildcar
   }
 }
 
-module.exports = { evaluate, matchesTrigger };
+module.exports = { evaluate, matchesTrigger, TEST_LOCK };
