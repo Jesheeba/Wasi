@@ -3344,3 +3344,9 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 /* Ad lead feedback (build-docs/features/ctwa-conversions.md). */
 .ctwa-chat-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ctwa-no-clid { font-size: 0.75rem; }
+
+/* Product messages (build-docs/features/catalog-product-messages.md). */
+.catalog-card { max-width: 640px; margin-top: 1.5rem; }
+.catalog-card .settings-inline-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.catalog-card .settings-inline-row .form-input { flex: 1 1 220px; min-width: 0; }
+#send-products-form [hidden] { display: none; }

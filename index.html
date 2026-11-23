@@ -357,6 +357,9 @@
                         <button type="button" id="chat-send-form-btn" class="menu-item" role="menuitem">
                           <i data-lucide="clipboard-list" class="icon-14"></i> Send form
                         </button>
+                        <button type="button" id="chat-send-products-btn" class="menu-item" role="menuitem">
+                          <i data-lucide="package" class="icon-14"></i> Send products
+                        </button>
                         <button type="button" id="chat-block-btn" class="menu-item" role="menuitem" data-manage-only>
                           <i data-lucide="ban" class="icon-14"></i> <span>Block contact</span>
                         </button>
@@ -888,10 +891,24 @@
             </div>
           </section>
 
+          <!-- Product messages (build-docs/features/catalog-product-messages.md) -->
+          <section class="profile-form-card catalog-card" aria-labelledby="catalog-title">
+            <h2 class="settings-card-title" id="catalog-title"><i data-lucide="package" class="icon-16"></i> Product messages from your Meta catalog</h2>
+            <p class="settings-help">Send products from the catalog connected to your WhatsApp account (WhatsApp Manager &gt; Catalog) straight into a chat. Customers can add them to a cart and send it to you.</p>
+            <form id="catalog-form">
+              <label class="form-label" for="catalog-id-input">Catalog ID</label>
+              <div class="settings-inline-row">
+                <input type="text" id="catalog-id-input" class="form-input" inputmode="numeric" placeholder="e.g. 194836987003835" autocomplete="off" />
+                <button type="button" class="btn-secondary btn-auto" id="catalog-find-btn">Find my catalog</button>
+                <button type="submit" class="btn-primary btn-auto">Save</button>
+              </div>
+              <div class="form-hint" id="catalog-status"></div>
+            </form>
+          </section>
+
           <div class="woo-coming-soon">
             <div><strong>Shopify</strong> <span class="badge badge-info">Coming soon</span><p>Needs Shopify's app approval.</p></div>
             <div><strong>Abandoned cart recovery</strong> <span class="badge badge-info">Coming soon</span><p>WooCommerce has no checkout event without a plugin.</p></div>
-            <div><strong>Product messages from your catalog</strong> <span class="badge badge-info">Coming soon</span><p>Send products from your Meta catalog in chat.</p></div>
           </div>
         </div>
 
@@ -2333,6 +2350,39 @@
         <button class="close-modal-btn" data-close-modal="modal-wa-form-responses"><i data-lucide="x"></i></button>
       </div>
       <div class="drawer-content" id="wa-form-responses-list" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- Chat: send catalog products -->
+  <div id="modal-send-products" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Send products</h3>
+        <button class="close-modal-btn" data-close-modal="modal-send-products"><i data-lucide="x"></i></button>
+      </div>
+      <form id="send-products-form">
+        <div class="modal-inner-scroll">
+          <div class="form-group">
+            <label class="form-label" for="send-products-kind">What to send</label>
+            <select id="send-products-kind" class="form-input">
+              <option value="product">One product</option>
+              <option value="product_list">A list of products (up to 30)</option>
+              <option value="catalog">My whole catalog</option>
+            </select>
+          </div>
+          <div class="form-group" data-products-for="product"><label class="form-label" for="send-products-sku">Product SKU (retailer ID)</label><input type="text" id="send-products-sku" class="form-input" autocomplete="off" /></div>
+          <div class="form-group" data-products-for="product_list"><label class="form-label" for="send-products-header">Heading</label><input type="text" id="send-products-header" class="form-input" maxlength="60" placeholder="New arrivals" /></div>
+          <div class="form-group" data-products-for="product_list"><label class="form-label" for="send-products-skus">Product SKUs, one per line</label><textarea id="send-products-skus" class="form-input" rows="4"></textarea></div>
+          <div class="form-group" data-products-for="catalog"><label class="form-label" for="send-products-thumb">Cover product SKU (optional)</label><input type="text" id="send-products-thumb" class="form-input" autocomplete="off" /></div>
+          <div class="form-group"><label class="form-label" for="send-products-body">Message</label><textarea id="send-products-body" class="form-input" rows="3" maxlength="1024">Have a look at these:</textarea></div>
+          <div class="form-group"><label class="form-label" for="send-products-footer">Footer (optional)</label><input type="text" id="send-products-footer" class="form-input" maxlength="60" /></div>
+          <p class="form-hint">Works within 24 hours of the customer's last message. SKUs must exist in your catalog.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-modal="modal-send-products">Cancel</button>
+          <button type="submit" class="btn-primary btn-auto">Send</button>
+        </div>
+      </form>
     </div>
   </div>
 

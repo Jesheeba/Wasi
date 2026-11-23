@@ -1030,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetView === 'ctwa') renderCtwaView();
     if (targetView === 'integrations') renderIntegrations();
     if (targetView === 'whatsapp-flows') renderWaForms();
-    if (targetView === 'ecommerce') renderEcommerce();
+    if (targetView === 'ecommerce') { renderEcommerce(); renderCatalogSetting(); }
     // The Whatsapp sub-tab ships marked active by default (index.html) but
     // previously only rendered real data on an explicit sub-nav click -
     // landing here from the main nav showed static placeholder markup
@@ -9377,6 +9377,83 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) { reportError(err); }
     });
   }
+
+  // --- Product messages (build-docs/features/catalog-product-messages.md) ---
+  async function renderCatalogSetting() {
+    const input = document.getElementById('catalog-id-input');
+    const status = document.getElementById('catalog-status');
+    if (!input) return;
+    try {
+      const c = await authFetch('/api/ecommerce/catalog');
+      input.value = c.catalogId || '';
+      status.textContent = !c.connected ? 'Connect your WhatsApp number first.' : c.catalogId ? 'Catalog set. Send products from any open chat: More actions > Send products.' : 'No catalog set yet.';
+    } catch (err) {
+      status.textContent = err.message || 'Could not load the catalog setting.';
+    }
+  }
+
+  document.getElementById('catalog-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value = document.getElementById('catalog-id-input').value.trim();
+    try {
+      await authFetch('/api/ecommerce/catalog', { method: 'PUT', body: JSON.stringify({ catalogId: value || null }) });
+      showToast(value ? 'Catalog saved' : 'Catalog removed', 'success');
+      renderCatalogSetting();
+    } catch (err) { reportError(err); }
+  });
+
+  document.getElementById('catalog-find-btn')?.addEventListener('click', async () => {
+    try {
+      const { catalogs } = await authFetch('/api/ecommerce/catalog/find', { method: 'POST' });
+      document.getElementById('catalog-id-input').value = catalogs[0].id;
+      showToast(`Found "${catalogs[0].name || catalogs[0].id}". Click Save to use it.`, 'success');
+    } catch (err) {
+      reportError(err);
+    }
+  });
+
+  const productKindFields = () => {
+    const kind = document.getElementById('send-products-kind').value;
+    document.querySelectorAll('#send-products-form [data-products-for]').forEach((el) => {
+      el.hidden = !el.dataset.productsFor.split(' ').includes(kind);
+    });
+  };
+  document.getElementById('send-products-kind')?.addEventListener('change', productKindFields);
+
+  document.getElementById('chat-send-products-btn')?.addEventListener('click', async () => {
+    if (!state.activeChatId) return;
+    try {
+      const c = await authFetch('/api/ecommerce/catalog');
+      if (!c.catalogId) { showToast('Set your Meta catalog ID on the Ecommerce page first.', 'warning'); return; }
+    } catch (err) { reportError(err); return; }
+    productKindFields();
+    document.getElementById('modal-send-products').classList.add('open');
+  });
+
+  document.getElementById('send-products-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const chatId = state.activeChatId;
+    if (!chatId) return;
+    const val = (id) => document.getElementById(id).value;
+    const kind = val('send-products-kind');
+    const payload = { kind, body: val('send-products-body'), footer: val('send-products-footer') };
+    if (kind === 'product') payload.sku = val('send-products-sku');
+    if (kind === 'product_list') { payload.header = val('send-products-header'); payload.sections = [{ title: '', skus: val('send-products-skus') }]; }
+    if (kind === 'catalog') payload.thumbnailSku = val('send-products-thumb');
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      await authFetch(`/api/chats/${chatId}/products`, { method: 'POST', body: JSON.stringify(payload) });
+      document.getElementById('modal-send-products').classList.remove('open');
+      showToast('Products sent', 'success');
+      const chat = state.chats.find((c) => c.id === chatId);
+      if (chat && state.activeChatId === chatId) await openActiveChat(chat);
+    } catch (err) {
+      reportError(err);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // --- Integrations (build-docs/features/integrations-page.md) ---
   // Read-only status of integrations configured elsewhere; each card links

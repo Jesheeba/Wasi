@@ -1,5 +1,20 @@
 # Testing
 
+## catalog-product-messages
+`productMessages.test.js` (Meta faked), 6/6:
+- Builder: product, list (deduplicated, 30 max, heading required, section
+  titles), catalog; cart text.
+- Catalog: non-numeric id 400; save; "find" with a Meta refusal 502 and a
+  hint, and success.
+- Send refused outside 24 h with no call; a list sent with the saved catalog
+  and shown in the chat, recording a human reply.
+- Bad input 400 before Meta; a failed send can't be retried.
+- An incoming order is stored as readable text.
+
+Regression, all green: whatsappFlows 17, woocommerce 13, woocommerceUI 3,
+chatUiPass 15, chatsLastAgentReplyAt 17, metaWebhookDispatch 3,
+webhookForwarding 8, whatsappQuickWins 11, apiV1 14.
+
 ## ctwa-conversions
 `ctwaConversions.test.js` (Meta faked), 5/5:
 - No click id -> 409 with no call.

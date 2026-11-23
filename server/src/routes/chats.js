@@ -8,6 +8,7 @@ const messagingService = require('../services/messagingService');
 const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
 const flowTemplates = require('../utils/whatsappFlowTemplates');
 const wabasRepo = require('../repositories/wabasRepo');
+const productMessages = require('../utils/productMessages');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
 const { z } = require('zod');
@@ -316,6 +317,32 @@ router.get('/:id/block', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(
 }));
 router.post('/:id/block', requireRole('Admin', 'Manager'), asyncHandler((req, res) => blockOrUnblock(req, res, false)));
 router.delete('/:id/block', requireRole('Admin', 'Manager'), asyncHandler((req, res) => blockOrUnblock(req, res, true)));
+
+// Send catalog products (build-docs/features/catalog-product-messages.md).
+// Here, not in routes/ecommerce.js, for the same reason as /forms below: a
+// person sending from the inbox is a human reply (markAgentReplyNonFatal).
+router.post('/:id/products', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const chat = await chatsRepo.findById(req.db, req.clientId, req.params.id);
+  if (!chat) return res.status(404).json({ error: 'Not found' });
+  if (!chat.phone) return res.status(400).json({ error: 'This chat has no phone number to send to.' });
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  const built = productMessages.buildProductInteractive(req.body || {}, waba?.commerce_catalog_id);
+  if (built.error) return res.status(400).json({ error: built.error });
+  await chatsRepo.markAgentReplyNonFatal(req.db, req.clientId, chat.id);
+  try {
+    const message = await messagingService.sendChatMessage(req.db, req.clientId, chat, {
+      type: 'product', body: String(req.body.body || '').trim(), product: built,
+    }, { release: req.commitAndRelease, reacquire: req.reacquireDb });
+    res.status(201).json(message);
+  } catch (err) {
+    if (err instanceof messagingService.MessagingError) {
+      const status = err.code === 'send_failed' ? 502 : 409;
+      return res.status(status).json({ error: err.message, code: err.code, metaErrorCode: err.metaError?.code ?? null });
+    }
+    throw err;
+  }
+}));
 
 // Send a WhatsApp Form (build-docs/features/whatsapp-flows.md) into this
 // chat. Lives here, not in routes/whatsappFlows.js, because a person sending

@@ -106,11 +106,13 @@ async function assertWithinPlanLimit(db, clientId) {
 // connection right before the Meta network call below and reacquire()
 // opens a fresh one only for the final result write, so a slow Meta response
 // never pins a connection the pool's other concurrent requests need.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId, flow }, connectionHooks = {}) {
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId, flow, product }, connectionHooks = {}) {
   // type 'flow' (WhatsApp Flows / "Forms") is a free-form interactive message
   // too, so it shares the 24h window rule. flow = { metaFlowId, flowToken,
   // cta, screen, mode, name } - see routes/whatsappFlows.js.
-  if ((type === 'text' || type === 'interactive' || type === 'flow') && !(await canSendFreeform(db, clientId, chat.id))) {
+  // type 'product' (catalog product messages) likewise; product =
+  // { interactive, summary } from utils/productMessages.js.
+  if ((type === 'text' || type === 'interactive' || type === 'flow' || type === 'product') && !(await canSendFreeform(db, clientId, chat.id))) {
     throw new MessagingError(
       'This chat is outside the 24-hour customer service window - send a template message instead.',
       'session_window_closed'
@@ -126,7 +128,8 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
   const waba = await getSendableWaba(clientId);
   const accessToken = decrypt(waba.access_token_encrypted);
   const toPhone = chat.phone;
-  const displayBody = type === 'template' ? `[template: ${templateName}]` : type === 'flow' ? `[form: ${flow.name}] ${body}` : body;
+  const displayBody = type === 'template' ? `[template: ${templateName}]` : type === 'flow' ? `[form: ${flow.name}] ${body}`
+    : type === 'product' ? `[products: ${product.summary}] ${body || ''}`.trim() : body;
 
   // Resolved before the pending message row exists - same treatment as
   // consent_required/session_window_closed above: a media id that can't be
@@ -241,6 +244,8 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
   try {
     if (type === 'text') {
       metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body);
+    } else if (type === 'product') {
+      metaMessageId = await metaClient.sendProductMessage(waba.phone_number_id, accessToken, toPhone, product.interactive);
     } else if (type === 'flow') {
       metaMessageId = await metaClient.sendFlowMessage(waba.phone_number_id, accessToken, toPhone, {
         bodyText: body, cta: flow.cta, flowId: flow.metaFlowId, flowToken: flow.flowToken, screen: flow.screen, mode: flow.mode,
@@ -353,10 +358,10 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
   }
   // Same trap for a failed form send: its body is the "[form: <name>] ..."
   // placeholder, which must never go out as plain text.
-  const formMatch = /^\[form: ([^\]]+)\]/.exec(message.body || '');
+  const formMatch = /^\[(?:form|products): ([^\]]+)\]/.exec(message.body || '');
   if (formMatch) {
     throw new MessagingError(
-      `This was a form ("${formMatch[1]}"), not plain text - Retry can't resend it. Send the form again from the chat menu instead.`,
+      `This was a form or product message ("${formMatch[1]}"), not plain text - Retry can't resend it. Send it again from the chat menu instead.`,
       'cannot_retry_form'
     );
   }

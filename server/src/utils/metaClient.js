@@ -1217,7 +1217,26 @@ async function sendCtwaConversion(datasetId, accessToken, { wabaId, ctwaClid, ev
   return graphFetch(`/${datasetId}/events`, { method: 'POST', accessToken, body: { data: [event], partner_agent: 'wasi' } });
 }
 
+// --- Product messages - build-docs/features/catalog-product-messages.md ---
+// Listing catalogs may need catalog_management (Meta lists it for this
+// edge); callers fall back to a typed-in catalog id if this fails.
+async function listWabaCatalogs(wabaId, accessToken) {
+  const data = await graphFetch(`/${wabaId}/product_catalogs?fields=id,name`, { accessToken });
+  return data.data || [];
+}
+
+// interactive is built and validated by utils/productMessages.js.
+async function sendProductMessage(phoneNumberId, accessToken, toPhone, interactive) {
+  const data = await graphFetch(`/${phoneNumberId}/messages`, {
+    method: 'POST', accessToken,
+    body: { messaging_product: 'whatsapp', recipient_type: 'individual', to: toPhone, type: 'interactive', interactive },
+  });
+  return data.messages?.[0]?.id;
+}
+
 module.exports = {
+  listWabaCatalogs,
+  sendProductMessage,
   getOrCreateCtwaDataset,
   sendCtwaConversion,
   getPricingAnalytics,

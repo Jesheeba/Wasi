@@ -164,3 +164,20 @@ Click-to-WhatsApp ad on the demo number (same as test 3).
    show the Lead and Purchase events within about an hour.
 
 Status: PENDING
+
+## 12. Product messages
+Deploy first (migration 100). Needs a catalog in Meta Commerce Manager
+connected to the demo WhatsApp account (WhatsApp Manager > Catalog), with at
+least 2 products and their SKUs (content IDs).
+1. Ecommerce > Product messages > Find my catalog.
+   - If it fails, copy the catalog ID from Commerce Manager, paste it and
+     Save.
+2. From 9092766740, send "hi" to the demo number.
+3. Open the chat > More actions > Send products > One product > enter a
+   SKU > Send.
+   - Expect: the phone shows the product card with photo and price.
+4. Repeat with "A list of products" and 2 SKUs, then "My whole catalog".
+5. On the phone, add a product to the cart and send the cart.
+   - Expect: the chat in Wasi shows "Cart sent" with the item and total.
+
+Status: PENDING

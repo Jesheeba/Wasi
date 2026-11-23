@@ -87,6 +87,12 @@ async function setCtwaDatasetId(id, datasetId) {
   await pool.query('update wabas set ctwa_dataset_id = $2 where id = $1', [id, datasetId]);
 }
 
+// Product messages: the Meta Commerce catalog for this WABA (migration 100).
+async function setCommerceCatalogId(id, catalogId) {
+  await pool.query('update wabas set commerce_catalog_id = $2 where id = $1', [id, catalogId]);
+}
+
 module.exports = {
+  setCommerceCatalogId,
   setCtwaDatasetId,
   markTemplateInsightsEnabled, findByClientId, findById, findByWabaId, findAnyConnected, listAllWithClient, upsertForClient };

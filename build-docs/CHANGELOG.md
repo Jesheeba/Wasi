@@ -1,5 +1,13 @@
 # Changelog
 
+## feat(catalog-product-messages): send products from the Meta catalog in chat
+- Ecommerce page: set the Meta catalog ID (typed, or found via Meta when
+  allowed).
+- Chat > Send products: one product, up to 30, or the whole catalog.
+- Customers' carts show in the chat as readable items and a total.
+- Failed product sends can't be retried as plain text.
+- Migration 100.
+
 ## feat(ctwa-conversions): report ad leads and sales back to Meta
 Ad Leads > an ad: each chat gets "Mark as lead" and "Mark sale" (with an
 amount). Wasi sends the event to Meta's Conversions API for Business

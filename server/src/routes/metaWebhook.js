@@ -14,6 +14,7 @@ const messageStatusForwardsRepo = require('../repositories/messageStatusForwards
 const zapierSubscriptionsRepo = require('../repositories/zapierSubscriptionsRepo');
 const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
 const flowTemplates = require('../utils/whatsappFlowTemplates');
+const productMessages = require('../utils/productMessages');
 const flowEngine = require('../services/flowEngine');
 const aiAgentRunner = require('../services/aiAgentRunner');
 const forwardRunner = require('../services/forwardRunner');
@@ -196,7 +197,10 @@ async function handleInboundMessages(waba, value) {
     // request_welcome: sent when a customer opens a new chat while the
     // welcome message is on (whatsapp-quick-wins.md); shown as plain words.
     const welcomeOpen = msg.type === 'request_welcome' ? 'Opened the chat' : null;
-    const body = msg.text?.body || formReply?.body || buttonReply?.title || listReply?.title || templateButtonText || welcomeOpen || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
+    // A cart the customer sent from the catalog (type "order"), as readable
+    // text (catalog-product-messages.md).
+    const cartText = msg.type === 'order' && msg.order ? productMessages.describeOrder(msg.order) : null;
+    const body = msg.text?.body || formReply?.body || buttonReply?.title || listReply?.title || templateButtonText || welcomeOpen || cartText || `[${msg.type}]`; // MVP: other non-text types still render as a type tag
 
     // Forwarded verbatim alongside `body` in message.received (see below) -
     // body alone only ever carried the reply's title (e.g. "Yes"), never

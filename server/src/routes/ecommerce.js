@@ -9,6 +9,9 @@ const ecommerceRepo = require('../repositories/ecommerceRepo');
 const ecommerceService = require('../services/ecommerceService');
 const { assertPublicHttpsUrl } = require('../utils/publicUrl');
 const woo = require('../utils/wooOrders');
+const wabasRepo = require('../repositories/wabasRepo');
+const metaClient = require('../utils/metaClient');
+const { decrypt } = require('../utils/encryption');
 
 const router = Router();
 router.use(requireRole('Admin', 'Manager'));
@@ -121,6 +124,38 @@ router.delete('/woocommerce/rules/:trigger', asyncHandler(async (req, res) => {
   if (!store) return res.status(404).json({ error: 'No store connected' });
   await ecommerceRepo.deleteRule(req.db, req.clientId, store.id, req.params.trigger);
   res.status(204).send();
+}));
+
+// ---------- Product messages: the Meta Commerce catalog ----------
+// (build-docs/features/catalog-product-messages.md)
+router.get('/catalog', asyncHandler(async (req, res) => {
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected') return res.json({ connected: false, catalogId: null });
+  res.json({ connected: true, catalogId: waba.commerce_catalog_id || null });
+}));
+
+router.put('/catalog', asyncHandler(async (req, res) => {
+  const { catalogId } = z.object({ catalogId: z.string().trim().regex(/^\d{5,25}$/, 'A catalog ID is a long number from Commerce Manager').nullable() }).parse(req.body);
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected') return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  await wabasRepo.setCommerceCatalogId(waba.id, catalogId);
+  res.json({ catalogId });
+}));
+
+// Asks Meta which catalog is connected to the WABA. Meta lists
+// catalog_management for this edge, which Wasi may not have; the reply then
+// says so and the client types the ID instead.
+router.post('/catalog/find', asyncHandler(async (req, res) => {
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba || waba.status !== 'connected' || !waba.access_token_encrypted) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  let catalogs;
+  try {
+    catalogs = await metaClient.listWabaCatalogs(waba.waba_id, decrypt(waba.access_token_encrypted));
+  } catch (err) {
+    return res.status(502).json({ error: 'Meta did not share your catalog with Wasi. Copy the catalog ID from Commerce Manager and paste it instead.', detail: err.message });
+  }
+  if (!catalogs.length) return res.status(404).json({ error: 'No catalog is connected to your WhatsApp account. Connect one in WhatsApp Manager > Catalog first.' });
+  res.json({ catalogs: catalogs.map((c) => ({ id: String(c.id), name: c.name || null })) });
 }));
 
 module.exports = router;

@@ -1,5 +1,24 @@
 # Catalog / product messages
 
+## Status (2026-11-23): built, live check pending
+Scope as proposed below (catalog-aware send only, no catalog management).
+As built:
+- **Catalog ID:** set on the Ecommerce page (typed, or "Find my catalog").
+  - "Find" calls `GET /{WABA}/product_catalogs`, which Meta lists under
+    `catalog_management`; if Meta refuses, the client pastes the ID.
+  - Stored in `wabas.commerce_catalog_id` (migration 100).
+- **Sending:** chat > More actions > Send products: one product, a list
+  (up to 30 SKUs, deduplicated) or the whole catalog (`catalog_message`).
+  - Built and validated in `utils/productMessages.js`.
+  - Sent through `sendChatMessage` type `product` (24 h window).
+  - The route lives in `routes/chats.js` (`POST /:id/products`), because
+    it is a human reply.
+  - A failed product send is never retried as text.
+- **Incoming carts** (`type: order`) are shown as "Cart sent / 2 x SKU @
+  price / Total / Note".
+- **Not built:** a product picker (needs `catalog_management`), and
+  turning a cart into an order or payment.
+
 ## Purpose
 Part of the CRM-wide messaging audit (2026-11-16). AiSensy, WATI, and
 Interakt all support sending a single product or a multi-product list
