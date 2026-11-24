@@ -441,3 +441,13 @@ are in the impact map above:
   502 instead of 200 - both about WhatsApp Embedded Signup/Coexistence
   connection flows, unrelated to templates/broadcasts/messaging, not
   investigated further here (out of this feature's scope).
+
+## flow-send-form (+ onboarding form kind), 2026-11-24
+- `server/test/flowSendForm.test.js` (10, stubbed engine, AC1-AC8) and
+  `server/test/flowSendFormUI.test.js` (1, Playwright, AC9): all pass.
+- Regression: flowEngine*, flowValidation, aiAgentEnqueue (now lists
+  `flow_form_submitted` as silent), whatsappFlows, whatsappFlowsPhase3,
+  flowLiveBooking, productMessages, automationRuleViewEdit, whatsappFlowsUI:
+  134 + 5 pass, local embedded Postgres with migration 106 applied.
+- No failures found during the build.
+- Live check pending: MANUAL_TESTS.md #16.

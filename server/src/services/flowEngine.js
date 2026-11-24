@@ -35,6 +35,9 @@ const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const contactAttributesRepo = require('../repositories/contactAttributesRepo');
 const contactAttributeValuesRepo = require('../repositories/contactAttributeValuesRepo');
 const messagingService = require('../services/messagingService');
+const formSender = require('./formSender');
+const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
+const { flowIdFromToken } = require('../utils/whatsappFlowTemplates');
 const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
 const { validateContactAttributeValue } = require('../utils/validate');
 
@@ -73,6 +76,9 @@ const LEGAL_EDGE_TYPES_BY_NODE_TYPE = {
   // value and always continues via 'always'; 'timeout' is the same
   // optional "no reply arrived" escape hatch send_interactive_buttons has.
   capture_reply: new Set(['always', 'timeout']),
+  // Sends a WhatsApp Form and waits for it to be submitted ('always'), with
+  // the same optional 'timeout' escape hatch. Zero edges = send and finish.
+  send_form: new Set(['always', 'timeout']),
 };
 
 function isEdgeTypeLegalForNode(nodeType, conditionType) {
@@ -213,6 +219,14 @@ async function executeNode(db, clientId, contact, chat, node) {
       body: renderBody(node.config.body, contact),
       buttons: node.config.buttons,
     });
+  } else if (node.type === 'send_form') {
+    // Same rules as the chat's Send form button (24h window, else the
+    // form's approved template) - services/formSender.js.
+    const form = node.config?.form_id ? await whatsappFlowsRepo.findById(db, clientId, node.config.form_id) : null;
+    await formSender.sendForm(db, clientId, chat, form, {
+      body: renderBody(node.config?.body, contact) || 'Please fill in this form.',
+      cta: node.config?.cta || 'Open form',
+    });
   } else if (node.type === 'send_template') {
     await executeSendTemplate(db, clientId, contact, chat, node);
   } else if (node.type === 'action') {
@@ -338,6 +352,9 @@ async function runToRest(db, clientId, contact, chat, flowId, startNodeId, fallb
       // guessing a default, since Stage 6's editor is what should enforce
       // they're set together at save time.
       const edges = await flowEdgesRepo.listForNode(db, clientId, node.id);
+      // A form with nowhere to continue is "send and finish", not a contact
+      // parked in this flow forever (which would block every other flow).
+      if (node.type === 'send_form' && !edges.length) return { nodeId: node.id, status: 'completed' };
       const timeoutEdge = edges.find((e) => e.condition_type === 'timeout');
       const timeoutMinutes = Number(node.config?.timeout_minutes);
       const dueAt = timeoutEdge && Number.isFinite(timeoutMinutes)
@@ -455,6 +472,7 @@ async function advanceDueNode(db, clientId, contact, chat, flowState) {
 //
 //   { handled: true,  how: 'flow_continued' }       an active flow's current node matched
 //   { handled: true,  how: 'flow_capture_reply' }   an active capture_reply node took the message
+//   { handled: true,  how: 'flow_form_submitted' }  the form an active send_form step sent was submitted
 //   { handled: true,  how: 'rule_started_flow' }    a keyword rule started (or a flow already owns) a flow
 //   { handled: true,  how: 'rule_text_reply' }      a keyword rule sent its free-text action
 //   { handled: true,  how: 'rule_text_reply_failed' | 'rule_flow_start_failed' }
@@ -469,6 +487,13 @@ async function advanceDueNode(db, clientId, contact, chat, flowState) {
 //                       which the agent may answer (see agentMayAnswer)
 //
 // `how` is a short identifier for logs and the gate log, never a sentence.
+// The Wasi form id inside a completed form (interactive.nfm_reply), or null.
+function submittedFormId(msg) {
+  const json = msg?.interactive?.nfm_reply?.response_json;
+  if (!json) return null;
+  try { return flowIdFromToken(JSON.parse(json).flow_token); } catch { return null; }
+}
+
 const NOT_ENGAGED = () => ({ handled: false, how: null });
 
 // The single place that decides whether the agent may answer a message that
@@ -511,6 +536,14 @@ async function evaluate(db, clientId, contact, chat, msg, inboundBody) {
       // this before activation) that somehow reached runtime anyway. Falls
       // through to the same 'unmatched_input' recording every other
       // no-match case gets, rather than a special case here.
+    } else if (currentNode?.type === 'send_form') {
+      // Only a submission of THIS step's form continues the flow; anything
+      // else (a text, another form) is unmatched input, the flow keeps waiting.
+      const alwaysEdge = edges.find((e) => e.condition_type === 'always');
+      if (alwaysEdge && submittedFormId(msg) === currentNode.config?.form_id) {
+        await continueFlow(db, clientId, contact, chat, flowState, alwaysEdge, 'form_submitted', { formId: currentNode.config.form_id });
+        return { handled: true, how: 'flow_form_submitted' };
+      }
     } else {
       const matched = resolveInboundEdge(edges, inboundEvent);
       if (matched) {
@@ -561,5 +594,5 @@ async function evaluateSafely(db, clientId, contact, chat, msg, inboundBody) {
 module.exports = {
   evaluate, evaluateSafely, agentMayAnswer, startFlow, advanceDueNode,
   normalizeInboundEvent, resolveInboundEdge, dueEdgeType, isEdgeTypeLegalForNode, renderBody,
-  captureReply,
+  captureReply, submittedFormId,
 };

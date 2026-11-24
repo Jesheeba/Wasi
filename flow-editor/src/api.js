@@ -48,6 +48,7 @@ export const api = {
   },
   listTags: () => request('/tags'),
   listContactAttributes: () => request('/contact-attributes'),
+  listForms: () => request('/whatsapp-flows'),
   listRulesForFlow: (flowId) => request(`/automation-rules?flow_id=${flowId}`),
   createRule: (data) => request('/automation-rules', { method: 'POST', body: JSON.stringify(data) }),
   updateRule: (ruleId, data) => request(`/automation-rules/${ruleId}`, { method: 'PATCH', body: JSON.stringify(data) }),

@@ -19,7 +19,7 @@ const manage = requireRole('Admin', 'Manager');
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['lead', 'booking', 'survey', 'booking_live']),
+  kind: z.enum(['lead', 'booking', 'survey', 'booking_live', 'onboarding']),
   config: z.record(z.any()).optional(),
 });
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100).optional(), config: z.record(z.any()).optional() });

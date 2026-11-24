@@ -6,6 +6,7 @@
 // status: 'active').
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const contactAttributesRepo = require('../repositories/contactAttributesRepo');
+const whatsappFlowsRepo = require('../repositories/whatsappFlowsRepo');
 
 // Deliberately NOT flagged: send_text/send_template/action nodes with zero
 // outgoing edges. flowEngine.js's runToRest treats that as a legitimate,
@@ -94,6 +95,21 @@ async function validateFlow(db, clientId, nodes, edges) {
     // answer into - flowEngine.js's captureReply() already fails soft at
     // runtime if the attribute was deleted after this flow was built, but
     // that should be caught here before activation, not discovered live.
+    // send_form: zero edges is a valid "send and finish" (flowEngine.runToRest),
+    // so only the form itself is checked. A deleted or retired form would
+    // stall every contact who reaches this step.
+    if (node.type === 'send_form') {
+      const formId = node.config?.form_id;
+      const form = formId ? await whatsappFlowsRepo.findById(db, clientId, formId) : null;
+      if (!formId) {
+        issues.push({ nodeId: node.id, edgeId: null, code: 'send_form_missing', message: 'No form selected for this step.' });
+      } else if (!form) {
+        issues.push({ nodeId: node.id, edgeId: null, code: 'send_form_not_found', message: 'The form this step sends no longer exists.' });
+      } else if (!form.meta_flow_id || !['draft', 'published'].includes(form.status)) {
+        issues.push({ nodeId: node.id, edgeId: null, code: 'send_form_not_sendable', message: `The form "${form.name}" can't be sent: WhatsApp never accepted it, or it has been retired.` });
+      }
+    }
+
     if (node.type === 'capture_reply') {
       if (!outgoing.some((e) => e.condition_type === 'always')) {
         issues.push({

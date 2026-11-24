@@ -238,3 +238,30 @@ and a deploy (migration 105).
    ads_read: expected for now.
 
 Status: PENDING
+
+## 16. Onboarding form + "Send form" step in a Bot Flow
+Deploy first (migration 106). Demo account, phone 9092766740 only.
+1. Forms > New form > "Business onboarding". Name it "Wasi Onboarding". Check
+   the preview shows business name, your name, email, industry, plan,
+   current WhatsApp tool and website. Click Create draft.
+   - Expect: a Draft row with no "WhatsApp reported" line. If there is one,
+     send me the text.
+2. Automation > Flows > New Flow "Onboarding". Add Node > Send Form > pick
+   "Wasi Onboarding (draft)" > Add Node. Add a second node: Send Text
+   "Thanks! Our team will call you within a day." On the Send Form node,
+   Add Branch > "The form is submitted" > the Send Text node. Set the Send
+   Form node as entry. Activate.
+3. Automation > Rules > New Rule: keyword "join", start the "Onboarding"
+   flow. Save.
+4. From 9092766740, send "join" to +91 73395 61631.
+   - Expect: the phone gets the "Please fill in this short form." message
+     with an "Open form" button (and a small draft banner).
+5. Before opening the form, send "hello".
+   - Expect: nothing else arrives; the flow is still waiting for the form.
+6. Open the form, fill it in, submit.
+   - Expect: the chat shows "Form submitted: Wasi Onboarding" with the
+     answers, then the phone gets "Thanks! Our team will call you within a
+     day."
+   - Forms > Responses for Wasi Onboarding shows 1.
+
+Status: PENDING

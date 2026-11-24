@@ -3847,6 +3847,7 @@ document.addEventListener('DOMContentLoaded', () => {
     action: ['always'],
     end: [],
     capture_reply: ['always', 'timeout'],
+    send_form: ['always', 'timeout'],
   };
   const FLOW_EDGE_TYPE_LABELS = {
     always: 'Always (continues automatically)',
@@ -3857,8 +3858,18 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const FLOW_NODE_TYPE_LABELS = {
     send_text: 'Send Text', send_interactive_buttons: 'Send Buttons', send_template: 'Send Template',
-    delay: 'Delay', action: 'Action', end: 'End', capture_reply: 'Capture Reply',
+    delay: 'Delay', action: 'Action', end: 'End', capture_reply: 'Capture Reply', send_form: 'Send Form',
   };
+  // A Send Form step continues when the form is submitted, not on any reply.
+  function flowEdgeTypeLabel(nodeType, t) {
+    if (nodeType === 'send_form') return { always: 'The form is submitted', timeout: 'Not submitted in time' }[t] || t;
+    return FLOW_EDGE_TYPE_LABELS[t] || t;
+  }
+  // Forms (WhatsApp Flows) a Send Form step can use; loaded on demand.
+  async function loadFlowForms() {
+    try { state.flowForms = await authFetch('/api/whatsapp-flows'); } catch { state.flowForms = state.flowForms || []; }
+    return state.flowForms;
+  }
 
   async function refreshFlows() {
     state.flows = await authFetch('/api/automation-flows');
@@ -3961,6 +3972,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (c.kind === 'set_opt_in') return `Set opt-in: ${escapeHtml(c.opt_in_event || '')}`;
       if (c.kind === 'human_handoff') return 'Hand off to a human';
       return escapeHtml(c.kind || '');
+    }
+    if (node.type === 'send_form') {
+      const form = (state.flowForms || []).find(f => f.id === c.form_id);
+      return `Form: ${escapeHtml(form?.name || (c.form_id ? 'a form' : 'no form selected'))}${c.body ? ` - ${escapeHtml(c.body)}` : ''}`;
     }
     if (node.type === 'capture_reply') {
       const attr = state.contactAttributes.find(a => a.id === c.attribute_id);
@@ -4077,7 +4092,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ` : '';
         return `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: #F8FAFC; border-radius: 6px; margin-top: 0.4rem; font-size: 0.8rem;">
-          <span>${FLOW_EDGE_TYPE_LABELS[e.condition_type] || e.condition_type}${e.condition_value ? ` "${escapeHtml(e.condition_value)}"` : ''} &rarr; ${escapeHtml(findNode(e.to_node_id) ? FLOW_NODE_TYPE_LABELS[findNode(e.to_node_id).type] : '-')}</span>
+          <span>${escapeHtml(flowEdgeTypeLabel(findNode(e.from_node_id)?.type, e.condition_type))}${e.condition_value ? ` "${escapeHtml(e.condition_value)}"` : ''} &rarr; ${escapeHtml(findNode(e.to_node_id) ? FLOW_NODE_TYPE_LABELS[findNode(e.to_node_id).type] : '-')}</span>
           <span style="display: flex; align-items: center; gap: 4px;">
             ${moveButtons}
             <button type="button" class="delete-flow-edge-btn" data-edge-id="${e.id}" style="border: none; background: none; color: #DC2626; cursor: pointer; font-size: 0.75rem;">Remove</button>
@@ -4250,6 +4265,20 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="form-group"><label class="form-label">Timeout, minutes (optional - only used if a "no reply" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
       `;
+    } else if (type === 'send_form') {
+      container.innerHTML = '<div class="form-hint">Loading your forms…</div>';
+      loadFlowForms().then((forms) => {
+        if (document.getElementById('new-bot-flow-node-type')?.value !== 'send_form') return;
+        const usable = forms.filter(f => f.meta_flow_id && ['draft', 'published'].includes(f.status));
+        container.innerHTML = usable.length ? `
+          <div class="form-group"><label class="form-label" for="new-bot-flow-node-form-id">Form</label>
+            <select id="new-bot-flow-node-form-id" class="form-input" required>${usable.map(f => `<option value="${f.id}">${escapeHtml(f.name)}${f.status === 'draft' ? ' (draft)' : ''}</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label" for="new-bot-flow-node-body">Message</label><textarea id="new-bot-flow-node-body" class="form-input" rows="2" maxlength="1024" required>Please fill in this short form.</textarea></div>
+          <div class="form-group"><label class="form-label" for="new-bot-flow-node-cta">Button text</label><input id="new-bot-flow-node-cta" class="form-input" maxlength="30" value="Open form" required /></div>
+          <div class="form-group"><label class="form-label" for="new-bot-flow-node-timeout">Timeout, minutes (optional - only used if a "not submitted in time" branch is added)</label><input type="number" id="new-bot-flow-node-timeout" class="form-input" min="1" step="any" /></div>
+          <div class="form-hint">The flow waits here until the customer submits this form. Outside the 24-hour window the form's approved "Send anytime" template is used.</div>`
+          : '<div class="form-hint">No form is ready to send yet. Create one on the Forms page first.</div>';
+      });
     } else {
       container.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted);">Ends the flow - nothing further to configure.</div>';
     }
@@ -4356,6 +4385,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (kind === 'assign_tag') return { kind, tag_id: document.getElementById('new-bot-flow-node-tag-id').value };
       if (kind === 'set_opt_in') return { kind, opt_in_event: document.getElementById('new-bot-flow-node-opt-in-event').value };
       return { kind };
+    }
+    if (type === 'send_form') {
+      const timeoutVal = document.getElementById('new-bot-flow-node-timeout')?.value;
+      return {
+        form_id: document.getElementById('new-bot-flow-node-form-id')?.value || null,
+        body: document.getElementById('new-bot-flow-node-body')?.value.trim() || '',
+        cta: document.getElementById('new-bot-flow-node-cta')?.value.trim() || 'Open form',
+        ...(timeoutVal ? { timeout_minutes: Number(timeoutVal) } : {}),
+      };
     }
     if (type === 'capture_reply') {
       const timeoutVal = document.getElementById('new-bot-flow-node-timeout').value;
@@ -8035,7 +8073,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const legalTypes = FLOW_EDGE_TYPES_BY_NODE_TYPE[node.type] || [];
         document.getElementById('add-bot-flow-edge-form').dataset.fromNodeId = nodeId;
-        document.getElementById('new-bot-flow-edge-condition-type').innerHTML = legalTypes.map(t => `<option value="${t}">${FLOW_EDGE_TYPE_LABELS[t]}</option>`).join('');
+        document.getElementById('new-bot-flow-edge-condition-type').innerHTML = legalTypes.map(t => `<option value="${t}">${escapeHtml(flowEdgeTypeLabel(node.type, t))}</option>`).join('');
         document.getElementById('new-bot-flow-edge-to-node').innerHTML = otherNodes
           .map(n => `<option value="${n.id}">${FLOW_NODE_TYPE_LABELS[n.type]}: ${nodeConfigSummary(n).slice(0, 40)}</option>`).join('');
         toggleEdgeValueField();
@@ -8970,7 +9008,7 @@ document.addEventListener('DOMContentLoaded', () => {
     blocked: { cls: 'badge-danger', text: 'Blocked' },
     throttled: { cls: 'badge-warning', text: 'Throttled' },
   };
-  const WA_KIND_ICON = { lead: 'user-plus', booking: 'calendar', survey: 'star', booking_live: 'calendar-clock' };
+  const WA_KIND_ICON = { lead: 'user-plus', booking: 'calendar', survey: 'star', booking_live: 'calendar-clock', onboarding: 'briefcase' };
   const waFormState = { forms: [], kinds: [], editing: null, kind: 'lead' };
   const canManageForms = () => state.actorRole !== 'Agent';
 

@@ -71,6 +71,26 @@ const KINDS = {
       },
     },
   },
+  // Sign-up form: the details needed to onboard a new business (written for
+  // Wasi's own onboarding; any client can reword it for theirs).
+  onboarding: {
+    label: 'Business onboarding',
+    category: 'SIGN_UP',
+    screen: 'ONBOARDING',
+    defaults: {
+      title: 'Start with Wasi',
+      submitLabel: 'Send details',
+      fields: {
+        business: { type: 'text', label: 'Business name', required: true },
+        name: { type: 'text', label: 'Your name', required: true },
+        email: { type: 'email', label: 'Email', required: true },
+        industry: { type: 'choice', label: 'Industry', required: true, options: ['Education', 'Retail', 'E-commerce', 'Healthcare', 'Real estate', 'Services', 'Other'] },
+        plan: { type: 'choice', label: 'Plan you want', required: true, options: ['Starter (₹999/month)', 'Growth (₹2,999/month)', 'Scale (₹7,999/month)', 'Not sure yet'] },
+        provider: { type: 'choice', label: 'WhatsApp tool now', required: true, options: ['None - new to WhatsApp API', 'WhatsApp Business app', 'AiSensy', 'Wati', 'Interakt', 'Other provider'] },
+        website: { type: 'text', label: 'Website (optional)', required: false },
+      },
+    },
+  },
 };
 
 // booking_live (phase 2) is answered by Wasi's Flows endpoint with real free

@@ -46,6 +46,7 @@ function runnerWith({ eligible = true } = {}) {
 const OUTCOMES_THE_AGENT_MUST_NOT_ANSWER = [
   { handled: true, how: 'flow_continued' },
   { handled: true, how: 'flow_capture_reply' },
+  { handled: true, how: 'flow_form_submitted' },
   { handled: true, how: 'rule_started_flow' },
   { handled: true, how: 'rule_text_reply' },
   { handled: true, how: 'rule_text_reply_failed' },

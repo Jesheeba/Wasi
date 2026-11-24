@@ -333,7 +333,7 @@ const automationFlowUpdateSchema = z.object({
 });
 
 const flowNodeCreateSchema = z.object({
-  type: z.enum(['send_text', 'send_interactive_buttons', 'send_template', 'delay', 'action', 'end', 'capture_reply']),
+  type: z.enum(['send_text', 'send_interactive_buttons', 'send_template', 'delay', 'action', 'end', 'capture_reply', 'send_form']),
   // Shape depends on `type` - validated loosely here (any object) and left
   // to flowEngine.js's executeNode to interpret at send time (same
   // "loosely typed, interpreted by the engine" approach automation_rules'

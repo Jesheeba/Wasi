@@ -1,5 +1,12 @@
 # Changelog
 
+## feat(flow-send-form): Send form step in Bot Flows + Business onboarding form
+- Bot Flows have a "Send form" step: it sends a WhatsApp Form, waits until
+  it is submitted, then continues (optional "not submitted in time" branch).
+  Same 24 h / "Send anytime" template rules as the chat button (shared code).
+- New form type "Business onboarding" for collecting new-client details.
+- Migration 106.
+
 ## feat(ctwa-ad-metrics): ad spend, clicks and cost per lead on Ad Leads
 - Ad Leads can connect a Meta ad account (Facebook Login for Business,
   ads_read).

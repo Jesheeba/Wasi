@@ -229,3 +229,57 @@ above sufficient for now? Everything below assumes the smaller scope.
 4. Existing template button types (URL/PHONE_NUMBER/QUICK_REPLY) and the
    existing automation Flow Builder are provably unaffected — their test
    suites (`templateEdit`, `automationFlow*` if present) pass unmodified.
+
+## Send form step in Bot Flows + Business onboarding form (built 2026-11-24, live check pending)
+**Purpose.** Forms could only be sent by hand from a chat. Automation (keyword
+rules, Bot Flows) could not send one. Separately, the owner needed a form to
+collect onboarding details for Wasi itself.
+
+**Architecture.**
+- New flow node type `send_form` (migration 106 widens `flow_nodes.type`, adds
+  `flow_events.event_type = 'form_submitted'`). Config: `form_id`, `body`,
+  `cta`, optional `timeout_minutes`.
+- Sending goes through `services/formSender.js`, now shared with the chat's
+  Send form button, so both have the same rules: the interactive form message
+  inside 24 h, otherwise the form's approved "Send anytime" template.
+- The step waits. Only a submission (`nfm_reply`) of *that* form continues it,
+  via its `always` edge ("The form is submitted"). A text or another form is
+  `unmatched_input` and the flow keeps waiting. The optional `timeout` edge
+  ("Not submitted in time") works as it does for Capture Reply.
+- A step with no outgoing edges sends and finishes (status completed), so a
+  contact is never parked in a flow, which would block other flows.
+- New engine outcome `flow_form_submitted`. The AI agent stays silent on it
+  (`agentMayAnswer` is an allow-list).
+- Keyword rules send a form by starting a flow whose entry step is Send form.
+  There is no separate rule action.
+- New form kind `onboarding` ("Business onboarding", Meta category SIGN_UP):
+  business name, your name, email, industry, plan (Starter ₹999 / Growth
+  ₹2,999 / Scale ₹7,999 / Not sure yet), current WhatsApp tool, website
+  (optional). Any client can reword it.
+
+**Impact map.** `flowEngine.js` (executeNode, runToRest, evaluate),
+`flowValidation.js`, `routes/chats.js` (send-form route now calls
+formSender, same responses), `utils/validate.js` node enum,
+`routes/whatsappFlows.js` kind enum, `whatsappFlowTemplates.js`, the List-view
+editor (`app.js`/`index.html`), and `flow-editor/` (palette, node card, api).
+
+**Edge cases.**
+- Form deleted, retired or never accepted by Meta: blocked at activation
+  (`send_form_missing` / `send_form_not_found` / `send_form_not_sendable`);
+  if it happens later, the step stalls with the reason and nothing is sent.
+- Outside 24 h with no approved template: stalls with `session_window_closed`.
+- Deleting a form doesn't check which flows use it; the activation check and
+  the stall catch it.
+
+**Acceptance criteria** (tests: `flowSendForm.test.js`, `flowSendFormUI.test.js`)
+1. The onboarding form passes Meta's length limits and is offered as a type.
+2. The step sends the form with Wasi's flow token and waits (due_at set when a
+   timeout branch and minutes exist).
+3. Submitting that form continues the flow and records `form_submitted`.
+4. A text or a different form does not move the flow.
+5. No next step: send and finish.
+6. Outside 24 h: approved template used, otherwise a stall with the reason.
+7. Deleted or retired form: stall, nothing sent.
+8. Activation checks flag a missing, deleted or retired form.
+9. The List-view editor offers only sendable forms and labels the branches
+   "The form is submitted" / "Not submitted in time".
