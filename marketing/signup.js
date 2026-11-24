@@ -158,7 +158,7 @@
       afterAccountCreated(data);
     } catch (err) {
       pendingGoogleCredential = null; // a fresh sign-in is needed after any failure
-      document.getElementById('password-group').hidden = false;
+      setGoogleMode(false);
       showStep1Error(err.message || 'Google sign-in failed. Please try again.');
     } finally {
       submitBtn.disabled = false;
@@ -166,15 +166,34 @@
     }
   }
 
+  // The email inside Google's sign-in token, for display only - the server
+  // verifies the token itself before creating anything.
+  function googleEmail(credential) {
+    try {
+      const part = credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(decodeURIComponent(escape(atob(part)))).email || '';
+    } catch (_) { return ''; }
+  }
+
+  // Signed in with Google: the email comes from Google and the password is
+  // not needed, so lock the one and hide the other.
+  function setGoogleMode(on, email) {
+    const emailInput = document.getElementById('email');
+    emailInput.readOnly = on;
+    if (on && email) emailInput.value = email;
+    if (!on) emailInput.value = '';
+    document.getElementById('password-group').hidden = on;
+  }
+
   function onGoogleCredential(credential) {
     clearFieldErrors();
     showStep1Error('');
+    setGoogleMode(true, googleEmail(credential));
     const businessName = document.getElementById('businessName').value.trim();
     if (!businessName) {
       pendingGoogleCredential = credential;
-      document.getElementById('password-group').hidden = true; // not needed with Google
       setSubmitLabel('Finish with Google');
-      applyFieldError('businessName', 'Enter your business name to finish signing up with Google.');
+      applyFieldError('businessName', 'Signed in with Google. Enter your business name to finish.');
       document.getElementById('businessName').focus();
       return;
     }
@@ -197,6 +216,17 @@
       theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill', width: 320,
     });
     document.getElementById('google-signin').hidden = false;
+  }
+
+  // The CRM login page sends a Google sign-in here when that Google account
+  // has no Wasi account yet, so the visitor doesn't sign in twice. Read once.
+  function takeHandedOverGoogleCredential() {
+    let credential = null;
+    try {
+      credential = sessionStorage.getItem('wasi_google_signup_credential');
+      sessionStorage.removeItem('wasi_google_signup_credential');
+    } catch (_) { /* storage unavailable */ }
+    if (credential) onGoogleCredential(credential);
   }
 
   function initStep1() {
@@ -260,10 +290,38 @@
   // STEP 2 - Plan selection + Razorpay checkout
   // ---------------------------------------------------------------------
   function selectPlan(plan) {
+    if (state.couponCode && plan !== state.selectedPlan) setCouponStatus('', false); // a coupon is checked per plan
     state.selectedPlan = plan;
     document.querySelectorAll('.plan-option').forEach((el) => {
       el.classList.toggle('selected', el.dataset.plan === plan);
     });
+  }
+
+  // Coupon - checked by the server (POST /api/billing/coupon, the same lookup
+  // checkout uses), so the price shown can't drift from what is charged.
+  function setCouponStatus(message, ok) {
+    if (!ok) state.couponCode = null;
+    const el = document.getElementById('coupon-status');
+    if (!el) return;
+    el.textContent = message;
+    el.className = `coupon-status${message ? (ok ? ' ok' : ' bad') : ''}`;
+  }
+
+  async function applyCoupon() {
+    const code = document.getElementById('coupon-code').value.trim();
+    if (!code) { setCouponStatus('Enter a coupon code.', false); return; }
+    if (!state.selectedPlan) { setCouponStatus('Pick a plan first.', false); return; }
+    const btn = document.getElementById('coupon-apply-btn');
+    btn.disabled = true;
+    try {
+      const r = await api('/api/billing/coupon', { method: 'POST', body: { plan: state.selectedPlan, couponCode: code } });
+      state.couponCode = r.couponApplied;
+      setCouponStatus(`Coupon ${r.couponApplied} applied: ₹${r.amountInr}/month instead of ₹${r.originalAmountInr}.`, true);
+    } catch (err) {
+      setCouponStatus(err.message || 'Invalid coupon code.', false);
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function setBanner(id, message, extraHtml) {
@@ -320,7 +378,7 @@
     try {
       const data = await api('/api/billing/checkout', {
         method: 'POST',
-        body: { plan: state.selectedPlan },
+        body: state.couponCode ? { plan: state.selectedPlan, couponCode: state.couponCode } : { plan: state.selectedPlan },
       });
       state.subscription = data.subscription;
 
@@ -347,7 +405,7 @@
         amount: data.amount,
         currency: data.currency,
         name: 'Wasi CRM',
-        description: `${state.selectedPlan} plan subscription`,
+        description: `${state.selectedPlan} plan subscription${data.couponApplied ? ` (coupon ${data.couponApplied})` : ''}`,
         prefill: { email: state.client && state.client.email, name: state.client && state.client.name },
         theme: { color: '#4AC959' },
         handler: () => {
@@ -389,6 +447,13 @@
     if (!state.selectedPlan) selectPlan('Growth'); // sensible default, matches "Most popular" on the landing page
 
     document.getElementById('step2-checkout-btn').addEventListener('click', runCheckout);
+    document.getElementById('coupon-apply-btn').addEventListener('click', applyCoupon);
+    document.getElementById('coupon-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); }
+    });
+    document.getElementById('coupon-code').addEventListener('input', () => {
+      if (state.couponCode) setCouponStatus('', false); // edited after applying: apply again
+    });
     document.getElementById('step2-next-btn').addEventListener('click', () => goToStep(3));
     document.querySelector('[data-back="1"]').addEventListener('click', () => goToStep(1));
 
@@ -582,6 +647,7 @@
     if (window.lucide) lucide.createIcons();
     initStep1();
     initGoogleSignIn();
+    takeHandedOverGoogleCredential();
     initStep2();
     document.querySelector('[data-back="2"]').addEventListener('click', () => goToStep(2));
     document.getElementById('step3-next-btn').addEventListener('click', () => goToStep(4));

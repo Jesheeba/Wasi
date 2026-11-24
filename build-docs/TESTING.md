@@ -587,3 +587,11 @@ Four files failed on master. No app code changed; three tests were stale.
 ## ai-handover-wording, 2026-11-24
 - `aiAgent.test.js` "15 handover wording": inside hours, later today, tomorrow,
   next week, no hours, edited message, no time promise. aiAgent 20/20.
+
+## google-signup-email-and-coupon, 2026-11-24
+- `googleLogin.test.js` 10/10: AC2 (UI) asserts the Google email is filled and
+  read-only; AC4 (UI) asserts the login -> signup handover (email filled, read
+  once, account created with only a business name); new coupon (UI) test
+  (invalid code, WASIMR10 -> Rs 1, checkout body carries couponCode, plan switch
+  clears it).
+- Mutation check: with the old signup.js/app.js the 3 UI tests fail.

@@ -105,6 +105,15 @@
 
             <div class="plan-option-grid" id="plan-options"></div>
 
+            <div class="coupon-box">
+              <label class="form-label" for="coupon-code">Coupon code (optional)</label>
+              <div class="coupon-row">
+                <input class="form-input" type="text" id="coupon-code" placeholder="Enter coupon code" autocomplete="off" autocapitalize="characters" maxlength="40" />
+                <button type="button" class="btn btn-secondary" id="coupon-apply-btn">Apply</button>
+              </div>
+              <div class="coupon-status" id="coupon-status" role="status" aria-live="polite"></div>
+            </div>
+
             <div id="payment-status"></div>
 
             <div class="wizard-actions">

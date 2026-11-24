@@ -164,6 +164,8 @@ test('AC2 (UI): signup - Google first, then business name, then straight to the 
   await p.waitForFunction(() => document.getElementById('password-group').hidden);
   assert.match(await p.textContent('[data-error-for="businessName"]'), /business name/i);
   assert.match(await p.textContent('#step1-submit'), /Finish with Google/);
+  assert.equal(await p.inputValue('#email'), e, 'the Google email is shown, not an empty box');
+  assert.ok(await p.$eval('#email', (el) => el.readOnly), 'and it cannot be edited');
   await p.fill('#businessName', `${SUITE}ui shop`);
   await p.click('#step1-submit');
   await p.waitForSelector('.wizard-step[data-step="2"]:not([hidden])');
@@ -190,6 +192,44 @@ test('AC4 (UI): login screen - existing account enters the app; unknown Google a
   await p.waitForSelector('#gsi-stub-button');
   await p.click('#gsi-stub-button');
   await p.waitForURL('**/marketing/signup.html', { timeout: 8000 });
+  // The Google sign-in carries over: email filled and locked, only the business name is asked for.
+  await p.waitForFunction((em) => document.getElementById('email').value === em, email('ui-unknown'));
+  assert.ok(await p.$eval('#email', (el) => el.readOnly));
+  assert.ok(await p.$eval('#password-group', (el) => el.hidden));
+  assert.equal(await p.evaluate(() => sessionStorage.getItem('wasi_google_signup_credential')), null, 'read once');
+  await p.fill('#businessName', `${SUITE}ui handover`);
+  await p.click('#step1-submit');
+  await p.waitForSelector('.wizard-step[data-step="2"]:not([hidden])');
+  assert.equal((await clientRow(email('ui-unknown'))).name, `${SUITE}ui handover`);
+  await p.close();
+});
+
+test('coupon (UI): the signup plan step checks a coupon with the server and sends it to checkout', async () => {
+  const e = email('ui-coupon');
+  const p = await page('/marketing/signup.html', googleToken({ email: e }));
+  await p.fill('#businessName', `${SUITE}ui coupon`);
+  await p.waitForSelector('#gsi-stub-button');
+  await p.click('#gsi-stub-button');
+  await p.waitForSelector('.wizard-step[data-step="2"]:not([hidden])');
+  assert.ok(await p.isVisible('#coupon-code'), 'coupon box is shown on the plan step');
+
+  await p.fill('#coupon-code', 'NOT-A-CODE');
+  await p.click('#coupon-apply-btn');
+  await p.waitForFunction(() => document.getElementById('coupon-status').classList.contains('bad'));
+  assert.match(await p.textContent('#coupon-status'), /invalid/i);
+
+  await p.fill('#coupon-code', 'wasimr10');
+  await p.click('#coupon-apply-btn');
+  await p.waitForFunction(() => document.getElementById('coupon-status').classList.contains('ok'));
+  assert.match(await p.textContent('#coupon-status'), /WASIMR10 applied: ₹1\/month/);
+
+  const checkout = p.waitForRequest((r) => r.url().endsWith('/api/billing/checkout'));
+  await p.click('#step2-checkout-btn');
+  assert.equal(JSON.parse((await checkout).postData()).couponCode, 'WASIMR10', 'checkout is charged with the coupon');
+
+  // Switching plan drops the coupon: it is checked per plan.
+  await p.click('.plan-option:not(.selected)');
+  assert.equal(await p.textContent('#coupon-status'), '');
   await p.close();
 });
 

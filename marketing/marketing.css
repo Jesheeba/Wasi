@@ -412,6 +412,13 @@ footer.site-footer { background: var(--color-dark); color: rgba(255, 255, 255, 0
 /* "Continue with Google" on signup step 1 (build-docs/features/google-login.md). */
 .google-signin { display: grid; justify-items: center; gap: 10px; margin-bottom: 18px; }
 .google-signin[hidden] { display: none; }
+.coupon-box { display: grid; gap: 6px; margin-top: 16px; }
+.coupon-row { display: flex; gap: 8px; }
+.coupon-row .form-input { flex: 1; min-width: 0; text-transform: uppercase; }
+.coupon-status { font-size: 0.8125rem; min-height: 1em; }
+.coupon-status.ok { color: var(--color-primary-800); }
+.coupon-status.bad { color: #B91C1C; }
+.form-input[readonly] { background: var(--bg-app); color: var(--text-muted); }
 .google-signin-hint { margin: 0; font-size: 0.8125rem; color: var(--text-muted, #667085); text-align: center; }
 .or-divider { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--text-muted, #667085); font-size: 0.8125rem; }
 .or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--border-light, #e4e7ec); }

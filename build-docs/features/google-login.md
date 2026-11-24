@@ -54,3 +54,15 @@ onboarding.
 - OAuth consent screen: app name, support email, logo; publish to "In
   production" (only basic scopes `openid email profile` are used, which need
   no Google verification review).
+
+## Fixes, 2026-11-24 (owner report: "it asks to type the email again")
+- Signup: after Google, the email box shows the Google email, read-only, and the
+  password is hidden; only the business name is asked for. The email is decoded
+  from the token for display only; the server still verifies the token.
+- Login with a Google account that has no Wasi account: the credential is handed
+  to the signup page (sessionStorage `wasi_google_signup_credential`, removed on
+  read), so the visitor signs in once. Google ID tokens expire in about 1 hour;
+  an expired one fails server-side and the visitor clicks Google again.
+- Signup plan step now has a coupon box (same `POST /api/billing/coupon` check as
+  the in-app plan pop-up; the code goes to `/api/billing/checkout`; switching
+  plan clears it).

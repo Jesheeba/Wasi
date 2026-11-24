@@ -795,6 +795,9 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           const data = await res.json();
           if (res.status === 404 && data.code === 'no_account') {
+            // Hand the Google sign-in to the signup page so it only asks for
+            // the business name, not the email again (read once there).
+            try { sessionStorage.setItem('wasi_google_signup_credential', credential); } catch (_) { /* storage unavailable */ }
             showToast('No Wasi account uses this Google account yet. Opening signup…', 'info');
             setTimeout(() => { window.location.href = '/marketing/signup.html'; }, 1200);
             return;
