@@ -16,6 +16,7 @@ const { pool } = require('../db/pool');
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendApiError } = require('../utils/apiError');
+const { serviceBlockReason } = require('../services/serviceAccess');
 
 const requireApiKey = asyncHandler(async (req, res, next) => {
   const header = req.get('authorization') || '';
@@ -27,6 +28,14 @@ const requireApiKey = asyncHandler(async (req, res, next) => {
   const record = await apiKeysRepo.findActiveByHash(pool, token);
   if (!record) {
     return sendApiError(res, 401, 'invalid_api_key', 'Invalid or revoked API key.');
+  }
+
+  // An unpaid or suspended account's keys stop working too, not just the app.
+  const blocked = serviceBlockReason(record.client_status);
+  if (blocked) {
+    return sendApiError(res, 402, blocked, blocked === 'payment_required'
+      ? 'This Wasi account has not been paid for yet. Complete payment in Wasi to use the API.'
+      : 'This Wasi account is suspended. Renew the subscription in Wasi to use the API.');
   }
 
   req.clientId = record.client_id;

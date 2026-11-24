@@ -1,4 +1,9 @@
 const { Router } = require('express');
+const crypto = require('crypto');
+const { z } = require('zod');
+const { pool } = require('../db/pool');
+const clientsRepo = require('../repositories/clientsRepo');
+const { confirmSubscriptionPayment } = require('../services/subscriptionPayment');
 const subscriptionsRepo = require('../repositories/subscriptionsRepo');
 const invoicesRepo = require('../repositories/invoicesRepo');
 const plansRepo = require('../repositories/plansRepo');
@@ -24,6 +29,41 @@ function resolveCouponAmount(planRow, couponCode) {
   if (!coupon) return { amountInr: null, couponApplied: null };
   return { amountInr: coupon.amountInr, couponApplied: code };
 }
+
+// Instant confirmation after Razorpay Checkout succeeds in the browser, so a
+// new customer isn't held at the paywall until the webhook lands. Razorpay's
+// documented check: HMAC-SHA256 of "order_id|payment_id" with the key secret.
+// The order must be this client's own subscription checkout.
+const verifyPaymentSchema = z.object({
+  razorpay_order_id: z.string().min(1).max(100),
+  razorpay_payment_id: z.string().min(1).max(100),
+  razorpay_signature: z.string().min(1).max(200),
+}).passthrough();
+
+function validPaymentSignature(orderId, paymentId, signature) {
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) return false;
+  const expected = Buffer.from(crypto.createHmac('sha256', secret).update(`${orderId}|${paymentId}`).digest('hex'));
+  const actual = Buffer.from(signature);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+router.post('/verify-payment', asyncHandler(async (req, res) => {
+  const { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = verifyPaymentSchema.parse(req.body);
+  if (!validPaymentSignature(orderId, paymentId, signature)) {
+    return res.status(400).json({ error: 'Payment could not be verified.' });
+  }
+  const { rows } = await req.db.query(
+    'select id from subscriptions where client_id = $1 and payment_provider_ref = $2', [req.clientId, orderId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'No checkout found for this payment.' });
+  // Commit this request's transaction first: confirmSubscriptionPayment
+  // writes on the privileged pool (the webhook's path), outside req.db.
+  await req.commitAndRelease();
+  await confirmSubscriptionPayment(orderId, paymentId, { actorType: 'client', action: 'payment_verified' });
+  const client = await clientsRepo.findById(pool, req.clientId);
+  res.json({ ok: true, status: client.status });
+}));
 
 router.post('/coupon', asyncHandler(async (req, res) => {
   const { plan, couponCode } = couponCheckSchema.parse(req.body);

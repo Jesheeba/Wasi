@@ -595,3 +595,15 @@ Four files failed on master. No app code changed; three tests were stale.
   (invalid code, WASIMR10 -> Rs 1, checkout body carries couponCode, plan switch
   clears it).
 - Mutation check: with the old signup.js/app.js the 3 UI tests fail.
+
+## unpaid-signup-block, 2026-11-24
+- `unpaidSignupBlock.test.js` AC1-AC7 7/7; `googleLogin.test.js` 10/10 (UI: unpaid
+  account sees "Complete your payment"; signup has no Next without payment);
+  `clientSuspensionPaywall.test.js` updated: its "pending_setup passes" test
+  encoded the old decision, now asserts 402 payment_required.
+- Full suite: 1084/1088. Failing: tenantIsolation #3 and errorDialogUI (both
+  fail identically on master without this change), optInKeywordPhase4 #6
+  (intermittent, 1 in 3; millisecond timestamp tie in alertRunner, fixed
+  separately).
+- Test fixture: `test/helpers/activateRegisteredClients.js` preloaded by
+  `npm test` activates clients signed up through Node fetch.

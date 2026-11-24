@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const subscriptionsRepo = require('../repositories/subscriptionsRepo');
 const invoicesRepo = require('../repositories/invoicesRepo');
-const clientsRepo = require('../repositories/clientsRepo');
+const { confirmSubscriptionPayment } = require('../services/subscriptionPayment');
 const walletRepo = require('../repositories/walletRepo');
 const paymentLinksRepo = require('../repositories/paymentLinksRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
@@ -30,8 +30,6 @@ function verifySignature(rawBody, signature) {
   return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
-const RENEWAL_PERIOD_DAYS = 30;
-
 router.post('/', asyncHandler(async (req, res) => {
   const signature = req.get('x-razorpay-signature');
   if (!verifySignature(req.rawBody, signature)) {
@@ -44,16 +42,7 @@ router.post('/', asyncHandler(async (req, res) => {
   const orderId = payment?.order_id || req.body.payload?.order?.entity?.id;
 
   if ((event === 'payment.captured' || event === 'order.paid') && orderId) {
-    const renewsAt = new Date(Date.now() + RENEWAL_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const subscription = await subscriptionsRepo.updateByProviderRef(pool, orderId, { status: 'active', renews_at: renewsAt });
-    await invoicesRepo.markStatusByOrderId(pool, orderId, 'paid', payment?.id);
-    if (subscription) {
-      const client = await clientsRepo.findById(pool, subscription.client_id);
-      if (client && client.status === 'pending_setup') {
-        await clientsRepo.update(pool, subscription.client_id, { status: 'payment_confirmed' });
-      }
-      await auditLogRepo.record({ actor_type: 'razorpay_webhook', actor_id: subscription.client_id, action: event, target: orderId });
-    }
+    await confirmSubscriptionPayment(orderId, payment?.id, { actorType: 'razorpay_webhook', action: event });
     // Same order id space, different table - an order is either a
     // subscription checkout (above) or a wallet recharge (this), never both,
     // so trying both updates and letting the non-matching one no-op is

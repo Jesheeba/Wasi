@@ -120,9 +120,22 @@ test('requireActiveSubscription: active passes through', async () => {
   assert.equal(passed, true);
 });
 
-test('requireActiveSubscription: pending_setup passes through - explicitly NOT gated (separate known bug, see feature doc)', async () => {
+// Changed 2026-11-24 by owner decision (build-docs/features/unpaid-signup-block.md):
+// an account that signed up but never paid is blocked too. It was left open
+// earlier only because real clients were stuck in pending_setup by a status
+// bug; none are now (every working client is active or payment_confirmed).
+test('requireActiveSubscription: pending_setup (signed up, never paid) is blocked with 402 payment_required', async () => {
   const { req, res } = fakeReqRes();
   req.clientStatus = 'pending_setup';
+  const passed = await runMiddleware(requireActiveSubscription, req, res);
+  assert.equal(passed, false);
+  assert.equal(res._status, 402);
+  assert.deepEqual(res._body, { error: 'payment_required' });
+});
+
+test('requireActiveSubscription: payment_confirmed (paid, WhatsApp not connected yet) passes through', async () => {
+  const { req, res } = fakeReqRes();
+  req.clientStatus = 'payment_confirmed';
   const passed = await runMiddleware(requireActiveSubscription, req, res);
   assert.equal(passed, true);
 });

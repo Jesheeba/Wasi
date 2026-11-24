@@ -149,13 +149,14 @@ document.addEventListener('DOMContentLoaded', () => {
       throw authErr;
     }
     if (res.status === 402) {
-      // Account was suspended mid-session (e.g. the auto-suspend runner
-      // fired while this tab was open) - tear down to the block screen the
-      // same way a 401 tears down to the login screen. Token stays valid
+      // Account is unpaid or was suspended mid-session (e.g. the auto-suspend
+      // runner fired while this tab was open) - tear down to the block screen
+      // the same way a 401 tears down to the login screen. Token stays valid
       // (this isn't a logout) so GET /api/auth/me and /api/billing/* -
       // exempt from this check server-side - keep working from here.
+      const blockBody = await res.clone().json().catch(() => ({}));
       stopPolling();
-      showSuspendedScreen();
+      showSuspendedScreen(blockBody.error === 'payment_required' ? 'unpaid' : 'suspended');
       const suspendedErr = new Error('Your subscription has ended.');
       suspendedErr.isSuspendedError = true;
       throw suspendedErr;
@@ -398,7 +399,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // (mid-session suspension). The token stays valid - this isn't a logout -
   // so GET /api/auth/me, /api/auth/team/me and /api/billing/* (server-side
   // exempt, see requireActiveSubscription.js) keep working from here.
-  function showSuspendedScreen() {
+  // kind: 'suspended' (service turned off) or 'unpaid' (signed up, never paid -
+  // build-docs/features/unpaid-signup-block.md).
+  function showSuspendedScreen(kind = 'suspended') {
     if (location.hash) location.hash = '';
     appShell.style.display = 'none';
     authView.style.display = 'none';
@@ -409,11 +412,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const payBtn = document.getElementById('suspended-view-pay-btn');
     const msgEl = document.getElementById('suspended-view-message');
     if (payBtn) payBtn.style.display = isOwner ? '' : 'none';
+    const unpaid = kind === 'unpaid';
+    const titleEl = document.getElementById('suspended-view-title');
+    if (titleEl) titleEl.textContent = unpaid ? 'Complete your payment' : 'Your subscription has ended';
+    if (payBtn) payBtn.textContent = unpaid ? 'Choose a plan and pay' : 'Pay to continue';
     if (msgEl) {
       msgEl.textContent = isOwner && IS_ANDROID_APP
         ? "This account's subscription is not active."
+        : isOwner && unpaid
+        ? 'Your account is created. Choose a plan and complete payment to start using Wasi.'
         : isOwner
         ? 'Pay to continue using Wasi.'
+        : unpaid
+        ? 'Ask your account owner to complete payment to start using Wasi.'
         : 'Ask your account owner to renew the subscription to continue using Wasi.';
     }
   }
@@ -696,8 +707,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // though it overwrites the same shared localStorage key.
     state.sessionTenantId = tokenTenantId(localStorage.getItem('client_token'));
 
-    if (client?.status === 'suspended') {
-      showSuspendedScreen();
+    if (client?.status === 'suspended' || client?.status === 'pending_setup') {
+      showSuspendedScreen(client.status === 'pending_setup' ? 'unpaid' : 'suspended');
       return;
     }
 
@@ -7944,9 +7955,21 @@ document.addEventListener('DOMContentLoaded', () => {
         name: 'Wasi CRM',
         description: `${selectedPlanId} plan subscription${order.couponApplied ? ` (coupon ${order.couponApplied})` : ''}`,
         theme: { color: '#4AC959' },
-        handler: async () => {
-          showToast('Payment received - updating subscription…');
-          setTimeout(renderSubscriptionTab, 2000); // webhook lands asynchronously
+        handler: async (response) => {
+          showToast('Payment received - confirming…');
+          try {
+            // Instant confirmation (signature checked server-side); the
+            // webhook confirms the same payment again later, harmlessly.
+            const result = await authFetch('/api/billing/verify-payment', { method: 'POST', body: JSON.stringify(response) });
+            if (document.getElementById('suspended-view')?.style.display === 'flex' && result.status !== 'suspended' && result.status !== 'pending_setup') {
+              window.location.reload(); // unblocked: load the app properly
+              return;
+            }
+            renderSubscriptionTab();
+          } catch (err) {
+            reportError(err);
+            setTimeout(renderSubscriptionTab, 2000); // the webhook will still confirm it
+          }
         },
       });
       rzp.open();

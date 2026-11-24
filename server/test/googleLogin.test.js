@@ -42,7 +42,7 @@ const email = (tag) => { const e = `test-suite-google-${tag}-${stamp}@wasi.local
 // Each API call identifies as its own visitor (the app trusts one proxy hop):
 // the 20-per-15-min auth limiter is per IP, and these tests alone exceed it.
 let ipCounter = 0;
-const post = (path, body, ip = `10.77.${Math.floor(++ipCounter / 250)}.${ipCounter % 250}`) => fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip }, body: JSON.stringify(body) })
+const post = (path, body, ip = `10.77.${Math.floor(++ipCounter / 250)}.${ipCounter % 250}`, extraHeaders = {}) => fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip, ...extraHeaders }, body: JSON.stringify(body) })
   .then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
 const clientRow = async (e) => (await pool.query('select * from clients where lower(email) = lower($1)', [e])).rows[0];
 
@@ -74,7 +74,8 @@ test('AC1: config exposes only the public client id; nothing works without it', 
 
 test('AC2: signup with Google creates a verified, password-less pending_setup account and a working session', async () => {
   const e = email('new');
-  const res = await post('/api/auth/google', { credential: googleToken({ email: e }), intent: 'signup', businessName: '  Priya Boutique  ' });
+  // Kept unpaid (test/helpers/activateRegisteredClients.js) to check the real signup state.
+  const res = await post('/api/auth/google', { credential: googleToken({ email: e }), intent: 'signup', businessName: '  Priya Boutique  ' }, undefined, { 'x-test-keep-unpaid': '1' });
   assert.equal(res.status, 201); assert.equal(res.body.created, true);
   assert.doesNotMatch(JSON.stringify(res.body), /google_sub|password_hash/, 'internal columns never returned');
   const row = await clientRow(e);
@@ -172,6 +173,11 @@ test('AC2 (UI): signup - Google first, then business name, then straight to the 
   const row = await clientRow(e);
   assert.ok(row && row.google_sub); assert.equal(row.name, `${SUITE}ui shop`);
   assert.ok(await p.evaluate(() => localStorage.getItem('client_token')), 'session stored for the next steps');
+  // Unpaid (a browser signup is not auto-activated): the app shows only the payment screen.
+  await p.goto(`${BASE}/app`);
+  await p.waitForFunction(() => getComputedStyle(document.getElementById('suspended-view')).display === 'flex');
+  assert.equal((await p.textContent('#suspended-view-title')).trim(), 'Complete your payment');
+  assert.equal(await p.evaluate(() => getComputedStyle(document.getElementById('app-shell')).display), 'none');
   await p.close();
 });
 
@@ -226,6 +232,9 @@ test('coupon (UI): the signup plan step checks a coupon with the server and send
   const checkout = p.waitForRequest((r) => r.url().endsWith('/api/billing/checkout'));
   await p.click('#step2-checkout-btn');
   assert.equal(JSON.parse((await checkout).postData()).couponCode, 'WASIMR10', 'checkout is charged with the coupon');
+  // No Razorpay keys in tests, so payment can't complete: signup must not offer a way past it.
+  await p.waitForFunction(() => document.getElementById('step2-warn').classList.contains('visible'));
+  assert.ok(await p.$eval('#step2-next-btn', (el) => el.hidden), 'no "Next" without payment');
 
   // Switching plan drops the coupon: it is checked per plan.
   await p.click('.plan-option:not(.selected)');

@@ -10,6 +10,7 @@
 //   handover - a reason to set chats.ai_handover_reason, or null
 const { isHumanActive } = require('../humanActivity');
 const config = require('./config');
+const { serviceBlockReason } = require('../serviceAccess');
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 4; // SPEC 10.4
@@ -76,7 +77,7 @@ function decide({ agent, client, chat, contactPhone, hasKey, recentRepliesInChat
   // Gate 1 - agent on, consented, keyed, client in good standing, in pilot, in schedule.
   if (!agent || !agent.is_enabled) return off('disabled');
   if (!agent.ai_consent_at) return off('no_consent');
-  if (client && client.status === 'suspended') return off('client_suspended');
+  if (client && serviceBlockReason(client.status)) return off(serviceBlockReason(client.status));
   if (!hasKey) return stop('no_api_key');
   if (!config.pilotAllows(agent.client_id, contactPhone)) return stop('not_in_pilot');
   if (agent.schedule_mode === 'outside_hours' && withinStaffHours(agent.staff_hours, agent.timezone, now)) {

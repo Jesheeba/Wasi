@@ -355,11 +355,28 @@
     });
   }
 
+  // Next is only offered once the payment is confirmed: an unpaid account is
+  // blocked server-side (services/serviceAccess.js), so there is nothing to
+  // continue to. See build-docs/features/unpaid-signup-block.md.
   function revealStep2Next() {
-    // Keep the checkout button visible (relabeled "Retry payment" in the
-    // finally block below) so the user can retry, rather than hiding their
-    // only way back into the payment flow.
     document.getElementById('step2-next-btn').hidden = false;
+  }
+
+  // Razorpay's success callback -> server-side signature check -> account
+  // unblocked at once, without waiting for the webhook.
+  async function confirmPayment(response) {
+    setBanner('step2-warn', '');
+    setBanner('step2-info', 'Confirming your payment…', infoIconSvg);
+    try {
+      await api('/api/billing/verify-payment', { method: 'POST', body: response });
+      state.checkoutOutcome = 'success';
+      setBanner('step2-info', 'Payment received. Next, connect WhatsApp.', infoIconSvg);
+      revealStep2Next();
+      document.getElementById('step2-checkout-btn').hidden = true;
+    } catch (err) {
+      setBanner('step2-info', '');
+      setBanner('step2-warn', `We could not confirm the payment yet (${err.message}). If you were charged, it will be confirmed automatically within a few minutes - reload this page, or contact support@sirahdigital.in.`, infoIconSvg);
+    }
   }
 
   async function runCheckout() {
@@ -387,8 +404,7 @@
         // shouldn't normally happen since checkout throws first, but handle
         // it defensively rather than trying to open a broken widget.
         state.checkoutOutcome = 'unconfigured';
-        setBanner('step2-warn', "Payment isn't fully configured in this environment yet - you can continue to test the WhatsApp connection step below.", infoIconSvg);
-        revealStep2Next();
+        setBanner('step2-warn', "Payment isn't available right now, so your account can't be activated yet. Please try again later or contact support@sirahdigital.in.", infoIconSvg);
         return;
       }
 
@@ -396,8 +412,7 @@
       // the order details the backend just created.
       await loadScriptOnce('https://checkout.razorpay.com/v1/checkout.js');
       state.checkoutOutcome = 'opened';
-      setBanner('step2-info', 'Complete payment in the popup to activate billing - or click Next below to continue testing without completing payment.', infoIconSvg);
-      revealStep2Next();
+      setBanner('step2-info', 'Complete payment in the popup to activate your account.', infoIconSvg);
 
       const rzp = new window.Razorpay({
         key: data.keyId,
@@ -408,28 +423,24 @@
         description: `${state.selectedPlan} plan subscription${data.couponApplied ? ` (coupon ${data.couponApplied})` : ''}`,
         prefill: { email: state.client && state.client.email, name: state.client && state.client.name },
         theme: { color: '#4AC959' },
-        handler: () => {
-          state.checkoutOutcome = 'success';
-          setBanner('step2-info', 'Payment received. You can continue to connect WhatsApp.', infoIconSvg);
-        },
+        handler: (response) => { confirmPayment(response); },
         modal: {
           ondismiss: () => {
             if (state.checkoutOutcome !== 'success') {
-              setBanner('step2-info', 'Payment window closed. You can retry payment or click Next to continue testing.', infoIconSvg);
+              setBanner('step2-info', 'Payment window closed. Your account is activated once payment is complete - click Retry payment.', infoIconSvg);
             }
           },
         },
       });
       rzp.on('payment.failed', () => {
-        setBanner('step2-warn', 'The payment attempt failed. You can retry, or click Next to continue testing without completing payment.', infoIconSvg);
+        setBanner('step2-warn', 'The payment attempt failed. Please retry payment.', infoIconSvg);
       });
       rzp.open();
     } catch (err) {
       if (err.status === 502) {
         // Expected in this dev environment: no real Razorpay keys configured.
         state.checkoutOutcome = 'unconfigured';
-        setBanner('step2-warn', "Payment isn't configured in this environment yet - you can continue to test the WhatsApp connection step below.", infoIconSvg);
-        revealStep2Next();
+        setBanner('step2-warn', "Payment isn't available right now, so your account can't be activated yet. Please try again later or contact support@sirahdigital.in.", infoIconSvg);
       } else {
         state.checkoutOutcome = 'error';
         setBanner('step2-error', err.message || 'Checkout failed. Please try again.');
@@ -652,12 +663,20 @@
     document.querySelector('[data-back="2"]').addEventListener('click', () => goToStep(2));
     document.getElementById('step3-next-btn').addEventListener('click', () => goToStep(4));
 
-    // If already logged in from an earlier attempt in this browser, skip step 1.
+    // If already logged in from an earlier attempt in this browser, skip step 1
+    // - and step 2 too once the account is paid.
     const savedClient = localStorage.getItem('client_info');
     if (state.token && savedClient) {
       try {
         state.client = JSON.parse(savedClient);
         goToStep(2);
+        api('/api/auth/me').then((client) => {
+          state.client = client;
+          if (client.status === 'payment_confirmed' || client.status === 'active') {
+            state.checkoutOutcome = 'success';
+            goToStep(3);
+          }
+        }).catch(() => { /* stay on the plan step */ });
       } catch (_) { /* ignore malformed cache */ }
     }
 

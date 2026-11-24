@@ -23,7 +23,8 @@ async function create(db, clientId, appName) {
 
 async function findActiveByHash(db, rawKey) {
   const { rows } = await db.query(
-    `select * from api_keys where key_hash = $1 and revoked_at is null`,
+    `select k.*, c.status as client_status from api_keys k join clients c on c.id = k.client_id
+      where k.key_hash = $1 and k.revoked_at is null`,
     [hashKey(rawKey)]
   );
   return rows[0] || null;
