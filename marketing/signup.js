@@ -112,12 +112,106 @@
     if (input) input.classList.add('input-error');
   }
 
+  // Shared by email signup and "Continue with Google": store the session and
+  // move on to choosing a plan.
+  function afterAccountCreated(data) {
+    state.token = data.token;
+    state.client = data.client;
+    localStorage.setItem('client_token', data.token);
+    localStorage.setItem('client_info', JSON.stringify(data.client));
+
+    // Preselect a plan from ?plan= if the visitor arrived from a pricing card.
+    const params = new URLSearchParams(window.location.search);
+    const requestedPlan = params.get('plan');
+    if (requestedPlan && PLAN_PRICING_INR[requestedPlan]) {
+      selectPlan(requestedPlan);
+    }
+
+    goToStep(2);
+  }
+
+  // ---------------------------------------------------------------------
+  // "Continue with Google" (build-docs/features/google-login.md)
+  // A Google sign-in that arrives before the business name is typed is held
+  // here; the main button then finishes the signup with it.
+  // ---------------------------------------------------------------------
+  let pendingGoogleCredential = null;
+
+  function setSubmitLabel(html) {
+    document.getElementById('step1-submit').innerHTML = html;
+  }
+  const CONTINUE_HTML = 'Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+  async function finishWithGoogle(credential, businessName) {
+    const submitBtn = document.getElementById('step1-submit');
+    submitBtn.disabled = true;
+    setSubmitLabel('<span class="spinner" style="border-color: rgba(255,255,255,0.5); border-top-color:#fff;"></span> Creating account…');
+    try {
+      const data = await api('/api/auth/google', { method: 'POST', auth: false, body: { credential, intent: 'signup', businessName } });
+      pendingGoogleCredential = null;
+      if (data.created === false) {
+        // This Google account already has a Wasi account: just sign them in.
+        localStorage.setItem('client_token', data.token);
+        window.location.href = '/app';
+        return;
+      }
+      afterAccountCreated(data);
+    } catch (err) {
+      pendingGoogleCredential = null; // a fresh sign-in is needed after any failure
+      document.getElementById('password-group').hidden = false;
+      showStep1Error(err.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      submitBtn.disabled = false;
+      setSubmitLabel(pendingGoogleCredential ? 'Finish with Google' : CONTINUE_HTML);
+    }
+  }
+
+  function onGoogleCredential(credential) {
+    clearFieldErrors();
+    showStep1Error('');
+    const businessName = document.getElementById('businessName').value.trim();
+    if (!businessName) {
+      pendingGoogleCredential = credential;
+      document.getElementById('password-group').hidden = true; // not needed with Google
+      setSubmitLabel('Finish with Google');
+      applyFieldError('businessName', 'Enter your business name to finish signing up with Google.');
+      document.getElementById('businessName').focus();
+      return;
+    }
+    finishWithGoogle(credential, businessName);
+  }
+
+  async function initGoogleSignIn() {
+    let clientId = null;
+    try {
+      ({ clientId } = await api('/api/auth/google/config', { auth: false, timeoutMs: 8000 }));
+    } catch (_) { return; } // Google sign-in is optional: email signup still works
+    if (!clientId) return;
+    // The Google script loads async; wait for it briefly.
+    for (let i = 0; i < 50 && !(window.google && google.accounts && google.accounts.id); i += 1) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    if (!(window.google && google.accounts && google.accounts.id)) return;
+    google.accounts.id.initialize({ client_id: clientId, callback: (r) => onGoogleCredential(r.credential), ux_mode: 'popup' });
+    google.accounts.id.renderButton(document.getElementById('google-signin-button'), {
+      theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill', width: 320,
+    });
+    document.getElementById('google-signin').hidden = false;
+  }
+
   function initStep1() {
     const form = document.getElementById('step1-form');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       clearFieldErrors();
       showStep1Error('');
+
+      if (pendingGoogleCredential) {
+        const name = document.getElementById('businessName').value.trim();
+        if (!name) { applyFieldError('businessName', 'Business name is required.'); return; }
+        await finishWithGoogle(pendingGoogleCredential, name);
+        return;
+      }
 
       const businessName = document.getElementById('businessName').value.trim();
       const email = document.getElementById('email').value.trim();
@@ -140,19 +234,7 @@
           auth: false,
           body: { businessName, email, password },
         });
-        state.token = data.token;
-        state.client = data.client;
-        localStorage.setItem('client_token', data.token);
-        localStorage.setItem('client_info', JSON.stringify(data.client));
-
-        // Preselect a plan from ?plan= if the visitor arrived from a pricing card.
-        const params = new URLSearchParams(window.location.search);
-        const requestedPlan = params.get('plan');
-        if (requestedPlan && PLAN_PRICING_INR[requestedPlan]) {
-          selectPlan(requestedPlan);
-        }
-
-        goToStep(2);
+        afterAccountCreated(data);
       } catch (err) {
         if (err.status === 409) {
           applyFieldError('email', err.message);
@@ -499,6 +581,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (window.lucide) lucide.createIcons();
     initStep1();
+    initGoogleSignIn();
     initStep2();
     document.querySelector('[data-back="2"]').addEventListener('click', () => goToStep(2));
     document.getElementById('step3-next-btn').addEventListener('click', () => goToStep(4));

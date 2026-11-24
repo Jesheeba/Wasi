@@ -48,13 +48,77 @@ const MEDIA_HEADER_LIMITS = {
 // this error type exists.
 class MediaResolutionError extends Error {}
 
-// The initial cache seed happens directly in routes/templates.js, not here
-// - template creation needs the standard Media API upload interleaved with
-// the Resumable Upload API call (for the creation-time handle) and the
-// local template row (the cache write needs its id), in a specific order;
-// there's no clean single call this module could offer that fits that
-// sequence, so it isn't duplicated here as a thin wrapper.
-//
+// Checks a header file against Meta's per-type limits. Returns
+// { mimeType } when valid, or { error, detail } to send back as a 400.
+// file: { mimetype, size } (a multer file, or fetchPublicMediaFile's result).
+function checkHeaderFile(headerType, file) {
+  const limits = MEDIA_HEADER_LIMITS[headerType];
+  const mimeType = limits.mimeTypes[file.mimetype];
+  if (!mimeType) {
+    return { error: 'Unsupported file type', detail: `${headerType} headers accept: ${Object.keys(limits.mimeTypes).join(', ')}.` };
+  }
+  if (file.size > limits.maxBytes) {
+    return { error: 'File too large', detail: `${headerType} headers are limited to ${Math.round(limits.maxBytes / (1024 * 1024))}MB.` };
+  }
+  return { mimeType };
+}
+
+// The two uploads a media-header template needs from the same bytes, both
+// done at creation/edit time (handle lifetime is undocumented, so never
+// deferred): 1) a Resumable Upload API handle, the template's
+// creation-time example; 2) a standard Media API id this app sends with,
+// seeded into template_media_cache by the caller once the template row
+// exists. Throws on any Meta failure (err.metaError attached by graphFetch).
+// Used by routes/templates.js (create + edit) and routes/apiV1Templates.js.
+async function uploadTemplateHeaderMedia(waba, accessToken, headerType, file, mimeType) {
+  if (!process.env.META_APP_ID) throw new Error('META_APP_ID is not configured for this environment');
+  const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
+    fileName: file.originalname || headerType.toLowerCase(),
+    fileLength: file.size,
+    fileType: mimeType,
+  });
+  const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, file.buffer);
+  if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
+  const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, file.buffer, mimeType, file.originalname);
+  return {
+    handle: uploadedHandle.h,
+    seededMedia: { mediaId: uploadedMedia.id, filename: headerType === 'DOCUMENT' ? (file.originalname || null) : null },
+  };
+}
+
+// Downloads a caller-supplied public https file (SSRF-guarded, size- and
+// type-checked against the header type) into a multer-shaped object:
+// { buffer, mimetype, size, originalname }. Throws MediaResolutionError.
+async function fetchPublicMediaFile(mediaUrl, headerType) {
+  const parsed = await assertPublicHttpsUrl(mediaUrl);
+  const limits = MEDIA_HEADER_LIMITS[headerType];
+  const tooLarge = () => new MediaResolutionError(
+    `headerMediaUrl's file is too large for a ${headerType.toLowerCase()} header (limit ${Math.round(limits.maxBytes / (1024 * 1024))}MB).`
+  );
+
+  let res;
+  try {
+    res = await fetch(parsed, { signal: AbortSignal.timeout(15000) });
+  } catch (err) {
+    throw new MediaResolutionError(`Could not fetch headerMediaUrl: ${err.message}`);
+  }
+  if (!res.ok) {
+    throw new MediaResolutionError(`headerMediaUrl responded with ${res.status} ${res.statusText}.`);
+  }
+  const contentLength = Number(res.headers.get('content-length') || 0);
+  if (contentLength && contentLength > limits.maxBytes) throw tooLarge();
+  const rawContentType = (res.headers.get('content-type') || '').split(';')[0].trim();
+  if (!limits.mimeTypes[rawContentType]) {
+    throw new MediaResolutionError(
+      `headerMediaUrl's Content-Type ("${rawContentType || 'unknown'}") isn't accepted for a ${headerType} header - expected: ${Object.keys(limits.mimeTypes).join(', ')}.`
+    );
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > limits.maxBytes) throw tooLarge();
+  const originalname = decodeURIComponent(parsed.pathname.split('/').pop() || '') || null;
+  return { buffer, mimetype: rawContentType, size: buffer.length, originalname };
+}
+
 // assetId (optional): points at a specific non-default asset row (see
 // templateMediaCacheRepo.insertAsset / migration 030) uploaded just for one
 // send - a chat message, a broadcast, a flow node - instead of the
@@ -211,41 +275,10 @@ async function assertPublicHttpsUrl(rawUrl) {
 // as a new non-default asset so a retry of the same logical send can reuse
 // it without a second fetch.
 async function resolveMediaIdFromUrl(db, clientId, waba, accessToken, template, mediaUrl, filename) {
-  const parsed = await assertPublicHttpsUrl(mediaUrl);
-  const limits = MEDIA_HEADER_LIMITS[template.header_type];
-
-  let res;
-  try {
-    res = await fetch(parsed, { signal: AbortSignal.timeout(15000) });
-  } catch (err) {
-    throw new MediaResolutionError(`Could not fetch headerMediaUrl: ${err.message}`);
-  }
-  if (!res.ok) {
-    throw new MediaResolutionError(`headerMediaUrl responded with ${res.status} ${res.statusText}.`);
-  }
-  const contentLength = Number(res.headers.get('content-length') || 0);
-  if (contentLength && contentLength > limits.maxBytes) {
-    throw new MediaResolutionError(
-      `headerMediaUrl's file is too large for a ${template.header_type.toLowerCase()} header (limit ${Math.round(limits.maxBytes / (1024 * 1024))}MB).`
-    );
-  }
-  const rawContentType = (res.headers.get('content-type') || '').split(';')[0].trim();
-  const mimeType = limits.mimeTypes[rawContentType];
-  if (!mimeType) {
-    throw new MediaResolutionError(
-      `headerMediaUrl's Content-Type ("${rawContentType || 'unknown'}") isn't accepted for a ${template.header_type} header - expected: ${Object.keys(limits.mimeTypes).join(', ')}.`
-    );
-  }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  if (buffer.length > limits.maxBytes) {
-    throw new MediaResolutionError(
-      `headerMediaUrl's file is too large for a ${template.header_type.toLowerCase()} header (limit ${Math.round(limits.maxBytes / (1024 * 1024))}MB).`
-    );
-  }
-
-  const resolvedFilename = template.header_type === 'DOCUMENT'
-    ? (filename || decodeURIComponent(parsed.pathname.split('/').pop() || '') || null)
-    : null;
+  const file = await fetchPublicMediaFile(mediaUrl, template.header_type);
+  const buffer = file.buffer;
+  const mimeType = MEDIA_HEADER_LIMITS[template.header_type].mimeTypes[file.mimetype];
+  const resolvedFilename = template.header_type === 'DOCUMENT' ? (filename || file.originalname) : null;
 
   let uploaded;
   try {
@@ -274,6 +307,9 @@ module.exports = {
   resolveMediaId,
   resolveCarouselMediaIds,
   resolveMediaIdFromUrl,
+  checkHeaderFile,
+  uploadTemplateHeaderMedia,
+  fetchPublicMediaFile,
   buildMediaHeaderComponent,
   MediaResolutionError,
   REFRESH_THRESHOLD_MS,

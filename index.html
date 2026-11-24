@@ -42,6 +42,12 @@
       <!-- Owner login (unchanged) -->
       <div class="auth-card" id="owner-login-card">
         <h3 class="auth-title">Log In</h3>
+        <!-- "Continue with Google" (build-docs/features/google-login.md); shown only
+             when the server has GOOGLE_CLIENT_ID. Never creates an account here. -->
+        <div class="google-login" id="google-login" hidden>
+          <div id="google-login-button"></div>
+          <div class="auth-or-divider"><span>or</span></div>
+        </div>
         <form id="login-form">
           <div class="form-group">
             <label class="form-label">Email</label>
@@ -61,7 +67,7 @@
           </div>
           <button type="submit" class="btn-primary">Login</button>
           <div style="text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-main);">
-            New to Wasi? <a href="#" style="color: var(--color-primary-600); font-weight: 600; text-decoration: none;">Signup</a>
+            New to Wasi? <a href="/marketing/signup.html" style="color: var(--color-primary-600); font-weight: 600; text-decoration: none;">Signup</a>
           </div>
           <div style="text-align: center; margin-top: 0.75rem; font-size: 0.8rem;">
             <a href="#" id="show-team-login-link" style="color: var(--text-main); font-weight: 600; text-decoration: none;">Log in as a team member</a>
@@ -273,6 +279,7 @@
                 <button type="button" class="queue-tab-btn" data-queue-filter="unassigned">Unassigned</button>
                 <button type="button" class="queue-tab-btn" data-queue-filter="mine">Mine</button>
                 <button type="button" class="queue-tab-btn active" data-queue-filter="all">All</button>
+                <button type="button" class="queue-tab-btn" data-queue-filter="needs-person">Needs a person</button>
                 <button type="button" class="queue-tab-btn" data-queue-filter="resolved">Resolved</button>
               </div>
 
@@ -319,6 +326,7 @@
                       <div class="chat-header-name" id="active-chat-name"></div>
                       <div class="chat-header-sub">
                         <span class="chat-header-channel">WhatsApp Business</span>
+                        <span class="chat-ai-note" id="chat-ai-note" hidden></span>
                         <span class="tag-badge" id="active-chat-tag" style="display: none;"></span>
                       </div>
                     </div>
@@ -350,6 +358,9 @@
                         </label>
                         <button type="button" id="chat-unassign-btn" class="menu-item" role="menuitem" style="display:none;">
                           <i data-lucide="user-minus" class="icon-14"></i> Unassign
+                        </button>
+                        <button type="button" id="chat-ai-mute-btn" class="menu-item" role="menuitem" hidden>
+                          <i data-lucide="sparkles" class="icon-14"></i> <span id="chat-ai-mute-label">Pause AI in this chat</span>
                         </button>
                         <button type="button" id="chat-notes-toggle-btn" class="menu-item" role="menuitem">
                           <i data-lucide="sticky-note" class="icon-14"></i> Internal notes
@@ -605,6 +616,10 @@
               <i data-lucide="plus"></i> New Campaign
             </button>
           </div>
+
+          <!-- WhatsApp daily sending limit (Meta's messaging tier), rendered by
+               app.js renderMessagingLimitCard from /api/broadcasts/tier-status. -->
+          <section class="messaging-limit-card" id="campaign-limit-card" aria-label="WhatsApp daily sending limit" hidden></section>
 
           <!-- Summary tiles - computed client-side from the already-loaded
                broadcast list only (see app.js updateCampaignSummary); no
@@ -1212,6 +1227,16 @@
                   </div>
                 </div>
 
+                <div class="sec-nav-group" data-manage-only>
+                  <div class="sec-nav-group-title">AI</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item" data-sec-view="ai-assistant" role="button" tabindex="0">
+                      <i data-lucide="sparkles"></i>
+                      <span>AI Assistant</span>
+                    </a>
+                  </div>
+                </div>
+
                 <div class="sec-nav-group">
                   <div class="sec-nav-group-title">Team &amp; access</div>
                   <div class="sec-nav-list">
@@ -1293,6 +1318,8 @@
                     <div class="settings-skeleton-lines"><span class="skeleton settings-skeleton-line"></span><span class="skeleton settings-skeleton-line short"></span></div>
                   </div>
                 </div>
+
+                <section class="messaging-limit-card" id="settings-limit-card" aria-label="WhatsApp daily sending limit" hidden></section>
 
                 <div class="tabs inner-tabs-list" role="tablist" aria-label="WhatsApp channel settings">
                   <button type="button" class="tab inner-tab-btn active" role="tab" aria-selected="true" data-inner-tab="profile">Profile</button>
@@ -1612,6 +1639,147 @@
                     </ul>
                   </aside>
                 </div>
+              </div>
+              <!-- AI ASSISTANT (build-docs/features/ai-agent.md). Rendered by
+                   renderAiAssistant() in app.js. Consent, key and on/off are
+                   Owner/Admin only on the server; Managers see them but get a
+                   clear error. -->
+              <div id="sec-view-ai-assistant" class="sec-content-view" style="display: none;">
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">AI Assistant</h2>
+                    <p class="page-subtitle">Answers customer questions from your own business information when no rule or flow handles the message, and hands over to your team when it can't.</p>
+                  </div>
+                </div>
+
+                <div class="alert alert-info ai-pilot-note" id="ai-pilot-note" hidden></div>
+
+                <div class="stat-tiles" id="ai-stat-tiles" aria-live="polite"></div>
+
+                <div class="ai-grid">
+                  <section class="card ai-card" aria-labelledby="ai-status-title">
+                    <h3 class="ai-card-title" id="ai-status-title"><i data-lucide="power"></i> Status</h3>
+                    <label class="wasi-toggle" for="ai-enabled-toggle">
+                      <input type="checkbox" id="ai-enabled-toggle" />
+                      <span class="wasi-toggle-label" id="ai-enabled-label">Off</span>
+                    </label>
+                    <div class="form-group ai-mode-group">
+                      <label class="form-label" for="ai-mode">Mode</label>
+                      <select id="ai-mode" class="form-input">
+                        <option value="shadow">Practice (nothing is sent)</option>
+                        <option value="live">Live (replies to customers)</option>
+                      </select>
+                      <div class="form-hint">Start in Practice mode and read its replies under Activity before going live.</div>
+                    </div>
+                    <ul class="ai-checklist" id="ai-checklist" aria-label="Before switching on"></ul>
+                  </section>
+
+                  <section class="card ai-card" aria-labelledby="ai-consent-title">
+                    <h3 class="ai-card-title" id="ai-consent-title"><i data-lucide="shield-check"></i> Data processing</h3>
+                    <p class="ai-consent-text" id="ai-consent-text"></p>
+                    <label class="ai-consent-check">
+                      <input type="checkbox" id="ai-consent-checkbox" />
+                      <span>I agree, on behalf of my business</span>
+                    </label>
+                    <div class="form-hint" id="ai-consent-meta"></div>
+                  </section>
+
+                  <section class="card ai-card" aria-labelledby="ai-key-title">
+                    <h3 class="ai-card-title" id="ai-key-title"><i data-lucide="key-round"></i> Your Anthropic API key</h3>
+                    <p class="form-hint">The assistant runs on your own key, so the AI cost is billed to you directly by Anthropic. Create one at console.anthropic.com. It is stored encrypted and never shown again.</p>
+                    <div class="ai-key-current" id="ai-key-current"></div>
+                    <form id="ai-key-form" class="ai-inline-form">
+                      <label class="sr-only" for="ai-key-input">API key</label>
+                      <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-..." autocomplete="off" required minlength="20" />
+                      <button type="submit" class="btn-primary btn-auto">Save key</button>
+                    </form>
+                    <button type="button" class="btn-ghost tpl-action-danger" id="ai-key-remove" hidden><i data-lucide="trash-2" class="icon-14"></i> Remove key</button>
+                  </section>
+                </div>
+
+                <section class="card ai-card" aria-labelledby="ai-profile-title">
+                  <h3 class="ai-card-title" id="ai-profile-title"><i data-lucide="building-2"></i> Business profile and behaviour</h3>
+                  <form id="ai-settings-form" class="ai-form-grid">
+                    <div class="form-group"><label class="form-label" for="ai-business-name">Business name</label><input id="ai-business-name" class="form-input" maxlength="120" /></div>
+                    <div class="form-group"><label class="form-label" for="ai-business-type">Type of business</label><input id="ai-business-type" class="form-input" maxlength="120" placeholder="e.g. coaching institute" /></div>
+                    <div class="form-group ai-span-2"><label class="form-label" for="ai-description">What you offer (1-3 sentences)</label><textarea id="ai-description" class="form-input" rows="2" maxlength="600"></textarea></div>
+                    <div class="form-group"><label class="form-label" for="ai-areas">Areas served</label><input id="ai-areas" class="form-input" maxlength="300" /></div>
+                    <div class="form-group"><label class="form-label" for="ai-hours">Business hours (as you'd tell a customer)</label><input id="ai-hours" class="form-input" maxlength="300" placeholder="Mon-Sat, 9am-7pm" /></div>
+                    <div class="form-group"><label class="form-label" for="ai-languages">Languages (comma separated)</label><input id="ai-languages" class="form-input" placeholder="english, tamil" /></div>
+                    <div class="form-group"><label class="form-label" for="ai-tone">Tone</label>
+                      <select id="ai-tone" class="form-input"><option value="friendly_professional">Friendly and professional</option><option value="formal">Formal</option><option value="casual">Casual</option></select></div>
+
+                    <fieldset class="ai-span-2 ai-fieldset">
+                      <legend class="form-label">When should the assistant reply?</legend>
+                      <select id="ai-schedule-mode" class="form-input" aria-label="Schedule">
+                        <option value="outside_hours">Only outside staff hours (recommended)</option>
+                        <option value="always">Any time</option>
+                      </select>
+                      <div class="form-hint" id="ai-schedule-blocked" hidden></div>
+                      <div class="ai-staff-hours" id="ai-staff-hours">
+                        <div class="chip-row" role="group" aria-label="Staff days" id="ai-staff-days"></div>
+                        <label class="sr-only" for="ai-staff-start">Staff start time</label><input type="time" id="ai-staff-start" class="form-input" value="09:00" />
+                        <span aria-hidden="true">to</span>
+                        <label class="sr-only" for="ai-staff-end">Staff end time</label><input type="time" id="ai-staff-end" class="form-input" value="18:00" />
+                      </div>
+                      <div class="form-hint">Your team's working hours. In "outside staff hours" mode the assistant stays silent during them.</div>
+                    </fieldset>
+
+                    <div class="form-group ai-span-2"><label class="form-label" for="ai-handover">Message when handing over to your team</label><textarea id="ai-handover" class="form-input" rows="2" maxlength="500"></textarea><div class="form-hint">Don't promise a time ("shortly", "soon"): a handover can happen at night.</div></div>
+                    <div class="form-group ai-span-2"><label class="form-label" for="ai-fallback">Message when the assistant has no information yet</label><textarea id="ai-fallback" class="form-input" rows="2" maxlength="500"></textarea></div>
+                    <div class="form-group"><label class="form-label" for="ai-cap">Monthly reply limit</label><input type="number" id="ai-cap" class="form-input" min="0" max="100000" /></div>
+                    <div class="form-group"><label class="form-label" for="ai-model">Model</label><select id="ai-model" class="form-input"></select></div>
+                    <div class="ai-span-2"><button type="submit" class="btn-primary btn-auto">Save settings</button></div>
+                  </form>
+                </section>
+
+                <section class="card ai-card" aria-labelledby="ai-knowledge-title">
+                  <div class="ai-card-head">
+                    <h3 class="ai-card-title" id="ai-knowledge-title"><i data-lucide="book-open"></i> Knowledge</h3>
+                    <button type="button" class="btn-secondary btn-auto" id="ai-suggest-btn"><i data-lucide="wand-sparkles" class="icon-14"></i> Suggest from my conversations</button>
+                  </div>
+                  <div class="ai-meter" aria-live="polite">
+                    <div class="ai-meter-label" id="ai-meter-label"></div>
+                    <div class="ai-meter-bar" role="progressbar" id="ai-meter-bar" aria-valuemin="0"><span id="ai-meter-fill"></span></div>
+                  </div>
+                  <div id="ai-suggestions" class="list-card" hidden></div>
+                  <div id="ai-sources" class="list-card"></div>
+                  <div class="ai-grid ai-grid-2">
+                    <form id="ai-qa-form" class="ai-add-form">
+                      <h4>Add a question and answer</h4>
+                      <label class="form-label" for="ai-qa-question">Question</label><input id="ai-qa-question" class="form-input" required maxlength="500" placeholder="What are the fees?" />
+                      <label class="form-label" for="ai-qa-answer">Answer</label><textarea id="ai-qa-answer" class="form-input" rows="3" required maxlength="2000"></textarea>
+                      <button type="submit" class="btn-primary btn-auto">Add</button>
+                    </form>
+                    <form id="ai-doc-form" class="ai-add-form">
+                      <h4>Paste text or load a .txt file</h4>
+                      <label class="form-label" for="ai-doc-title">Title</label><input id="ai-doc-title" class="form-input" required maxlength="120" placeholder="Fee structure" />
+                      <label class="form-label" for="ai-doc-body">Text</label><textarea id="ai-doc-body" class="form-input" rows="3" required maxlength="20000"></textarea>
+                      <label class="form-label" for="ai-doc-file">Or load a text file</label><input type="file" id="ai-doc-file" accept=".txt,text/plain" class="form-input" />
+                      <button type="submit" class="btn-primary btn-auto">Add</button>
+                    </form>
+                  </div>
+                </section>
+
+                <section class="card ai-card" aria-labelledby="ai-try-title">
+                  <h3 class="ai-card-title" id="ai-try-title"><i data-lucide="message-square-dashed"></i> Try it</h3>
+                  <p class="form-hint">Ask a question the way a customer would. Nothing is sent on WhatsApp.</p>
+                  <form id="ai-try-form" class="ai-inline-form">
+                    <label class="sr-only" for="ai-try-input">Test question</label>
+                    <input id="ai-try-input" class="form-input" maxlength="500" required placeholder="What are your fees?" />
+                    <button type="submit" class="btn-primary btn-auto">Ask</button>
+                  </form>
+                  <div class="wa-preview" id="ai-try-result" hidden></div>
+                </section>
+
+                <section class="card ai-card" aria-labelledby="ai-activity-title">
+                  <div class="ai-card-head">
+                    <h3 class="ai-card-title" id="ai-activity-title"><i data-lucide="activity"></i> Activity (last 30 days)</h3>
+                    <label class="ai-consent-check"><input type="checkbox" id="ai-handovers-only" /> <span>Handovers only</span></label>
+                  </div>
+                  <div class="form-hint" id="ai-gate-summary"></div>
+                  <div id="ai-activity-list" class="list-card"></div>
+                </section>
               </div>
               <!-- WEBHOOK -->
               <div id="sec-view-webhook" class="sec-content-view" style="display: none;">
@@ -3138,5 +3306,6 @@
        cached copy after a plain (non-hard) refresh, silently running old
        logic. Bump the value whenever app.js changes. -->
   <script src="app.js?v=20261123a"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
 </body>
 </html>

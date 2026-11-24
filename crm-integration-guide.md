@@ -121,6 +121,34 @@ curl -X POST https://<wasi-host>/api/v1/messages \
 `type: "template"` send; submitted templates go through the normal
 approval turnaround (minutes to a day, per Meta).
 
+Templates with an **image, video or document header** need the file at
+submission time (Meta reviews the sample). Send it one of two ways:
+
+- **Multipart upload**: `multipart/form-data` with the file in a `file`
+  part and the template JSON (same fields as a plain submit) in a `data`
+  part:
+  ```bash
+  curl -X POST https://wasi.sirahagents.com/api/v1/templates     -H "Authorization: Bearer <API key>"     -F 'data={"name":"event_reminder","category":"Marketing","language":"en_US","header":{"type":"IMAGE"},"body":"See you at the event on 12 December."}'     -F "file=@poster.jpg;type=image/jpeg"
+  ```
+- **Public URL**: plain JSON with `"headerMediaUrl": "https://..."` (a
+  public https file; Wasi downloads it).
+
+Limits: IMAGE JPEG/PNG up to 5MB, VIDEO MP4 up to 16MB, DOCUMENT PDF up to
+100MB. Error codes: `header_media_required`, `invalid_header_media`,
+`unexpected_header_media`, `invalid_upload`, `whatsapp_not_connected`
+(409), `template_name_taken` (409, same name + language already exists),
+`header_media_upload_failed` (502). The uploaded file also becomes the
+template's default header for sends, so nothing more is needed once Meta
+approves it. Carousel templates are not supported through the API yet.
+
+**Daily sending limit** — `GET /api/v1/account` includes
+`messaging_limit`: `tier`, `limit_per_24h`, `used_last_24h`,
+`remaining`, `unlimited`, `checked_at`. Meta caps how many unique
+people a number can message first (outside an open 24-hour customer window)
+per rolling 24 hours, and rejects sends over it. `used_last_24h` is Wasi's
+estimate from messages sent through Wasi. Check `remaining` before a bulk
+run and send in batches that fit.
+
 ### API versioning & deprecation policy
 
 The Hub API is versioned in its path (`/api/v1/...`) and this policy governs

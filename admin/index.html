@@ -655,11 +655,12 @@
             <div class="detail-card">
               <h2 class="detail-card-title">5. Manage Templates - <code>GET/POST /api/v1/templates</code></h2>
               <p>Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send.</p>
+              <p>Image, video or document header: send <code>multipart/form-data</code> with the file in a <code>file</code> part and the template JSON in a <code>data</code> part, or plain JSON with <code>"headerMediaUrl": "https://..."</code> (public https file). Limits: JPEG/PNG 5MB, MP4 16MB, PDF 100MB. The file also becomes the template's default header for sends.</p>
             </div>
 
             <div class="detail-card">
               <h2 class="detail-card-title">5b. Read Endpoints - Conversations, Contacts, Account, Message Status</h2>
-              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id - not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status and quality rating), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
+              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id - not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status, quality rating, and <code>messaging_limit</code>: Meta's daily limit on unique people messaged first, with Wasi's estimate of used and remaining), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
             </div>
 
             <div class="detail-card">

@@ -10,6 +10,8 @@ const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema }
 const { requireClientAuth } = require('../middleware/requireClientAuth');
 const { withTenantContext } = require('../middleware/tenantContext');
 const { authLimiter, sessionCheckLimiter } = require('../middleware/rateLimit');
+const { z } = require('zod');
+const { verifyGoogleIdToken, GoogleTokenError } = require('../utils/googleIdToken');
 
 const router = Router();
 
@@ -123,6 +125,77 @@ router.post('/verify-email', authLimiter, asyncHandler(async (req, res) => {
   }
   await clientsRepo.update(pool, consumed.subject_id, { email_verified: true });
   res.json({ message: 'Email verified.' });
+}));
+
+// ---- "Continue with Google" (build-docs/features/google-login.md) ----------
+// The browser gets a Google ID token from Google Identity Services and posts
+// it here. Only the public client id is involved; there is no client secret.
+//
+// Account matching, in order:
+//   1. a client already linked to this Google account (google_sub)
+//   2. a client with the same email (case-insensitive): Google has verified
+//      the email, so it is linked and signed in
+//   3. otherwise, intent 'signup' creates a new client (business name
+//      required); intent 'login' never creates one silently.
+router.get('/google/config', (req, res) => {
+  res.json({ clientId: process.env.GOOGLE_CLIENT_ID || null });
+});
+
+const googleAuthSchema = z.object({
+  credential: z.string().min(20).max(4096),
+  intent: z.enum(['signup', 'login']),
+  businessName: z.string().trim().min(1).max(120).optional(),
+}).strict();
+
+router.post('/google', authLimiter, asyncHandler(async (req, res) => {
+  const { credential, intent, businessName } = googleAuthSchema.parse(req.body);
+  if (!process.env.GOOGLE_CLIENT_ID) return res.status(503).json({ error: 'Google sign-in is not set up yet.' });
+
+  let google;
+  try {
+    google = await verifyGoogleIdToken(credential);
+  } catch (err) {
+    if (err instanceof GoogleTokenError) {
+      return res.status(401).json({ error: 'Google sign-in could not be verified. Please try again.' });
+    }
+    throw err;
+  }
+
+  let client = (await pool.query('select * from clients where google_sub = $1', [google.sub])).rows[0];
+  if (!client) {
+    client = (await pool.query('select * from clients where lower(email) = lower($1) order by created_at limit 1', [google.email])).rows[0];
+    if (client) {
+      if (client.google_sub && client.google_sub !== google.sub) {
+        return res.status(409).json({ error: 'This email is already linked to a different Google account.' });
+      }
+      await pool.query('update clients set google_sub = $2, email_verified = true where id = $1', [client.id, google.sub]);
+    }
+  }
+
+  if (client) {
+    await clientsRepo.touchLastLogin(pool, client.id);
+    return res.json({ token: signClientToken(client), client: await clientsRepo.findById(pool, client.id), created: false });
+  }
+
+  if (intent !== 'signup') {
+    return res.status(404).json({ error: 'No Wasi account uses this Google account yet. Create one first.', code: 'no_account' });
+  }
+  if (!businessName) {
+    return res.status(400).json({ error: 'Enter your business name first.', code: 'business_name_required' });
+  }
+
+  const baseSlug = slugify(businessName) || 'client';
+  let tenant_slug = baseSlug;
+  let suffix = 1;
+  while (await clientsRepo.slugExists(pool, tenant_slug)) tenant_slug = `${baseSlug}-${suffix++}`;
+
+  // No password: a Google-only account can add one later via "Forgot password".
+  const created = await clientsRepo.create(pool, {
+    name: businessName, email: google.email, tenant_slug, status: 'pending_setup', password_hash: null,
+  });
+  await pool.query('update clients set google_sub = $2, email_verified = true where id = $1', [created.id, google.sub]);
+  await clientsRepo.touchLastLogin(pool, created.id);
+  res.status(201).json({ token: signClientToken(created), client: await clientsRepo.findById(pool, created.id), created: true });
 }));
 
 module.exports = router;

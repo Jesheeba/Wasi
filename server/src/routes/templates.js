@@ -307,24 +307,9 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
       }
       const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[headerFile.mimetype];
       try {
-        // Two separate Meta uploads from the same bytes, both required, both
-        // done now - never deferred (handle lifetime is undocumented, see
-        // the media-header investigation). 1) the Resumable Upload API
-        // handle Meta requires as the template's creation-time example.
-        // 2) the standard Media API id this app will actually send with -
-        // resolved and cached now so day-one sending works without a second
-        // round of uploads.
-        const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
-          fileName: headerFile.originalname || data.header.type.toLowerCase(),
-          fileLength: headerFile.size,
-          fileType: mimeType,
-        });
-        const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, headerFile.buffer);
-        if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
-        data.header.handle = uploadedHandle.h;
-
-        const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, headerFile.buffer, mimeType, headerFile.originalname);
-        seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (headerFile.originalname || null) : null };
+        const uploaded = await mediaHeaderService.uploadTemplateHeaderMedia(waba, accessToken, data.header.type, headerFile, mimeType);
+        data.header.handle = uploaded.handle;
+        seededMedia = uploaded.seededMedia;
       } catch (err) {
         return res.status(502).json({ error: 'Could not upload header media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
       }
@@ -668,17 +653,9 @@ router.put('/:id', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHa
       }
       const mimeType = MEDIA_HEADER_LIMITS[data.header.type].mimeTypes[headerFile.mimetype];
       try {
-        const session = await metaClient.createUploadSession(process.env.META_APP_ID, accessToken, {
-          fileName: headerFile.originalname || data.header.type.toLowerCase(),
-          fileLength: headerFile.size,
-          fileType: mimeType,
-        });
-        const uploadedHandle = await metaClient.uploadFileBytes(session.id, accessToken, headerFile.buffer);
-        if (!uploadedHandle.h) throw new Error('Meta did not return an upload handle');
-        templateData.header.handle = uploadedHandle.h;
-
-        const uploadedMedia = await metaClient.uploadMedia(waba.phone_number_id, accessToken, headerFile.buffer, mimeType, headerFile.originalname);
-        seededMedia = { mediaId: uploadedMedia.id, filename: data.header.type === 'DOCUMENT' ? (headerFile.originalname || null) : null };
+        const uploaded = await mediaHeaderService.uploadTemplateHeaderMedia(waba, accessToken, data.header.type, headerFile, mimeType);
+        templateData.header.handle = uploaded.handle;
+        seededMedia = uploaded.seededMedia;
       } catch (err) {
         return res.status(502).json({ error: 'Could not upload header media to Meta', detail: describeMetaError(err), metaError: err.metaError || undefined });
       }

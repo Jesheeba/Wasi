@@ -25,6 +25,14 @@ function apiV1ErrorHandler(err, req, res, next) {
     });
   }
 
+  // multer upload errors (POST /api/v1/templates' `file` part): oversize
+  // file, or the file sent under a field name other than "file".
+  if (err && err.name === 'MulterError') {
+    return sendApiError(res, 400, 'invalid_upload', err.code === 'LIMIT_UNEXPECTED_FILE'
+      ? `Unexpected file field "${err.field}" - send the file as "file".`
+      : `Upload rejected: ${err.message}.`);
+  }
+
   if (err && err.code === '23505') {
     return sendApiError(res, 409, 'conflict', 'This request conflicts with an existing record.', {
       detail: err.detail,

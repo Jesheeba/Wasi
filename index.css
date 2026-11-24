@@ -2143,16 +2143,23 @@ body {
   font-weight: 700;
 }
 
+/* Whole image, never a cropped strip: the preview exists so the author can
+   see what they are submitting (a tall poster used to show as a thin slice).
+   Carousel cards below keep the cropped fixed-height look WhatsApp uses. */
 .template-preview-media-thumb {
   width: 100%;
-  max-height: 140px;
-  object-fit: cover;
+  height: auto;
+  max-height: 320px;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.04);
   border-radius: 6px;
   display: block;
 }
 
 .template-preview-card .template-preview-media-thumb {
+  height: 90px;
   max-height: 90px;
+  object-fit: cover;
   margin-bottom: 4px;
 }
 
@@ -3461,3 +3468,85 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .ctwa-ads-connect p { margin: 0; }
 .ctwa-ads-connect-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ctwa-ads-connect-row .form-input { flex: 1 1 220px; min-width: 0; }
+/* AI assistant (build-docs/features/ai-agent.md). */
+#sec-view-ai-assistant .stat-tiles { margin-bottom: var(--sp-4); }
+.ai-pilot-note { margin-bottom: var(--sp-4); }
+.ai-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.ai-grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin: var(--sp-4) 0 0; }
+.ai-card { margin-bottom: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.ai-grid .ai-card { margin-bottom: 0; }
+.ai-card-title { display: flex; align-items: center; gap: 8px; font-size: var(--fs-h3, 1rem); margin: 0; }
+.ai-card-title svg { width: 18px; height: 18px; }
+.ai-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.ai-mode-group { margin: 0; }
+.ai-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--fs-label); color: var(--text-muted); }
+.ai-checklist li { display: flex; align-items: center; gap: 6px; }
+.ai-checklist li.is-done { color: var(--success); }
+.ai-consent-text { margin: 0; font-size: var(--fs-label); line-height: 1.5; color: var(--text); }
+.ai-consent-check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+.ai-consent-check input { width: 18px; height: 18px; accent-color: var(--brand); }
+.ai-key-current { font-family: var(--font-mono); font-size: var(--fs-label); }
+.ai-inline-form { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.ai-inline-form .form-input { flex: 1 1 220px; }
+.ai-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.ai-form-grid .form-group { margin: 0; }
+.ai-span-2 { grid-column: 1 / -1; }
+.ai-fieldset { border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3); margin: 0; display: grid; gap: var(--sp-2); }
+.ai-staff-hours { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.ai-staff-hours input[type=time] { width: auto; }
+.ai-staff-hours .chip-btn.active { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
+.ai-meter { display: grid; gap: 6px; }
+.ai-meter-label { font-size: var(--fs-label); color: var(--text-muted); }
+.ai-meter-bar { height: 8px; border-radius: var(--r-pill); background: var(--neutral-bg); overflow: hidden; }
+.ai-meter-bar span { display: block; height: 100%; background: var(--brand); transition: width 0.2s ease; }
+.ai-meter-bar.is-near span { background: var(--warning, #B45309); }
+.ai-add-form { display: grid; gap: 6px; align-content: start; }
+.ai-add-form h4 { margin: 0 0 4px; font-size: var(--fs-body); }
+.ai-add-form .btn-primary { justify-self: start; margin-top: 4px; }
+#ai-sources .list-row.is-muted .list-row-title, #ai-sources .list-row.is-muted .list-row-sub { opacity: 0.55; }
+#ai-sources .list-row-meta, #ai-suggestions .list-row-meta { display: flex; align-items: center; gap: 6px; }
+#ai-suggestions .list-row-main { display: grid; gap: 6px; width: 100%; }
+#ai-try-result { display: grid; gap: 8px; }
+#ai-try-result .wa-bubble.in { justify-self: start; }
+#ai-try-result .wa-bubble.out { justify-self: end; }
+#ai-activity-list .list-row-meta { text-align: right; font-size: var(--fs-caption); color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 640px) {
+  .ai-form-grid { grid-template-columns: 1fr; }
+  #ai-activity-list .list-row { flex-direction: column; align-items: flex-start; }
+  #ai-activity-list .list-row-meta { text-align: left; white-space: normal; }
+}
+
+/* AI state in the inbox. */
+.msg-ai-label { font-style: italic; white-space: nowrap; color: var(--brand-dark, var(--brand)); }
+.chat-assign-pill.is-needs-person { color: var(--warning, #B45309); background: var(--warning-bg); max-width: 110px; }
+.chat-ai-note { font-size: var(--fs-caption); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
+.chat-ai-note.is-handover { color: var(--warning, #B45309); font-weight: 600; }
+.chat-ai-note.is-muted { font-style: italic; }
+
+/* "Continue with Google" on the login screen (build-docs/features/google-login.md). */
+.google-login { display: grid; justify-items: center; gap: 14px; margin-bottom: 16px; }
+.google-login[hidden] { display: none; }
+.auth-or-divider { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--text-muted); font-size: var(--fs-label); }
+.auth-or-divider::before, .auth-or-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* WhatsApp daily sending limit card (Campaigns + Settings > WhatsApp),
+   rendered by app.js renderMessagingLimitCard. */
+.messaging-limit-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 12px);
+  padding: var(--sp-4, 16px);
+  margin-bottom: var(--sp-4, 16px);
+}
+.messaging-limit-card.is-low { border-color: var(--warning-border); background: var(--warning-bg); }
+.messaging-limit-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3, 12px); flex-wrap: wrap; }
+.messaging-limit-title { font-size: var(--fs-label, 0.8rem); color: var(--text-muted); }
+.messaging-limit-value { font-size: 1.05rem; color: var(--text); margin-top: 2px; }
+.messaging-limit-value strong { font-size: 1.4rem; }
+.messaging-limit-meter { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: var(--sp-3, 12px); }
+.messaging-limit-meter span { display: block; height: 100%; background: var(--success); }
+.messaging-limit-card.is-low .messaging-limit-meter span { background: var(--warning); }
+.messaging-limit-hint { font-size: var(--fs-caption, 0.78rem); color: var(--text-muted); margin: var(--sp-2, 8px) 0 0; }
+.messaging-limit-raise { margin-top: var(--sp-2, 8px); font-size: var(--fs-caption, 0.78rem); color: var(--text-muted); }
+.messaging-limit-raise summary { cursor: pointer; color: var(--text); font-weight: 500; }
+.messaging-limit-raise ol { margin: var(--sp-2, 8px) 0 0; padding-left: 1.2rem; }

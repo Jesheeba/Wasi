@@ -90,7 +90,10 @@ router.post('/:id/assign', requireRole('Admin', 'Manager', 'Agent'), asyncHandle
   const teamMember = await teamMembersRepo.findById(req.db, req.clientId, teamMemberId);
   if (!teamMember) return res.status(400).json({ error: 'teamMemberId does not belong to this client.' });
 
-  const chat = await chatsRepo.update(req.db, req.clientId, req.params.id, { assigned_team_member_id: teamMemberId });
+  // Assigning answers an AI handover: a person now owns the chat.
+  const chat = await chatsRepo.update(req.db, req.clientId, req.params.id, {
+    assigned_team_member_id: teamMemberId, ai_handover_reason: null, ai_handover_at: null,
+  });
   if (!chat) return res.status(404).json({ error: 'Not found' });
   res.json(chat);
 }));
@@ -112,7 +115,7 @@ router.post('/:id/unassign', requireRole('Admin', 'Manager', 'Agent'), asyncHand
 
 router.post('/:id/resolve', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) => {
   uuid.parse(req.params.id);
-  const chat = await chatsRepo.update(req.db, req.clientId, req.params.id, { status: 'resolved' });
+  const chat = await chatsRepo.update(req.db, req.clientId, req.params.id, { status: 'resolved', ai_handover_reason: null, ai_handover_at: null });
   if (!chat) return res.status(404).json({ error: 'Not found' });
 
   // PLAN.md item 5 - resolution-latency tracking, same non-fatal pattern as
@@ -428,6 +431,19 @@ router.post('/:id/messages/:messageId/retry', requireRole('Admin', 'Manager', 'A
     }
     throw err;
   }
+}));
+
+// The client's own switch for the AI assistant in this chat (SPEC section 6).
+// Only ever touches ai_muted*: turning the mute off must NOT clear the
+// system's cooldown (ai_cooldown_until), which lapses on its own.
+router.post('/:id/ai-mute', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  uuid.parse(req.params.id);
+  const { muted } = z.object({ muted: z.boolean() }).parse(req.body);
+  const chat = await chatsRepo.update(req.db, req.clientId, req.params.id, muted
+    ? { ai_muted: true, ai_muted_at: new Date(), ai_muted_by_type: req.actorType, ai_muted_by_id: req.actorType === 'team_member' ? req.actorId : null }
+    : { ai_muted: false, ai_muted_at: null, ai_muted_by_type: null, ai_muted_by_id: null });
+  if (!chat) return res.status(404).json({ error: 'Not found' });
+  res.json(chat);
 }));
 
 module.exports = router;

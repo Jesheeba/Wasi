@@ -27,6 +27,22 @@
   Meta Verified guidance (paid, bought in the app) instead of a dead end.
 - Fixed: booking dates were shown a day early in India.
 - Migration 105 (renumbered from 104 at merge: master took 104 for Google login).
+## fix(hub-api-template-media, messaging-limit, template-preview): 2026-11-24
+- Hub API `POST /api/v1/templates` accepts image/video/document headers
+  (multipart `file` + `data`, or `headerMediaUrl`); stores Meta's id,
+  caches the send-time media, rejects duplicate name+language.
+- Daily sending limit card on Campaigns and Settings > WhatsApp;
+  `GET /api/v1/account` returns `messaging_limit`; "used today" no longer
+  counts replies inside an open 24h window or failed sends.
+- Create Template preview shows the whole image instead of a cropped strip.
+
+## feat(google-login): Continue with Google for signup and login
+New customers can create their account with Google on signup step 1 (business
+name still required) and continue the usual plan and WhatsApp steps; existing
+customers can log in with Google (linked by email the first time). ID token
+verified against Google's keys; no client secret. Hidden until GOOGLE_CLIENT_ID
+is set. Migration 104 (clients.google_sub). Fixed: login screen Signup link
+went nowhere.
 
 ## feat(android-no-checkout): no subscription checkout inside the Android app
 Google Play requires Play Billing (15% on subscriptions) for anything sold in
@@ -54,6 +70,16 @@ New form type "Booking with live slots".
 - Customers' carts show in the chat as readable items and a total.
 - Failed product sends can't be retried as plain text.
 - Migration 100.
+## feat(ai-agent): AI assistant - Settings screen and inbox markers
+Settings > AI Assistant: consent statement, bring-your-own Anthropic key
+(encrypted, last 4 shown), business profile, staff hours, handover and
+fallback wording, monthly cap, model, knowledge (Q&A, pasted or .txt text,
+2,500-token meter, suggestions from your own past chats), try-it box, and
+activity (answered, handed over, AI cost, practice replies, why it stayed
+silent). Inbox: "Needs a person" queue and pill, header note, assistant
+badge on AI messages, pause/resume AI per chat. Backend in the previous
+commit. Live only for AI_LIVE_ALLOWLIST (demo account + 9092766740).
+
 ## fix(automation-rules): remove the temporary test lock
 Reverts 63572a3 after the live test passed on production (catch-all replied
 once to 9092766740, then stayed silent within 24h). Once deployed, "*" rules

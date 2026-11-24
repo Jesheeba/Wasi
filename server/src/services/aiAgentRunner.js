@@ -120,6 +120,7 @@ function createAiAgentRunner(options = {}) {
       if (Date.now() - lastPurgeAt > PURGE_EVERY_MS) {
         lastPurgeAt = Date.now();
         await aiJobsRepo.purgeFinished(db);
+        await require('../repositories/aiAgentRepo').purgeOldGateLog(db); // 30-day retention (SPEC section 6)
       }
     } catch (err) {
       logger.error('aiAgentRunner tick failed:', err.message);
@@ -175,5 +176,11 @@ function createAiAgentRunner(options = {}) {
   return { start, stop, tick, processJob, attemptImmediately, enqueueIfEligible };
 }
 
-const defaultRunner = createAiAgentRunner();
+// The production instance runs the real pipeline. Required lazily: the
+// agent service sends through messagingService, which must not load while
+// this module is still being required by metaWebhook.js.
+const defaultRunner = createAiAgentRunner({
+  handler: (job) => require('./aiAgent/agentService').handleJob(job),
+  isEligible: (clientId) => require('./aiAgent/agentService').isEligible(clientId),
+});
 module.exports = { ...defaultRunner, createAiAgentRunner };

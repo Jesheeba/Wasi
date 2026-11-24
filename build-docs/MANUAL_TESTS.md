@@ -263,5 +263,17 @@ Deploy first (migration 107). Demo account, phone 9092766740 only.
      answers, then the phone gets "Thanks! Our team will call you within a
      day."
    - Forms > Responses for Wasi Onboarding shows 1.
+## 17. Hub API image template + sending limit (after deploy)
+
+1. Demo account > Settings > Developer: create a key. Run:
+   `curl -X POST https://wasi.sirahagents.com/api/v1/templates -H "Authorization: Bearer <key>" -F 'data={"name":"api_image_test","category":"Utility","language":"en_US","header":{"type":"IMAGE"},"body":"This is a test of image templates from the API."}' -F "file=@poster.jpg;type=image/jpeg"`
+   - Expect 201 with a `meta_template_id`; the template shows in Templates
+     as pending with the image.
+2. `curl https://wasi.sirahagents.com/api/v1/account -H "Authorization: Bearer <key>"`
+   - Expect `messaging_limit` with the demo number's tier.
+3. Campaigns and Settings > WhatsApp: the "Daily sending limit" card shows.
+4. Templates > Create Template > Image header > pick a tall poster: the
+   preview shows the whole picture.
+5. Delete `api_image_test` afterwards.
 
 Status: PENDING
