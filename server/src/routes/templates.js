@@ -249,6 +249,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
   }
 
   let metaTemplateId = null;
+  let metaCategory = null; // Meta's category in its create response - may differ from the submitted one
   let seededMedia = null; // { mediaId, filename } - set once the standard Media API upload succeeds
   let seededCardMedia = null; // [{ mediaId, filename }, ...] - one per card, same order as data.cards
 
@@ -354,6 +355,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
       // next sync to backfill by name.
       const metaResponse = await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
       metaTemplateId = metaResponse.id;
+      metaCategory = metaResponse.category ? templateSyncService.mapMetaCategory(metaResponse.category) : null;
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
         return res.status(400).json({ error: 'Invalid template', details: err.errors });
@@ -372,12 +374,15 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
     req.db = await req.reacquireDb();
   }
 
-  const template = await messageTemplatesRepo.create(req.db, {
+  let template = await messageTemplatesRepo.create(req.db, {
     client_id: req.clientId,
     ...data,
     status: 'pending',
     meta_template_id: metaTemplateId,
   });
+  if (metaCategory && metaCategory !== template.category) {
+    template = (await messageTemplatesRepo.applyMetaCategory(req.db, template.id, metaCategory)) || template;
+  }
 
   if (seededMedia) {
     await templateMediaCacheRepo.upsert(req.db, req.clientId, template.id, seededMedia);
@@ -395,7 +400,8 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
   // (templateParams.js's own comment). Never withholds the 201 - the
   // template was already genuinely submitted to Meta by this point.
   const categoryCheck = checkCategoryContentMismatch(data.body, data.category);
-  res.status(201).json(categoryCheck.mismatch ? { ...template, warnings: [categoryCheck.warning] } : template);
+  const warnings = [templateSyncService.categoryChangeWarning(template), categoryCheck.mismatch ? categoryCheck.warning : null].filter(Boolean);
+  res.status(201).json(warnings.length ? { ...template, warnings } : template);
 }));
 
 // Uploads a new media asset for a media-header template, for one send to

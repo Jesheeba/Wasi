@@ -546,3 +546,14 @@ are in the impact map above:
   productMessages, coexistenceEchoIngestion, aiAgentEnqueue, comingSoonPages,
   settingsRedesign: 194/194. Screenshots at 1440 and 390 px: no overflow, no
   page errors.
+
+## template-category-change, 2026-11-24
+- templateCategoryChange.test.js: 8/8 (AC1 CRM create, AC2 Hub create, AC3
+  sync change, AC4 Meta previous/correct_category, AC5 fallback when Meta
+  rejects the fields, AC6 webhook advance + completed, AC7 name/en-US match,
+  AC8 UI static). Meta faked, local Postgres.
+- Regression: template*, apiV1*, metaWebhook*, webhookForwarding,
+  consentTracking, coexistence echo: 289/289.
+- Browser check (Playwright): both card notes render, filter shows 2 cards, no
+  page errors.
+- No failures found during the build.

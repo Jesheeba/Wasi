@@ -125,13 +125,18 @@ async function updateStatus(db, id, status) {
 async function createFromMetaSync(db, {
   client_id, meta_template_id, name, category, status, language, rejection_reason,
   body, bodyParamExamples, headerType, headerContent, footerText, buttons, cards,
+  meta_previous_category, upcoming_category,
 }) {
+  const previous = meta_previous_category && meta_previous_category !== category ? meta_previous_category : null;
+  const upcoming = upcoming_category && upcoming_category !== category ? upcoming_category : null;
   const { rows } = await db.query(
     `insert into message_templates (
        client_id, meta_template_id, name, category, status, language, rejection_reason,
-       body, body_param_examples, header_type, header_content, footer_text, buttons, cards
+       body, body_param_examples, header_type, header_content, footer_text, buttons, cards,
+       previous_category, category_changed_at, upcoming_category
      )
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+             $15, case when $15::text is not null then now() end, $16)
      returning *`,
     [
       client_id, meta_template_id, name, category, status, language || 'en_US', rejection_reason || null,
@@ -142,6 +147,7 @@ async function createFromMetaSync(db, {
       footerText || null,
       buttons ? JSON.stringify(buttons) : null,
       cards ? JSON.stringify(cards) : null,
+      previous, upcoming,
     ]
   );
   return rows[0];
@@ -154,16 +160,59 @@ async function createFromMetaSync(db, {
 // COALESCE rather than overwriting, so it's a no-op once already set.
 // Clears orphaned_at unconditionally: reappearing in this sync's Meta
 // listing means it isn't missing anymore, however it got marked before.
-async function updateFromMetaSync(db, id, { status, category, rejection_reason, meta_template_id }) {
+//
+// A category that differs from the stored one is Meta's change, never a
+// silent overwrite: the old value goes to previous_category and
+// category_changed_at is stamped (migration 109). meta_previous_category
+// (Meta's own previous_category field) backfills a change made before Wasi
+// recorded them, when the local row already holds the new value.
+// upcoming_category is Meta's correct_category: a change announced for
+// later, cleared once the category matches it.
+async function updateFromMetaSync(db, id, { status, category, rejection_reason, meta_template_id, meta_previous_category, upcoming_category }) {
   const { rows } = await db.query(
     `update message_templates
      set status = $2, category = $3, rejection_reason = $4,
          meta_template_id = coalesce(meta_template_id, $5),
+         previous_category = case
+           when category is distinct from $3 then category
+           when previous_category is null and $6::text <> $3 then $6::text
+           else previous_category end,
+         category_changed_at = case
+           when category is distinct from $3 then now()
+           when previous_category is null and $6::text <> $3 then now()
+           else category_changed_at end,
+         upcoming_category = case when $7::text <> $3 then $7::text end,
+         upcoming_category_at = case when $7::text <> $3 then upcoming_category_at end,
          orphaned_at = null,
          updated_at = now()
      where id = $1
      returning *`,
-    [id, status, category, rejection_reason || null, meta_template_id]
+    [id, status, category, rejection_reason || null, meta_template_id, meta_previous_category || null, upcoming_category || null]
+  );
+  return rows[0] || null;
+}
+
+// Meta's own category for a template (the create response, or a
+// template_category_update webhook). No-op when it already matches.
+async function applyMetaCategory(db, id, category, previousCategory) {
+  const { rows } = await db.query(
+    `update message_templates
+     set previous_category = coalesce($3, category), category = $2, category_changed_at = now(),
+         upcoming_category = null, upcoming_category_at = null, updated_at = now()
+     where id = $1 and category is distinct from $2
+     returning *`,
+    [id, category, previousCategory || null]
+  );
+  return rows[0] || null;
+}
+
+// Meta announced a change for later (template_category_update carrying
+// correct_category): shown to the client before it happens.
+async function setUpcomingCategory(db, id, upcomingCategory, effectiveAt) {
+  const { rows } = await db.query(
+    `update message_templates set upcoming_category = $2, upcoming_category_at = $3, updated_at = now()
+     where id = $1 and category is distinct from $2 returning *`,
+    [id, upcomingCategory, effectiveAt || null]
   );
   return rows[0] || null;
 }
@@ -240,6 +289,8 @@ module.exports = {
   findActiveByNameAndLanguage,
   createFromMetaSync,
   updateFromMetaSync,
+  applyMetaCategory,
+  setUpcomingCategory,
   markOrphaned,
   updateContent,
   remove,

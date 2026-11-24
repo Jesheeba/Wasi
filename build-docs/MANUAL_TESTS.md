@@ -299,3 +299,17 @@ Deploy first (migration 108). Demo account, phone 9092766740 only.
    changed, moved or deleted like any other.
 
 Status: PENDING
+
+## 19. Template category changed by Meta (after deploy)
+Deploy first (migration 109).
+1. App Dashboard > WhatsApp > Configuration > Webhook fields: subscribe
+   `template_category_update`.
+2. Demo account > Templates > Sync. Any template Meta moved shows an amber
+   "Meta changed the category from Utility to Marketing" note and
+   "(was Utility)" in its footer. Category filter > "Changed by Meta" lists them.
+3. The client whose templates were moved: Sync once on their account (or
+   ask them to) so the notes appear.
+4. If Meta later recategorises one, the card first says "Meta will change
+   the category to Marketing on <date>", then the changed note.
+
+Status: PENDING

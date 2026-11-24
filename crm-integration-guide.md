@@ -133,6 +133,16 @@ submission time (Meta reviews the sample). Send it one of two ways:
 - **Public URL**: plain JSON with `"headerMediaUrl": "https://..."` (a
   public https file; Wasi downloads it).
 
+**Category changed by Meta.** Meta may approve a template in a different
+category from the one you submitted (most often Utility approved as
+Marketing). The create response then has `"category": "Marketing"`,
+`"previous_category": "Utility"` and a `warnings` array explaining it.
+Template objects from `GET /api/v1/templates` also carry
+`previous_category`, `category_changed_at` and, when Meta has announced a
+change that has not happened yet, `upcoming_category` /
+`upcoming_category_at`. Marketing templates are only sent to contacts who
+opted in.
+
 Limits: IMAGE JPEG/PNG up to 5MB, VIDEO MP4 up to 16MB, DOCUMENT PDF up to
 100MB. Error codes: `header_media_required`, `invalid_header_media`,
 `unexpected_header_media`, `invalid_upload`, `whatsapp_not_connected`

@@ -32,6 +32,26 @@ function mapMetaCategory(metaCategory) {
   return CATEGORY_MAP[String(metaCategory || '').toUpperCase()] || metaCategory;
 }
 
+// The flag shown when Meta put a template in a different category from the
+// one it was submitted under (the create response and the Templates view).
+function categoryChangeWarning(template) {
+  if (!template?.previous_category || template.previous_category === template.category) return null;
+  const extra = template.category === 'Marketing'
+    ? ' Marketing messages cost more, and Wasi only sends them to contacts who opted in.'
+    : '';
+  return `Meta changed this template's category from ${template.previous_category} to ${template.category}.${extra}`;
+}
+
+// Meta's recategorisation fields on a listed template (migration 109):
+// previous_category = what it was before Meta changed it, correct_category =
+// a change Meta has announced for later. Either may be absent or blank.
+function categoryChange(mt) {
+  return {
+    meta_previous_category: mt.previous_category ? mapMetaCategory(mt.previous_category) : null,
+    upcoming_category: mt.correct_category ? mapMetaCategory(mt.correct_category) : null,
+  };
+}
+
 // Meta's status vocabulary (APPROVED, PENDING, REJECTED, PAUSED, DISABLED,
 // IN_APPEAL, PENDING_DELETION) already uses underscores matching this
 // app's lowercase snake_case convention (migration
@@ -84,6 +104,7 @@ function reconcileTemplates(metaTemplates, localTemplates) {
         category: mapMetaCategory(mt.category),
         rejection_reason: mapRejectionReason(mt.rejected_reason),
         meta_template_id: mt.id,
+        ...categoryChange(mt),
       });
     } else {
       toInsert.push({
@@ -93,6 +114,7 @@ function reconcileTemplates(metaTemplates, localTemplates) {
         status: mapMetaStatus(mt.status),
         language: mt.language || 'en_US',
         rejection_reason: mapRejectionReason(mt.rejected_reason),
+        ...categoryChange(mt),
         ...parsed,
       });
     }
@@ -138,4 +160,4 @@ async function syncTemplates(db, clientId) {
   return { inserted: toInsert.length, updated: toUpdate.length, orphaned: toOrphan.length };
 }
 
-module.exports = { syncTemplates, reconcileTemplates, mapMetaCategory, mapMetaStatus, TemplateSyncError };
+module.exports = { syncTemplates, reconcileTemplates, mapMetaCategory, mapMetaStatus, categoryChangeWarning, TemplateSyncError };

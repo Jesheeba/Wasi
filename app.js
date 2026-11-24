@@ -4629,11 +4629,30 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('scroll', hideTemplateHoverPopover, true);
   })();
 
+  // Meta moved the template to another category (migration 109): either
+  // at approval (submitted as Utility, approved as Marketing) or later.
+  function templateCategoryChanged(t) {
+    return Boolean(t.previous_category && t.previous_category !== t.category);
+  }
+
+  function templateCategoryNote(t) {
+    const when = (d) => (d ? new Date(d).toLocaleDateString() : '');
+    if (templateCategoryChanged(t)) {
+      const cost = t.category === 'Marketing' ? ' Marketing messages cost more and only go to contacts who opted in.' : '';
+      return `<p class="template-category-change" role="note"><i data-lucide="alert-triangle" class="icon-14" aria-hidden="true"></i> Meta changed the category from ${esc(t.previous_category)} to ${esc(t.category)}${t.category_changed_at ? ' (' + esc(when(t.category_changed_at)) + ')' : ''}.${cost}</p>`;
+    }
+    if (t.upcoming_category) {
+      return `<p class="template-category-change" role="note"><i data-lucide="alert-triangle" class="icon-14" aria-hidden="true"></i> Meta will change the category to ${esc(t.upcoming_category)}${t.upcoming_category_at ? ' on ' + esc(when(t.upcoming_category_at)) : ''}.</p>`;
+    }
+    return '';
+  }
+
   function getFilteredTemplates() {
     const q = templatesView.q.trim().toLowerCase();
     return state.templates.filter((t) =>
       (!templatesView.status || (t.status || 'pending') === templatesView.status) &&
-      (!templatesView.category || t.category === templatesView.category) &&
+      (!templatesView.category
+        || (templatesView.category === 'changed' ? templateCategoryChanged(t) || Boolean(t.upcoming_category) : t.category === templatesView.category)) &&
       (!q || (t.name || '').toLowerCase().includes(q) || (t.body || '').toLowerCase().includes(q))
     );
   }
@@ -4751,9 +4770,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <p class="template-card-body">${bodyPreview}</p>
             ${rejectionNote}
             ${orphanedNote}
+            ${templateCategoryNote(t)}
           </div>
           <div class="template-card-foot">
-            <span class="template-card-meta">${esc(t.category)}${t.language ? ' · ' + esc(t.language) : ''}</span>
+            <span class="template-card-meta">${esc(t.category)}${templateCategoryChanged(t) ? ' (was ' + esc(t.previous_category) + ')' : ''}${t.language ? ' · ' + esc(t.language) : ''}</span>
             <div class="template-card-actions">
               <button type="button" class="btn-ghost btn-sm tpl-action preview-template-btn" data-preview-template="${esc(t.id)}" title="Preview in chat" aria-label="Preview ${esc(t.name)}"><i data-lucide="eye" class="icon-14"></i></button>
               <button type="button" class="btn-ghost btn-sm tpl-action edit-template-btn" data-edit-template="${esc(t.id)}" title="${t.cards ? 'Meta does not support editing a carousel template - delete and recreate instead' : 'Edit template'}" aria-label="Edit ${esc(t.name)}" ${t.cards ? 'disabled' : ''}><i data-lucide="pencil" class="icon-14"></i></button>
@@ -7386,7 +7406,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Same category/content-mismatch signal the live warning above
       // already showed - surfaced again here for whoever submitted
       // despite it (or via a path that skipped the live check).
-      if (result?.warnings?.[0]) showToast(result.warnings[0]);
+      // Meta's own category change at approval (e.g. submitted as Utility,
+      // approved as Marketing) is too important for a 2-second toast.
+      if (result?.warnings?.length) {
+        showErrorDialog({ title: 'Template submitted - please check', details: result.warnings });
+      }
     } catch (err) {
       reportError(err);
     } finally {

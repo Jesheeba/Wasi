@@ -18,6 +18,7 @@ const { Router } = require('express');
 const multer = require('multer');
 const { pool } = require('../db/pool');
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
+const { mapMetaCategory, categoryChangeWarning } = require('../services/templateSyncService');
 const templateMediaCacheRepo = require('../repositories/templateMediaCacheRepo');
 const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
@@ -105,6 +106,7 @@ router.post('/', uploadFile, asyncHandler(async (req, res) => {
   }
 
   let metaTemplateId = null;
+  let metaCategory = null; // Meta's category in its create response - may differ from the submitted one
   let seededMedia = null;
 
   if (connected) {
@@ -151,6 +153,7 @@ router.post('/', uploadFile, asyncHandler(async (req, res) => {
     try {
       const metaResponse = await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
       metaTemplateId = metaResponse?.id || null;
+      metaCategory = metaResponse?.category ? mapMetaCategory(metaResponse.category) : null;
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
         return sendApiError(res, 400, 'invalid_template_body', 'Invalid template body.', { details: err.errors });
@@ -162,11 +165,15 @@ router.post('/', uploadFile, asyncHandler(async (req, res) => {
     }
   }
 
-  const template = await messageTemplatesRepo.create(pool, { client_id: req.clientId, ...data, status: 'pending', meta_template_id: metaTemplateId });
+  let template = await messageTemplatesRepo.create(pool, { client_id: req.clientId, ...data, status: 'pending', meta_template_id: metaTemplateId });
+  if (metaCategory && metaCategory !== template.category) {
+    template = (await messageTemplatesRepo.applyMetaCategory(pool, template.id, metaCategory)) || template;
+  }
   if (seededMedia) {
     await templateMediaCacheRepo.upsert(pool, req.clientId, template.id, seededMedia);
   }
-  res.status(201).json(template);
+  const categoryWarning = categoryChangeWarning(template);
+  res.status(201).json(categoryWarning ? { ...template, warnings: [categoryWarning] } : template);
 }));
 
 module.exports = router;

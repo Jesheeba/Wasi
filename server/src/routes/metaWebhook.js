@@ -7,6 +7,8 @@ const contactsRepo = require('../repositories/contactsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const paymentNotificationsRepo = require('../repositories/paymentNotificationsRepo');
 const consentRepo = require('../repositories/consentRepo');
+const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
+const { mapMetaCategory } = require('../services/templateSyncService');
 const usageRepo = require('../repositories/usageRepo');
 const clientWebhooksRepo = require('../repositories/clientWebhooksRepo');
 const webhookDeliveriesRepo = require('../repositories/webhookDeliveriesRepo');
@@ -643,6 +645,55 @@ async function handleTemplateStatusUpdate(waba, value) {
   return true;
 }
 
+// template_category_update (Meta's webhook reference, confirmed against the
+// docs 2026-11-24, not yet against a live delivery): two variants.
+//   Advance notice: { correct_category, new_category (= current),
+//     category_update_timestamp } - the change Meta will make in ~24h.
+//   Completed: { previous_category, new_category }.
+// Matched by message_template_id, then (name, language) - Meta sends
+// language as "en-US", stored as "en_US". Not forwarded to consuming apps:
+// wabas.forward_events' CHECK has no such event yet.
+async function handleTemplateCategoryUpdate(waba, value) {
+  if (!value?.message_template_name && !value?.message_template_id) return false;
+  let template = null;
+  if (value.message_template_id) {
+    ({ rows: [template] } = await pool.query(
+      'select id from message_templates where client_id = $1 and meta_template_id = $2',
+      [waba.client_id, String(value.message_template_id)]
+    ));
+  }
+  if (!template && value.message_template_name) {
+    const language = String(value.message_template_language || '').replace('-', '_');
+    ({ rows: [template] } = await pool.query(
+      `select id from message_templates where client_id = $1 and name = $2 and ($3 = '' or language = $3)
+       order by created_at desc limit 1`,
+      [waba.client_id, value.message_template_name, language]
+    ));
+  }
+  await auditLogRepo.record({
+    actor_type: 'meta_webhook',
+    actor_id: null,
+    action: 'template_category_update',
+    target: `${waba.client_id}: ${JSON.stringify(value).slice(0, 500)}`,
+  });
+  if (!template) {
+    console.error('metaWebhook: template_category_update for an unknown template:', value.message_template_name, value.message_template_id);
+    return true;
+  }
+  if (value.correct_category) {
+    const effectiveAt = Number(value.category_update_timestamp)
+      ? new Date(Number(value.category_update_timestamp) * 1000)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await messageTemplatesRepo.setUpcomingCategory(pool, template.id, mapMetaCategory(value.correct_category), effectiveAt);
+  } else if (value.new_category) {
+    await messageTemplatesRepo.applyMetaCategory(
+      pool, template.id, mapMetaCategory(value.new_category),
+      value.previous_category ? mapMetaCategory(value.previous_category) : null
+    );
+  }
+  return true;
+}
+
 async function handleAccountUpdate(waba, value) {
   if (!value?.phone_number) return false;
   // restriction_info/ban_info are Meta's documented field names for this
@@ -708,6 +759,7 @@ async function handleUnmappedWabaEvent(field, entryId, value) {
 // dispatch is correct for these.
 const WABA_SCOPED_FIELD_HANDLERS = {
   message_template_status_update: handleTemplateStatusUpdate,
+  template_category_update: handleTemplateCategoryUpdate,
   account_update: handleAccountUpdate,
   message_template_quality_update: (waba, value) => handleUnmappedWabaEvent('message_template_quality_update', waba.waba_id, value),
   phone_number_quality_update: (waba, value) => handleUnmappedWabaEvent('phone_number_quality_update', waba.waba_id, value),
