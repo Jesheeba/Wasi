@@ -313,3 +313,14 @@ Deploy first (migration 109).
    the category to Marketing on <date>", then the changed note.
 
 Status: PENDING
+
+## 20. Unapproved template is refused (after deploy)
+Deploy first (migration 110).
+1. In n8n (or any Hub API client), send a template that is still pending
+   on the Templates page. Expect HTTP 409, code `template_not_approved`,
+   message "... is still waiting for Meta's review". No message appears in
+   the chat.
+2. Send an approved template the same way - it still sends.
+3. Campaigns > New campaign with the pending template - refused at create.
+
+Status: PENDING

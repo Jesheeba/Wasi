@@ -657,6 +657,7 @@
               <p>Same bearer auth. A submitted template must be Meta-approved (minutes to a day) before it can be used in a <code>type: "template"</code> send.</p>
               <p>Image, video or document header: send <code>multipart/form-data</code> with the file in a <code>file</code> part and the template JSON in a <code>data</code> part, or plain JSON with <code>"headerMediaUrl": "https://..."</code> (public https file). Limits: JPEG/PNG 5MB, MP4 16MB, PDF 100MB. The file also becomes the template's default header for sends.</p>
               <p>If Meta approves the template in a different category (e.g. Utility as Marketing), the create response has <code>previous_category</code> and a <code>warnings</code> array; template objects also carry <code>category_changed_at</code>, <code>upcoming_category</code> and <code>upcoming_category_at</code>.</p>
+              <p>Only approved templates can be sent: <code>POST /api/v1/messages</code> with a template that is pending, rejected, paused or disabled returns <code>template_not_approved</code> (409) and nothing reaches Meta. An approved template that was edited keeps sending while Meta re-reviews it.</p>
             </div>
 
             <div class="detail-card">

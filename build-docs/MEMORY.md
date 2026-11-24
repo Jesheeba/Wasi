@@ -102,3 +102,8 @@ had any code-level effect on sending (it doesn't - `clients.status` gated
 nothing before this feature) and whether the timing was coincidental with
 Meta's own block clearing - not conclusively resolved, not re-investigated
 further since the account was confirmed working.
+
+- 2026-11-24 template-approval-guard: only approved templates send. An edited
+  approved template (status back to pending) stays sendable via `approved_at`
+  (migration 110 trigger) because Meta keeps the old version live. Decided not
+  to block on local status alone: one live Meta re-check before refusing.

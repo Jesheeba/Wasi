@@ -557,3 +557,13 @@ are in the impact map above:
 - Browser check (Playwright): both card notes render, filter shows 2 cards, no
   page errors.
 - No failures found during the build.
+
+## template-approval-guard, 2026-11-24
+- `server/test/templateApprovalGuard.test.js` AC1-AC7: 7/7 (local DB, faked Meta).
+- Mutation check: guard disabled -> AC1, AC2, AC4, AC7 fail.
+- Regression: 60 files (template/apiV1/broadcast/flow/chat/messaging/consent/
+  ecommerce/alert) 526/526.
+- Fixture updates (tests relied on sending unapproved templates): two stubbed
+  template rows gained `status: 'approved'`; consentTracking's no-WABA draft
+  templates are marked approved in its helper. Broadcast suites needed no
+  change once create stores Meta's returned APPROVED status.

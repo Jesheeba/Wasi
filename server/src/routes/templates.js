@@ -249,6 +249,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
   }
 
   let metaTemplateId = null;
+  let metaStatus = null; // Meta's review status in its create response (often APPROVED at once)
   let metaCategory = null; // Meta's category in its create response - may differ from the submitted one
   let seededMedia = null; // { mediaId, filename } - set once the standard Media API upload succeeds
   let seededCardMedia = null; // [{ mediaId, filename }, ...] - one per card, same order as data.cards
@@ -356,6 +357,9 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
       const metaResponse = await metaClient.createMessageTemplate(waba.waba_id, accessToken, data);
       metaTemplateId = metaResponse.id;
       metaCategory = metaResponse.category ? templateSyncService.mapMetaCategory(metaResponse.category) : null;
+      // Meta often approves a Utility template instantly; keep its answer
+      // instead of always storing pending until the next webhook or sync.
+      metaStatus = metaResponse.status ? templateSyncService.mapMetaStatus(metaResponse.status) : null;
     } catch (err) {
       if (err instanceof metaClient.TemplateValidationError) {
         return res.status(400).json({ error: 'Invalid template', details: err.errors });
@@ -377,7 +381,7 @@ router.post('/', requireRole('Admin', 'Manager'), uploadTemplateMedia, asyncHand
   let template = await messageTemplatesRepo.create(req.db, {
     client_id: req.clientId,
     ...data,
-    status: 'pending',
+    status: metaStatus || 'pending',
     meta_template_id: metaTemplateId,
   });
   if (metaCategory && metaCategory !== template.category) {

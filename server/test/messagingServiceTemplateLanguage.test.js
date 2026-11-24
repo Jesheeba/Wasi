@@ -70,7 +70,7 @@ function setUpCommonStubs() {
 test('sendChatMessage: the template\'s REAL local language wins over a stale/wrong caller-supplied templateLanguage', async () => {
   setUpCommonStubs();
   messageTemplatesRepo.findByNameAndClient = async () => ({
-    category: 'Utility', header_type: 'NONE', language: 'ta',
+    category: 'Utility', header_type: 'NONE', language: 'ta', status: 'approved',
   });
   let capturedArgs = null;
   metaClient.sendTemplateMessage = async (phoneNumberId, accessToken, toPhone, args) => {

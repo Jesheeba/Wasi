@@ -52,6 +52,52 @@ async function canSendFreeform(db, clientId, chatId) {
 // future) the way a UI-only check could be. Utility and authentication
 // templates are exempt; a template whose category can't be determined
 // locally is treated as marketing - fail closed, not open.
+// Template approval (build-docs/features/template-approval-guard.md). Meta
+// only delivers an approved template; a template that is pending, rejected,
+// paused or disabled must be refused here with a clear reason, not handed to
+// Meta. Exception: an approved template that was edited is 'pending' again,
+// but Meta keeps sending the old approved version while it re-reviews, so a
+// row that was approved before (approved_at, migration 110) stays sendable
+// while pending.
+const EDIT_REVIEW_STATUSES = ['pending', 'in_appeal'];
+
+function isTemplateSendable(template) {
+  if (!template) return true; // no local row: nothing to check against (the Hub API already refuses this case)
+  if (template.status === 'approved') return true;
+  return Boolean(template.approved_at) && EDIT_REVIEW_STATUSES.includes(template.status);
+}
+
+const STATUS_WORDING = {
+  pending: 'is still waiting for Meta\'s review',
+  in_appeal: 'is under appeal with Meta',
+  rejected: 'was rejected by Meta',
+  paused: 'is paused by Meta (low quality rating)',
+  disabled: 'is disabled by Meta',
+  pending_deletion: 'is being deleted',
+};
+
+async function assertTemplateSendable(db, template, accessToken) {
+  if (isTemplateSendable(template)) return template;
+  // The local row may be stale (a missed status webhook) - ask Meta once
+  // before refusing. A failed lookup refuses on the local status.
+  if (template.meta_template_id) {
+    try {
+      const metaStatus = String((await metaClient.getTemplateStatus(template.meta_template_id, accessToken)) || '').toLowerCase();
+      if (metaStatus && metaStatus !== template.status) {
+        template = (await messageTemplatesRepo.setStatus(db, template.id, metaStatus)) || { ...template, status: metaStatus };
+        if (isTemplateSendable(template)) return template;
+      }
+    } catch (err) {
+      console.error('[messagingService] template status re-check failed:', err.message);
+    }
+  }
+  const wording = STATUS_WORDING[template.status] || `has status "${template.status}" on Meta`;
+  throw new MessagingError(
+    `Template "${template.name}" ${wording}, so it can't be sent yet. Only approved templates can be sent.`,
+    'template_not_approved'
+  );
+}
+
 // Takes the template row directly, not a name - sendChatMessage now looks
 // it up once (also needed for the media-header resolution below) rather
 // than this function re-fetching it a second time.
@@ -127,6 +173,9 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
 
   const waba = await getSendableWaba(clientId);
   const accessToken = decrypt(waba.access_token_encrypted);
+  // After the WABA lookup because the live re-check needs the token; still
+  // before any message row or Meta send.
+  if (type === 'template') template = await assertTemplateSendable(db, template, accessToken);
   const toPhone = chat.phone;
   const displayBody = type === 'template' ? `[template: ${templateName}]` : type === 'flow' ? `[form: ${flow.name}] ${body}`
     : type === 'product' ? `[products: ${product.summary}] ${body || ''}`.trim() : body;
@@ -448,4 +497,4 @@ async function sendReactionToMessage(db, clientId, chat, messageId, emoji) {
   return chatsRepo.setReaction(db, clientId, target.id, 'agent', emoji);
 }
 
-module.exports = { MessagingError, canSendFreeform, sendChatMessage, retryMessage, sendReactionToMessage, SESSION_WINDOW_MS };
+module.exports = { MessagingError, canSendFreeform, isTemplateSendable, sendChatMessage, retryMessage, sendReactionToMessage, SESSION_WINDOW_MS };

@@ -45,7 +45,7 @@ async function createChat(contact) {
 }
 
 async function createTemplate(category, name = `${SUITE_PREFIX}template_${Date.now()}_${Math.random().toString(36).slice(2)}`) {
-  return fetch(`${baseUrl}/api/templates`, {
+  const template = await fetch(`${baseUrl}/api/templates`, {
     method: 'POST',
     headers: authed(clientToken),
     body: JSON.stringify({
@@ -55,6 +55,11 @@ async function createTemplate(category, name = `${SUITE_PREFIX}template_${Date.n
       bodyParamExamples: { customer_name: 'Riyaz' },
     }),
   }).then((r) => r.json());
+  // No WABA is connected in this suite, so the template is a local draft that
+  // stays pending. Only approved templates can be sent or broadcast
+  // (template-approval-guard.md), and this suite tests consent, not approval.
+  if (template.id) await pool.query("update message_templates set status = 'approved' where id = $1", [template.id]);
+  return { ...template, status: 'approved' };
 }
 
 async function sendTemplate(chatId, templateName) {

@@ -953,6 +953,14 @@ const LIST_TEMPLATES_FIELDS = 'id,name,status,category,language,components,rejec
 const CATEGORY_CHANGE_FIELDS = ',previous_category,correct_category';
 const MAX_TEMPLATE_PAGES = 50;
 
+// One template's current review status on Meta (APPROVED, PENDING, REJECTED,
+// PAUSED, DISABLED...). Used when a send hits a template whose local status
+// says it isn't approved, in case the local row is stale.
+async function getTemplateStatus(metaTemplateId, accessToken) {
+  const data = await graphFetch(`/${encodeURIComponent(metaTemplateId)}?fields=status`, { accessToken });
+  return data.status || null;
+}
+
 async function listTemplates(wabaId, accessToken) {
   try {
     return await listTemplatesWithFields(wabaId, accessToken, LIST_TEMPLATES_FIELDS + CATEGORY_CHANGE_FIELDS);
@@ -1403,6 +1411,7 @@ module.exports = {
   updateMessageTemplate,
   deleteMessageTemplate,
   listTemplates,
+  getTemplateStatus,
   listTemplateLibraryCatalog,
   createTemplateFromLibrary,
   parseTemplateComponents,

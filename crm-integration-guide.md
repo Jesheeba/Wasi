@@ -92,6 +92,12 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   null/boolean/object/array/empty values, or a code over 15 characters
   (Meta's limit) — is rejected with `auth_code_invalid` (409) and a message
   saying what was wrong; nothing is sent to Meta.
+- **Only approved templates send.** A template that is still pending Meta's
+  review, or rejected, paused or disabled, is refused with
+  `template_not_approved` (409); nothing is sent to Meta. Wasi re-checks the
+  status with Meta once before refusing, in case its copy is stale. An
+  approved template that you edited stays sendable while Meta re-reviews it
+  (Meta keeps sending the old approved version).
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.

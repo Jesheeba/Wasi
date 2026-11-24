@@ -19,10 +19,24 @@ async function findById(db, clientId, id) {
 // Consent enforcement (messagingService.sendChatMessage) looks up a
 // template's category by name to decide whether it's subject to the
 // opt-in gate - a template name is only unique per client, not globally.
+// When a name exists in more than one language, an approved row wins over a
+// newer one still under review, so a pending new-language submission can't
+// shadow the approved template every sender uses.
 async function findByNameAndClient(db, clientId, name) {
   const { rows } = await db.query(
-    'select * from message_templates where client_id = $1 and name = $2 order by created_at desc limit 1',
+    `select * from message_templates where client_id = $1 and name = $2
+     order by (status = 'approved') desc, (approved_at is not null) desc, created_at desc limit 1`,
     [clientId, name]
+  );
+  return rows[0] || null;
+}
+
+// The send-time re-check (messagingService.assertTemplateSendable) found Meta
+// has a different status than the local row - store Meta's.
+async function setStatus(db, id, status) {
+  const { rows } = await db.query(
+    'update message_templates set status = $2, updated_at = now() where id = $1 returning *',
+    [id, status]
   );
   return rows[0] || null;
 }
@@ -291,6 +305,7 @@ module.exports = {
   updateFromMetaSync,
   applyMetaCategory,
   setUpcomingCategory,
+  setStatus,
   markOrphaned,
   updateContent,
   remove,
