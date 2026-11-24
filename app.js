@@ -1055,6 +1055,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (targetView === 'campaigns') {
       renderBroadcasts();
+      renderMessagingLimitCard(document.getElementById('campaign-limit-card'));
       // Same staleness fix as contacts above: refetch on every view open so
       // sends/recipient counts that moved since login show up.
       refreshBroadcasts().then(() => {
@@ -5566,6 +5567,64 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('campaign-audience-segment-section').style.display = isSegment ? '' : 'none';
   }
 
+  // WhatsApp daily sending limit card (Campaigns page + Settings > WhatsApp).
+  // Meta caps how many unique people a number can message first in 24h;
+  // before this the number only appeared inside the New Campaign wizard, so
+  // clients sending through the API/n8n hit the cap blind. Same numbers as
+  // the wizard (/api/broadcasts/tier-status). Hidden on any error, e.g. an
+  // Agent (that route is Admin/Manager only) - never a misleading figure.
+  const QUALITY_LABELS = {
+    GREEN: ['High', 'badge-success'], YELLOW: ['Medium', 'badge-warning'], RED: ['Low', 'badge-danger'],
+  };
+  async function renderMessagingLimitCard(el) {
+    if (!el) return;
+    let s;
+    try {
+      s = await authFetch('/api/broadcasts/tier-status');
+    } catch {
+      el.hidden = true;
+      return;
+    }
+    if (!s.connected) { el.hidden = true; return; }
+
+    const [qLabel, qClass] = QUALITY_LABELS[String(s.qualityRating || '').toUpperCase()] || ['Unknown', 'badge-neutral'];
+    let headline;
+    let meter = '';
+    let tone = '';
+    if (!s.tier) {
+      headline = 'Not checked yet - Wasi reads it from Meta every hour.';
+    } else if (s.unlimited) {
+      headline = 'No daily limit on this number.';
+    } else {
+      const pctUsed = Math.min(100, Math.round((s.usedToday / s.capNumber) * 100));
+      tone = s.remaining <= s.capNumber * 0.1 ? ' is-low' : '';
+      headline = `<strong>~${s.remaining.toLocaleString()}</strong> of ${s.capNumber.toLocaleString()} people left today`;
+      meter = `<div class="messaging-limit-meter" role="meter" aria-label="Daily limit used" aria-valuemin="0" aria-valuemax="${s.capNumber}" aria-valuenow="${s.usedToday}"><span style="width:${pctUsed}%"></span></div>`;
+    }
+
+    el.className = `messaging-limit-card${tone}`;
+    el.innerHTML = `
+      <div class="messaging-limit-head">
+        <div>
+          <div class="messaging-limit-title">Daily sending limit</div>
+          <div class="messaging-limit-value">${headline}</div>
+        </div>
+        <span class="badge ${qClass}" title="Meta's quality rating for this number">Quality: ${esc(qLabel)}</span>
+      </div>
+      ${meter}
+      <p class="messaging-limit-hint">Meta limits how many people this number can message first in any 24 hours. Replies to customers who wrote to you in the last 24 hours don't count. Sends over the limit are rejected by Meta. Wasi's estimate, from messages sent through Wasi.</p>
+      <details class="messaging-limit-raise">
+        <summary>How to raise the limit</summary>
+        <ol>
+          <li>Complete Meta Business Verification (Meta Business Manager &gt; Business Settings &gt; Security Centre).</li>
+          <li>Make sure the display name is approved in WhatsApp Manager.</li>
+          <li>Keep quality High: message only people who opted in, so few block or report you.</li>
+          <li>Keep sending steadily. Meta raises the limit automatically (250 &rarr; 2,000 &rarr; 10,000 &rarr; 100,000 &rarr; unlimited); there is no request button.</li>
+        </ol>
+      </details>`;
+    el.hidden = false;
+  }
+
   // Real-time messaging-tier status (build plan: broadcast preflight
   // warning) - shown once when the modal opens, before any audience is even
   // picked, so a client sees "how much room is left today" up front rather
@@ -6792,7 +6851,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const MEDIA_HEADER_TYPES = ['IMAGE', 'VIDEO', 'DOCUMENT'];
   const MEDIA_HEADER_ACCEPT = { IMAGE: '.jpg,.jpeg,.png', VIDEO: '.mp4', DOCUMENT: '.pdf' };
-  const MEDIA_HEADER_HINT = { IMAGE: 'Max 5MB - JPEG or PNG.', VIDEO: 'Max 16MB - MP4.', DOCUMENT: 'Max 100MB - PDF.' };
+  const MEDIA_HEADER_HINT = { IMAGE: 'Max 5MB - JPEG or PNG. WhatsApp crops tall images in the chat bubble (customers tap to see the whole picture); a landscape image around 1.91:1, e.g. 800x418, shows in full.', VIDEO: 'Max 16MB - MP4.', DOCUMENT: 'Max 100MB - PDF.' };
 
   // Mirrors routes/templates.js's own gate ("Connect WhatsApp first" - a
   // media header has to upload to Meta immediately, both for the
@@ -10474,6 +10533,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="badge badge-success">Active</span>
       `;
       refreshIcons();
+      renderMessagingLimitCard(document.getElementById('settings-limit-card'));
       return;
     }
 

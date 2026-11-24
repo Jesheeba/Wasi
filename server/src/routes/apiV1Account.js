@@ -14,12 +14,27 @@
 // it) has any reason to already know. Exposing it here keeps every tool's
 // schema task-shaped, not plumbing-shaped.
 const { Router } = require('express');
+const { pool } = require('../db/pool');
 const wabasRepo = require('../repositories/wabasRepo');
+const { getMessagingLimitStatus } = require('../services/messagingLimitService');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { requireApiKey } = require('../middleware/requireApiKey');
 
 const router = Router();
 router.use(requireApiKey);
+
+async function messagingLimitForApi(clientId) {
+  const s = await getMessagingLimitStatus(pool, clientId);
+  return {
+    tier: s.tier,
+    unlimited: s.unlimited,
+    limit_per_24h: s.capNumber,
+    used_last_24h: s.usedToday,
+    remaining: s.remaining,
+    checked_at: s.tierCheckedAt,
+    note: 'Estimate from messages sent through Wasi; Meta counts unique people reached outside an open 24-hour customer window. Sends over the limit are rejected by Meta.',
+  };
+}
 
 router.get('/', asyncHandler(async (req, res) => {
   const waba = await wabasRepo.findByClientId(req.clientId);
@@ -41,6 +56,11 @@ router.get('/', asyncHandler(async (req, res) => {
     waba_id: waba.waba_id || null,
     quality_rating: waba.quality_rating || null,
     verified_at: waba.verified_at || null,
+    // Meta's daily limit on unique people reached outside an open 24h
+    // customer window. used_last_24h/remaining are Wasi's estimate from its
+    // own send history (services/messagingLimitService.js), not Meta's live
+    // count; null when the tier is unknown or unlimited.
+    messaging_limit: await messagingLimitForApi(req.clientId),
   });
 }));
 

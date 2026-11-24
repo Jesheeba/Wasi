@@ -1,5 +1,14 @@
 # Changelog
 
+## fix(hub-api-template-media, messaging-limit, template-preview): 2026-11-24
+- Hub API `POST /api/v1/templates` accepts image/video/document headers
+  (multipart `file` + `data`, or `headerMediaUrl`); stores Meta's id,
+  caches the send-time media, rejects duplicate name+language.
+- Daily sending limit card on Campaigns and Settings > WhatsApp;
+  `GET /api/v1/account` returns `messaging_limit`; "used today" no longer
+  counts replies inside an open 24h window or failed sends.
+- Create Template preview shows the whole image instead of a cropped strip.
+
 ## feat(google-login): Continue with Google for signup and login
 New customers can create their account with Google on signup step 1 (business
 name still required) and continue the usual plan and WhatsApp steps; existing

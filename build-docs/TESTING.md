@@ -1,5 +1,19 @@
 # Testing
 
+## hub-api-template-media, messaging-limit-visibility, template-preview-crop (2026-11-24)
+`apiV1TemplateMediaAndMessagingLimit.test.js` (local embedded Postgres, Meta
+faked), 13/13 first run: AC1 multipart image -> handle in Meta payload,
+meta_template_id stored, default media cached; AC2-AC6 missing file / wrong
+type / http URL / file with TEXT header / wrong field -> clear 400s, no Meta
+call; AC7 duplicate name 409; AC8 plain JSON unchanged; AC9 used-today counts
+only first-contact non-failed sends (open-window reply and failed send
+excluded, 30h-old inbound counted); AC10 /api/v1/account messaging_limit;
+AC11 unknown tier claims nothing; AC12 card wiring; AC13 preview CSS.
+Regression: 28 files (apiV1*, broadcast*, template*, carousel, LTO,
+mediaHeaderService, messagingTier, wabasMessagingTier) 246/246.
+Browser (Playwright, local): limit card on Campaigns and Settings, no page
+errors; 1069x1471 poster previews at 173x238, uncropped.
+
 ## google-login
 `server/test/googleLogin.test.js` (API + Playwright on own port 4108 opened as
 http://[::1]; a test RSA key stands in for Google's signing key, so the real

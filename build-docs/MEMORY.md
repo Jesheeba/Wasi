@@ -1,5 +1,15 @@
 # Project memory
 
+## 2026-11-24 - client event-template follow-ups (owner: "fix them all")
+- Three fixes in one commit (they share app.js/index.css/docs/one test file):
+  Hub API media templates, limit visibility, preview crop.
+- Hub API media: both multipart and `headerMediaUrl`; carousel via API
+  still out of scope.
+- Limit "used" estimate changed to Meta's rule (exclude open-window replies
+  and failed sends); still Wasi-only sends.
+- API key audit: the key in local server/.env matches no api_keys row at all
+  (not a revoked key). That client's working key is a separate, active one.
+
 ## 2026-11-23 - WooCommerce first
 - Owner: "Add woocommerce for now - build". The Ecommerce page is
   WooCommerce order messages. Shopify, abandoned carts and catalog product
