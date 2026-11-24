@@ -206,7 +206,7 @@ means Meta could not reach or decrypt the endpoint.
 Status: PENDING
 
 ## 14. Forms: contact fields, send anytime, CSV, bookings
-Deploy first (migration 104).
+Deploy first (migration 105).
 1. Settings > Attributes: add a text field "Course". Forms > your Lead form
    > Contact fields > "Interested in" -> Course > Save.
 2. Send the form to 9092766740 and submit it.
@@ -227,7 +227,7 @@ Status: PENDING
 
 ## 15. Ad spend and cost per lead (your own ad account first)
 Needs the owner setup in build-docs/features/ctwa-ad-metrics.md (steps 1-3)
-and a deploy (migration 105).
+and a deploy (migration 106).
 1. Ad Leads > Connect ad account > sign in with your Facebook account (an
    admin of the Wasi Meta app) > choose your ad account.
    - Expect: back on Ad Leads with "Meta ad account connected".
@@ -240,7 +240,7 @@ and a deploy (migration 105).
 Status: PENDING
 
 ## 16. Onboarding form + "Send form" step in a Bot Flow
-Deploy first (migration 106). Demo account, phone 9092766740 only.
+Deploy first (migration 107). Demo account, phone 9092766740 only.
 1. Forms > New form > "Business onboarding". Name it "Wasi Onboarding". Check
    the preview shows business name, your name, email, industry, plan,
    current WhatsApp tool and website. Click Create draft.

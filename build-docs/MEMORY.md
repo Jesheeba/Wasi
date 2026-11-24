@@ -6,10 +6,9 @@
   not unconditionally free any more. This also affects the AI-agent spec's
   per-reply Meta fee assumption (SPEC decision 27): its owner should
   re-check it.
-- Migration 104 was taken because the `ai-agent` and `google-login`
-  branches both hold 102_messages_reply_and_reactions and 103_ai_agent. If
-  ai-agent merges after 104 is applied in production, its 103 must be
-  renumbered (node-pg-migrate refuses out-of-order migrations).
+- 2026-11-24 merge into master: production had applied up to
+  104_clients_google_sub, so Forms phase 3 / ad accounts / Send form were
+  renumbered to 105 / 106 / 107 (node-pg-migrate refuses out-of-order).
 - Green tick: OBA has no fee documented by Meta. Meta Verified is paid and
   bought only in the WhatsApp Business app; Wasi can only show the steps.
 

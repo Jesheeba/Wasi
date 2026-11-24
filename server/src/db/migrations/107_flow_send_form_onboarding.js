@@ -27,7 +27,7 @@ exports.down = (pgm) => {
   pgm.sql(`do $$ begin
     if exists (select 1 from flow_nodes where type = 'send_form') or exists (select 1 from whatsapp_flows where kind = 'onboarding')
       or exists (select 1 from flow_events where event_type = 'form_submitted') then
-      raise exception 'Cannot roll back 106: send_form steps, onboarding forms or form_submitted events exist';
+      raise exception 'Cannot roll back 107: send_form steps, onboarding forms or form_submitted events exist';
     end if; end $$;`);
   setChecks(pgm, '', '', '');
 };

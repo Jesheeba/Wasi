@@ -20,7 +20,7 @@ to end. It does, but Meta gates who can use it:
     code (the same `redirect_uri`), swaps it for a long-lived (60-day)
     token, lists ad accounts (auto-picks a single one), and redirects to
     `/app?ads=<result>#ctwa`.
-- **Storage:** `ads_connections` (migration 105, RLS). The token is stored
+- **Storage:** `ads_connections` (migration 106, RLS). The token is stored
   encrypted and never returned.
 - **Account:** `GET /api/ads/accounts` and `PUT /api/ads/account` (only
   accounts Meta shared). Disconnect is `DELETE /api/ads`.

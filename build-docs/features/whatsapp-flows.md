@@ -64,7 +64,7 @@ Wasi's own Flows endpoint so customers only see free times.
 
 ## Phase 3 (built 2026-11-23, live check pending)
 - **Contact fields:** per form, each answer can be saved to a contact
-  attribute (`whatsapp_flows.attribute_map`, migration 104).
+  attribute (`whatsapp_flows.attribute_map`, migration 105).
   - Choice answers are saved as their text.
   - An answer that doesn't fit the field's type is skipped (same rule as
     the flow engine's Capture Reply).
@@ -236,7 +236,7 @@ rules, Bot Flows) could not send one. Separately, the owner needed a form to
 collect onboarding details for Wasi itself.
 
 **Architecture.**
-- New flow node type `send_form` (migration 106 widens `flow_nodes.type`, adds
+- New flow node type `send_form` (migration 107 widens `flow_nodes.type`, adds
   `flow_events.event_type = 'form_submitted'`). Config: `form_id`, `body`,
   `cta`, optional `timeout_minutes`.
 - Sending goes through `services/formSender.js`, now shared with the chat's

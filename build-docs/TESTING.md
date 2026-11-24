@@ -448,6 +448,6 @@ are in the impact map above:
 - Regression: flowEngine*, flowValidation, aiAgentEnqueue (now lists
   `flow_form_submitted` as silent), whatsappFlows, whatsappFlowsPhase3,
   flowLiveBooking, productMessages, automationRuleViewEdit, whatsappFlowsUI:
-  134 + 5 pass, local embedded Postgres with migration 106 applied.
+  134 + 5 pass, local embedded Postgres with migration 107 applied.
 - No failures found during the build.
 - Live check pending: MANUAL_TESTS.md #16.

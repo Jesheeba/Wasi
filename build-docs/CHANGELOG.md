@@ -5,7 +5,7 @@
   it is submitted, then continues (optional "not submitted in time" branch).
   Same 24 h / "Send anytime" template rules as the chat button (shared code).
 - New form type "Business onboarding" for collecting new-client details.
-- Migration 106.
+- Migration 107.
 
 ## feat(ctwa-ad-metrics): ad spend, clicks and cost per lead on Ad Leads
 - Ad Leads can connect a Meta ad account (Facebook Login for Business,
@@ -15,7 +15,7 @@
 - Works for the owner's own ad account now. Clients need Meta App Review
   for ads_read and the Marketing API Full access tier; owner steps are in
   the feature doc.
-- Migration 105.
+- Migration 106.
 
 ## feat(whatsapp-flows-phase3): contact fields, send anytime, CSV, bookings
 - Forms can save answers to contact fields.
@@ -26,7 +26,7 @@
 - Green tick: numbers on the WhatsApp Business app now get step-by-step
   Meta Verified guidance (paid, bought in the app) instead of a dead end.
 - Fixed: booking dates were shown a day early in India.
-- Migration 104 (102 and 103 are taken by other branches).
+- Migration 105 (renumbered from 104 at merge: master took 104 for Google login).
 
 ## feat(android-no-checkout): no subscription checkout inside the Android app
 Google Play requires Play Billing (15% on subscriptions) for anything sold in
