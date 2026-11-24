@@ -150,6 +150,24 @@ test('16.1 gates: schedule - inside staff hours is silent outside_hours mode; mu
   assert.equal(decide({ chat: { ai_muted: false, ai_cooldown_until: new Date(now.getTime() + 1) } }).gate, 'cooldown');
 });
 
+test('15 handover wording: default is time-aware and never promises a time; an edited message is sent as written', () => {
+  // `now` is Monday 13:30 IST.
+  const base = { handover_message: gates.DEFAULT_HANDOVER, timezone: 'Asia/Kolkata' };
+  const weekday = [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }];
+  const inside = gates.handoverText({ ...base, staff_hours: weekday }, now);
+  assert.match(inside, /as quickly as they can/);
+  const later = gates.handoverText({ ...base, staff_hours: [{ days: [1], start: '15:00', end: '18:00' }] }, now);
+  assert.match(later, /back at 3:00 pm today\./);
+  const tomorrow = gates.handoverText({ ...base, staff_hours: [{ days: [2], start: '09:30', end: '18:00' }] }, now);
+  assert.match(tomorrow, /back at 9:30 am tomorrow\./);
+  const nextWeek = gates.handoverText({ ...base, staff_hours: [{ days: [1], start: '09:00', end: '12:00' }] }, now);
+  assert.match(nextWeek, /back at 9:00 am on Monday\./, 'past today\'s window -> same weekday next week');
+  assert.equal(gates.handoverText({ ...base, staff_hours: null }, now), gates.DEFAULT_HANDOVER, 'no hours -> honest static default');
+  assert.equal(gates.handoverText({ ...base, handover_message: 'Our admissions desk will call you.', staff_hours: weekday }, now),
+    'Our admissions desk will call you.');
+  for (const t of [inside, later, tomorrow, nextWeek]) assert.doesNotMatch(t, /\b(shortly|soon|in a few minutes)\b/i);
+});
+
 test('prompt: rules first, no phone or name, user turn first, refusal anywhere in the reply', () => {
   const p = prompt.buildPrompt({ business_name: 'Acme', knowledge_md: 'Fee: Rs 100', languages: ['english', 'tamil'], tone: 'formal' },
     [{ direction: 'out', body: 'Hello' }, { direction: 'in', body: 'x'.repeat(900) }, { direction: 'out', body: 'ok' }, { direction: 'in', body: 'fees?' }]);

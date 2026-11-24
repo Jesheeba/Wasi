@@ -583,3 +583,7 @@ Four files failed on master. No app code changed; three tests were stale.
   environmental).
 - Run note: set `DATABASE_URL` and `TEST_DATABASE_URL` as separate literals;
   `export A=x B=$A` expands `$A` before it is set.
+
+## ai-handover-wording, 2026-11-24
+- `aiAgent.test.js` "15 handover wording": inside hours, later today, tomorrow,
+  next week, no hours, edited message, no time promise. aiAgent 20/20.
