@@ -268,6 +268,7 @@ test('onboarding: whatsapp connect skips phone registration for coexistence, sti
     registerPhoneNumber: metaClient.registerPhoneNumber,
     getPhoneNumberDetails: metaClient.getPhoneNumberDetails,
     listTemplates: metaClient.listTemplates,
+    listPhoneNumbers: metaClient.listPhoneNumbers,
   };
   const registerCalls = [];
   metaClient.exchangeCodeForToken = async () => 'short-lived-token';
@@ -279,6 +280,14 @@ test('onboarding: whatsapp connect skips phone registration for coexistence, sti
   };
   metaClient.getPhoneNumberDetails = async () => ({ verified_name: 'Test Business', quality_rating: 'GREEN' });
   metaClient.listTemplates = async () => [];
+  // The register decision reads Meta's own is_on_biz_app for the number
+  // (wabaConnectionService); via_coexistence is only the fallback when the
+  // number isn't in its WABA's list. 'fake-waba-biz' reports the number as
+  // on the WhatsApp Business app; the other WABAs list nothing, so the
+  // first two calls exercise the via_coexistence fallback.
+  metaClient.listPhoneNumbers = async (wabaId) => (
+    wabaId === 'fake-waba-biz' ? [{ id: 'fake-phone-biz', is_on_biz_app: true }] : []
+  );
 
   try {
     const coexRes = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
@@ -296,6 +305,14 @@ test('onboarding: whatsapp connect skips phone registration for coexistence, sti
     });
     assert.equal(migRes.status, 200);
     assert.deepEqual(registerCalls, ['fake-phone-mig'], 'plain migration connect (via_coexistence omitted) must still call registerPhoneNumber');
+
+    const bizRes = await fetch(`${baseUrl}/api/onboarding/whatsapp/connect`, {
+      method: 'POST',
+      headers: { ...authed(clientToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'fake', waba_id: 'fake-waba-biz', phone_number_id: 'fake-phone-biz' }),
+    });
+    assert.equal(bizRes.status, 200);
+    assert.deepEqual(registerCalls, ['fake-phone-mig'], 'a number Meta reports as on the Business app must not be registered, even without via_coexistence');
   } finally {
     Object.assign(metaClient, original);
   }

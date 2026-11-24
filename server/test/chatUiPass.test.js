@@ -289,7 +289,15 @@ test('10. contacts CSV import: uploading a real file via the Contacts view creat
     ownerPage.click('#import-contacts-csv-btn'),
   ]);
   await fileChooser.setFiles({ name: 'contacts.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
-  await ownerPage.waitForTimeout(1000);
+  // Picking a file opens the import confirm modal (opt-in is optional and
+  // collapsed); the upload only starts on Import. .modal-overlay toggles
+  // .open, not display, so wait on the class (see CLAUDE.md conventions).
+  await ownerPage.waitForSelector('#modal-import-contacts-csv.open', { timeout: 5000 });
+  await ownerPage.click('#import-csv-confirm-btn');
+  await ownerPage.waitForFunction(
+    () => /Imported/.test(document.getElementById('import-contacts-csv-status')?.textContent || ''),
+    null, { timeout: 10000 },
+  );
 
   const statusText = await ownerPage.textContent('#import-contacts-csv-status');
   assert.match(statusText, /Imported 2 contact/);

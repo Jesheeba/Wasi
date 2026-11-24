@@ -567,3 +567,19 @@ are in the impact map above:
   template rows gained `status: 'approved'`; consentTracking's no-WABA draft
   templates are marked approved in its helper. Broadcast suites needed no
   change once create stores Meta's returned APPROVED status.
+
+## preexisting-test-failures, 2026-11-24
+Four files failed on master. No app code changed; three tests were stale.
+- `api.test.js` onboarding connect: never stubbed `metaClient.listPhoneNumbers`
+  (register decision reads Meta's is_on_biz_app since 2026-09-08), so it hit
+  real Meta -> 502. Stubbed; added a case: number reported on the Business app
+  is not registered even without via_coexistence. 13/13.
+- `embeddedSignupConnectRuntime.test.js` runtime 1: same missing stub in the
+  shared beforeEach. 5/5.
+- `chatUiPass.test.js` test 10: CSV import now opens a confirm modal (opt-in
+  step, 2026-11-23); the test expected an immediate upload. Test now clicks
+  Import. 15/15.
+- `crossTabTenantIsolation.test.js`: 2/2 with no change (earlier failure was
+  environmental).
+- Run note: set `DATABASE_URL` and `TEST_DATABASE_URL` as separate literals;
+  `export A=x B=$A` expands `$A` before it is set.
