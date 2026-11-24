@@ -245,12 +245,17 @@ async function replayFailedConsentWrites() {
       // the write it's being asked to make, only the contact's CURRENT
       // status.
       if (row.event === 'opted_out') {
+        // Compared in SQL, not via JS Dates: those keep milliseconds only, so
+        // a STOP failure and a START in the same millisecond looked equal and
+        // the stale STOP was replayed over the newer opt-in.
         const { rows } = await pool.query(
-          'select opt_in_status, opt_in_at from contacts where client_id = $1 and id = $2',
-          [row.client_id, row.contact_id]
+          `select c.opt_in_status, (c.opt_in_at > f.created_at) as start_is_newer
+             from contacts c join failed_consent_writes f on f.id = $3
+            where c.client_id = $1 and c.id = $2`,
+          [row.client_id, row.contact_id, row.id]
         );
         const contact = rows[0];
-        if (contact && contact.opt_in_status === 'opted_in' && contact.opt_in_at && new Date(contact.opt_in_at) > new Date(row.created_at)) {
+        if (contact && contact.opt_in_status === 'opted_in' && contact.start_is_newer) {
           console.error(`alertRunner.replayFailedConsentWrites: row ${row.id} is a stale STOP from before a newer START - resolving as moot, not applying:`, { contactId: row.contact_id });
           await failedConsentWritesRepo.resolve(row.id);
           continue;
