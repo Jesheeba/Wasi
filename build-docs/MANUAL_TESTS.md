@@ -16,7 +16,7 @@ PASSED only when the owner confirms. Test sends: **demo account only, to
    check the left menu shows Forms, Ad Leads, Ecommerce and Integrations
    without a "Soon" badge, and Instagram with one.
 
-Status: PENDING
+Status: PASSED (2026-11-24) - deployed by the owner; live app.js has the form builder, prod pgmigrations has 105-109 applied. The menu check (step 3) is still the owner's to eyeball.
 
 ## 1. Forms (WhatsApp Flows)
 
