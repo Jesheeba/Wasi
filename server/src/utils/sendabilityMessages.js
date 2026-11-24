@@ -29,6 +29,14 @@ const KNOWN_CODES = {
     action: 'Start business verification in Meta Business Manager to restore sending.',
     actionKey: 'start_verification',
   },
+  // WhatsApp Flows "Blocked by Integrity" (Meta's Flows error-code
+  // reference): Meta has blocked Forms on this account only. Normal messages
+  // and templates still send; only Meta Support can lift it, not Wasi.
+  139000: {
+    headline: 'Meta has blocked WhatsApp Forms on this account.',
+    action: "Normal messages and templates still send. Only Meta can lift this: check the account's quality and any notice in WhatsApp Manager, then open a Meta support case quoting this code.",
+    actionKey: 'contact_meta',
+  },
   200: {
     headline: "Your account doesn't currently have permission to send messages.",
     action: "This needs to be fixed on our side - contact us, this isn't something you can resolve yourself.",

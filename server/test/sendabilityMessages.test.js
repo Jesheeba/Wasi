@@ -120,3 +120,11 @@ test('describeSendability: null/missing waba is not a banner condition either', 
   assert.equal(describeSendability(null), null);
   assert.equal(describeSendability(undefined), null);
 });
+
+test('describeErrorCode: 139000 (Flows "Blocked by Integrity") says only Forms are blocked and Meta must lift it', () => {
+  const info = describeErrorCode(139000);
+  assert.match(info.headline, /Forms/);
+  assert.doesNotMatch(info.headline, /stopping messages/);
+  assert.match(info.action, /Meta support/);
+  assert.equal(info.code, 139000);
+});
