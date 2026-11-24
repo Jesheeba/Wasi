@@ -945,12 +945,36 @@ async function updateMessageTemplate(templateId, accessToken, templateData) {
 // MAX_TEMPLATE_PAGES is a safety backstop against a malformed/looping
 // paging.next, not a real-world cap (50 pages is thousands of templates).
 const LIST_TEMPLATES_FIELDS = 'id,name,status,category,language,components,rejected_reason';
+// previous_category / correct_category (Meta's recategorisation fields,
+// whats-app-business-hsm reference) are documented for current Graph
+// versions but not confirmed on the version this app pins. If Meta rejects
+// them as unknown fields, the list is fetched again without them, so a
+// sync never fails over the extra fields.
+const CATEGORY_CHANGE_FIELDS = ',previous_category,correct_category';
 const MAX_TEMPLATE_PAGES = 50;
 
+// One template's current review status on Meta (APPROVED, PENDING, REJECTED,
+// PAUSED, DISABLED...). Used when a send hits a template whose local status
+// says it isn't approved, in case the local row is stale.
+async function getTemplateStatus(metaTemplateId, accessToken) {
+  const data = await graphFetch(`/${encodeURIComponent(metaTemplateId)}?fields=status`, { accessToken });
+  return data.status || null;
+}
+
 async function listTemplates(wabaId, accessToken) {
+  try {
+    return await listTemplatesWithFields(wabaId, accessToken, LIST_TEMPLATES_FIELDS + CATEGORY_CHANGE_FIELDS);
+  } catch (err) {
+    if (!/previous_category|correct_category/.test(err.message || '')) throw err;
+    console.error('metaClient.listTemplates: Meta rejected the category-change fields, retrying without them:', err.message);
+    return listTemplatesWithFields(wabaId, accessToken, LIST_TEMPLATES_FIELDS);
+  }
+}
+
+async function listTemplatesWithFields(wabaId, accessToken, fields) {
   const all = [];
   let url = new URL(`${GRAPH_BASE}/${wabaId}/message_templates`);
-  url.searchParams.set('fields', LIST_TEMPLATES_FIELDS);
+  url.searchParams.set('fields', fields);
   url.searchParams.set('access_token', accessToken);
 
   for (let page = 0; page < MAX_TEMPLATE_PAGES; page++) {
@@ -1387,6 +1411,7 @@ module.exports = {
   updateMessageTemplate,
   deleteMessageTemplate,
   listTemplates,
+  getTemplateStatus,
   listTemplateLibraryCatalog,
   createTemplateFromLibrary,
   parseTemplateComponents,

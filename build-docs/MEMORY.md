@@ -12,6 +12,14 @@
   renumbered to 105 / 106 / 107 (node-pg-migrate refuses out-of-order).
 - Green tick: OBA has no fee documented by Meta. Meta Verified is paid and
   bought only in the WhatsApp Business app; Wasi can only show the steps.
+## 2026-11-24 - template category changed by Meta
+- Owner: "templates submitted as utility and changed into marketing, the
+  system is not even flagging them - fix that".
+- Flag only; never resubmit or change the template automatically.
+- Not forwarded to Hub/webhook consumers yet (needs a forward_events CHECK
+  migration); Hub API exposes it via the template fields and `warnings`.
+- template_category_update must be subscribed in the App Dashboard (owner).
+
 ## 2026-11-24 - client event-template follow-ups (owner: "fix them all")
 - Three fixes in one commit (they share app.js/index.css/docs/one test file):
   Hub API media templates, limit visibility, preview crop.
@@ -94,3 +102,8 @@ had any code-level effect on sending (it doesn't - `clients.status` gated
 nothing before this feature) and whether the timing was coincidental with
 Meta's own block clearing - not conclusively resolved, not re-investigated
 further since the account was confirmed working.
+
+- 2026-11-24 template-approval-guard: only approved templates send. An edited
+  approved template (status back to pending) stays sendable via `approved_at`
+  (migration 110 trigger) because Meta keeps the old version live. Decided not
+  to block on local status alone: one live Meta re-check before refusing.

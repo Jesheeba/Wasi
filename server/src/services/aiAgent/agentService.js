@@ -133,7 +133,7 @@ async function handleJob(job, { db = getPool(), now = () => new Date() } = {}) {
 
   // Gate 8 - the model said it can't answer from what it was told.
   if (prompt.isRefusal(result.text)) {
-    const sent = live ? await send(db, clientId, chat, agent.handover_message) : null;
+    const sent = live ? await send(db, clientId, chat, gates.handoverText(agent)) : null;
     await flagForHuman(db, clientId, chat.id, 'Question outside what the assistant was told', { cooldown: true });
     await aiAgentRepo.insertReply(db, { ...base, ...usage, outcome: 'refused_out_of_scope', replyText: result.text, outboundMessageId: sent?.id });
     return { outcome: 'refused_out_of_scope' };

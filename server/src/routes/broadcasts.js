@@ -11,6 +11,7 @@ const { compileFilter, UnknownAttributeError, InvalidConditionError, SEGMENT_QUE
 const { describeMessageFailure } = require('../utils/metaMessageErrorMessages');
 const { toCsv } = require('../utils/csvExport');
 const { getMessagingLimitStatus } = require('../services/messagingLimitService');
+const { isTemplateSendable } = require('../services/messagingService');
 
 const router = Router();
 
@@ -47,6 +48,14 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
   // consent-required elsewhere, so param validation is skipped rather than
   // guessed at when there's nothing to check the mapping against.
   const template = await messageTemplatesRepo.findByNameAndClient(req.db, req.clientId, templateName);
+
+  // Only an approved template can go out (build-docs/features/template-approval-guard.md);
+  // otherwise every recipient would fail at Meta.
+  if (template && !isTemplateSendable(template)) {
+    return res.status(400).json({
+      error: `Template "${template.name}" is ${template.status}, not approved by Meta yet. Only approved templates can be broadcast - if Meta has approved it since, click Sync on the Templates page.`,
+    });
+  }
 
   if (template) {
     const required = requiredParamNames(template);

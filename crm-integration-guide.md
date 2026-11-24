@@ -92,6 +92,12 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   null/boolean/object/array/empty values, or a code over 15 characters
   (Meta's limit) — is rejected with `auth_code_invalid` (409) and a message
   saying what was wrong; nothing is sent to Meta.
+- **Only approved templates send.** A template that is still pending Meta's
+  review, or rejected, paused or disabled, is refused with
+  `template_not_approved` (409); nothing is sent to Meta. Wasi re-checks the
+  status with Meta once before refusing, in case its copy is stale. An
+  approved template that you edited stays sendable while Meta re-reviews it
+  (Meta keeps sending the old approved version).
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.
@@ -132,6 +138,16 @@ submission time (Meta reviews the sample). Send it one of two ways:
   ```
 - **Public URL**: plain JSON with `"headerMediaUrl": "https://..."` (a
   public https file; Wasi downloads it).
+
+**Category changed by Meta.** Meta may approve a template in a different
+category from the one you submitted (most often Utility approved as
+Marketing). The create response then has `"category": "Marketing"`,
+`"previous_category": "Utility"` and a `warnings` array explaining it.
+Template objects from `GET /api/v1/templates` also carry
+`previous_category`, `category_changed_at` and, when Meta has announced a
+change that has not happened yet, `upcoming_category` /
+`upcoming_category_at`. Marketing templates are only sent to contacts who
+opted in.
 
 Limits: IMAGE JPEG/PNG up to 5MB, VIDEO MP4 up to 16MB, DOCUMENT PDF up to
 100MB. Error codes: `header_media_required`, `invalid_header_media`,

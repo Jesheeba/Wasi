@@ -87,6 +87,10 @@ beforeEach(async () => {
     subscribeAppToWaba: async () => ({}),
     registerPhoneNumber: async () => ({}),
     getPhoneNumberDetails: async () => ({ verified_name: 'Test Business', display_phone_number: '+1 555 0100', quality_rating: 'GREEN' }),
+    // completeWabaConnection reads the number's is_on_biz_app from Meta to
+    // decide whether to register it; an empty list falls back to
+    // via_coexistence. Without this stub the call reaches real Meta.
+    listPhoneNumbers: async () => [],
   });
 
   page = await browser.newPage();

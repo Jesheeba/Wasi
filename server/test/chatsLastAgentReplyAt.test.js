@@ -124,7 +124,7 @@ function stubSendPipeline() {
     status: 'connected', phone_number_id: 'phone-1', access_token_encrypted: encrypt('fake-token-never-sent'),
   }));
   patch(subscriptionsRepo, 'findByClientId', async () => null); // no plan limit
-  patch(messageTemplatesRepo, 'findByNameAndClient', async () => ({ category: 'Utility', header_type: 'NONE' }));
+  patch(messageTemplatesRepo, 'findByNameAndClient', async () => ({ category: 'Utility', header_type: 'NONE', status: 'approved' }));
   patch(metaClient, 'sendTextMessage', async () => 'wamid.TEXT');
   patch(metaClient, 'sendTemplateMessage', async () => 'wamid.TEMPLATE');
   patch(metaClient, 'sendInteractiveMessage', async () => 'wamid.INTERACTIVE');

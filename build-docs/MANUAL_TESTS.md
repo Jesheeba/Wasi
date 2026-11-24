@@ -299,3 +299,28 @@ Deploy first (migration 108). Demo account, phone 9092766740 only.
    changed, moved or deleted like any other.
 
 Status: PENDING
+
+## 19. Template category changed by Meta (after deploy)
+Deploy first (migration 109).
+1. App Dashboard > WhatsApp > Configuration > Webhook fields: subscribe
+   `template_category_update`.
+2. Demo account > Templates > Sync. Any template Meta moved shows an amber
+   "Meta changed the category from Utility to Marketing" note and
+   "(was Utility)" in its footer. Category filter > "Changed by Meta" lists them.
+3. The client whose templates were moved: Sync once on their account (or
+   ask them to) so the notes appear.
+4. If Meta later recategorises one, the card first says "Meta will change
+   the category to Marketing on <date>", then the changed note.
+
+Status: PENDING
+
+## 20. Unapproved template is refused (after deploy)
+Deploy first (migration 110).
+1. In n8n (or any Hub API client), send a template that is still pending
+   on the Templates page. Expect HTTP 409, code `template_not_approved`,
+   message "... is still waiting for Meta's review". No message appears in
+   the chat.
+2. Send an approved template the same way - it still sends.
+3. Campaigns > New campaign with the pending template - refused at create.
+
+Status: PENDING

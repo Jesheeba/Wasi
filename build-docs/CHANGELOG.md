@@ -1,5 +1,24 @@
 # Changelog
 
+## fix(template-approval-guard): only approved templates can be sent
+- Every template send (Hub API / n8n / Zapier, chat inbox, flows, WooCommerce)
+  is refused with `template_not_approved` unless Meta approved it; broadcasts
+  can't be created with one. Re-checks Meta once first in case the local
+  status is stale. Edited approved templates stay sendable during re-review.
+- Create stores Meta's own status from the create response (was always pending).
+- A pending new-language variant no longer shadows the approved template.
+- Migration 110 (`approved_at` + trigger, backfilled).
+
+## fix(template-category-change): flag templates Meta moved to another category
+- A template submitted as Utility but approved as Marketing (or recategorised
+  later) now shows "Meta changed the category from Utility to Marketing" on its
+  card, "(was Utility)" in the footer, and a "Changed by Meta" filter.
+- Recorded at creation (Meta's create response), on every sync, and from the
+  template_category_update webhook (advance notice shown as "will change").
+- Hub API create returns a `warnings` entry; template rows carry
+  `previous_category`, `category_changed_at`, `upcoming_category`.
+- Migration 109.
+
 ## feat(custom-forms): build forms question by question
 - Forms > New form starts blank: add questions, pick each one's type (short
   or long answer, email, phone, number, date, dropdown, single or multiple

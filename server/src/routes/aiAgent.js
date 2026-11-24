@@ -16,6 +16,7 @@ const { requireRole } = require('../middleware/requireRole');
 const config = require('../services/aiAgent/config');
 const model = require('../services/aiAgent/model');
 const prompt = require('../services/aiAgent/prompt');
+const gates = require('../services/aiAgent/gates');
 const knowledge = require('../services/aiAgent/knowledge');
 const agentService = require('../services/aiAgent/agentService');
 
@@ -245,7 +246,7 @@ router.post('/test', manage, testLimiter, asyncHandler(async (req, res) => {
   try {
     const r = await model.callModel({ apiKey, model: agent.model, system, messages });
     const refused = prompt.isRefusal(r.text);
-    res.json({ reply: refused ? agent.handover_message : r.text, refused, cost_paise: r.costPaise, latency_ms: r.latencyMs, tokens_in: r.tokensIn, tokens_out: r.tokensOut });
+    res.json({ reply: refused ? gates.handoverText(agent) : r.text, refused, cost_paise: r.costPaise, latency_ms: r.latencyMs, tokens_in: r.tokensIn, tokens_out: r.tokensOut });
   } catch (err) {
     res.status(502).json({ error: `The AI provider did not answer (${model.describeError(err)}).` });
   }

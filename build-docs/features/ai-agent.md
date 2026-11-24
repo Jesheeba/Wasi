@@ -71,3 +71,12 @@ it can't. Replaces silence (or a canned "*" greeting) with a real answer.
 7. Client without the agent: no behaviour change (no job enqueued).
 8. Non-allowlisted client/number never gets a sent reply (shadow at most).
 9. BYOK key is encrypted at rest and never returned.
+
+## Time-aware handover wording (2026-11-24, SPEC 15 / decision 16)
+- `gates.handoverText(agent, now)`: if `handover_message` is the column default,
+  inside staff hours -> "...they'll reply as quickly as they can."; outside ->
+  "...back at <time> <today|tomorrow|on Monday>." (next `staff_hours` start, in
+  the agent's timezone); no staff hours -> the static default.
+- An edited message is always sent as written (save-time check still bans
+  "shortly"/"soon").
+- Used for the gate 8 handover and the Try-it panel.

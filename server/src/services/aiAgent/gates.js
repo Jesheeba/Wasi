@@ -16,16 +16,57 @@ const RATE_LIMIT_PER_HOUR = 4; // SPEC 10.4
 
 // staff_hours: [{ days: [1..6] (0 = Sunday), start: 'HH:MM', end: 'HH:MM' }],
 // read in the agent's own timezone. No staff hours = the team is never "in".
-function withinStaffHours(staffHours, timezone, now) {
-  if (!Array.isArray(staffHours) || staffHours.length === 0) return false;
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const toMin = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };
+
+// The weekday (0 = Sunday) and minute-of-day of `now` in `timezone`.
+function localTime(timezone, now) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone || 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
   }).formatToParts(now).map((p) => [p.type, p.value]));
-  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
-  const minutes = (Number(parts.hour) % 24) * 60 + Number(parts.minute);
-  const toMin = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };
+  return { day: DAYS.indexOf(parts.weekday), minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute) };
+}
+
+function withinStaffHours(staffHours, timezone, now) {
+  if (!Array.isArray(staffHours) || staffHours.length === 0) return false;
+  const { day, minutes } = localTime(timezone, now);
   return staffHours.some((w) => Array.isArray(w.days) && w.days.includes(day)
     && minutes >= toMin(w.start) && minutes < toMin(w.end));
+}
+
+// When the team is next in, as words: "9:00 am tomorrow", "10:30 am on Monday".
+// Null when no staff hours are set.
+function nextStaffStart(staffHours, timezone, now) {
+  if (!Array.isArray(staffHours) || staffHours.length === 0) return null;
+  const { day, minutes } = localTime(timezone, now);
+  for (let d = 0; d <= 7; d++) {
+    const dayIdx = (day + d) % 7;
+    const starts = staffHours.filter((w) => Array.isArray(w.days) && w.days.includes(dayIdx))
+      .map((w) => toMin(w.start)).filter((m) => d > 0 || m > minutes);
+    if (!starts.length) continue;
+    const m = Math.min(...starts);
+    const h = Math.floor(m / 60);
+    const time = `${h % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+    const when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : `on ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIdx]}`;
+    return `${time} ${when}`;
+  }
+  return null;
+}
+
+// Must match migration 103's column default. A client who never edited the
+// handover message gets time-aware wording (SPEC section 15); an edited
+// message is always sent exactly as written.
+const DEFAULT_HANDOVER = "I've passed this on to our team. They'll reply when they're next in.";
+
+function handoverText(agent, now = new Date()) {
+  if (agent.handover_message !== DEFAULT_HANDOVER) return agent.handover_message;
+  if (withinStaffHours(agent.staff_hours, agent.timezone, now)) {
+    return "Let me get someone from our team to help - they'll reply as quickly as they can.";
+  }
+  const next = nextStaffStart(agent.staff_hours, agent.timezone, now);
+  return next
+    ? `Our team isn't online right now. I've passed your question on, and they'll reply when they're back at ${next}.`
+    : DEFAULT_HANDOVER;
 }
 
 const off = (reason) => ({ pass: false, gate: 'agent_off', log: false, detail: { reason }, handover: null });
@@ -66,4 +107,4 @@ function decide({ agent, client, chat, contactPhone, hasKey, recentRepliesInChat
   return { pass: true };
 }
 
-module.exports = { decide, withinStaffHours, RATE_LIMIT_PER_HOUR };
+module.exports = { decide, withinStaffHours, nextStaffStart, handoverText, DEFAULT_HANDOVER, RATE_LIMIT_PER_HOUR };

@@ -917,6 +917,21 @@ body {
   margin-top: 0.5rem;
 }
 
+/* Meta changed (or will change) the template's category - migration 109 */
+.template-category-change {
+  display: flex;
+  gap: 0.375rem;
+  align-items: flex-start;
+  font-size: 0.8rem;
+  color: #92400E;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+  margin-top: 0.5rem;
+}
+.template-category-change svg { flex-shrink: 0; margin-top: 2px; }
+
 /* Template Library (wasi-master-plan.md §2) - cards | preview, two columns
    on desktop. Collapses to one column at the project's existing tablet
    breakpoint (900px, see breakpoints.css) rather than inventing a new one,
