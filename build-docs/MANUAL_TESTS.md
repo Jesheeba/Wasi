@@ -263,6 +263,9 @@ Deploy first (migration 107). Demo account, phone 9092766740 only.
      answers, then the phone gets "Thanks! Our team will call you within a
      day."
    - Forms > Responses for Wasi Onboarding shows 1.
+
+Status: PENDING
+
 ## 17. Hub API image template + sending limit (after deploy)
 
 1. Demo account > Settings > Developer: create a key. Run:
