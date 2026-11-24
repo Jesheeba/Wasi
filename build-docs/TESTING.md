@@ -529,3 +529,20 @@ are in the impact map above:
   134 + 5 pass, local embedded Postgres with migration 107 applied.
 - No failures found during the build.
 - Live check pending: MANUAL_TESTS.md #16.
+
+## merge master + custom-forms, 2026-11-24
+- Full suite on the merged branch (local embedded Postgres): 1050/1055 pass.
+  The 4 failures also fail on a clean origin/master checkout, so they are
+  pre-existing: api.test.js coexistence onboarding and
+  embeddedSignupConnectRuntime runtime 1 (already in CLAUDE.md), chatUiPass
+  #10 contacts CSV import (expects the old upload-on-pick flow; the opt-in
+  modal now opens first), errorDialogUI details-array dialog (timeout).
+- First run failed 113 files: master added @anthropic-ai/sdk, not installed
+  locally. npm install fixed it (environment, not code).
+- custom-forms: customForms.test.js (6, AC1-AC6) and whatsappFlowsUI builder
+  test (AC7) pass. whatsappFlowsUI booking test updated to the builder's
+  selectors (the old fixed-field editor no longer exists).
+- Regression: whatsapp*, flow*, metaWebhook*, webhookForwarding,
+  productMessages, coexistenceEchoIngestion, aiAgentEnqueue, comingSoonPages,
+  settingsRedesign: 194/194. Screenshots at 1440 and 390 px: no overflow, no
+  page errors.

@@ -277,3 +277,25 @@ Deploy first (migration 107). Demo account, phone 9092766740 only.
 5. Delete `api_image_test` afterwards.
 
 Status: PENDING
+
+## 18. Custom form builder
+Deploy first (migration 108). Demo account, phone 9092766740 only.
+1. Forms > New form. Expect "Blank form" selected, one question, and the
+   preview on the right.
+2. Name it "Wasi Custom". Change question 1 to "Student name". Add question
+   > type "Multiple choice" > "Courses" > choices NEET, JEE, TNPSC. Add a
+   "Phone number" question and a "Long answer" question (untick Required).
+   Move "Courses" to the top with the up arrow. Delete one question.
+   - Expect: the preview follows every change.
+3. Create draft. Expect a Draft row and no "WhatsApp reported" line. If there
+   is one, send me the text.
+4. From 9092766740 send "hi", then in the chat: More actions > Send form >
+   "Wasi Custom" > Send. Fill it in on the phone (tick two courses) and
+   submit.
+   - Expect: "Form submitted: Wasi Custom" in the chat, with the two courses
+     as words (e.g. "NEET, JEE"), not codes. If you see codes like opt_1,
+     tell me: Meta's format for multiple choice isn't documented.
+5. Forms > New form > "Lead form": the lead questions appear and can be
+   changed, moved or deleted like any other.
+
+Status: PENDING

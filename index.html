@@ -2479,14 +2479,15 @@
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="wa-form-drawer-title">New form</h3>
-          <p class="modal-subtitle">Change the wording and choices. The form layout is fixed per type.</p>
+          <p class="modal-subtitle">Start blank or from a template, then add, reorder or remove questions.</p>
         </div>
         <button class="close-modal-btn" data-close-modal="modal-wa-form"><i data-lucide="x"></i></button>
       </div>
       <form id="wa-form-form" novalidate>
-        <div class="drawer-content">
+        <div class="drawer-content wa-form-builder">
+          <div class="wa-form-editor">
           <div class="drawer-section" id="wa-form-kind-section">
-            <div class="drawer-section-title">Type</div>
+            <div class="drawer-section-title">Start from</div>
             <div class="option-cards" id="wa-form-kinds" role="radiogroup" aria-label="Form type"></div>
           </div>
           <div class="drawer-section">
@@ -2504,11 +2505,12 @@
               <input type="text" id="wa-form-submit" class="form-input" maxlength="35" />
             </div>
           </div>
-          <div class="drawer-section">
+          <div class="alert alert-danger" id="wa-form-errors" role="alert" hidden></div>
+          </div>
+          <aside class="wa-form-preview-pane" aria-label="Preview">
             <div class="drawer-section-title">Preview</div>
             <div class="wa-form-preview" id="wa-form-preview" aria-hidden="true"></div>
-          </div>
-          <div class="alert alert-danger" id="wa-form-errors" role="alert" hidden></div>
+          </aside>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" data-close-modal="modal-wa-form">Cancel</button>

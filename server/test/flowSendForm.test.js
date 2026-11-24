@@ -60,8 +60,9 @@ test('AC1 onboarding form: valid against Meta limits, SIGN_UP, offered as a form
   assert.equal(json.screens[0].id, 'ONBOARDING');
   const names = json.screens[0].layout.children.map((c) => c.name).filter(Boolean);
   for (const f of ['business', 'name', 'email', 'industry', 'plan', 'provider', 'website']) assert.ok(names.includes(f), f);
-  assert.ok(config.fields.plan.options.includes('Growth (₹2,999/month)'));
-  assert.equal(config.fields.website.required, false);
+  const field = (k) => config.fields.find((f) => f.key === k);
+  assert.ok(field('plan').options.includes('Growth (₹2,999/month)'));
+  assert.equal(field('website').required, false);
 });
 
 test('AC9 edges: a Send form step takes always (submitted) and timeout only', () => {

@@ -2,7 +2,8 @@
 
 ## 2026-11-23 - pricing correction, migration numbers
 - Meta charges service (non-template) messages from 2026-10-01, at utility
-  rates, with 1,000 free per business number per month. In-window Forms are
+  rates, with 1,000 free per business number per month (from secondary
+  sources, not confirmed by Meta: the owner is asking Meta, SPEC decision 27). In-window Forms are
   not unconditionally free any more. This also affects the AI-agent spec's
   per-reply Meta fee assumption (SPEC decision 27): its owner should
   re-check it.
@@ -41,7 +42,10 @@ CTWA Ads, Integrations, Ecommerce, WhatsApp Flows, Instagram (PLAN.md).
 - Ecommerce = catalog/product messages only; abandoned-cart recovery
   (needs a Shopify app) stays "Coming soon".
 - WhatsApp Flows = fixed authored set (lead, booking, survey) with
-  editable labels, not a visual designer.
+  editable labels, not a visual designer. SUPERSEDED 2026-11-24 (owner:
+  "the form UI is a bit complicated, dont we create a custom form?"): forms
+  are built question by question; templates only prefill. Still a single
+  screen and no free-form designer (custom-forms.md).
 - Every page shows in the nav with a "Coming soon" badge until it ships;
   no fake data on any of them.
 - CTWA shows leads per ad only: no clicks/spend/CPL (no Marketing API).

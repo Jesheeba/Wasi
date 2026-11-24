@@ -3550,3 +3550,27 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
 .messaging-limit-raise { margin-top: var(--sp-2, 8px); font-size: var(--fs-caption, 0.78rem); color: var(--text-muted); }
 .messaging-limit-raise summary { cursor: pointer; color: var(--text); font-weight: 500; }
 .messaging-limit-raise ol { margin: var(--sp-2, 8px) 0 0; padding-left: 1.2rem; }
+
+/* Custom form builder (build-docs/features/custom-forms.md): editor beside a
+   sticky preview, stacked on narrow screens. */
+#modal-wa-form .modal-box { max-width: 980px; width: 100%; }
+.wa-form-builder { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--sp-5, 20px); align-items: start; }
+.wa-form-editor { min-width: 0; }
+.wa-form-preview-pane { position: sticky; top: 0; }
+.wa-q-list { display: flex; flex-direction: column; gap: var(--sp-3, 12px); margin-bottom: var(--sp-3, 12px); }
+.wa-q { border: 1px solid var(--border-light); border-radius: 10px; padding: 12px; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.wa-q-head { display: flex; align-items: center; gap: 8px; }
+.wa-q-num { width: 24px; height: 24px; border-radius: 50%; background: var(--neutral-bg, #F1F5F9); display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0; }
+.wa-q-type { flex: 1 1 auto; min-width: 0; }
+.wa-q-tools { display: flex; gap: 2px; flex-shrink: 0; }
+.wa-q-tools button { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.wa-q-tools button svg { width: 16px; height: 16px; }
+.wa-q-tools button:disabled { opacity: 0.35; cursor: default; }
+.wa-q textarea.wa-q-options { min-height: 80px; }
+.wa-q .form-label, .wa-q .form-hint { margin: 0; }
+.wa-form-preview-choices { display: flex; flex-direction: column; gap: 2px; color: var(--text); }
+.wa-form-preview-input.is-long { min-height: 56px; }
+@media (max-width: 900px) {
+  .wa-form-builder { grid-template-columns: 1fr; }
+  .wa-form-preview-pane { position: static; }
+}

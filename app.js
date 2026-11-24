@@ -9177,12 +9177,17 @@ document.addEventListener('DOMContentLoaded', () => {
     blocked: { cls: 'badge-danger', text: 'Blocked' },
     throttled: { cls: 'badge-warning', text: 'Throttled' },
   };
-  const WA_KIND_ICON = { lead: 'user-plus', booking: 'calendar', survey: 'star', booking_live: 'calendar-clock', onboarding: 'briefcase' };
-  const waFormState = { forms: [], kinds: [], editing: null, kind: 'lead' };
+  const WA_KIND_ICON = { custom: 'file-plus', lead: 'user-plus', booking: 'calendar', survey: 'star', booking_live: 'calendar-clock', onboarding: 'briefcase' };
+  const waFormState = { forms: [], kinds: [], types: {}, maxFields: 20, fields: [], editing: null, kind: 'custom' };
   const canManageForms = () => state.actorRole !== 'Agent';
 
   async function loadWaFormKinds() {
-    if (!waFormState.kinds.length) waFormState.kinds = await authFetch('/api/whatsapp-flows/kinds');
+    if (!waFormState.kinds.length) {
+      const [kinds, qt] = await Promise.all([authFetch('/api/whatsapp-flows/kinds'), authFetch('/api/whatsapp-flows/question-types')]);
+      waFormState.types = qt.types;
+      waFormState.maxFields = qt.maxFields;
+      waFormState.kinds = kinds;
+    }
     return waFormState.kinds;
   }
 
@@ -9218,7 +9223,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const manage = canManageForms();
       tbody.innerHTML = waFormState.forms.length
         ? waFormState.forms.map((fm) => waFormRow(fm, manage)).join('')
-        : analyticsEmptyRow(5, 'No forms yet', manage ? 'Create a lead, booking or feedback form, then send it from any open chat.' : 'Ask an admin to create a form.');
+        : analyticsEmptyRow(5, 'No forms yet', manage ? 'Build your own form or start from a template, then send it from a chat or a Bot Flow.' : 'Ask an admin to create a form.');
     } catch (err) {
       tbody.innerHTML = analyticsErrorRow(5, err.message || 'Could not load forms.', 'wa-forms-retry');
       document.getElementById('wa-forms-retry')?.addEventListener('click', renderWaForms);
@@ -9269,20 +9274,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function waFormCurrentConfig() {
     if (waFormState.kind === 'booking_live') return readLiveConfig();
-    const fields = {};
-    document.querySelectorAll('#wa-form-fields [data-wa-field]').forEach((box) => {
-      const field = {
-        label: box.querySelector('[data-wa-field-label]').value,
-        required: box.querySelector('[data-wa-field-required]').checked,
-      };
-      const opts = box.querySelector('[data-wa-field-options]');
-      if (opts) field.options = opts.value.split('\n').map((o) => o.trim()).filter(Boolean);
-      fields[box.dataset.waField] = field;
-    });
     return {
       title: document.getElementById('wa-form-title').value,
       submitLabel: document.getElementById('wa-form-submit').value,
-      fields,
+      fields: waFormState.fields.map((f) => ({
+        ...(f.key ? { key: f.key } : {}), type: f.type, label: f.label, required: f.required,
+        ...(waQuestionType(f.type).maxOptions ? { options: f.options || [] } : {}),
+      })),
     };
   }
 
@@ -9300,45 +9298,129 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="wa-form-preview-btn">${esc(cfg.submitLabel)}</div>`;
       return;
     }
-    const defs = waKindDef()?.defaults.fields || {};
-    const rows = Object.entries(cfg.fields).map(([key, fdef]) => {
-      const type = defs[key]?.type;
-      const hint = type === 'choice' ? `${fdef.options?.[0] || 'Choose'} ▾` : type === 'date' ? 'Pick a date' : '';
-      return `<div class="wa-form-preview-field"><span>${esc(fdef.label)}${fdef.required ? '' : ' (optional)'}</span><span class="wa-form-preview-input">${esc(hint)}</span></div>`;
+    const rows = cfg.fields.map((f) => {
+      const opts = f.options || [];
+      let input;
+      if (f.type === 'radio' || f.type === 'checkbox') {
+        const mark = f.type === 'radio' ? '○' : '☐';
+        input = `<span class="wa-form-preview-choices">${opts.slice(0, 4).map((o) => `<span>${mark} ${esc(o)}</span>`).join('')}${opts.length > 4 ? `<span>+${opts.length - 4} more</span>` : ''}</span>`;
+      } else {
+        const hint = f.type === 'choice' ? `${opts[0] || 'Choose'} ▾` : f.type === 'date' ? 'Pick a date' : '';
+        input = `<span class="wa-form-preview-input${f.type === 'long_text' ? ' is-long' : ''}">${esc(hint)}</span>`;
+      }
+      return `<div class="wa-form-preview-field"><span>${esc(f.label || 'Untitled question')}${f.required ? '' : ' (optional)'}</span>${input}</div>`;
     }).join('');
     document.getElementById('wa-form-preview').innerHTML =
       `<div class="wa-form-preview-title">${esc(cfg.title)}</div>${rows}<div class="wa-form-preview-btn">${esc(cfg.submitLabel)}</div>`;
   }
 
-  function renderWaFormFields(config) {
-    if (waFormState.kind === 'booking_live') { renderLiveFields(config); return; }
-    const kindDef = waKindDef();
-    const cfg = config || kindDef.defaults;
-    document.getElementById('wa-form-title').value = cfg.title;
-    document.getElementById('wa-form-submit').value = cfg.submitLabel;
-    document.getElementById('wa-form-fields').innerHTML = Object.entries(kindDef.defaults.fields).map(([key, base]) => {
-      const fdef = cfg.fields?.[key] || base;
-      const id = `wa-field-${key}`;
-      const kindLabel = base.type === 'choice' ? 'Choice question' : base.type === 'date' ? 'Date question' : 'Text question';
-      const options = base.type === 'choice'
-        ? `<div class="form-group"><label class="form-label" for="${id}-opts">Choices, one per line (up to 30 characters each)</label><textarea id="${id}-opts" class="form-input" rows="3" data-wa-field-options>${esc((fdef.options || base.options).join('\n'))}</textarea></div>`
-        : '';
-      return `<fieldset class="wa-form-field" data-wa-field="${key}">
-        <div class="form-group">
-          <label class="form-label" for="${id}">${kindLabel}</label>
-          <input type="text" id="${id}" class="form-input" maxlength="${base.type === 'date' ? 40 : 20}" value="${esc(fdef.label)}" data-wa-field-label />
-        </div>
-        ${options}
-        <label class="wa-form-required"><input type="checkbox" data-wa-field-required ${fdef.required ? 'checked' : ''} /> Required</label>
-      </fieldset>`;
-    }).join('');
+  // Question builder (build-docs/features/custom-forms.md). Question types
+  // and Meta's limits come from the server (GET .../question-types).
+  const waQuestionType = (type) => waFormState.types[type] || { label: type, maxLabel: 20 };
+
+  // A form's questions as an ordered list. Reads the list the builder saves
+  // and the older per-key object (forms made before the builder).
+  function waFieldsFromConfig(cfg, kind = waFormState.kind) {
+    const defs = waFormState.kinds.find((k) => k.kind === kind)?.defaults.fields || {};
+    const src = cfg?.fields || defs;
+    if (Array.isArray(src)) return src.map((f) => ({ ...f, options: f.options ? [...f.options] : undefined }));
+    const keys = [...new Set([...Object.keys(defs), ...Object.keys(src)])];
+    return keys.map((key) => {
+      const f = { ...defs[key], ...src[key] };
+      return { key, type: f.type || 'text', label: f.label || '', required: f.required !== false, options: f.options ? [...f.options] : undefined };
+    });
+  }
+
+  function renderWaQuestions() {
+    const list = waFormState.fields;
+    const full = list.length >= waFormState.maxFields;
+    const typeOptions = (sel) => Object.entries(waFormState.types).map(([t, d]) => `<option value="${t}" ${t === sel ? 'selected' : ''}>${esc(d.label)}</option>`).join('');
+    document.getElementById('wa-form-fields').innerHTML = `
+      <div class="wa-q-list">${list.map((f, i) => {
+        const t = waQuestionType(f.type);
+        const n = i + 1;
+        const options = t.maxOptions ? `
+          <label class="form-label" for="wa-q-${i}-opts">Choices, one per line</label>
+          <textarea id="wa-q-${i}-opts" class="form-input wa-q-options" rows="3" data-q="options">${esc((f.options || []).join('\n'))}</textarea>
+          <p class="form-hint">Up to ${t.maxOptions} choices, 30 characters each.</p>` : '';
+        return `<fieldset class="wa-q" data-q-index="${i}">
+          <legend class="sr-only">Question ${n}</legend>
+          <div class="wa-q-head">
+            <span class="wa-q-num" aria-hidden="true">${n}</span>
+            <select class="form-input wa-q-type" data-q="type" aria-label="Question ${n} type">${typeOptions(f.type)}</select>
+            <span class="wa-q-tools">
+              <button type="button" class="btn-ghost" data-q-move="-1" aria-label="Move question ${n} up" title="Move up" ${i === 0 ? 'disabled' : ''}><i data-lucide="arrow-up"></i></button>
+              <button type="button" class="btn-ghost" data-q-move="1" aria-label="Move question ${n} down" title="Move down" ${i === list.length - 1 ? 'disabled' : ''}><i data-lucide="arrow-down"></i></button>
+              <button type="button" class="btn-ghost" data-q-delete aria-label="Delete question ${n}" title="Delete" ${list.length === 1 ? 'disabled' : ''}><i data-lucide="trash-2"></i></button>
+            </span>
+          </div>
+          <input type="text" class="form-input" data-q="label" maxlength="${t.maxLabel}" value="${esc(f.label)}" placeholder="Type the question" aria-label="Question ${n} text" />
+          ${options}
+          <label class="wa-form-required"><input type="checkbox" data-q="required" ${f.required ? 'checked' : ''} /> Required</label>
+        </fieldset>`;
+      }).join('')}</div>
+      <button type="button" class="btn-secondary btn-sm" id="wa-q-add" ${full ? 'disabled' : ''}><i data-lucide="plus" class="icon-14"></i> Add question</button>
+      ${full ? `<p class="form-hint">A form can have ${waFormState.maxFields} questions at most.</p>` : ''}`;
+    refreshIcons();
     renderWaFormPreview();
   }
+
+  function renderWaFormFields(config) {
+    if (waFormState.kind === 'booking_live') { renderLiveFields(config); return; }
+    const cfg = config || waKindDef().defaults;
+    document.getElementById('wa-form-title').value = cfg.title;
+    document.getElementById('wa-form-submit').value = cfg.submitLabel;
+    waFormState.fields = waFieldsFromConfig(cfg);
+    renderWaQuestions();
+  }
+
+  // A question edit updates state here; the form's own input listener then
+  // redraws the preview. Type changes, moves and deletes re-render the list.
+  const waFormFieldsBox = document.getElementById('wa-form-fields');
+  waFormFieldsBox?.addEventListener('input', (e) => {
+    const box = e.target.closest('[data-q-index]');
+    const prop = e.target.dataset.q;
+    if (!box || !prop || prop === 'type') return;
+    const f = waFormState.fields[Number(box.dataset.qIndex)];
+    if (prop === 'label') f.label = e.target.value;
+    else if (prop === 'options') f.options = e.target.value.split('\n').map((o) => o.trim()).filter(Boolean);
+    else if (prop === 'required') f.required = e.target.checked;
+  });
+  waFormFieldsBox?.addEventListener('change', (e) => {
+    const box = e.target.closest('[data-q-index]');
+    if (!box || e.target.dataset.q !== 'type') return;
+    const f = waFormState.fields[Number(box.dataset.qIndex)];
+    f.type = e.target.value;
+    if (waQuestionType(f.type).maxOptions && !f.options?.length) f.options = ['Option 1', 'Option 2'];
+    renderWaQuestions();
+  });
+  waFormFieldsBox?.addEventListener('click', (e) => {
+    if (e.target.closest('#wa-q-add')) {
+      waFormState.fields.push({ type: 'text', label: '', required: true });
+      renderWaQuestions();
+      waFormFieldsBox.querySelector(`[data-q-index="${waFormState.fields.length - 1}"] [data-q="label"]`)?.focus();
+      return;
+    }
+    const box = e.target.closest('[data-q-index]');
+    if (!box) return;
+    const i = Number(box.dataset.qIndex);
+    const move = e.target.closest('[data-q-move]');
+    if (move) {
+      const j = i + Number(move.dataset.qMove);
+      if (j < 0 || j >= waFormState.fields.length) return;
+      [waFormState.fields[i], waFormState.fields[j]] = [waFormState.fields[j], waFormState.fields[i]];
+      renderWaQuestions();
+      waFormFieldsBox.querySelector(`[data-q-index="${j}"] [data-q="label"]`)?.focus();
+    } else if (e.target.closest('[data-q-delete]') && waFormState.fields.length > 1) {
+      waFormState.fields.splice(i, 1);
+      renderWaQuestions();
+    }
+  });
 
   async function openWaFormDrawer(form) {
     try { await loadWaFormKinds(); } catch (err) { reportError(err); return; }
     waFormState.editing = form || null;
-    waFormState.kind = form?.kind || 'lead';
+    waFormState.kind = form?.kind || 'custom';
     document.getElementById('wa-form-drawer-title').textContent = form ? 'Edit draft form' : 'New form';
     document.getElementById('wa-form-save').textContent = form ? 'Save draft' : 'Create draft';
     document.getElementById('wa-form-name').value = form?.name || '';
@@ -9404,13 +9486,12 @@ document.addEventListener('DOMContentLoaded', () => {
       attrs = await authFetch('/api/contact-attributes');
       await loadWaFormKinds();
     } catch (err) { box.innerHTML = `<p class="settings-muted">${esc(err.message)}</p>`; return; }
-    const fields = waFormState.kinds.find((k) => k.kind === form.kind)?.defaults.fields || {};
+    const fields = waFieldsFromConfig(form.config, form.kind);
     if (!attrs.length) {
       box.innerHTML = '<p class="settings-muted">You have no contact fields yet. Add them under Settings > Attributes first.</p>';
       return;
     }
-    box.innerHTML = Object.entries(fields).map(([key, f]) => {
-      const label = form.config?.fields?.[key]?.label || f.label;
+    box.innerHTML = fields.map(({ key, label }) => {
       const current = form.attribute_map?.[key] || '';
       return `<div class="form-group"><label class="form-label" for="wa-map-${esc(key)}">${esc(label)}</label>
         <select id="wa-map-${esc(key)}" class="form-input" data-map-field="${esc(key)}">

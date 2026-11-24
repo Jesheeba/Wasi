@@ -25,8 +25,42 @@ function chatIdFromToken(token) {
   return m ? m[1] : null;
 }
 
-// type: text | email | date | choice. maxLabel follows Meta's per-component cap.
+// Question types a form can use, with Meta's limits (Flows components
+// reference, checked 2026-11-24): TextInput/TextArea/Dropdown label <= 20,
+// DatePicker label <= 40, RadioButtonsGroup/CheckboxGroup label content <= 30
+// and 1-20 options, Dropdown 1-200 options, option title <= 30, 50
+// components per screen (Wasi caps a form at MAX_FIELDS questions).
+// build-docs/features/custom-forms.md.
+const FIELD_TYPES = {
+  text: { label: 'Short answer', component: 'TextInput', inputType: 'text', maxLabel: 20 },
+  long_text: { label: 'Long answer', component: 'TextArea', maxLabel: 20 },
+  email: { label: 'Email', component: 'TextInput', inputType: 'email', maxLabel: 20 },
+  phone: { label: 'Phone number', component: 'TextInput', inputType: 'phone', maxLabel: 20 },
+  number: { label: 'Number', component: 'TextInput', inputType: 'number', maxLabel: 20 },
+  date: { label: 'Date', component: 'DatePicker', maxLabel: 40 },
+  choice: { label: 'Dropdown', component: 'Dropdown', maxLabel: 20, maxOptions: 200 },
+  radio: { label: 'Single choice', component: 'RadioButtonsGroup', maxLabel: 30, maxOptions: 20 },
+  checkbox: { label: 'Multiple choice', component: 'CheckboxGroup', maxLabel: 30, maxOptions: 20 },
+};
+const MAX_FIELDS = 20;
+const KEY_RE = /^[a-z][a-z0-9_]{0,29}$/;
+
+// Templates. Their questions are only a starting point: config.fields is an
+// editable ordered list (see fieldList). booking_live is the exception.
 const KINDS = {
+  custom: {
+    label: 'Blank form',
+    category: 'OTHER',
+    screen: 'FORM',
+    defaults: {
+      title: 'Your details',
+      submitLabel: 'Submit',
+      fields: {
+        name: { type: 'text', label: 'Full name', required: true },
+      },
+    },
+  },
+
   lead: {
     label: 'Lead form',
     category: 'LEAD_GENERATION',
@@ -126,20 +160,45 @@ function normalizeConfig(kind, input = {}) {
   if (config.title.length > LIMITS.title) errors.push(`Form title must be ${LIMITS.title} characters or fewer.`);
   if (config.submitLabel.length > LIMITS.submitLabel) errors.push(`Button text must be ${LIMITS.submitLabel} characters or fewer.`);
 
-  for (const [key, base] of Object.entries(def.defaults.fields)) {
-    const edit = input.fields?.[key] || {};
-    const field = { type: base.type, label: str(edit.label, base.label), required: typeof edit.required === 'boolean' ? edit.required : base.required };
-    if (field.label.length > LIMITS[base.type]) errors.push(`"${field.label}" is too long: labels can be ${LIMITS[base.type]} characters at most.`);
-    if (base.type === 'choice') {
-      const options = Array.isArray(edit.options) ? edit.options.map((o) => String(o).trim()).filter(Boolean) : base.options;
-      if (!options.length) errors.push(`"${field.label}" needs at least one option.`);
-      if (options.length > LIMITS.maxOptions) errors.push(`"${field.label}" can have ${LIMITS.maxOptions} options at most.`);
-      if (new Set(options.map((o) => o.toLowerCase())).size !== options.length) errors.push(`"${field.label}" has duplicate options.`);
+  // The editor sends an ordered list of questions. Older callers send
+  // per-key edits onto the template's questions; both end up as the list.
+  const raw = Array.isArray(input.fields)
+    ? input.fields
+    : Object.entries(def.defaults.fields).map(([key, base]) => {
+      const edit = input.fields?.[key] || {};
+      return { ...base, key, label: edit.label ?? base.label, required: edit.required ?? base.required, options: edit.options ?? base.options };
+    });
+  if (!raw.length) errors.push('Add at least one question.');
+  if (raw.length > MAX_FIELDS) errors.push(`A form can have ${MAX_FIELDS} questions at most.`);
+  // Keep valid, unique keys (stored answers and contact-field mapping use
+  // them); give the rest q1, q2, ...
+  const taken = new Set();
+  const kept = raw.map((f) => {
+    const k = typeof f?.key === 'string' && KEY_RE.test(f.key) && !taken.has(f.key) ? f.key : null;
+    if (k) taken.add(k);
+    return k;
+  });
+  let n = 0;
+  config.fields = raw.slice(0, MAX_FIELDS).map((f, i) => {
+    const t = FIELD_TYPES[f?.type];
+    if (!t) { errors.push(`Question ${i + 1} has an unknown type.`); return null; }
+    let key = kept[i];
+    while (!key) { const c = `q${++n}`; if (!taken.has(c)) { key = c; taken.add(c); } }
+    const label = str(f.label, '');
+    if (!label) errors.push(`Question ${i + 1} needs some text.`);
+    else if (label.length > t.maxLabel) errors.push(`"${label}" is too long: labels can be ${t.maxLabel} characters at most.`);
+    const field = { key, type: f.type, label, required: typeof f.required === 'boolean' ? f.required : true };
+    if (t.maxOptions) {
+      const options = Array.isArray(f.options) ? f.options.map((o) => String(o).trim()).filter(Boolean) : [];
+      const name = label || `Question ${i + 1}`;
+      if (!options.length) errors.push(`"${name}" needs at least one option.`);
+      if (options.length > t.maxOptions) errors.push(`"${name}" can have ${t.maxOptions} options at most.`);
+      if (new Set(options.map((o) => o.toLowerCase())).size !== options.length) errors.push(`"${name}" has duplicate options.`);
       for (const o of options) if (o.length > LIMITS.option) errors.push(`Option "${o}" is too long: ${LIMITS.option} characters at most.`);
       field.options = options;
     }
-    config.fields[key] = field;
-  }
+    return field;
+  }).filter(Boolean);
   return { config, errors };
 }
 
@@ -148,18 +207,13 @@ function buildFlowJson(kind, config) {
   const def = KINDS[kind];
   const children = [];
   const payload = {};
-  for (const [key, f] of Object.entries(config.fields)) {
-    if (f.type === 'choice') {
-      children.push({
-        type: 'Dropdown', name: key, label: f.label, required: f.required,
-        'data-source': f.options.map((title, i) => ({ id: `opt_${i + 1}`, title })),
-      });
-    } else if (f.type === 'date') {
-      children.push({ type: 'DatePicker', name: key, label: f.label, required: f.required });
-    } else {
-      children.push({ type: 'TextInput', name: key, label: f.label, 'input-type': f.type === 'email' ? 'email' : 'text', required: f.required });
-    }
-    payload[key] = `\${form.${key}}`;
+  for (const f of fieldList(config, kind)) {
+    const t = FIELD_TYPES[f.type] || FIELD_TYPES.text;
+    const component = { type: t.component, name: f.key, label: f.label, required: f.required };
+    if (t.inputType) component['input-type'] = t.inputType;
+    if (t.maxOptions) component['data-source'] = (f.options || []).map((title, i) => ({ id: `opt_${i + 1}`, title }));
+    children.push(component);
+    payload[f.key] = `\${form.${f.key}}`;
   }
   children.push({ type: 'Footer', label: config.submitLabel, 'on-click-action': { name: 'complete', payload } });
   return {
@@ -168,28 +222,43 @@ function buildFlowJson(kind, config) {
   };
 }
 
+// A form's questions in order, as [{key, type, label, required, options?}].
+// Reads both shapes: the list the editor saves, and the older per-key object
+// (forms created before the builder; jsonb reorders keys, so the template's
+// order is used for those).
+function fieldList(config, kind) {
+  const fields = config?.fields;
+  if (Array.isArray(fields)) return fields;
+  const defs = KINDS[kind]?.defaults.fields || {};
+  const obj = fields && typeof fields === 'object' ? fields : defs;
+  const keys = [...new Set([...Object.keys(defs), ...Object.keys(obj)])];
+  return keys.map((key) => ({ ...defs[key], ...obj[key], key, type: obj[key]?.type || defs[key]?.type || 'text' }));
+}
+
 // Turns a parsed nfm_reply response_json into readable label/value pairs.
-// Dropdown answers arrive as option ids (opt_N); map them back to the text.
+// Choice answers arrive as option ids (opt_N); a multiple-choice answer may
+// be a list of them (Meta doesn't document that shape). Both are mapped back
+// to the option text.
 function describeResponse(flow, response) {
-  const fields = flow?.config?.fields || KINDS[flow?.kind]?.defaults.fields || {};
+  const fields = fieldList(flow?.config, flow?.kind);
+  const byKey = new Map(fields.map((f) => [f.key, f]));
+  const keys = [...new Set([...fields.map((f) => f.key), ...Object.keys(response || {})])];
   const rows = [];
-  // The form type's field order first: config and responses are stored as
-  // jsonb, which reorders keys, so neither can be trusted for order.
-  const order = Object.keys(KINDS[flow?.kind]?.defaults.fields || fields);
-  const keys = [...new Set([...order, ...Object.keys(response || {})])];
   for (const key of keys) {
     if (!(key in (response || {}))) continue;
     const value = response[key];
     if (key === 'flow_token' || value === '' || value == null) continue;
-    const f = fields[key];
-    let shown = value;
-    if (f?.type === 'choice' && typeof value === 'string') {
-      const m = /^opt_(\d+)$/.exec(value);
-      if (m && f.options[Number(m[1]) - 1]) shown = f.options[Number(m[1]) - 1];
-    }
-    rows.push({ key, label: f?.label || key, value: String(shown) });
+    const f = byKey.get(key);
+    const optionText = (v) => {
+      const m = /^opt_(\d+)$/.exec(String(v));
+      return m && f?.options?.[Number(m[1]) - 1] ? f.options[Number(m[1]) - 1] : String(v);
+    };
+    const shown = Array.isArray(value)
+      ? value.map((v) => (f?.options ? optionText(v) : String(v))).join(', ')
+      : (f?.options ? optionText(value) : String(value));
+    rows.push({ key, label: f?.label || key, value: shown });
   }
   return rows;
 }
 
-module.exports = { FLOW_JSON_VERSION, KINDS, LIMITS, normalizeConfig, buildFlowJson, describeResponse, makeFlowToken, flowIdFromToken, chatIdFromToken };
+module.exports = { FLOW_JSON_VERSION, KINDS, LIMITS, FIELD_TYPES, MAX_FIELDS, fieldList, normalizeConfig, buildFlowJson, describeResponse, makeFlowToken, flowIdFromToken, chatIdFromToken };

@@ -1,5 +1,13 @@
 # Changelog
 
+## feat(custom-forms): build forms question by question
+- Forms > New form starts blank: add questions, pick each one's type (short
+  or long answer, email, phone, number, date, dropdown, single or multiple
+  choice), reorder, delete; preview beside the editor.
+- Lead, booking, feedback and onboarding are templates that fill in the
+  questions; everything stays editable. Older forms keep working.
+- Migration 108.
+
 ## feat(flow-send-form): Send form step in Bot Flows + Business onboarding form
 - Bot Flows have a "Send form" step: it sends a WhatsApp Form, waits until
   it is submitted, then continues (optional "not submitted in time" branch).

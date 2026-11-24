@@ -19,7 +19,7 @@ const manage = requireRole('Admin', 'Manager');
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['lead', 'booking', 'survey', 'booking_live', 'onboarding']),
+  kind: z.enum(['custom', 'lead', 'booking', 'survey', 'booking_live', 'onboarding']),
   config: z.record(z.any()).optional(),
 });
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100).optional(), config: z.record(z.any()).optional() });
@@ -57,6 +57,12 @@ async function ensureLiveFormSetup(conn) {
 }
 
 const shape = (f) => ({ ...f, kindLabel: tpl.KINDS[f.kind]?.label, screen: tpl.KINDS[f.kind]?.screen });
+
+// Question types for the form builder, with Meta's limits, from the one
+// table the server validates against (build-docs/features/custom-forms.md).
+router.get('/question-types', (req, res) => {
+  res.json({ maxFields: tpl.MAX_FIELDS, types: tpl.FIELD_TYPES });
+});
 
 router.get('/kinds', (req, res) => {
   res.json(Object.entries(tpl.KINDS).map(([kind, k]) => ({ kind, label: k.label, defaults: k.defaults })));
@@ -190,7 +196,7 @@ router.put('/:id/attribute-map', manage, asyncHandler(async (req, res) => {
   const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, req.params.id);
   if (!flow) return res.status(404).json({ error: 'Form not found' });
   const input = z.record(z.string().uuid().nullable()).parse(req.body?.map || {});
-  const fields = Object.keys(tpl.KINDS[flow.kind].defaults.fields);
+  const fields = tpl.fieldList(flow.config, flow.kind).map((f) => f.key);
   const unknown = Object.keys(input).filter((k) => !fields.includes(k));
   if (unknown.length) return res.status(400).json({ error: `Unknown form field: ${unknown.join(', ')}` });
   const ids = [...new Set(Object.values(input).filter(Boolean))];
@@ -242,7 +248,7 @@ router.get('/:id/responses.csv', asyncHandler(async (req, res) => {
   const flow = await whatsappFlowsRepo.findById(req.db, req.clientId, req.params.id);
   if (!flow) return res.status(404).json({ error: 'Form not found' });
   const rows = await whatsappFlowsRepo.listResponses(req.db, req.clientId, flow.id);
-  const fields = Object.entries(tpl.KINDS[flow.kind].defaults.fields).map(([key, f]) => ({ key, header: flow.config?.fields?.[key]?.label || f.label }));
+  const fields = tpl.fieldList(flow.config, flow.kind).map((f) => ({ key: f.key, header: f.label }));
   const columns = [{ key: 'submitted', header: 'Submitted' }, { key: 'contact', header: 'Contact' }, { key: 'phone', header: 'Phone' }, ...fields];
   const data = rows.map((r) => {
     const answers = Object.fromEntries(tpl.describeResponse(flow, r.response).map((a) => [a.key, a.value]));

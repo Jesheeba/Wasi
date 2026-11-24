@@ -75,9 +75,9 @@ test('Forms page: empty state, create a booking form with live preview, publish 
   await page.click('#open-wa-form-drawer');
   await page.waitForSelector('#modal-wa-form.open');
   await page.click('label.option-card:has(input[value="booking"])');
-  await page.waitForSelector('[data-wa-field="slot"]');
+  await page.waitForSelector('[data-q-index="3"]');
   await page.fill('#wa-form-name', 'Wasi Demo Booking');
-  await page.fill('#wa-field-service-opts', 'Haircut\nBeard trim');
+  await page.fill('[data-q-index="1"] [data-q="options"]', 'Haircut\nBeard trim');
   await page.fill('#wa-form-title', 'Book a visit');
   await page.waitForFunction(() => /Book a visit/.test(document.getElementById('wa-form-preview').innerText) && /Haircut/.test(document.getElementById('wa-form-preview').innerText));
 
@@ -136,5 +136,39 @@ test('Forms page fits a 375px phone', async () => {
   const page = await openApp('whatsapp-flows', 375);
   await page.waitForFunction(() => /Wasi Demo Booking/.test(document.getElementById('wa-forms-tbody').innerText));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+  await page.close();
+});
+
+// Custom form builder (build-docs/features/custom-forms.md, AC7).
+test('Form builder: blank form, add, retype, reorder and delete questions; preview follows; saved as a list', async () => {
+  const page = await openApp('whatsapp-flows');
+  await page.click('#open-wa-form-drawer');
+  await page.waitForSelector('#modal-wa-form.open');
+  assert.ok(await page.locator('label.option-card:has(input[value="custom"]) input').isChecked(), 'new forms start blank');
+  await page.waitForSelector('[data-q-index="0"]');
+  await page.fill('#wa-form-name', 'Wasi Custom');
+  await page.fill('[data-q-index="0"] [data-q="label"]', 'Student name');
+
+  await page.click('#wa-q-add');
+  await page.selectOption('[data-q-index="1"] [data-q="type"]', 'checkbox');
+  await page.waitForSelector('[data-q-index="1"] [data-q="options"]');
+  await page.fill('[data-q-index="1"] [data-q="label"]', 'Courses');
+  await page.fill('[data-q-index="1"] [data-q="options"]', 'NEET\nJEE');
+  await page.click('#wa-q-add');
+  await page.fill('[data-q-index="2"] [data-q="label"]', 'Delete me');
+  await page.waitForFunction(() => /Courses[\s\S]*NEET[\s\S]*Delete me/.test(document.getElementById('wa-form-preview').innerText));
+
+  await page.click('[data-q-index="2"] [data-q-delete]');
+  await page.click('[data-q-index="1"] [data-q-move="-1"]');
+  assert.equal(await page.locator('[data-q-index="0"] [data-q="label"]').inputValue(), 'Courses');
+  assert.equal(await page.locator('[data-q-index]').count(), 2);
+  await page.waitForFunction(() => !/Delete me/.test(document.getElementById('wa-form-preview').innerText));
+
+  await page.click('#wa-form-save');
+  await page.waitForFunction(() => /Wasi Custom/.test(document.getElementById('wa-forms-tbody').innerText));
+  const created = JSON.parse(metaCalls.filter((c) => /\/flows$/.test(c.url)).pop().body);
+  assert.deepEqual(created.categories, ['OTHER']);
+  const kids = JSON.parse(created.flow_json).screens[0].layout.children;
+  assert.deepEqual(kids.map((c) => [c.type, c.label]), [['CheckboxGroup', 'Courses'], ['TextInput', 'Student name'], ['Footer', 'Submit']]);
   await page.close();
 });
