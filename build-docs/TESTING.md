@@ -1,5 +1,18 @@
 # Testing
 
+## meta-send-pacing, 2026-11-25
+- metaSendPacing.test.js 8/8: spacing, independent numbers, burst queues,
+  130429 retried then succeeds, retries capped, other errors not retried,
+  retry:false, queue limit, end-to-end retry (201), end-to-end burst of 20.
+- Mutation check: a pass-through pacer fails both end-to-end tests.
+- broadcastRetry.test.js first failed (inline retry made the recipient sent
+  where the runner expects to reschedule): fixed in the code, not the test,
+  by retryThrottled:false for broadcasts.
+- Send-path regression (51 files: apiV1*, hubApi*, broadcast*, flow*,
+  automation*, chat*, woocommerce, whatsappFlows, productMessages, aiAgent,
+  consent*, templateApprovalGuard, limitedTimeOffer, ctwa*, quick wins,
+  payment notifications): 438/438.
+
 ## hub-api-guards (param check + rejection log), 2026-11-25
 - `hubApiParamsAndRejections.test.js` 6/6 (AC1-AC5 + checkSendParams unit).
 - Mutation check: disabling the route check fails AC1/AC2; disabling the log

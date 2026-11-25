@@ -178,6 +178,8 @@ async function sendOneRecipient(broadcast, recipient, template) {
       templateComponents,
       headerMediaAssetId: broadcast.header_media_asset_id,
       limitedTimeOfferExpirationMs: broadcast.limited_time_offer_expiration_ms,
+      // Paced, but a 130429 is rescheduled by this runner (markFailedAttempt), not retried inline.
+      retryThrottled: false,
     });
     await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {

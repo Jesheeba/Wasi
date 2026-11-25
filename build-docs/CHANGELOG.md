@@ -1,5 +1,11 @@
 # Changelog
 
+## feat(meta-send-pacing): pace sends per number and retry Meta rate limits
+- Sends to Meta are spaced per WhatsApp number (META_SENDS_PER_SECOND, default
+  15), so an n8n burst queues instead of failing with 130429; a 130429 that
+  still happens is retried after 1s/2s/4s. Broadcasts are paced but keep
+  their own rescheduling for 130429.
+
 ## feat(hub-api-guards): template parameter check + refused-request log
 - `POST /api/v1/messages` refuses template params that don't match the
   template's variables with 400 `params_mismatch` (was Meta's #132000).

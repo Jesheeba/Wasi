@@ -22,6 +22,7 @@ const usageRepo = require('../repositories/usageRepo');
 const marketingConsentRepo = require('../repositories/marketingConsentRepo');
 const metaClient = require('../utils/metaClient');
 const mediaHeaderService = require('./mediaHeaderService');
+const { runPaced } = require('../utils/metaSendThrottle');
 const { decrypt } = require('../utils/encryption');
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -164,7 +165,7 @@ async function assertWithinPlanLimit(db, clientId) {
 // connection right before the Meta network call below and reacquire()
 // opens a fresh one only for the final result write, so a slow Meta response
 // never pins a connection the pool's other concurrent requests need.
-async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId, flow, product, replyToMessageId }, connectionHooks = {}) {
+async function sendChatMessage(db, clientId, chat, { type, body, buttons, header, footer, button, sections, templateName, templateLanguage, templateComponents, headerMediaAssetId, headerMediaUrl, limitedTimeOfferExpirationMs, apiKeyId, flow, product, replyToMessageId, retryThrottled = true }, connectionHooks = {}) {
   // type 'flow' (WhatsApp Flows / "Forms") is a free-form interactive message
   // too, so it shares the 24h window rule. flow = { metaFlowId, flowToken,
   // cta, screen, mode, name } - see routes/whatsappFlows.js.
@@ -319,48 +320,52 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
 
   let metaMessageId;
   try {
-    if (type === 'text') {
-      metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body, replyContextMessageId);
-    } else if (type === 'product') {
-      metaMessageId = await metaClient.sendProductMessage(waba.phone_number_id, accessToken, toPhone, product.interactive);
-    } else if (type === 'flow') {
-      metaMessageId = await metaClient.sendFlowMessage(waba.phone_number_id, accessToken, toPhone, {
-        bodyText: body, cta: flow.cta, flowId: flow.metaFlowId, flowToken: flow.flowToken, screen: flow.screen, mode: flow.mode,
-        action: flow.action,
-      });
-    } else if (type === 'interactive') {
-      // Two distinct interactive shapes share type: 'interactive' - a
-      // reply-button message (buttons) or a list message (sections),
-      // decided by which one is present. validate.js's apiMessageSendSchema
-      // already guarantees exactly one of them is set before this is ever
-      // reached, so no third "neither/both" case needs handling here.
-      metaMessageId = sections
-        ? await metaClient.sendListMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttonText: button, sections, header, footer })
-        : await metaClient.sendInteractiveMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttons, header, footer });
-    } else {
-      // Real bug, fixed (same class as apiV1Messages.js/broadcastRunner.js/
-      // flowEngine.js/clientNotifier.js/alertNotifier.js): `template` (the
-      // real local row, already fetched above) was loaded and used for the
-      // consent/Authentication/media-header checks, but the actual Meta send
-      // still trusted the caller-supplied `templateLanguage` outright, with
-      // no DB-backed check or fallback. Every caller that goes through one
-      // of the 5 already-fixed call sites happens to pass the real
-      // `template.language` itself, but this function is the shared choke
-      // point (routes/chats.js's inbox manual-reply send/retry route also
-      // calls it directly, forwarding whatever `templateLanguage` the
-      // request body supplied) - nothing here stopped a stale or missing
-      // caller-supplied value from silently reaching Meta as the wrong
-      // language. `template.language` now wins whenever a local row exists;
-      // `templateLanguage` is kept only as the fallback for the one case
-      // where it doesn't (no local row - the same "nothing reasonable to
-      // guess" case the other fixes leave alone), so behavior there is
-      // unchanged.
-      metaMessageId = await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
-        name: templateName,
-        language: template?.language || templateLanguage,
-        components: finalComponents,
-      });
-    }
+    // Paced per WhatsApp number, with Meta's 130429 retried (utils/metaSendThrottle.js).
+    // retryThrottled: false for broadcasts, which reschedule a 130429 themselves.
+    metaMessageId = await runPaced(waba.phone_number_id, async () => {
+      if (type === 'text') {
+        return await metaClient.sendTextMessage(waba.phone_number_id, accessToken, toPhone, body, replyContextMessageId);
+      } else if (type === 'product') {
+        return await metaClient.sendProductMessage(waba.phone_number_id, accessToken, toPhone, product.interactive);
+      } else if (type === 'flow') {
+        return await metaClient.sendFlowMessage(waba.phone_number_id, accessToken, toPhone, {
+          bodyText: body, cta: flow.cta, flowId: flow.metaFlowId, flowToken: flow.flowToken, screen: flow.screen, mode: flow.mode,
+          action: flow.action,
+        });
+      } else if (type === 'interactive') {
+        // Two distinct interactive shapes share type: 'interactive' - a
+        // reply-button message (buttons) or a list message (sections),
+        // decided by which one is present. validate.js's apiMessageSendSchema
+        // already guarantees exactly one of them is set before this is ever
+        // reached, so no third "neither/both" case needs handling here.
+        return sections
+          ? await metaClient.sendListMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttonText: button, sections, header, footer })
+          : await metaClient.sendInteractiveMessage(waba.phone_number_id, accessToken, toPhone, { bodyText: body, buttons, header, footer });
+      } else {
+        // Real bug, fixed (same class as apiV1Messages.js/broadcastRunner.js/
+        // flowEngine.js/clientNotifier.js/alertNotifier.js): `template` (the
+        // real local row, already fetched above) was loaded and used for the
+        // consent/Authentication/media-header checks, but the actual Meta send
+        // still trusted the caller-supplied `templateLanguage` outright, with
+        // no DB-backed check or fallback. Every caller that goes through one
+        // of the 5 already-fixed call sites happens to pass the real
+        // `template.language` itself, but this function is the shared choke
+        // point (routes/chats.js's inbox manual-reply send/retry route also
+        // calls it directly, forwarding whatever `templateLanguage` the
+        // request body supplied) - nothing here stopped a stale or missing
+        // caller-supplied value from silently reaching Meta as the wrong
+        // language. `template.language` now wins whenever a local row exists;
+        // `templateLanguage` is kept only as the fallback for the one case
+        // where it doesn't (no local row - the same "nothing reasonable to
+        // guess" case the other fixes leave alone), so behavior there is
+        // unchanged.
+        return await metaClient.sendTemplateMessage(waba.phone_number_id, accessToken, toPhone, {
+          name: templateName,
+          language: template?.language || templateLanguage,
+          components: finalComponents,
+        });
+      }
+    }, { retry: retryThrottled });
   } catch (err) {
     console.error(
       `messagingService.sendChatMessage: send failed - client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
@@ -457,7 +462,7 @@ async function retryMessage(db, clientId, chat, message, connectionHooks = {}) {
 
   let metaMessageId;
   try {
-    metaMessageId = await metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body);
+    metaMessageId = await runPaced(waba.phone_number_id, () => metaClient.sendTextMessage(waba.phone_number_id, accessToken, chat.phone, message.body));
   } catch (err) {
     console.error(
       `messagingService.retryMessage: retry failed - client=${clientId} message=${message.id} phoneNumberId=${waba.phone_number_id}:`,
