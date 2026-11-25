@@ -265,7 +265,35 @@ function checkCategoryContentMismatch(text, category) {
   };
 }
 
+// Hub API send check (build-docs/features/hub-api-template-param-check.md):
+// do the `params` a caller sent match the template body's {{...}} exactly?
+// Meta rejects any mismatch with a cryptic "(#132000) Number of parameters
+// does not match" (or #131008 for an empty value) - found in production
+// when an n8n workflow sent {hi: name} to a template with no variables.
+// Returns an error message, or null when the params match.
+function checkSendParams(templateName, body, params) {
+  const expected = [...new Set(extractPlaceholders(body).map((p) => p.name))];
+  const given = Object.keys(params || {});
+  const list = (names) => names.map((n) => `"${n}"`).join(', ');
+  if (expected.length === 0) {
+    return given.length
+      ? `Template "${templateName}" has no parameters - remove "params" (got ${list(given)}).`
+      : null;
+  }
+  const missing = expected.filter((n) => !given.includes(n));
+  const extra = given.filter((n) => !expected.includes(n));
+  if (missing.length || extra.length) {
+    return `Template "${templateName}" needs params ${list(expected)}.`
+      + (missing.length ? ` Missing: ${list(missing)}.` : '')
+      + (extra.length ? ` Not in this template: ${list(extra)}.` : '');
+  }
+  const empty = expected.filter((n) => params[n] === null || String(params[n]).trim() === '');
+  if (empty.length) return `Template "${templateName}": params ${list(empty)} must not be empty.`;
+  return null;
+}
+
 const templateParams = {
+  checkSendParams,
   extractPlaceholders,
   isPurelyNumeric,
   isVariableAtStartOrEnd,

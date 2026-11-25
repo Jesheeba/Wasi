@@ -7,8 +7,23 @@
 // `extra` carries optional per-error context (metaError, details) nested
 // under `error` rather than as sibling top-level fields, so the whole
 // response stays a single consistent shape to parse.
+//
+// Every refusal of an authenticated API-key request is also logged
+// (apiRejectionsRepo, build-docs/features/hub-api-rejection-log.md), so
+// "why did n8n fail?" can be answered for refusals that never reached Meta.
+// Unauthenticated requests (bad key) have no client to log against.
 function sendApiError(res, status, code, message, extra) {
   res.status(status).json({ error: { code, message, ...extra } });
+  const req = res.req;
+  if (req && req.clientId && req.apiKeyId) {
+    // Lazy require: keeps this module free of a DB dependency for callers
+    // (and tests) that never log anything.
+    // eslint-disable-next-line global-require
+    require('../repositories/apiRejectionsRepo').record({
+      clientId: req.clientId, apiKeyId: req.apiKeyId,
+      method: req.method, path: req.originalUrl || req.url, status, code, message,
+    });
+  }
 }
 
 module.exports = { sendApiError };

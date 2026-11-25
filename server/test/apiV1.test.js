@@ -159,7 +159,7 @@ test('6. send reuses the Phase 4 opt-in consent guard for marketing templates', 
   const res = await fetch(`${baseUrl}/api/v1/messages`, {
     method: 'POST',
     headers: apiAuthed(apiKey),
-    body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name }),
+    body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name, params: { customer_name: 'Riyaz' } }),
   });
   assert.equal(res.status, 409);
   const data = await res.json();
@@ -176,7 +176,7 @@ test('7. with no guard blocking it, send reaches (and is stopped only by) the re
   const res = await fetch(`${baseUrl}/api/v1/messages`, {
     method: 'POST',
     headers: apiAuthed(apiKey),
-    body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name }),
+    body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name, params: { customer_name: 'Riyaz' } }),
   });
   // 409 with code waba_not_connected - same status chats.js's internal send
   // route uses for every MessagingError except 'send_failed' (502 is
@@ -445,7 +445,7 @@ test('8. send reuses the plan-limit guard', async () => {
   const res = await fetch(`${baseUrl}/api/v1/messages`, {
     method: 'POST',
     headers: apiAuthed(apiKey),
-    body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name }),
+    body: JSON.stringify({ client_id: testClientId, to: contact.phone, type: 'template', template: template.name, params: { customer_name: 'Riyaz' } }),
   });
   assert.equal(res.status, 409);
   const data = await res.json();

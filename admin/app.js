@@ -1461,7 +1461,7 @@ function clientDetailAttention(client, waba) {
 }
 
 function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
-  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity } = detail;
+  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections } = detail;
   const flags = clientDetailAttention(client, waba);
 
   const statusOptionsHtml = CLIENT_STATUS_OPTIONS.map((s) =>
@@ -1719,6 +1719,22 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       `).join('')
     : `<div class="empty-state"><i data-lucide="send" class="empty-icon"></i><div class="empty-title">No Hub API sends</div><div>None of this client's API keys have sent a message yet.</div></div>`;
 
+  // Requests Wasi refused before anything reached Meta (invalid_phone,
+  // consent_required, params_mismatch...) - kept 30 days. Sends Meta
+  // refused are under Hub API Activity instead.
+  const hubApiRejectionsHtml = (hubApiRejections && hubApiRejections.length)
+    ? hubApiRejections.map((r) => `
+        <div class="audit-item">
+          <div class="audit-actor-icon"><i data-lucide="ban" class="icon-14"></i></div>
+          <div class="audit-item-body">
+            <div class="audit-item-action">${esc(r.code)} <span class="cell-secondary">${esc(String(r.status))} &middot; ${esc(r.method)} ${esc(r.path)}${r.app_name ? ` &middot; ${esc(r.app_name)}` : ''}</span></div>
+            <div class="audit-item-target">${esc(r.message || '')}</div>
+            <div class="audit-item-time">${formatDateTime(r.created_at)}</div>
+          </div>
+        </div>
+      `).join('')
+    : `<div class="empty-state"><i data-lucide="ban" class="empty-icon"></i><div class="empty-title">No refused requests</div><div>Wasi has not refused any of this client's Hub API requests in the last 30 days.</div></div>`;
+
   const tabDefs = [
     ['overview', 'Overview', ''],
     ['billing', 'Billing & Service', flags.billing ? ' <span class="tab-flag" title="Needs attention" aria-label="Needs attention">!</span>' : ''],
@@ -1820,6 +1836,10 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
           <h2 class="detail-card-title">Hub API Activity</h2>
           ${hubApiActivityHtml}
         </div>
+      </div>
+      <div class="detail-card">
+        <h2 class="detail-card-title">Refused Hub API Requests</h2>
+        ${hubApiRejectionsHtml}
       </div>
       <div class="detail-card">
         <h2 class="detail-card-title">Audit Trail</h2>

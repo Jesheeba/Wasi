@@ -344,5 +344,9 @@ Deploy first (migration 111). Demo account, test number 9092766740 only.
 5. Log in as an Agent or Manager team member: the box is greyed out.
 6. In n8n, send with `to` set to a field that doesn't exist: HTTP 400,
    code `invalid_phone`, message quotes "undefined". No new contact appears.
+7. Send a template that has no variables with `params: {"hi": "x"}`: HTTP 400
+   `params_mismatch`, "has no parameters - remove params".
+8. Admin > Clients > that client > Activity: "Refused Hub API Requests" lists
+   the refusals from steps 6 and 7.
 
 Status: PENDING

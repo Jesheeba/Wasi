@@ -20,6 +20,7 @@ const { requireApiKey } = require('../middleware/requireApiKey');
 const { sendApiError } = require('../utils/apiError');
 const consentRepo = require('../repositories/consentRepo');
 const { normalizePhone, isValidPhone, invalidPhoneMessage } = require('../utils/csvContacts');
+const { checkSendParams } = require('../utils/templateParams');
 const { recordHubApiConsent } = require('../services/hubApiConsent');
 
 const router = Router();
@@ -93,6 +94,11 @@ router.post('/', asyncHandler(async (req, res) => {
       if (extracted.error) return sendApiError(res, 409, 'auth_code_invalid', extracted.error);
       templateComponents = metaClient.buildAuthenticationSendComponents(extracted.code);
     } else {
+      // Checked against the template's own body before anything reaches
+      // Meta, which would otherwise answer with a cryptic #132000. Skipped
+      // when no body is stored locally (nothing reliable to compare with).
+      const mismatch = template.body ? checkSendParams(template.name, template.body, data.params) : null;
+      if (mismatch) return sendApiError(res, 400, 'params_mismatch', mismatch);
       templateComponents = metaClient.buildNamedBodyComponents(data.params);
     }
   }

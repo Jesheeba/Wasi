@@ -1,5 +1,16 @@
 # Testing
 
+## hub-api-guards (param check + rejection log), 2026-11-25
+- `hubApiParamsAndRejections.test.js` 6/6 (AC1-AC5 + checkSendParams unit).
+- Mutation check: disabling the route check fails AC1/AC2; disabling the log
+  fails AC3-AC5.
+- `apiV1.test.js` 6-8 changed on purpose: they sent a `{{customer_name}}`
+  template without params (Meta would reject it); they now send it. 14/14.
+- Regression (apiV1*, hubApi*, marketingConsent, templateApprovalGuard,
+  templateParams, limitedTimeOffer, alerting*, adminRole*, consent*,
+  messagesApiKey, optInKeyword): 207/210 before the apiV1 fix, the 3 being
+  those tests. Admin UI suites 13/13. mcp-server 21/21.
+
 ## hub-api-phone-validation, 2026-11-25
 - `hubApiPhoneValidation.test.js` 4/4: normalizer cases (incl. U+202C, U+200E,
   BOM), invalid `to` values -> 400 `invalid_phone` with no contact created,

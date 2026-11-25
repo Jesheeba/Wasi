@@ -1,5 +1,11 @@
 # Changelog
 
+## feat(hub-api-guards): template parameter check + refused-request log
+- `POST /api/v1/messages` refuses template params that don't match the
+  template's variables with 400 `params_mismatch` (was Meta's #132000).
+- Every Hub API request Wasi refuses is stored (migration 112, 30 days) and
+  shown in admin Client Detail > Activity > "Refused Hub API Requests".
+
 ## fix(hub-api-phone-validation): refuse non-phone `to` values, clean formatted numbers
 - `POST /api/v1/messages` and `/api/v1/contacts/consent` return 400
   `invalid_phone` for values like `undefined` instead of creating a junk

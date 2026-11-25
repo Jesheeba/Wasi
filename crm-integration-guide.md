@@ -104,6 +104,11 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   10-15 digits, otherwise the request is refused with `invalid_phone` (400)
   and nothing is created. A value of `undefined` or empty usually means the
   automation is reading a field that doesn't exist.
+- For a template send, `params` must match the template's `{{...}}`
+  variables exactly: same names, none missing, none extra, none empty. A
+  template with no variables takes no `params`. Otherwise the request is
+  refused with `params_mismatch` (400) and the message names what's wrong,
+  instead of Meta's `#132000`.
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.

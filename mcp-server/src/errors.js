@@ -14,6 +14,7 @@ const { HubApiError } = require('./hubClient');
 const HUB_CODE_HINTS = {
   waba_not_connected: 'This Wasi account has no connected WhatsApp Business number yet - connect one from the Wasi admin panel before sending.',
   consent_required: 'This contact has not opted in to marketing. Record their opt-in first (the Hub API\'s optIn field), or the business owner can confirm in Wasi Settings > Marketing consent that they collect opt-in.',
+  params_mismatch: 'The template parameters do not match the template. Call get_template_details to see its exact {{...}} names; send none if it has none.',
   invalid_phone: 'The phone number is not valid. Use the full number with country code, digits only (e.g. 919876543210).',
   contact_opted_out: 'This contact opted out of marketing messages. Do not retry - only the contact can opt back in (e.g. by replying START). Utility templates are unaffected.',
   plan_limit_reached: 'This account has hit its monthly conversation limit for the current billing plan. Sending will resume next billing cycle, or after an upgrade.',

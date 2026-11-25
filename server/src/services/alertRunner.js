@@ -14,6 +14,7 @@
 // (the partial unique index).
 const { pool } = require('../db/pool');
 const alertEventsRepo = require('../repositories/alertEventsRepo');
+const apiRejectionsRepo = require('../repositories/apiRejectionsRepo');
 const alertNotifier = require('../services/alertNotifier');
 const metaClient = require('../utils/metaClient');
 const consentRepo = require('../repositories/consentRepo');
@@ -414,6 +415,8 @@ async function tick() {
     await reconcile('dormant_no_outbound', await checkDormantNoOutbound());
     await reconcile('never_logged_in_stale', await checkNeverLoggedInStale());
     await maybeSendDailyDigest();
+    // Refused Hub API requests are kept 30 days (migration 112).
+    await apiRejectionsRepo.purgeOld();
   } catch (err) {
     console.error('alertRunner tick failed:', err.message);
   }
