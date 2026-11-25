@@ -147,6 +147,15 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   ```json
   { "error": { "code": "send_failed", "message": "Meta rejected the send.", "metaError": { "code": 131047, "message": "..." } } }
   ```
+- **Queued sends (202)**: if Wasi can't reach Meta (network problem, or a
+  temporary Meta error) even after quick retries, the message is **not
+  lost**. The send answers **202** with `"status": "pending"` and
+  `"queued": true`, and Wasi keeps retrying in the background for about 70
+  minutes. Check `GET /api/v1/messages/:id/status` (`next_retry_at`,
+  `retry_count`); it becomes `sent` once Meta accepts it, or `failed` with
+  the reason. **Don't resend a queued message yourself**, or the customer may
+  get it twice. Sends from one number are also paced (about 15 per second),
+  so a large batch is queued instead of refused.
 - **Rate limits**: every `/api/v1/*` response carries live
   `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset`
   headers so a well-behaved integration can self-throttle before hitting a

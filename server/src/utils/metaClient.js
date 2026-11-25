@@ -24,6 +24,13 @@ async function fetchWithTimeout(url, options = {}, ms = DEFAULT_TIMEOUT_MS) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
       throw new Error(`Meta API request timed out after ${Math.round(ms / 1000)}s`);
     }
+    // Node's fetch says only "fetch failed"; the real reason (ECONNRESET,
+    // ENOTFOUND, ...) is in err.cause. Keep it, so a failure can be diagnosed
+    // later (send-retry-queue.md: 5 sends were lost with no cause recorded).
+    const causeCode = err.cause?.code || err.cause?.name;
+    if (err.message === 'fetch failed' && causeCode) {
+      throw new Error(`fetch failed (${causeCode})`, { cause: err.cause });
+    }
     throw err;
   }
 }

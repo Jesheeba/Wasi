@@ -43,6 +43,9 @@ router.get('/:id/status', asyncHandler(async (req, res) => {
     meta_error_code: message.meta_error_code,
     meta_message_id: message.meta_message_id,
     sent_at: message.sent_at,
+    // Set while a send is queued for retry (status stays 'pending').
+    next_retry_at: message.next_retry_at || null,
+    retry_count: message.retry_count || 0,
   });
 }));
 
@@ -146,7 +149,10 @@ router.post('/', asyncHandler(async (req, res) => {
       // "sent via <app_name>" instead of nothing at all.
       apiKeyId: req.apiKeyId,
     });
-    res.status(201).json(message);
+    // queued: Meta could not be reached (network / temporary error); Wasi
+    // keeps the message and retries it in the background
+    // (build-docs/features/send-retry-queue.md). Check GET /:id/status.
+    res.status(message.queued ? 202 : 201).json(message);
   } catch (err) {
     if (err instanceof messagingService.MessagingError) {
       const status = err.code === 'send_failed' ? 502 : 409;

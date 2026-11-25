@@ -17,6 +17,26 @@
 
 const THROTTLE_CODE = 130429;
 
+// Errors worth retrying: nothing about the message or recipient caused them
+// (build-docs/features/send-retry-queue.md). Meta's documented temporary
+// codes: 1/2 API unknown/unavailable, 4 app rate limit, 130429 throughput,
+// 131000 something went wrong, 131016 service unavailable, 131056 pair rate
+// limit, 133004 server temporarily unavailable. Without a Meta error body:
+// no HTTP answer at all (fetch failed, connection reset/refused, DNS, our own
+// timeout) or a 5xx. Shared with broadcastRunner.isTransientSendError.
+const TRANSIENT_META_CODES = new Set([1, 2, 4, 130429, 131000, 131016, 131056, 133004]);
+function isTransientMetaError(err) {
+  if (!err) return false;
+  if (err.metaError && err.metaError.code !== undefined && err.metaError.code !== null) {
+    return TRANSIENT_META_CODES.has(Number(err.metaError.code));
+  }
+  return /timed out|fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|other side closed|UND_ERR|Meta Graph API error \(5\d\d\)/i.test(err.message || '');
+}
+
+// Our own 20s timeout already waited a long time; don't repeat it inline,
+// let the background queue retry it (messageRetryRunner).
+const isTimeout = (err) => /timed out/i.test(err?.message || '');
+
 function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -48,10 +68,12 @@ function createSendThrottle({
     if (waitMs > 0) await sleep(waitMs);
   }
 
-  // Runs `send` in a paced slot for `key`; on Meta's 130429, waits and runs
-  // it again (each retry takes a new slot), up to retryDelaysMs.length times.
+  // Runs `send` in a paced slot for `key`; on a transient error (130429, a
+  // network blip, a temporary Meta error - isTransientMetaError), waits and
+  // runs it again (each retry takes a new slot), up to retryDelaysMs.length
+  // times. A timeout is not retried inline (it already took 20s).
   // `retry: false` paces only - for the broadcast runner, which already
-  // reschedules a throttled recipient itself and must not wait inline (its
+  // reschedules a transient failure itself and must not wait inline (its
   // tick is shared by every client's broadcasts).
   async function run(key, send, { retry = true } = {}) {
     for (let attempt = 0; ; attempt++) {
@@ -59,7 +81,7 @@ function createSendThrottle({
       try {
         return await send();
       } catch (err) {
-        if (!retry || err?.metaError?.code !== THROTTLE_CODE || attempt >= retryDelaysMs.length) throw err;
+        if (!retry || !isTransientMetaError(err) || isTimeout(err) || attempt >= retryDelaysMs.length) throw err;
         await sleep(retryDelaysMs[attempt]);
       }
     }
@@ -76,4 +98,5 @@ module.exports = {
   runPaced: (key, send, options) => defaultThrottle.run(key, send, options),
   SendQueueFullError,
   THROTTLE_CODE,
+  isTransientMetaError,
 };

@@ -9,6 +9,7 @@ const metaTemplateLibraryRefreshRunner = require('./services/metaTemplateLibrary
 const paymentReminderRunner = require('./services/paymentReminderRunner');
 const messagingTierRefreshRunner = require('./services/messagingTierRefreshRunner');
 const sendabilityMonitorRunner = require('./services/sendabilityMonitorRunner');
+const messageRetryRunner = require('./services/messageRetryRunner');
 const aiAgentRunner = require('./services/aiAgentRunner');
 
 // Defense-in-depth, not a replacement for fixing specific gaps (see
@@ -76,6 +77,7 @@ app.listen(port, () => {
   paymentReminderRunner.start();
   messagingTierRefreshRunner.start();
   sendabilityMonitorRunner.start();
+  messageRetryRunner.start(); // queued sends (build-docs/features/send-retry-queue.md)
   // AI agent queue poller (docs/ai-agent unit 0.4). Off unless explicitly
   // enabled: the feature must be invisible when off, and migration 088 must
   // exist before this polls (otherwise every tick would log a missing-table

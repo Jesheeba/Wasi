@@ -10,6 +10,7 @@ const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const chatsRepo = require('../repositories/chatsRepo');
 const contactAttributeValuesRepo = require('../repositories/contactAttributeValuesRepo');
 const messagingService = require('../services/messagingService');
+const { isTransientMetaError } = require('../utils/metaSendThrottle');
 const { resolveParamValues, buildTemplateComponents } = require('../utils/templateParamMapping');
 const { MessagingError } = messagingService;
 
@@ -84,11 +85,11 @@ function effectiveBatchSize(broadcast) {
 // problems a retry a few minutes later won't fix either, and
 // consent_required is already routed to markSkipped before this is ever
 // reached.
-const TRANSIENT_META_ERROR_CODES = new Set([4, 130429, 131056]);
+// The rule itself is shared with the inline retry and the send retry queue
+// (utils/metaSendThrottle.js isTransientMetaError), so there is one list.
 function isTransientSendError(err) {
   if (!(err instanceof MessagingError) || err.code !== 'send_failed') return false;
-  if (err.metaError) return TRANSIENT_META_ERROR_CODES.has(err.metaError.code);
-  return /timed out|fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(err.message || '');
+  return isTransientMetaError(err);
 }
 
 async function runWithConcurrency(items, limit, worker) {
@@ -178,8 +179,8 @@ async function sendOneRecipient(broadcast, recipient, template) {
       templateComponents,
       headerMediaAssetId: broadcast.header_media_asset_id,
       limitedTimeOfferExpirationMs: broadcast.limited_time_offer_expiration_ms,
-      // Paced, but a 130429 is rescheduled by this runner (markFailedAttempt), not retried inline.
-      retryThrottled: false,
+      // Paced, but transient failures are rescheduled by this runner (markFailedAttempt), not retried inline or queued.
+      retryTransient: false,
     });
     await broadcastRecipientsRepo.markSent(pool, recipient.id, message.id);
   } catch (err) {

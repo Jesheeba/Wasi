@@ -463,6 +463,9 @@ async function handleInboundMessages(waba, value) {
         direction: _direction, error_reason: _errorReason, meta_error_code: _metaErrorCode,
         meta_error_subcode: _metaErrorSubcode,
         referral: _referral, delivered_at: _deliveredAt, read_at: _readAt, failed_at: _failedAt,
+        // Outbound-only retry queue (migration 113) - always defaults on an
+        // inbound row, and internal state, never part of the external contract.
+        retry_count: _retryCount, next_retry_at: _nextRetryAt, send_request: _sendRequest,
         // source (migration 080_messages_source.js) is dropped for the same
         // reason as direction above - chatsRepo.insertInbound never sets it,
         // so it's always the column default ('api') on every inbound row,

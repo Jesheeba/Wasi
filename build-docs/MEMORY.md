@@ -1,5 +1,16 @@
 # Project memory
 
+## 2026-11-25 - send retry queue
+- Owner: no message may be lost to network/our side; queue and retry.
+- Decisions (owner): retry all network errors, accepting a rare duplicate when
+  Meta got the message but the answer was lost (same rule broadcasts already
+  used); Hub API answers 202 queued.
+- Production before this: 5 sends lost in 4 days to "fetch failed" (Fortune
+  CRM x4, TNPSC OTP x1), cause not recorded. Cause is recorded now.
+- A concurrent session was editing Hub API files (client_id optional,
+  apiV1Account/Conversations, admin API guide) at the same time; only this
+  feature's hunks were committed.
+
 ## 2026-11-25 - Hub API phone validation
 - Owner approved. 10-15 digits after cleanup; no automatic country code
   (not all clients are Indian), so a 10-digit number without 91 still passes.

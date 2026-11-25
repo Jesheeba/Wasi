@@ -1,5 +1,13 @@
 # Testing
 
+## send-retry-queue, 2026-11-25
+- sendRetryQueue.test.js 6/6: classification, inline recovery (201), queued
+  (202, pending, stored call without token), runner sends it, reschedule /
+  give up / permanent error on retry, permanent first error still 502.
+- Mutation check: disabling the queue branch fails AC3-AC5.
+- Regression (56 files: every send path, broadcasts, flows, webhooks incl.
+  webhookForwarding key-set check, Hub API): 473/473.
+
 ## meta-send-pacing, 2026-11-25
 - metaSendPacing.test.js 8/8: spacing, independent numbers, burst queues,
   130429 retried then succeeds, retries capped, other errors not retried,

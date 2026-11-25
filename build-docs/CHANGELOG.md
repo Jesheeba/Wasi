@@ -1,5 +1,12 @@
 # Changelog
 
+## feat(send-retry-queue): no message lost to a network or temporary Meta error
+- A send that can't reach Meta (network, timeout, 5xx, Meta temporary codes)
+  is retried inline, then queued (stays pending, exact Meta call stored without
+  the token) and replayed by messageRetryRunner for about 70 minutes. Hub API
+  answers 202 queued. Network errors now record their cause.
+  Migration 113. One transient-error rule shared with broadcasts.
+
 ## fix(hub-api-conversations): page past 100 conversations; client_id optional on sends
 - `GET /api/v1/conversations` takes `offset` and `updated_after` (alias
   `since`); unknown params are a 400 instead of silently ignored.

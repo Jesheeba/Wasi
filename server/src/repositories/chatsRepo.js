@@ -225,7 +225,7 @@ async function setReaction(db, clientId, messageId, direction, emoji) {
 
 async function markSent(db, clientId, messageId, metaMessageId) {
   const { rows } = await db.query(
-    `update messages set status = 'sent', meta_message_id = $3, error_reason = null
+    `update messages set status = 'sent', meta_message_id = $3, error_reason = null, send_request = null, next_retry_at = null
      where client_id = $1 and id = $2 returning *`,
     [clientId, messageId, metaMessageId]
   );
@@ -242,7 +242,7 @@ async function markSent(db, clientId, messageId, metaMessageId) {
 // by err.metaError?.error_subcode.
 async function markFailed(db, clientId, messageId, errorReason, metaErrorCode, metaErrorSubcode) {
   const { rows } = await db.query(
-    `update messages set status = 'failed', error_reason = $3, meta_error_code = $4, meta_error_subcode = $5
+    `update messages set status = 'failed', error_reason = $3, meta_error_code = $4, meta_error_subcode = $5, send_request = null, next_retry_at = null
      where client_id = $1 and id = $2 returning *`,
     [clientId, messageId, errorReason, metaErrorCode || null, metaErrorSubcode || null]
   );
