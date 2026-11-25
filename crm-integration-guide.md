@@ -98,6 +98,12 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   status with Meta once before refusing, in case its copy is stale. An
   approved template that you edited stays sendable while Meta re-reviews it
   (Meta keeps sending the old approved version).
+- `to` (and `phone` on `/api/v1/contacts/consent`) must be a phone number
+  **with country code**, e.g. `919876543210`. Spaces, dashes, brackets, a
+  leading `+` and invisible characters are removed; what's left must be
+  10-15 digits, otherwise the request is refused with `invalid_phone` (400)
+  and nothing is created. A value of `undefined` or empty usually means the
+  automation is reading a field that doesn't exist.
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.

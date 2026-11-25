@@ -17,6 +17,7 @@ const consentRepo = require('../repositories/consentRepo');
 const { recordHubApiConsent } = require('../services/hubApiConsent');
 const { apiContactConsentSchema } = require('../utils/validate');
 const { sendApiError } = require('../utils/apiError');
+const { normalizePhone, isValidPhone, invalidPhoneMessage } = require('../utils/csvContacts');
 
 const router = Router();
 router.use(requireApiKey);
@@ -31,7 +32,8 @@ router.get('/', asyncHandler(async (req, res) => {
   const { q, phone, limit } = searchQuerySchema.parse(req.query);
 
   if (phone) {
-    const contact = await contactsRepo.findByPhone(pool, req.clientId, phone);
+    // Same cleanup as a send stores, so "+91 98765-43210" finds 919876543210.
+    const contact = await contactsRepo.findByPhone(pool, req.clientId, normalizePhone(phone));
     return res.json(contact ? [contact] : []);
   }
 
@@ -51,7 +53,9 @@ router.get('/', asyncHandler(async (req, res) => {
 // opt-in for a contact who opted out is refused, never applied.
 router.post('/consent', asyncHandler(async (req, res) => {
   const data = apiContactConsentSchema.parse(req.body);
-  const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone: data.phone });
+  const phone = normalizePhone(data.phone);
+  if (!isValidPhone(phone)) return sendApiError(res, 400, 'invalid_phone', invalidPhoneMessage('phone', data.phone));
+  const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone });
   try {
     const updated = await recordHubApiConsent(req.clientId, contact.id, {
       status: data.status, method: data.method, note: data.note, apiKeyId: req.apiKeyId,

@@ -1,5 +1,11 @@
 # Changelog
 
+## fix(hub-api-phone-validation): refuse non-phone `to` values, clean formatted numbers
+- `POST /api/v1/messages` and `/api/v1/contacts/consent` return 400
+  `invalid_phone` for values like `undefined` instead of creating a junk
+  contact. Formatted numbers and invisible characters are cleaned (shared
+  `normalizePhone`, now also used by the CSV import). Lookup by phone normalizes.
+
 ## feat(sirahos-payments): bring the VPS-only SirahOS payment report into the repo
 - A paid subscription (Razorpay webhook `payment.captured` / `order.paid`) is
   reported to SirahOS so its invoice is marked paid. This existed only as an

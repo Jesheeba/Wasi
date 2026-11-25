@@ -342,5 +342,7 @@ Deploy first (migration 111). Demo account, test number 9092766740 only.
    (with or without optIn): HTTP 409, code `contact_opted_out`, nothing in
    the chat. Reply START afterwards to undo it.
 5. Log in as an Agent or Manager team member: the box is greyed out.
+6. In n8n, send with `to` set to a field that doesn't exist: HTTP 400,
+   code `invalid_phone`, message quotes "undefined". No new contact appears.
 
 Status: PENDING

@@ -1,5 +1,15 @@
 # Testing
 
+## hub-api-phone-validation, 2026-11-25
+- `hubApiPhoneValidation.test.js` 4/4: normalizer cases (incl. U+202C, U+200E,
+  BOM), invalid `to` values -> 400 `invalid_phone` with no contact created,
+  formatted number stored digits-only, consent + lookup normalize.
+- Mutation check: removing the send-route check fails the invalid_phone test.
+- `marketingConsentAttestation.test.js` phone helper changed to 12 digits (it
+  produced 18-digit numbers, which are not phone numbers).
+- Regression: apiV1*, csvContacts, contactsCsvImport, messagesApiKeyAttribution,
+  consentTracking, unpaidSignupBlock, marketingConsentAttestation: 126/126.
+
 ## sirahos-payments, 2026-11-25
 - `sirahosPaymentReport.test.js` 7/7 (SirahOS host stubbed, local DB): request
   shape + secret header, off without secret/client/reference/amount, never

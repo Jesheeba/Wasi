@@ -19,6 +19,7 @@ const { apiMessageSendSchema, uuid } = require('../utils/validate');
 const { requireApiKey } = require('../middleware/requireApiKey');
 const { sendApiError } = require('../utils/apiError');
 const consentRepo = require('../repositories/consentRepo');
+const { normalizePhone, isValidPhone, invalidPhoneMessage } = require('../utils/csvContacts');
 const { recordHubApiConsent } = require('../services/hubApiConsent');
 
 const router = Router();
@@ -51,7 +52,13 @@ router.post('/', asyncHandler(async (req, res) => {
     return sendApiError(res, 403, 'client_id_mismatch', 'client_id does not match this API key\'s client.');
   }
 
-  const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone: data.to });
+  // A bad `to` used to be stored as-is - production had contacts with phone
+  // "undefined" (an n8n field that didn't exist) and "not-a-number". Clean it
+  // like the CSV import does and refuse anything that isn't a phone number,
+  // before any contact, chat or message row exists.
+  const to = normalizePhone(data.to);
+  if (!isValidPhone(to)) return sendApiError(res, 400, 'invalid_phone', invalidPhoneMessage('to', data.to));
+  const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone: to });
   const chat = await chatsRepo.findOrCreateByContact(pool, req.clientId, contact);
 
   // Real bug, fixed: this used to hardcode 'en_US' for every template send

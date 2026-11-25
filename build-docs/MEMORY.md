@@ -1,5 +1,12 @@
 # Project memory
 
+## 2026-11-25 - Hub API phone validation
+- Owner approved. 10-15 digits after cleanup; no automatic country code
+  (not all clients are Indian), so a 10-digit number without 91 still passes.
+- Junk contacts already in production (`undefined` LEADERS CONNECT,
+  `not-a-number` Sirah Digital, `x` demo, Fortune's number with U+202C) are NOT
+  cleaned up yet: needs the owner's OK.
+
 ## 2026-11-25 - code edited directly on the VPS
 - `git pull` on /opt/wasi failed: `razorpayWebhook.js` had an uncommitted edit
   calling an untracked `utils/sirahosPayments.js` (SirahOS invoice reporting,

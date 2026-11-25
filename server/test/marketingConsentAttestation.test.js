@@ -26,7 +26,9 @@ let phoneSeq = 0;
 const createdTeamMemberIds = [];
 
 const authed = (token) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' });
-const nextPhone = () => `9177${Date.now()}${phoneSeq++}`;
+// 12 digits: 9177 + the last 6 of the clock + a 2-digit sequence (the Hub
+// API refuses anything that isn't 10-15 digits).
+const nextPhone = () => `9177${String(Date.now()).slice(-6)}${String(phoneSeq++).padStart(2, '0')}`;
 
 async function json(method, path, token, body) {
   const res = await fetch(`${baseUrl}${path}`, { method, headers: authed(token), body: body ? JSON.stringify(body) : undefined });

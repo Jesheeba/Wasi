@@ -50,13 +50,29 @@ function parseCsvLine(line) {
 // 10-15 digits covers real-world national numbers through E.164's max
 // length without hand-coding country-specific rules this app has no other
 // precedent for anywhere else in its validation.
+//
+// Also strips invisible Unicode format characters (\p{Cf}: left-to-right
+// marks, zero-width spaces, BOMs) that come along when a number is copied
+// from a spreadsheet or a phone's contact card - found in production
+// (2026-11-25) as a trailing U+202C on a real contact, which Meta would
+// reject on every send. Shared with the Hub API (routes/apiV1Messages.js,
+// apiV1Contacts.js) so both paths store numbers the same way.
 function normalizePhone(raw) {
-  const stripped = (raw || '').replace(/[\s\-().]/g, '').replace(/^\+/, '');
+  const stripped = String(raw ?? '').replace(/\p{Cf}/gu, '').replace(/[\s\-().]/g, '').replace(/^\+/, '');
   return stripped;
 }
 
 function isValidPhone(normalized) {
   return /^[0-9]{10,15}$/.test(normalized);
+}
+
+// Hub API error text for a value that isn't a phone number. Quotes what was
+// received, since the usual cause is an automation tool (n8n, Zapier) sending
+// a field that doesn't exist, which arrives as "undefined" or empty.
+function invalidPhoneMessage(field, raw) {
+  const shown = String(raw ?? '').slice(0, 40);
+  return `${field} must be a phone number with country code, digits only (10-15 digits, e.g. 919876543210). Received "${shown}".`
+    + (/^(undefined|null|)$/i.test(shown.trim()) ? ' This usually means the field your automation reads does not exist - check its name.' : '');
 }
 
 // Only name/phone are ever read by default - a column like "tags" is not
@@ -193,4 +209,4 @@ function parseContactsCsv(text, { includeTags = false, includeOptIn = false } = 
   return { validRows, errors };
 }
 
-module.exports = { parseCsvLine, normalizePhone, isValidPhone, parseContactsCsv };
+module.exports = { parseCsvLine, normalizePhone, isValidPhone, invalidPhoneMessage, parseContactsCsv };
