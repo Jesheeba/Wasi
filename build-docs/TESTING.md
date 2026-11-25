@@ -1,5 +1,14 @@
 # Testing
 
+## sirahos-payments, 2026-11-25
+- `sirahosPaymentReport.test.js` 7/7 (SirahOS host stubbed, local DB): request
+  shape + secret header, off without secret/client/reference/amount, never
+  throws on 404 or network error, webhook reports once in rupees, webhook stays
+  200 when SirahOS is down, unknown order reports nothing, client-side
+  verify-payment does not report (no double).
+- Mutation check: removing the webhook call fails the "reports once" test.
+- Regression: `unpaidSignupBlock` 7/7, `clientSuspensionPaywall` 8/8.
+
 ## marketing-consent-attestation, 2026-11-25
 - `marketingConsentAttestation.test.js` AC1-AC8, 6/6 (local embedded Postgres).
 - Mutation check: removing the attestation pass fails AC1/AC2/AC8; removing the

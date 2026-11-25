@@ -1,3 +1,7 @@
 node_modules/
 .env
 .pgdata/
+# Every env file and backup of one (e.g. .env.production.bak-2026-11-23 on
+# the VPS) holds secrets; only the example is tracked.
+.env.*
+!.env.example

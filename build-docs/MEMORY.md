@@ -1,5 +1,16 @@
 # Project memory
 
+## 2026-11-25 - code edited directly on the VPS
+- `git pull` on /opt/wasi failed: `razorpayWebhook.js` had an uncommitted edit
+  calling an untracked `utils/sirahosPayments.js` (SirahOS invoice reporting,
+  live in production). Brought into the repo as-is (no secret in it; reads
+  SIRAHOS_URL/SIRAHOS_SECRET), placed after `confirmSubscriptionPayment`,
+  webhook only so a payment is never reported twice.
+- Rule: never edit code on the VPS. Change it in the repo, push, pull, deploy.
+  `deploy.sh` does not pull; run `git pull origin master` first.
+- The VPS also has ~20 untracked diagnostic scripts in /opt/wasi and
+  `server/.env.production.bak-2026-11-23` (secrets; keep out of git).
+
 ## 2026-11-25 - marketing consent: account attestation + Hub API opt-in
 - Owner chose options B + C ("use b and c"). Reverses the 2026-09-22 rule that
   only opted_in contacts may get Marketing: production had ~4,350 real contacts

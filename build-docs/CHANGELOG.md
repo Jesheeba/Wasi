@@ -1,5 +1,13 @@
 # Changelog
 
+## feat(sirahos-payments): bring the VPS-only SirahOS payment report into the repo
+- A paid subscription (Razorpay webhook `payment.captured` / `order.paid`) is
+  reported to SirahOS so its invoice is marked paid. This existed only as an
+  uncommitted edit plus an untracked `utils/sirahosPayments.js` on the VPS, and
+  blocked `git pull` there. Now committed, ported onto the shared
+  `confirmSubscriptionPayment` code. Webhook only, never awaited, never throws.
+- `SIRAHOS_URL` / `SIRAHOS_SECRET` added to `.env.example` (empty secret = off).
+
 ## feat(marketing-consent): account attestation + opt-in through the Hub API
 - Settings > Marketing consent: an Owner/Admin confirms the business collects
   opt-in; Marketing templates can then go to contacts with no recorded opt-in.

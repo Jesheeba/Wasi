@@ -8,6 +8,7 @@ const walletRepo = require('../repositories/walletRepo');
 const paymentLinksRepo = require('../repositories/paymentLinksRepo');
 const auditLogRepo = require('../repositories/auditLogRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { reportPayment } = require('../utils/sirahosPayments');
 
 const router = Router();
 
@@ -42,7 +43,21 @@ router.post('/', asyncHandler(async (req, res) => {
   const orderId = payment?.order_id || req.body.payload?.order?.entity?.id;
 
   if ((event === 'payment.captured' || event === 'order.paid') && orderId) {
-    await confirmSubscriptionPayment(orderId, payment?.id, { actorType: 'razorpay_webhook', action: event });
+    const subscription = await confirmSubscriptionPayment(orderId, payment?.id, { actorType: 'razorpay_webhook', action: event });
+    if (subscription) {
+      // Tell SirahOS, which holds the invoice. Not awaited and never throws:
+      // Razorpay is waiting on this webhook and retries a non-2xx, which
+      // would re-run everything above for a payment already recorded.
+      // Razorpay amounts are in paise; SirahOS books rupees. Webhook only
+      // (not billing.js's client-side verify), so one payment is reported
+      // from one place; SirahOS dedupes Razorpay retries by payment id.
+      void reportPayment({
+        clientId: subscription.client_id,
+        amount: (payment?.amount || 0) / 100,
+        reference: payment?.id,
+        kind: 'invoice',
+      });
+    }
     // Same order id space, different table - an order is either a
     // subscription checkout (above) or a wallet recharge (this), never both,
     // so trying both updates and letting the non-matching one no-op is
