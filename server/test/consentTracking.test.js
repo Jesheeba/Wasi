@@ -132,7 +132,9 @@ test('2. marketing send to an opted-out contact is blocked', async () => {
   const res = await sendTemplate(chat.id, template.name);
   assert.equal(res.status, 409);
   const data = await res.json();
-  assert.equal(data.code, 'consent_required');
+  // Opted-out now has its own code (marketing-consent-attestation.md), so a
+  // caller can tell "never message this person" from "record consent first".
+  assert.equal(data.code, 'contact_opted_out');
 });
 
 test('3. utility send to an unknown-status contact is allowed through the consent gate', async () => {

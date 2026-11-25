@@ -327,3 +327,20 @@ Deploy first (migration 110).
 3. Campaigns > New campaign with the pending template - refused at create.
 
 Status: PENDING
+
+## 21. Marketing consent: account confirmation + n8n opt-in (after deploy)
+Deploy first (migration 111). Demo account, test number 9092766740 only.
+1. Settings > Compliance > Marketing consent: tiles show opted in / not
+   recorded / opted out counts. Tick the box as the owner: "Confirmed by the
+   account owner on <date>".
+2. Send an approved Marketing template to 9092766740 (status not recorded):
+   it sends. Untick the box and send again: refused with "has not opted in".
+3. In n8n, send a Marketing template with
+   `"optIn": {"method": "website_form"}` to 9092766740: it sends, and
+   Contacts shows the number opted in.
+4. Reply STOP from 9092766740, then send a Marketing template from n8n
+   (with or without optIn): HTTP 409, code `contact_opted_out`, nothing in
+   the chat. Reply START afterwards to undo it.
+5. Log in as an Agent or Manager team member: the box is greyed out.
+
+Status: PENDING

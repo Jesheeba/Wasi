@@ -3,6 +3,7 @@ const broadcastsRepo = require('../repositories/broadcastsRepo');
 const broadcastRecipientsRepo = require('../repositories/broadcastRecipientsRepo');
 const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const contactSegmentsRepo = require('../repositories/contactSegmentsRepo');
+const marketingConsentRepo = require('../repositories/marketingConsentRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { uuid, broadcastCreateSchema } = require('../utils/validate');
 const { extractPlaceholders } = require('../utils/templateParams');
@@ -150,10 +151,17 @@ router.post('/', requireRole('Admin', 'Manager'), asyncHandler(async (req, res) 
   const requiresConsent = !template || template.category === 'Marketing';
   let consentWarning = null;
   if (requiresConsent && recipients.length > 0) {
-    const optedInCount = recipients.filter((r) => r.opt_in_status === 'opted_in').length;
-    const notOptedInCount = recipients.length - optedInCount;
-    if (notOptedInCount > recipients.length / 2) {
-      consentWarning = `${notOptedInCount} of ${recipients.length} recipients have not opted in to marketing messages and will be skipped, not sent.`;
+    // Same rule as messagingService.assertConsentForTemplate: opted-out is
+    // always skipped; unknown is skipped only until the client attests
+    // (build-docs/features/marketing-consent-attestation.md).
+    const attested = await marketingConsentRepo.isAttested(req.db, req.clientId);
+    const optedOutCount = recipients.filter((r) => r.opt_in_status === 'opted_out').length;
+    const unknownCount = recipients.filter((r) => r.opt_in_status !== 'opted_in' && r.opt_in_status !== 'opted_out').length;
+    const skippedCount = optedOutCount + (attested ? 0 : unknownCount);
+    if (skippedCount > recipients.length / 2) {
+      consentWarning = attested
+        ? `${skippedCount} of ${recipients.length} recipients have opted out of marketing messages and will be skipped, not sent.`
+        : `${skippedCount} of ${recipients.length} recipients have not opted in to marketing messages and will be skipped, not sent. Record their opt-in, or confirm in Settings > Marketing consent that your business collects opt-in.`;
     }
   }
 

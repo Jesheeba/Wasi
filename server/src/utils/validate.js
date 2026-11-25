@@ -805,6 +805,30 @@ const listSectionSchema = z.object({
   rows: z.array(listRowSchema).min(1),
 });
 
+// How a business collected a contact's opt-in - shared by the bulk/CSV
+// opt-in routes and the Hub API's opt-in (see bulkConsentOptInSchema below).
+// Defined here, above apiMessageSendSchema, because that schema uses it.
+const CONSENT_METHODS = ['website_form', 'in_store', 'existing_customer_agreement', 'other'];
+
+// Hub API opt-in (build-docs/features/marketing-consent-attestation.md): the
+// caller asserts it collected this contact's opt-in, and how.
+const apiOptInSchema = z.object({
+  method: z.enum(CONSENT_METHODS),
+  note: z.string().max(500).optional(),
+}).strict();
+
+// POST /api/v1/contacts/consent. method is required for an opt-in (the
+// evidence of how it was collected) and ignored for an opt-out.
+const apiContactConsentSchema = z.object({
+  phone: z.string().min(1),
+  status: z.enum(['opted_in', 'opted_out']),
+  method: z.enum(CONSENT_METHODS).optional(),
+  note: z.string().max(500).optional(),
+}).strict().refine((d) => d.status !== 'opted_in' || Boolean(d.method), {
+  message: `method is required when status is opted_in (one of: ${CONSENT_METHODS.join(', ')})`,
+  path: ['method'],
+});
+
 // Hub API send endpoint (build plan Phase 5) - client_id is required in the
 // body (not just resolved from the API key) as a defense-in-depth sanity
 // check: routes/apiV1Messages.js rejects the request if it doesn't match
@@ -841,6 +865,8 @@ const apiMessageSendSchema = z.object({
   // list-opening button itself (distinct from the reply `buttons` above).
   button: z.string().min(1).max(20).optional(),
   sections: z.array(listSectionSchema).min(1).max(10).optional(),
+  // Optional: record this contact's marketing opt-in before sending.
+  optIn: apiOptInSchema.optional(),
 }).refine(
   (data) => {
     if (data.type === 'text') return Boolean(data.body);
@@ -894,7 +920,6 @@ const consentEventCreateSchema = z.object({
 // 20000 is a generous, not a tight, cap - this app's own no-pagination
 // convention means a "select all" in the UI is the client's whole contact
 // list; the cap exists only to reject a truly pathological request.
-const CONSENT_METHODS = ['website_form', 'in_store', 'existing_customer_agreement', 'other'];
 const bulkConsentOptInSchema = z.object({
   contactIds: z.array(uuid).min(1).max(20000),
   method: z.enum(CONSENT_METHODS),
@@ -983,6 +1008,7 @@ module.exports = {
   bulkConsentOptInSchema,
   CONSENT_METHODS,
   apiMessageSendSchema,
+  apiContactConsentSchema,
   zapierSubscribeSchema,
   apiKeySelfCreateSchema,
 };

@@ -1,5 +1,18 @@
 # Testing
 
+## marketing-consent-attestation, 2026-11-25
+- `marketingConsentAttestation.test.js` AC1-AC8, 6/6 (local embedded Postgres).
+- Mutation check: removing the attestation pass fails AC1/AC2/AC8; removing the
+  opted-out branch fails AC3/AC8.
+- `consentTracking.test.js` #2 changed on purpose: an opted-out contact now
+  returns `contact_opted_out`, not `consent_required` (new, distinct code).
+- Impact-map run (consent*, optIn*, apiV1*, broadcast*, csv*, flowEngine*,
+  templateApprovalGuard, limitedTimeOffer, messagesApiKeyAttribution,
+  productMessages, whatsappFlows, woocommerce, aiAgent, settingsRedesign):
+  304/305. The one failure, settingsRedesign "discarding a dirty drawer"
+  (element not stable), passed 3/3 when rerun alone: timing flake.
+- mcp-server tests 21/21 (error hints edited).
+
 ## ctwa-ad-metrics
 `ctwaAdMetrics.test.js` (Meta faked), 8/8. `ctwaAdsPage.test.js` 6/6
 after a deliberate change: the old "never show spend" check became "never

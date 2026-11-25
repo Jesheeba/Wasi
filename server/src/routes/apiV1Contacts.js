@@ -13,6 +13,10 @@ const { z } = require('zod');
 const contactsRepo = require('../repositories/contactsRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { requireApiKey } = require('../middleware/requireApiKey');
+const consentRepo = require('../repositories/consentRepo');
+const { recordHubApiConsent } = require('../services/hubApiConsent');
+const { apiContactConsentSchema } = require('../utils/validate');
+const { sendApiError } = require('../utils/apiError');
 
 const router = Router();
 router.use(requireApiKey);
@@ -39,6 +43,30 @@ router.get('/', asyncHandler(async (req, res) => {
     );
   }
   res.json(contacts.slice(0, limit));
+}));
+
+// Record a contact's marketing opt-in or opt-out collected outside Wasi
+// (build-docs/features/marketing-consent-attestation.md). Creates the
+// contact if the phone is new, same as a send does. Opt-out is sticky: an
+// opt-in for a contact who opted out is refused, never applied.
+router.post('/consent', asyncHandler(async (req, res) => {
+  const data = apiContactConsentSchema.parse(req.body);
+  const contact = await contactsRepo.upsertByPhone(pool, req.clientId, { phone: data.phone });
+  try {
+    const updated = await recordHubApiConsent(req.clientId, contact.id, {
+      status: data.status, method: data.method, note: data.note, apiKeyId: req.apiKeyId,
+    });
+    if (!updated) return sendApiError(res, 404, 'contact_not_found', 'Contact not found.');
+    res.json({
+      id: updated.id, phone: updated.phone, opt_in_status: updated.opt_in_status,
+      opt_in_at: updated.opt_in_at, opt_out_at: updated.opt_out_at,
+    });
+  } catch (err) {
+    if (err instanceof consentRepo.ConsentBlockedError) {
+      return sendApiError(res, 409, 'contact_opted_out', 'This contact has opted out of marketing messages - only the contact can undo that (e.g. by replying START).');
+    }
+    throw err;
+  }
 }));
 
 module.exports = router;

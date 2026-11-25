@@ -19,6 +19,7 @@ const messageTemplatesRepo = require('../repositories/messageTemplatesRepo');
 const subscriptionsRepo = require('../repositories/subscriptionsRepo');
 const plansRepo = require('../repositories/plansRepo');
 const usageRepo = require('../repositories/usageRepo');
+const marketingConsentRepo = require('../repositories/marketingConsentRepo');
 const metaClient = require('../utils/metaClient');
 const mediaHeaderService = require('./mediaHeaderService');
 const { decrypt } = require('../utils/encryption');
@@ -101,17 +102,28 @@ async function assertTemplateSendable(db, template, accessToken) {
 // Takes the template row directly, not a name - sendChatMessage now looks
 // it up once (also needed for the media-header resolution below) rather
 // than this function re-fetching it a second time.
+//
+// Account attestation (build-docs/features/marketing-consent-attestation.md):
+// an opted-out contact is always refused; an opted-in one always passes; a
+// contact whose status is unknown passes only once the client has attested,
+// in Settings > Marketing consent, that it collects opt-in itself.
 async function assertConsentForTemplate(db, clientId, chat, template) {
   const requiresConsent = !template || template.category === 'Marketing';
   if (!requiresConsent) return;
 
   const contact = chat.contact_id ? await contactsRepo.findById(db, clientId, chat.contact_id) : null;
-  if (!contact || contact.opt_in_status !== 'opted_in') {
+  if (contact?.opt_in_status === 'opted_in') return;
+  if (contact?.opt_in_status === 'opted_out') {
     throw new MessagingError(
-      'This contact has not opted in to marketing messages - utility/authentication templates are unaffected.',
-      'consent_required'
+      'This contact has opted out of marketing messages - only the contact can undo that (e.g. by replying START). Utility/authentication templates are unaffected.',
+      'contact_opted_out'
     );
   }
+  if (await marketingConsentRepo.isAttested(db, clientId)) return;
+  throw new MessagingError(
+    'This contact has not opted in to marketing messages. Record their opt-in (Contacts, CSV import, or the API\'s optIn field), or confirm in Settings > Marketing consent that your business collects opt-in. Utility/authentication templates are unaffected.',
+    'consent_required'
+  );
 }
 
 // Approximate plan enforcement - see usageRepo.monthToDateSent for the

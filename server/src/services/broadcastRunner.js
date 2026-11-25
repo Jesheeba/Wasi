@@ -185,7 +185,7 @@ async function sendOneRecipient(broadcast, recipient, template) {
     // not fail (build plan Phase 4). Reusing messagingService's own check
     // rather than re-implementing it here means there's exactly one place
     // that decides whether a template send needs consent.
-    if (err instanceof MessagingError && err.code === 'consent_required') {
+    if (err instanceof MessagingError && (err.code === 'consent_required' || err.code === 'contact_opted_out')) {
       await broadcastRecipientsRepo.markSkipped(pool, recipient.id, err.message);
     } else if (isTransientSendError(err)) {
       await broadcastRecipientsRepo.markFailedAttempt(pool, recipient.id, err.message, recipient.attempt_count || 0);

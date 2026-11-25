@@ -18,6 +18,8 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { apiMessageSendSchema, uuid } = require('../utils/validate');
 const { requireApiKey } = require('../middleware/requireApiKey');
 const { sendApiError } = require('../utils/apiError');
+const consentRepo = require('../repositories/consentRepo');
+const { recordHubApiConsent } = require('../services/hubApiConsent');
 
 const router = Router();
 router.use(requireApiKey);
@@ -85,6 +87,23 @@ router.post('/', asyncHandler(async (req, res) => {
       templateComponents = metaClient.buildAuthenticationSendComponents(extracted.code);
     } else {
       templateComponents = metaClient.buildNamedBodyComponents(data.params);
+    }
+  }
+
+  // optIn (build-docs/features/marketing-consent-attestation.md): the caller
+  // asserts it collected this contact's marketing opt-in. Recorded after the
+  // request is otherwise valid and before the send, so the consent gate in
+  // sendChatMessage sees it. An opted-out contact is refused, nothing sent.
+  if (data.optIn) {
+    try {
+      await recordHubApiConsent(req.clientId, contact.id, {
+        status: 'opted_in', method: data.optIn.method, note: data.optIn.note, apiKeyId: req.apiKeyId,
+      });
+    } catch (err) {
+      if (err instanceof consentRepo.ConsentBlockedError) {
+        return sendApiError(res, 409, 'contact_opted_out', 'This contact has opted out of marketing messages - only the contact can undo that (e.g. by replying START). Nothing was sent.');
+      }
+      throw err;
     }
   }
 

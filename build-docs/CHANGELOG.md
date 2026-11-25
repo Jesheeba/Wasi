@@ -1,5 +1,14 @@
 # Changelog
 
+## feat(marketing-consent): account attestation + opt-in through the Hub API
+- Settings > Marketing consent: an Owner/Admin confirms the business collects
+  opt-in; Marketing templates can then go to contacts with no recorded opt-in.
+  Opted-out contacts are never sent Marketing (new code `contact_opted_out`).
+- Hub API: `POST /api/v1/contacts/consent` and an `optIn` field on
+  `POST /api/v1/messages`; opt-out stays sticky.
+- Broadcast warning counts only who will really be skipped; runner skips
+  opted-out recipients. Migration 111.
+
 ## fix(template-approval-guard): only approved templates can be sent
 - Every template send (Hub API / n8n / Zapier, chat inbox, flows, WooCommerce)
   is refused with `template_not_approved` unless Meta approved it; broadcasts

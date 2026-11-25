@@ -13,7 +13,8 @@ const { HubApiError } = require('./hubClient');
 // top, not a duplicate restatement.
 const HUB_CODE_HINTS = {
   waba_not_connected: 'This Wasi account has no connected WhatsApp Business number yet - connect one from the Wasi admin panel before sending.',
-  consent_required: 'Call search_contacts or check this contact\'s opt-in status - marketing templates can only be sent to contacts who have explicitly opted in.',
+  consent_required: 'This contact has not opted in to marketing. Record their opt-in first (the Hub API\'s optIn field), or the business owner can confirm in Wasi Settings > Marketing consent that they collect opt-in.',
+  contact_opted_out: 'This contact opted out of marketing messages. Do not retry - only the contact can opt back in (e.g. by replying START). Utility templates are unaffected.',
   plan_limit_reached: 'This account has hit its monthly conversation limit for the current billing plan. Sending will resume next billing cycle, or after an upgrade.',
   session_window_closed: 'Use send_template_message instead - free-form text/button/list messages only work within 24 hours of the contact\'s last inbound message.',
   media_resolution_failed: 'The template\'s media header (image/video/document) could not be resolved - check the header_media_url, or that the template\'s default sample media is still valid.',

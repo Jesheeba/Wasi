@@ -1,5 +1,22 @@
 # Project memory
 
+## 2026-11-25 - marketing consent: account attestation + Hub API opt-in
+- Owner chose options B + C ("use b and c"). Reverses the 2026-09-22 rule that
+  only opted_in contacts may get Marketing: production had ~4,350 real contacts
+  'unknown' and ~9 opted in, so Marketing (incl. n8n sends) was blocked for
+  almost every client.
+- Now: opted_out always blocked (new code contact_opted_out); opted_in sent;
+  unknown sent only after an Owner/Admin attests in Settings > Marketing consent.
+  Matches Meta (duty on the business, enforced via quality) and other providers.
+- Attestation is append-only (migration 111), verbatim statement + version.
+  Owner/Admin only (same as AI consent): it binds the business legally.
+- Hub API: POST /api/v1/contacts/consent and optIn on /api/v1/messages, source
+  hub_api, actor_type api_key. Opt-out stays sticky (only START lifts it).
+- Risk accepted: a client that attests without real consent lowers its own
+  number's quality. Statement wording is draft, pending legal review.
+- Not done: Meta user_preferences ("Stop promotions") opt-out is still unhandled;
+  n8n-nodes-wasi (untracked folder) has no optIn field yet.
+
 ## 2026-11-23 - pricing correction, migration numbers
 - Meta charges service (non-template) messages from 2026-10-01, at utility
   rates, with 1,000 free per business number per month (from secondary

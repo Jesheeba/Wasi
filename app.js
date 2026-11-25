@@ -3536,7 +3536,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // with an accurate reason.
       const badges = [];
       if (b.skippedConsent > 0) {
-        badges.push(`<span class="badge badge-warning" title="Contacts not opted in for marketing - skipped, not sent">${esc(b.skippedConsent)} consent</span>`);
+        badges.push(`<span class="badge badge-warning" title="Contacts skipped for marketing consent (opted out, or no recorded opt-in) - not sent">${esc(b.skippedConsent)} consent</span>`);
       }
       if (b.skippedSmartSending > 0) {
         badges.push(`<span class="badge badge-info" title="Contacts already messaged by another campaign within this broadcast's Smart Sending window - skipped, not sent">${esc(b.skippedSmartSending)} smart sending</span>`);
@@ -6207,7 +6207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       alerts.push({ cls: 'alert-warning', icon: 'alert-triangle', text: `This list has ${listCount.toLocaleString()} contacts but roughly ${Number(campaignTierStatus.remaining).toLocaleString()} conversations remain in your daily messaging tier - some sends could be rejected by WhatsApp. (Estimate, not a live Meta count.)` });
     }
     if (template && template.category === 'Marketing') {
-      alerts.push({ cls: 'alert-info', icon: 'shield-check', text: 'This is a Marketing template: only contacts who have opted in to marketing messages will receive it. Anyone else is skipped, not sent - you will see a warning after launch if most of the audience is not opted in.' });
+      alerts.push({ cls: 'alert-info', icon: 'shield-check', text: 'This is a Marketing template: contacts who opted out are skipped, not sent. Contacts with no recorded opt-in are skipped too, unless you have confirmed in Settings > Marketing consent that your business collects opt-in. You will see a warning after launch if most of the audience will be skipped.' });
     }
     warn.innerHTML = alerts.map((a) => `<div class="alert ${a.cls}"><i data-lucide="${a.icon}" class="icon-16"></i><div>${esc(a.text)}</div></div>`).join('');
     refreshIcons();
@@ -10527,8 +10527,54 @@ document.addEventListener('DOMContentLoaded', () => {
       if (secKey === 'subscription') renderSubscriptionTab();
       if (secKey === 'billing') renderBillingTab();
       if (secKey === 'ai-assistant') renderAiAssistant();
+      if (secKey === 'marketing-consent') renderMarketingConsent();
       refreshIcons();
     });
+  });
+
+  // --- Marketing consent (sec-view-marketing-consent;
+  // build-docs/features/marketing-consent-attestation.md). Owner/Admin may
+  // confirm or withdraw; everyone else sees the state read-only. The server
+  // enforces the role too - this only avoids offering a doomed click.
+  async function renderMarketingConsent() {
+    try {
+      paintMarketingConsent(await authFetch('/api/marketing-consent'));
+    } catch (err) {
+      reportError(err);
+    }
+  }
+
+  function paintMarketingConsent(mc) {
+    const c = mc.contacts || {};
+    document.getElementById('mc-stat-tiles').innerHTML = [
+      statTile('user-check', 'Opted in', String(c.opted_in ?? 0)),
+      statTile('help-circle', 'Not recorded', String(c.unknown ?? 0), mc.attested ? 'Can receive Marketing' : 'Blocked from Marketing'),
+      statTile('user-x', 'Opted out', String(c.opted_out ?? 0), 'Never sent Marketing'),
+    ].join('');
+    document.getElementById('mc-statement').textContent = mc.statement.text;
+    const box = document.getElementById('mc-checkbox');
+    const canChange = state.actorRole === 'Owner' || state.actorRole === 'Admin';
+    box.checked = mc.attested;
+    box.disabled = !canChange;
+    const who = mc.current ? (mc.current.actor_type === 'owner' ? 'the account owner' : 'a team member') : '';
+    document.getElementById('mc-meta').textContent = mc.attested
+      ? `Confirmed by ${who} on ${formatShortDate(mc.current.created_at)}.${canChange ? ' Untick to withdraw.' : ''}`
+      : (mc.current ? `Withdrawn by ${who} on ${formatShortDate(mc.current.created_at)}. ` : '')
+        + (canChange ? 'Not confirmed: Marketing templates only go to contacts marked opted in.' : 'Not confirmed. Only the account owner or an Admin can confirm this.');
+    refreshIcons();
+  }
+
+  document.getElementById('mc-checkbox')?.addEventListener('change', async (e) => {
+    const box = e.target;
+    box.disabled = true;
+    try {
+      const mc = await authFetch('/api/marketing-consent', { method: 'POST', body: JSON.stringify({ attested: box.checked }) });
+      paintMarketingConsent(mc);
+      showToast(mc.attested ? 'Marketing consent confirmed.' : 'Marketing consent withdrawn.', 'success');
+    } catch (err) {
+      reportError(err);
+      renderMarketingConsent(); // put the checkbox back to what the server holds
+    }
   });
 
   // --- AI Assistant (sec-view-ai-assistant; build-docs/features/ai-agent.md) ---

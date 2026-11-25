@@ -15,7 +15,17 @@ const CONSENT_STATEMENT =
 // asset pattern templateParams.js already established (server/src/app.js's
 // GET /templateParams.js), so the UI and the server read the literal same
 // string rather than a hand-copied duplicate that could drift.
-const consentStatement = { CONSENT_STATEMENT };
+// Account-level attestation (build-docs/features/marketing-consent-
+// attestation.md): an Owner/Admin confirms once that the business collects
+// opt-in, so contacts whose status is unknown may receive marketing
+// templates. Opted-out contacts are never messaged. Same DRAFT/legal-review
+// caveat as above. Bump the version whenever the wording changes - each
+// attestation row stores both, verbatim.
+const ACCOUNT_CONSENT_VERSION = 'v1';
+const ACCOUNT_CONSENT_STATEMENT =
+  'I confirm that my business only sends WhatsApp marketing messages to people who have agreed to receive them from us, that I can provide evidence of that agreement if asked, and that anyone who opts out will not be sent marketing messages.';
+
+const consentStatement = { CONSENT_STATEMENT, ACCOUNT_CONSENT_VERSION, ACCOUNT_CONSENT_STATEMENT };
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = consentStatement;
 } else if (typeof window !== 'undefined') {

@@ -101,10 +101,31 @@ curl -X POST https://<wasi-host>/api/v1/messages \
 - `client_id` in the body must match the client the API key belongs to —
   a defense-in-depth check, not just decoration; a key can't be pointed at
   another tenant even by mistake.
-- Consent: if the contact has opted out (or never opted in, depending on
-  your client's consent policy), the send is rejected. This is enforced
-  centrally in `messagingService.sendChatMessage`, the same function the
-  Wasi chat UI itself calls — the CRM API isn't a side door around it.
+- **Marketing consent** (Marketing templates only; Utility and
+  Authentication are not affected). Enforced centrally in
+  `messagingService.sendChatMessage`, the same function the Wasi chat UI
+  calls, so the CRM API isn't a side door around it:
+  - contact opted out (e.g. replied STOP) → `contact_opted_out` (409),
+    always. Don't retry; only the contact can opt back in.
+  - contact opted in → sent.
+  - opt-in not recorded → sent only if the business owner or an Admin has
+    confirmed in Wasi **Settings > Marketing consent** that the business
+    collects opt-in; otherwise `consent_required` (409).
+  - To record opt-in from your own system, add
+    `"optIn": { "method": "website_form", "note": "optional" }` to the send.
+    It is recorded before the send, with your API key as the source.
+    `method` is one of `website_form`, `in_store`,
+    `existing_customer_agreement`, `other`. An opt-in for an opted-out
+    contact is refused with `contact_opted_out` and nothing is sent.
+  - Or record consent separately:
+    `POST /api/v1/contacts/consent` with
+    `{ "phone": "9198...", "status": "opted_in", "method": "website_form" }`
+    (or `"status": "opted_out"`, no method needed). Creates the contact if
+    it's new; returns `id`, `phone`, `opt_in_status`, `opt_in_at`,
+    `opt_out_at`.
+  - Passing `optIn` or `status: "opted_in"` means you confirm that this
+    person agreed to receive WhatsApp marketing from the business and that
+    the business can show evidence of it.
 - Errors come back in one consistent shape across every `/api/v1/*`
   endpoint: `{ "error": { "code": "...", "message": "...", ... } }` — a
   stable, machine-readable `code` to branch on, a human-readable `message`,
@@ -146,8 +167,9 @@ Marketing). The create response then has `"category": "Marketing"`,
 Template objects from `GET /api/v1/templates` also carry
 `previous_category`, `category_changed_at` and, when Meta has announced a
 change that has not happened yet, `upcoming_category` /
-`upcoming_category_at`. Marketing templates are only sent to contacts who
-opted in.
+`upcoming_category_at`. Marketing templates follow the consent rules
+above (opted-in contacts, or any not-opted-out contact once the business
+has confirmed it collects opt-in).
 
 Limits: IMAGE JPEG/PNG up to 5MB, VIDEO MP4 up to 16MB, DOCUMENT PDF up to
 100MB. Error codes: `header_media_required`, `invalid_header_media`,

@@ -1240,6 +1240,16 @@
                 </div>
 
                 <div class="sec-nav-group">
+                  <div class="sec-nav-group-title">Compliance</div>
+                  <div class="sec-nav-list">
+                    <a class="sec-nav-item" data-sec-view="marketing-consent" role="button" tabindex="0">
+                      <i data-lucide="shield-check"></i>
+                      <span>Marketing consent</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="sec-nav-group">
                   <div class="sec-nav-group-title">Team &amp; access</div>
                   <div class="sec-nav-list">
                     <a class="sec-nav-item" data-sec-view="team" role="button" tabindex="0">
@@ -1347,6 +1357,35 @@
                     <div class="settings-loading"><span class="skeleton settings-skeleton-line"></span></div>
                   </div>
                 </div>
+              </div>
+
+              <!-- MARKETING CONSENT (build-docs/features/marketing-consent-attestation.md).
+                   Rendered by renderMarketingConsent() (app.js). -->
+              <div id="sec-view-marketing-consent" class="sec-content-view" style="display: none;">
+                <div class="page-header settings-page-header">
+                  <div class="page-header-text">
+                    <h2 class="page-title">Marketing consent</h2>
+                    <p class="page-subtitle">Who can receive your Marketing templates. Utility and authentication templates are not affected.</p>
+                  </div>
+                </div>
+
+                <div class="stat-tiles" id="mc-stat-tiles" aria-live="polite"></div>
+
+                <section class="card ai-card" aria-labelledby="mc-title">
+                  <h3 class="ai-card-title" id="mc-title"><i data-lucide="shield-check"></i> Your business collects opt-in</h3>
+                  <p class="form-hint">WhatsApp requires every business to get permission before sending marketing messages. Confirm below that you do, and Marketing templates can go to contacts whose opt-in isn't recorded in Wasi. Contacts who opted out (for example by replying STOP) are never sent marketing messages.</p>
+                  <p class="ai-consent-text" id="mc-statement"></p>
+                  <label class="ai-consent-check">
+                    <input type="checkbox" id="mc-checkbox" />
+                    <span>I confirm this, on behalf of my business</span>
+                  </label>
+                  <div class="form-hint" id="mc-meta"></div>
+                </section>
+
+                <section class="card ai-card" aria-labelledby="mc-api-title">
+                  <h3 class="ai-card-title" id="mc-api-title"><i data-lucide="plug"></i> Recording opt-in per contact</h3>
+                  <p class="form-hint">You can also record each contact's opt-in: in Contacts (select contacts, then "Mark as opted in"), with an <code>opt_in</code> column in a CSV import, or from your own system through the API (<code>POST /api/v1/contacts/consent</code>, or the <code>optIn</code> field when sending a message).</p>
+                </section>
               </div>
 
               <!-- TEAM -->
