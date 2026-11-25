@@ -49,7 +49,7 @@ router.get('/:id/status', asyncHandler(async (req, res) => {
 router.post('/', asyncHandler(async (req, res) => {
   const data = apiMessageSendSchema.parse(req.body);
 
-  if (data.client_id !== req.clientId) {
+  if (data.client_id !== undefined && data.client_id !== req.clientId) {
     return sendApiError(res, 403, 'client_id_mismatch', 'client_id does not match this API key\'s client.');
   }
 

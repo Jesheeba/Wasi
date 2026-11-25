@@ -109,9 +109,10 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   template with no variables takes no `params`. Otherwise the request is
   refused with `params_mismatch` (400) and the message names what's wrong,
   instead of Meta's `#132000`.
-- `client_id` in the body must match the client the API key belongs to —
-  a defense-in-depth check, not just decoration; a key can't be pointed at
-  another tenant even by mistake.
+- `client_id` in the body is optional — the API key already identifies the
+  client. If you send it, it must match the client the key belongs to, or
+  the request is refused with `client_id_mismatch` (403); a key can't be
+  pointed at another tenant even by mistake.
 - **Marketing consent** (Marketing templates only; Utility and
   Authentication are not affected). Enforced centrally in
   `messagingService.sendChatMessage`, the same function the Wasi chat UI
@@ -153,6 +154,20 @@ curl -X POST https://<wasi-host>/api/v1/messages \
   300 requests/minute, currently scoped per source IP (also available as a
   static reference via `GET /api/v1/account/rate-limit`). A 429 response
   uses the same error shape as above: `{ "error": { "code": "rate_limited", "message": "Too many requests." } }`.
+
+**Read conversations** — `GET /api/v1/conversations` (same auth). Newest
+activity first. Query parameters:
+- `limit` (1-100, default 20).
+- `offset` (default 0) — skip that many; page with `offset=0`, `100`,
+  `200`... until fewer than `limit` come back.
+- `updated_after` (ISO time, e.g. `2026-11-25T09:00:00Z`; `since` is an
+  alias) — only conversations with a message after that time. For a
+  poller: pass the time of your previous poll.
+- Any other parameter (e.g. `page`) is refused with `validation_failed`
+  (400) rather than silently ignored.
+
+`GET /api/v1/conversations/:id/messages?limit=` (1-200, default 50) returns
+that conversation's most recent messages, oldest first.
 
 **Manage templates** — `GET /api/v1/templates`, `POST /api/v1/templates`
 (same auth). A template must be Meta-approved before it can be used in a

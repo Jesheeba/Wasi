@@ -8,7 +8,7 @@
 // `client_id` is included here specifically so the MCP server
 // (mcp-server/src/hubClient.js) can resolve it once, from the API key
 // alone, and inject it automatically into every POST /api/v1/messages call
-// - apiMessageSendSchema requires a client_id body field as a
+// - apiMessageSendSchema accepts an optional client_id body field as a
 // defense-in-depth check (see validate.js's comment), but that's an
 // internal identifier no MCP tool caller (a model, or the person prompting
 // it) has any reason to already know. Exposing it here keeps every tool's

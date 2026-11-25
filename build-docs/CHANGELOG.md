@@ -1,5 +1,11 @@
 # Changelog
 
+## fix(hub-api-conversations): page past 100 conversations; client_id optional on sends
+- `GET /api/v1/conversations` takes `offset` and `updated_after` (alias
+  `since`); unknown params are a 400 instead of silently ignored.
+- `POST /api/v1/messages` no longer requires `client_id`; a wrong one is
+  still refused (403 `client_id_mismatch`).
+
 ## feat(meta-send-pacing): pace sends per number and retry Meta rate limits
 - Sends to Meta are spaced per WhatsApp number (META_SENDS_PER_SECOND, default
   15), so an n8n burst queues instead of failing with 130429; a 130429 that

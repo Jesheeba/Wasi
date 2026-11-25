@@ -25,14 +25,21 @@ const { sendApiError } = require('../utils/apiError');
 const router = Router();
 router.use(requireApiKey);
 
+// .strict(): an unsupported param (e.g. `page`, `after`) is a 400 naming it,
+// not silently ignored - callers once paged with `page` and got the same 100
+// rows back every time (build-docs/features/hub-api-conversations-paging.md).
+// `since` is accepted as an alias of `updated_after`.
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
-});
+  offset: z.coerce.number().int().min(0).default(0),
+  updated_after: z.coerce.date().optional(),
+  since: z.coerce.date().optional(),
+}).strict();
 
 router.get('/', asyncHandler(async (req, res) => {
-  const { limit } = listQuerySchema.parse(req.query);
-  const chats = await chatsRepo.list(pool, req.clientId);
-  res.json(chats.slice(0, limit));
+  const { limit, offset, updated_after, since } = listQuerySchema.parse(req.query);
+  const chats = await chatsRepo.list(pool, req.clientId, { since: updated_after || since });
+  res.json(chats.slice(offset, offset + limit));
 }));
 
 const historyQuerySchema = z.object({

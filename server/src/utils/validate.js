@@ -829,13 +829,14 @@ const apiContactConsentSchema = z.object({
   path: ['method'],
 });
 
-// Hub API send endpoint (build plan Phase 5) - client_id is required in the
-// body (not just resolved from the API key) as a defense-in-depth sanity
-// check: routes/apiV1Messages.js rejects the request if it doesn't match
-// the key's own client_id, catching a caller that's confused about which
-// key it's using rather than silently acting on the wrong tenant.
+// Hub API send endpoint (build plan Phase 5). client_id is optional (the
+// API key already resolves the client); when sent, routes/apiV1Messages.js
+// rejects it if it doesn't match the key's own client_id, catching a caller
+// that's confused about which key it's using.
 const apiMessageSendSchema = z.object({
-  client_id: uuid,
+  // Optional: the API key already identifies the client. If sent, it must
+  // match (apiV1Messages.js, 403 client_id_mismatch).
+  client_id: uuid.optional(),
   to: z.string().min(1),
   type: z.enum(['text', 'template', 'interactive']).default('text'),
   template: z.string().optional(),

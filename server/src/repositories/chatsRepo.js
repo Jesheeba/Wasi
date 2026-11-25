@@ -24,7 +24,8 @@ async function list(db, clientId, { since, status, assignedTo } = {}) {
   }
 
   const { rows } = await db.query(
-    `select * from chats where ${conditions.join(' and ')} order by last_message_at desc`,
+    // id breaks ties so offset paging (Hub API) never repeats or skips a row.
+    `select * from chats where ${conditions.join(' and ')} order by last_message_at desc, id desc`,
     params
   );
   return rows;

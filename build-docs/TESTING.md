@@ -663,3 +663,12 @@ Four files failed on master. No app code changed; three tests were stale.
   separately).
 - Test fixture: `test/helpers/activateRegisteredClients.js` preloaded by
   `npm test` activates clients signed up through Node fetch.
+
+## hub-api-conversations-paging, 2026-11-25
+- `hubApiConversationsPaging.test.js` AC1-AC4 4/4 (local embedded Postgres).
+- Mutation check: with the old conversations route all 4 fail (AC4 via the
+  rate limiter after AC1 looped; loop now bounded).
+- Regression: apiV1Reads 12, apiV1 14, apiV1ErrorShape 14,
+  hubApiParamsAndRejections 6, hubApiPhoneValidation 4, chatAssignment 13,
+  chatNotes 7, chatsLastAgentReplyAt 17, consentTracking 8, contactTimeline 4,
+  marketingConsentAttestation 6, unpaidSignupBlock 7: all pass.

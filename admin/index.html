@@ -649,7 +649,7 @@
     "template": "order_shipped",
     "params": { "1": "Priya", "2": "#4821" }
   }'</pre>
-              <p><code>type: "template"</code> is required outside the 24-hour customer-service window and needs a Meta-approved template. <code>type: "text"</code> with a <code>"body"</code> field only works inside that 24-hour window. <code>client_id</code> in the body must match the key's own client - a defense-in-depth check, not decoration.</p>
+              <p><code>type: "template"</code> is required outside the 24-hour customer-service window and needs a Meta-approved template. <code>type: "text"</code> with a <code>"body"</code> field only works inside that 24-hour window. <code>client_id</code> in the body is optional (the API key already identifies the client); if sent, it must match the key's own client or the request is refused with <code>client_id_mismatch</code> (403).</p>
             </div>
 
             <div class="detail-card">
@@ -662,7 +662,7 @@
 
             <div class="detail-card">
               <h2 class="detail-card-title">5b. Read Endpoints - Conversations, Contacts, Account, Message Status</h2>
-              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id - not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status, quality rating, and <code>messaging_limit</code>: Meta's daily limit on unique people messaged first, with Wasi's estimate of used and remaining), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
+              <p>Same bearer auth. <code>GET /api/v1/templates/:id</code> (full template definition), <code>GET /api/v1/messages/:id/status</code> (delivery status of a previously sent message, by its Hub-assigned id - not Meta's <code>wamid.*</code>), <code>GET /api/v1/conversations</code> and <code>GET /api/v1/conversations/:id/messages</code> (chat list and history, both accept <code>?limit=</code>; the list also takes <code>?offset=</code> and <code>?updated_after=</code> - an ISO time - to page past the newest 100 or poll for chats changed since a time; any other parameter is a 400), <code>GET /api/v1/contacts?q=</code> or <code>?phone=</code> (search), <code>GET /api/v1/account</code> (WABA connection status, quality rating, and <code>messaging_limit</code>: Meta's daily limit on unique people messaged first, with Wasi's estimate of used and remaining), and <code>GET /api/v1/account/rate-limit</code> (the static rate ceiling below, machine-readable). These were added alongside the Wasi MCP server (see "Connect via MCP / Claude" below) so an AI assistant has read access to the same data a developer's own integration would.</p>
             </div>
 
             <div class="detail-card">
