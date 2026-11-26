@@ -46,7 +46,9 @@ function typing(dur) {
 
   const N = Math.ceil(DUR * SR), L = new Float32Array(N), R = new Float32Array(N);
   const cache = {};
-  for (const c of cues) {
+  // With a recorded score, only small UI sounds stay: no whooshes, typing or chimes over the music.
+  const KEEP = new Set(['click', 'tick', 'pop', 'send', 'success', 'error']);
+  for (const c of cues.filter((x) => KEEP.has(x.s))) {
     const snd = c.s === 'typing' ? typing(c.dur) : (cache[c.s] ||= SOUNDS[c.s] && SOUNDS[c.s]());
     if (!snd) throw new Error('unknown sfx ' + c.s);
     const g = c.gain ?? 1, i0 = Math.floor(c.t * SR);

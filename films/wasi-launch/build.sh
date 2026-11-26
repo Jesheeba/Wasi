@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 if [ "$1" != "--preview" ]; then
   echo "== voice (ElevenLabs) =="; node scripts/generate-vo.js
 fi
+echo "== app UI from index.html =="; node scripts/extract-app-ui.js
 echo "== timing (90.0s) ==";       node scripts/build-timing.js
 echo "== score ==";                node scripts/make-music.js
 echo "== sound design ==";         node scripts/make-sfx.js
