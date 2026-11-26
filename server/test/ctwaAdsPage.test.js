@@ -125,7 +125,7 @@ async function openApp(t, hash) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(10000);
   await page.goto(`${BASE}/app`);
-  await page.evaluate((tk) => { localStorage.setItem('client_token', tk); localStorage.setItem('actor_type', 'owner'); }, t);
+  await page.evaluate((tk) => { localStorage.setItem('client_token', tk); localStorage.setItem('actor_type', 'owner'); localStorage.setItem('wasi_preview_ctwa', '1'); }, t);
   await page.goto(`${BASE}/app#${hash}`);
   await page.reload();
   await page.waitForSelector(`#view-${hash}.active`);
@@ -135,7 +135,10 @@ async function openApp(t, hash) {
 test('AC1-AC4 UI: nav opens the page, tiles + table, range filter, drill into chats, open a chat', async () => {
   const page = await openApp(token, 'ctwa');
   const nav = page.locator('.nav-item[data-view="ctwa"]');
-  assert.equal(await nav.locator('.nav-soon').count(), 0, 'no longer marked Soon');
+  // Coming soon again until Meta approves ad reporting (owner, 2026-11-26);
+  // openApp sets wasi_preview_ctwa=1 so the working page is still tested.
+  assert.equal(await nav.locator('.nav-soon').count(), 1, 'marked Soon');
+  assert.equal(await page.locator('#ctwa-coming-soon').isHidden(), true, 'preview shows the live page');
 
   await page.waitForSelector('#ctwa-ads-tbody tr.ctwa-ad-row');
   assert.equal(await page.locator('#ctwa-ads-tbody tr.ctwa-ad-row').count(), 1, 'default 30 days shows Ad A only');

@@ -9152,7 +9152,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
   }
 
+  // Ad Leads is "Coming soon" until Meta approves ad reporting (owner,
+  // 2026-11-26). The working page stays in index.html (#ctwa-live); set this
+  // to false to turn it back on. localStorage wasi_preview_ctwa=1 shows it
+  // anyway, for testing.
+  const CTWA_COMING_SOON = true;
+
   async function renderCtwaView() {
+    const live = !CTWA_COMING_SOON || localStorage.getItem('wasi_preview_ctwa') === '1';
+    document.getElementById('ctwa-live').hidden = !live;
+    document.getElementById('ctwa-coming-soon').hidden = live;
+    if (!live) return;
     const tbody = document.getElementById('ctwa-ads-tbody');
     const stats = document.getElementById('ctwa-stats');
     if (!tbody || !stats) return;

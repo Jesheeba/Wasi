@@ -198,9 +198,10 @@
           <i data-lucide="clipboard-list"></i>
           <span class="nav-text">Forms</span>
         </a>
-        <a class="nav-item" data-view="ctwa" role="button" tabindex="0" title="Click-to-WhatsApp Ads">
+        <a class="nav-item" data-view="ctwa" role="button" tabindex="0" title="Ad Leads - coming soon">
           <i data-lucide="target"></i>
           <span class="nav-text">Ad Leads</span>
+          <span class="nav-soon">Soon</span>
         </a>
         <div class="nav-group-label">Business</div>
         <a class="nav-item" data-view="payments" role="button" tabindex="0">
@@ -986,7 +987,27 @@
              first message of a chat started from an ad. Ad clicks, spend and
              cost per lead are NOT shown: they live in Meta's Marketing API,
              which this app has no access to. -->
+        <!-- Coming soon (owner, 2026-11-26): the working page below is kept but
+             hidden (#ctwa-live) until Meta approves ad reporting; app.js's
+             CTWA_COMING_SOON switch turns it back on. -->
         <div id="view-ctwa" class="view-container" style="padding: 1.5rem;">
+          <div id="ctwa-coming-soon">
+            <div class="page-title-bar">
+              <div>
+                <h1 class="page-title">Click-to-WhatsApp Ads <span class="badge badge-info">Coming soon</span></h1>
+                <p class="page-subtitle">Chats started from your Facebook and Instagram ads</p>
+              </div>
+            </div>
+            <div class="table-card">
+              <div class="empty-state">
+                <i data-lucide="target" class="empty-icon" aria-hidden="true"></i>
+                <div class="empty-title">Ad Leads is coming soon</div>
+                <p>See which Facebook and Instagram ads bring you WhatsApp chats, with spend, clicks and cost per lead.</p>
+                <p class="empty-example">Waiting on Meta to approve ad reporting for Wasi.</p>
+              </div>
+            </div>
+          </div>
+          <div id="ctwa-live" hidden>
           <div class="page-title-bar">
             <div>
               <h1 class="page-title">Click-to-WhatsApp Ads</h1>
@@ -1021,6 +1042,7 @@
             </table>
           </div>
           <p class="form-hint ctwa-note">Leads are the chats each ad started, counted by Wasi. Spend and clicks come from your connected Meta ad account; cost per lead = spend ÷ leads.</p>
+          </div>
         </div>
 
         <!-- Integrations (build-docs/features/integrations-page.md): live status
