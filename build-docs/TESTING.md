@@ -680,3 +680,12 @@ Four files failed on master. No app code changed; three tests were stale.
   hubApiParamsAndRejections 6, hubApiPhoneValidation 4, chatAssignment 13,
   chatNotes 7, chatsLastAgentReplyAt 17, consentTracking 8, contactTimeline 4,
   marketingConsentAttestation 6, unpaidSignupBlock 7: all pass.
+
+## contacts-bulk-tags, 2026-11-26
+- `contactsBulkTags.test.js` AC1-AC6 6/6 (local embedded Postgres).
+- Browser check (Playwright, :4000, disposable client): select 2 of 3
+  contacts, create "Chennai" from the modal, add existing "VIP", remove "VIP";
+  table chips and toasts correct, selection kept, no page errors.
+- Regression: analyticsTagsMultiTag, apiV1, broadcastTagAudienceMultiTag,
+  consentHardeningPhase2, contactSegments, contactTags, contactTagsWrite,
+  contactsCsvImport, contactLists, settingsRedesign: 87/87 pass.

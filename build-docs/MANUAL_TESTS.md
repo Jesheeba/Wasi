@@ -350,3 +350,15 @@ Deploy first (migration 111). Demo account, test number 9092766740 only.
    the refusals from steps 6 and 7.
 
 Status: PENDING
+
+## 23. Contacts: bulk tagging (after deploy)
+
+1. Demo account > Contacts: tick 3 contacts (or the header box, then
+   "Select all N contacts").
+2. Click **Tags**, type a new tag name, click **Add tag**: toast says it was
+   added to 3 contacts; the Tags column shows the tag on all 3.
+3. With the same selection, pick an existing tag and **Add tag**: both tags
+   show. Filter "All tags" by the new tag: only those 3 remain.
+4. **Tags** > pick the new tag > **Remove tag**: it disappears from all 3.
+
+Status: PENDING

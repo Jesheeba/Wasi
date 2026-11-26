@@ -259,6 +259,9 @@ document.addEventListener('DOMContentLoaded', () => {
       name: c.name,
       phone: c.phone,
       tag: state.tagsById[c.tag_id]?.name || '-',
+      // Every tag the contact has: the primary tag_id plus contact_tags.
+      tags: [...new Set([c.tag_id, ...(c.tag_ids || [])].filter(Boolean))]
+        .map((id) => state.tagsById[id]?.name).filter(Boolean),
       status: c.status,
       created: (c.created_at || '').slice(0, 10),
       optInStatus: c.opt_in_status || 'unknown',
@@ -3174,9 +3177,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const q = contactsView.q.trim().toLowerCase();
     return state.contacts.filter((c) => {
       if (contactsView.consent && c.optInStatus !== contactsView.consent) return false;
-      if (contactsView.tag && c.tag !== contactsView.tag) return false;
+      if (contactsView.tag && !c.tags.includes(contactsView.tag)) return false;
       if (q) {
-        const hay = `${c.name} ${c.phone} ${c.tag}`.toLowerCase();
+        const hay = `${c.name} ${c.phone} ${c.tags.join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -3192,7 +3195,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function populateContactsTagFilter() {
     const select = document.getElementById('contacts-tag-filter');
     if (!select) return;
-    const names = Array.from(new Set(state.contacts.map((c) => c.tag).filter((t) => t && t !== '-'))).sort();
+    const names = Array.from(new Set(state.contacts.flatMap((c) => c.tags))).sort();
     if (contactsView.tag && !names.includes(contactsView.tag)) contactsView.tag = '';
     select.innerHTML = '<option value="">All tags</option>' +
       names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
@@ -3291,7 +3294,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td data-label="Name" class="contacts-name-td"><span class="contacts-name-cell"><span class="contacts-avatar" aria-hidden="true">${esc(contactInitials(c.name))}</span><span class="contacts-name">${esc(c.name)}</span></span></td>
           <td data-label="Phone" class="contacts-phone">${esc(c.phone)}</td>
           <td data-label="Status"><span class="badge ${statusCls}">${esc(c.status)}</span></td>
-          <td data-label="Tags">${c.tag && c.tag !== '-' ? `<span class="tag-badge">${esc(c.tag)}</span>` : '<span class="contacts-muted">-</span>'}</td>
+          <td data-label="Tags">${c.tags.length ? c.tags.map((t) => `<span class="tag-badge">${esc(t)}</span>`).join(' ') : '<span class="contacts-muted">-</span>'}</td>
           <td data-label="Consent">
             <span class="contacts-consent"><span class="badge ${badge.cls}"${detail ? ` title="${esc(detail)}"` : ''}>${esc(badge.label)}</span>${detail ? `<span class="contacts-consent-detail">${esc(detail)}</span>` : ''}</span>
           </td>
@@ -3341,6 +3344,8 @@ document.addEventListener('DOMContentLoaded', () => {
       countEl.textContent = `${count} selected`;
     }
     if (btn) btn.hidden = count === 0 || !canBulkOptIn;
+    const tagsBtn = document.getElementById('contacts-bulk-tags-btn');
+    if (tagsBtn) tagsBtn.hidden = count === 0;
 
     const filtered = getFilteredContacts();
     const pageIds = Array.from(document.querySelectorAll('#contacts-table-body .contacts-row-checkbox')).map((cb) => cb.dataset.contactId);
@@ -3395,6 +3400,82 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('contacts-bulk-opt-in-btn')?.addEventListener('click', () => {
     if (state.selectedContactIds.size === 0) return;
     openOptInConfirmModal(Array.from(state.selectedContactIds));
+  });
+
+  document.getElementById('contacts-bulk-tags-btn')?.addEventListener('click', () => {
+    if (state.selectedContactIds.size === 0) return;
+    openBulkTagsModal();
+  });
+
+  // Bulk tag modal: pick an existing tag (or, for Owner/Admin/Manager, type
+  // a new one), then Add to or Remove from every selected contact. The
+  // selection is kept afterwards so a second tag can be applied straight away.
+  function openBulkTagsModal() {
+    const select = document.getElementById('bulk-tags-select');
+    const count = state.selectedContactIds.size;
+    document.getElementById('bulk-tags-subtitle').textContent =
+      `${count} contact${count === 1 ? '' : 's'} selected.`;
+    const tags = Object.values(state.tagsById || {}).sort((a, b) => a.name.localeCompare(b.name));
+    select.innerHTML = '<option value="">Choose a tag…</option>' +
+      tags.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+    document.getElementById('bulk-tags-new').value = '';
+    document.getElementById('bulk-tags-new-wrap').hidden = state.actorRole === 'Agent';
+    document.getElementById('modal-bulk-tags').classList.add('open');
+    select.focus();
+  }
+
+  async function submitBulkTags(action) {
+    const select = document.getElementById('bulk-tags-select');
+    const newName = document.getElementById('bulk-tags-new').value.trim();
+    const buttons = document.querySelectorAll('#modal-bulk-tags [data-bulk-tag-action]');
+    let tagId = select.value;
+    if (!tagId && !newName) { showToast('Choose a tag or type a new tag name.', 'error'); return; }
+    buttons.forEach((b) => { b.disabled = true; });
+    try {
+      if (!tagId) {
+        const existing = Object.values(state.tagsById).find((t) => t.name.toLowerCase() === newName.toLowerCase());
+        if (existing) {
+          tagId = existing.id;
+        } else if (action === 'remove') {
+          showToast(`No tag named "${newName}" exists.`, 'error');
+          return;
+        } else {
+          const created = await authFetch('/api/tags', { method: 'POST', body: JSON.stringify({ name: newName }) });
+          state.tagsById[created.id] = created;
+          tagId = created.id;
+        }
+      }
+      const result = await authFetch('/api/contacts/bulk-tags', {
+        method: 'POST',
+        body: JSON.stringify({ contactIds: Array.from(state.selectedContactIds), tagId, action }),
+      });
+      document.getElementById('modal-bulk-tags').classList.remove('open');
+      const kept = new Set(state.selectedContactIds);
+      await refreshContacts();
+      renderContacts();
+      kept.forEach((id) => { if (state.contacts.some((c) => c.id === id)) state.selectedContactIds.add(id); });
+      drawContacts();
+      updateContactsBulkToolbar();
+      const unchanged = result.selected - result.changed;
+      const verb = action === 'add' ? 'added to' : 'removed from';
+      const note = action === 'add' ? 'already had it' : 'did not have it';
+      const rest = unchanged ? ` (${unchanged} ${note})` : '';
+      showToast(`"${result.tag.name}" ${verb} ${result.changed} contact${result.changed === 1 ? '' : 's'}${rest}.`, 'success');
+    } catch (err) {
+      reportError(err);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  document.querySelectorAll('#modal-bulk-tags [data-bulk-tag-action]').forEach((btn) => {
+    btn.addEventListener('click', () => submitBulkTags(btn.dataset.bulkTagAction));
+  });
+  document.getElementById('bulk-tags-new')?.addEventListener('input', (e) => {
+    if (e.target.value.trim()) document.getElementById('bulk-tags-select').value = '';
+  });
+  document.getElementById('bulk-tags-select')?.addEventListener('change', (e) => {
+    if (e.target.value) document.getElementById('bulk-tags-new').value = '';
   });
 
   // Filters / search / paging all reset to page 1 (except paging itself) and

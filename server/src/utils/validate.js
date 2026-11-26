@@ -681,6 +681,12 @@ const contactTagAddSchema = z.object({
   tagId: uuid,
 });
 
+const bulkContactTagsSchema = z.object({
+  contactIds: z.array(uuid).min(1).max(20000),
+  tagId: uuid,
+  action: z.enum(['add', 'remove']),
+});
+
 // PLAN.md item 9 - AND/OR audience segment builder. Shape validation only;
 // an 'attribute' condition's op/value are further checked against that
 // attribute's real declared type by utils/segmentFilter.js (the client
@@ -999,6 +1005,7 @@ module.exports = {
   contactAttributeValueSetSchema,
   validateContactAttributeValue,
   contactTagAddSchema,
+  bulkContactTagsSchema,
   segmentFilterSchema,
   contactSegmentCreateSchema,
   contactSegmentPreviewSchema,

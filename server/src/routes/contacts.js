@@ -12,7 +12,7 @@ const auditLogRepo = require('../repositories/auditLogRepo');
 const { asyncHandler } = require('../utils/asyncHandler');
 const {
   uuid, contactCreateSchema, contactUpdateSchema, consentEventCreateSchema,
-  bulkConsentOptInSchema, contactAttributeValueSetSchema, validateContactAttributeValue, contactTagAddSchema,
+  bulkConsentOptInSchema, contactAttributeValueSetSchema, validateContactAttributeValue, contactTagAddSchema, bulkContactTagsSchema,
   CONSENT_METHODS,
 } = require('../utils/validate');
 const { requireRole } = require('../middleware/requireRole');
@@ -30,7 +30,25 @@ const uploadCsv = multer({
 });
 
 router.get('/', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
-  res.json(await contactsRepo.list(req.db, req.clientId));
+  const [contacts, tagIds] = await Promise.all([
+    contactsRepo.list(req.db, req.clientId),
+    contactTagsRepo.tagIdsByContact(req.db, req.clientId),
+  ]);
+  res.json(contacts.map((c) => ({ ...c, tag_ids: tagIds.get(c.id) || [] })));
+}));
+
+// Bulk tagging from the Contacts view's selection bar. Same roles as the
+// per-contact tag routes below (tagging is day-to-day work, Agents included).
+router.post('/bulk-tags', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {
+  const { contactIds, tagId, action } = bulkContactTagsSchema.parse(req.body);
+  const tag = await tagsRepo.findById(req.db, req.clientId, tagId);
+  if (!tag) return res.status(404).json({ error: 'Tag not found' });
+
+  const ids = [...new Set(contactIds)];
+  const changed = action === 'add'
+    ? await contactTagsRepo.addMany(req.db, req.clientId, ids, tagId)
+    : await contactTagsRepo.removeMany(req.db, req.clientId, ids, tagId);
+  res.json({ action, tag: { id: tag.id, name: tag.name }, selected: ids.length, changed });
 }));
 
 router.get('/:id', requireRole('Admin', 'Manager', 'Agent'), asyncHandler(async (req, res) => {

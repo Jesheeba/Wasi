@@ -1,5 +1,10 @@
 # Changelog
 
+## feat(contacts-bulk-tags): tag many contacts at once
+- Contacts selection bar has a Tags button: add or remove a tag (or create one)
+  on every selected contact. `POST /api/contacts/bulk-tags`. The Tags column
+  shows all of a contact's tags. No migration.
+
 ## feat(send-retry-queue): no message lost to a network or temporary Meta error
 - A send that can't reach Meta (network, timeout, 5xx, Meta temporary codes)
   is retried inline, then queued (stays pending, exact Meta call stored without
