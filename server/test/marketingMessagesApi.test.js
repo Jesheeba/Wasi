@@ -14,6 +14,7 @@ const wabasRepo = require('../src/repositories/wabasRepo');
 const apiKeysRepo = require('../src/repositories/apiKeysRepo');
 const messageTemplatesRepo = require('../src/repositories/messageTemplatesRepo');
 const messageRetryRunner = require('../src/services/messageRetryRunner');
+const authTokensRepo = require('../src/repositories/authTokensRepo');
 const { encrypt } = require('../src/utils/encryption');
 const { ADMIN_EMAIL, ADMIN_PASSWORD } = require('./helpers/adminCredentials');
 
@@ -25,7 +26,8 @@ const MARKETING = `${PREFIX}promo`;
 const UTILITY = `${PREFIX}receipt`;
 const OPT_IN_METHOD = 'website_form';
 
-let server, baseUrl, clientId, apiKey, adminToken, savedSecret, restoreFetch;
+let server, baseUrl, clientId, clientToken, apiKey, adminToken, savedSecret, restoreFetch;
+const teamMemberIds = [];
 let calls = [];
 let mmFails = false; // fake /marketing_messages answers 503
 let mmStatus = 'ONBOARDED';
@@ -60,6 +62,7 @@ before(async () => {
     body: JSON.stringify({ businessName: `${PREFIX}client`, email: `test-suite-mmapi-${Date.now()}@wasi.local`, password: 'test-suite-password-12345' }),
   }).then((r) => r.json());
   clientId = reg.client.id;
+  clientToken = reg.token;
   await pool.query("update clients set status = 'active', email_verified = true where id = $1", [clientId]);
   await wabasRepo.upsertForClient(clientId, {
     waba_id: WABA_ID, phone_number_id: PHONE_ID, status: 'connected', access_token_encrypted: encrypt('fake-token'),
@@ -82,6 +85,7 @@ beforeEach(() => { calls = []; mmFails = false; });
 after(async () => {
   restoreFetch();
   if (savedSecret === undefined) delete process.env.META_APP_SECRET; else process.env.META_APP_SECRET = savedSecret;
+  if (teamMemberIds.length) await pool.query("delete from auth_tokens where subject_type = 'team_member' and subject_id = any($1)", [teamMemberIds]);
   if (clientId) {
     await pool.query('delete from audit_log where actor_id = $1 or target like $2', [clientId, `${clientId}%`]);
     await pool.query('delete from clients where id = $1', [clientId]);
@@ -130,7 +134,7 @@ test('AC1 switch on: a Marketing template goes to /marketing_messages with Cloud
   const row = await send(MARKETING);
   assert.match(calls[0].url, new RegExp(`/v24\\.0/${PHONE_ID}/marketing_messages$`));
   assert.equal(calls[0].body.product_policy, 'CLOUD_API_FALLBACK');
-  assert.equal('message_activity_sharing' in calls[0].body, false, 'left to the business setting');
+  assert.equal(calls[0].body.message_activity_sharing, false, 'default: do not share, sent explicitly');
   assert.equal(calls[0].body.template.name, MARKETING);
   assert.equal(row.send_route, 'mm_api');
 });
@@ -210,4 +214,51 @@ test('AC7 a queued MM send is replayed on the same route', async () => {
   const { rows: [after] } = await pool.query('select status, send_route from messages where id = $1', [row.id]);
   assert.equal(after.status, 'sent');
   assert.equal(after.send_route, 'mm_api');
+});
+
+const asClient = (token, method = 'GET', body) => fetch(`${baseUrl}/api/whatsapp-tools/mm-activity-sharing`, {
+  method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body),
+});
+async function teamMemberToken(role) {
+  const tm = await fetch(`${baseUrl}/api/team-members`, {
+    method: 'POST', headers: { Authorization: `Bearer ${clientToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `${PREFIX}${role}`, email: `${PREFIX}${role}-${Date.now()}@wasi.local`, role }),
+  }).then((r) => r.json());
+  assert.ok(tm.id, JSON.stringify(tm));
+  teamMemberIds.push(tm.id);
+  const invite = await authTokensRepo.create('team_member', tm.id, 'team_invite', 60);
+  const res = await fetch(`${baseUrl}/api/auth/team/accept-invite`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: invite, password: 'test-suite-password-12345' }),
+  });
+  return (await res.json()).token;
+}
+
+test('AC8 activity sharing: default off; Owner/Admin change it, Manager cannot; recorded; sent to Meta', async () => {
+  let s = await asClient(clientToken).then((r) => r.json());
+  assert.equal(s.enabled, false, 'default off');
+
+  const manager = await teamMemberToken('Manager');
+  assert.equal((await asClient(manager)).status, 200, 'Manager can read');
+  assert.equal((await asClient(manager, 'PUT', { enabled: true })).status, 403, 'Manager cannot change');
+  assert.equal((await asClient(await teamMemberToken('Agent'))).status, 403, 'Agent cannot read');
+  assert.equal((await asClient(clientToken, 'PUT', { enabled: 'yes' })).status, 400);
+
+  s = await asClient(clientToken, 'PUT', { enabled: true }).then((r) => r.json());
+  assert.equal(s.enabled, true);
+  assert.equal(s.changedBy, 'the account owner');
+  assert.ok(s.changedAt);
+
+  await setSwitch(true);
+  calls = [];
+  await send(MARKETING);
+  assert.equal(calls[0].body.message_activity_sharing, true, 'client choice reaches Meta');
+
+  const admin2 = await teamMemberToken('Admin');
+  s = await asClient(admin2, 'PUT', { enabled: false }).then((r) => r.json());
+  assert.equal(s.enabled, false);
+  assert.equal(s.changedBy, 'a team member');
+  const { rows } = await pool.query("select action from audit_log where target like $1 and action like 'mm_activity_sharing_%' order by created_at", [`${clientId}%`]);
+  assert.deepEqual(rows.map((r) => r.action), ['mm_activity_sharing_on', 'mm_activity_sharing_off']);
+  const detail = await admin(`/clients/${clientId}`).then((r) => r.json());
+  assert.equal(detail.waba.mm_activity_sharing, false, 'admin sees the client choice');
 });

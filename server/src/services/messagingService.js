@@ -353,7 +353,10 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     const route = waba.mm_api_enabled && template?.category === 'Marketing' ? 'mm_api' : undefined;
     call = {
       fn: 'sendTemplateMessage',
-      args: [toPhone, { name: templateName, language: template?.language || templateLanguage, components: finalComponents, ...(route ? { route } : {}) }],
+      args: [toPhone, {
+        name: templateName, language: template?.language || templateLanguage, components: finalComponents,
+        ...(route ? { route, activitySharing: waba.mm_activity_sharing === true } : {}),
+      }],
     };
   }
 

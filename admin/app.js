@@ -1754,6 +1754,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       </div>
       ${detailRow('Meta status', esc(waba.mm_api_status || 'Not checked'))}
       ${detailRow('Last checked', waba.mm_api_checked_at ? formatDateTime(waba.mm_api_checked_at) : 'Never')}
+      ${detailRow('Share activity with Meta (set by client)', waba.mm_activity_sharing ? 'On' : 'Off')}
       <p class="cell-secondary">Utility, OTP and chat replies always use Cloud API. If the business has not accepted Meta's terms, Meta delivers through Cloud API instead.</p>
       ${(mmDeliveryByRoute && mmDeliveryByRoute.length) ? `<div class="table-scroll"><table class="data-table" id="mm-api-route-table">
         <thead><tr><th>Route (Marketing, 30 days)</th><th>Sent</th><th>Delivered</th><th>Meta per-user limit (131049)</th></tr></thead>

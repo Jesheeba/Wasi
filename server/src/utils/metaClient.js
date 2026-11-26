@@ -621,9 +621,10 @@ function extractAuthenticationCode(params) {
 // route 'mm_api': a Marketing template sent through the Marketing Messages
 // API (marketing-messages-api.md). Same payload; product_policy
 // CLOUD_API_FALLBACK makes Meta deliver it via Cloud API when the business
-// isn't onboarded. message_activity_sharing is omitted on purpose, so the
-// business's own setting in WhatsApp Manager applies.
-async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, language = 'en_US', components = [], route } = {}) {
+// isn't onboarded. message_activity_sharing is the client's own choice
+// (Settings > WhatsApp, default false), always sent so Meta's business-level
+// default (share) never applies silently.
+async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, language = 'en_US', components = [], route, activitySharing = false } = {}) {
   const mm = route === 'mm_api';
   const data = await graphFetch(`/${phoneNumberId}/${mm ? 'marketing_messages' : 'messages'}`, {
     method: 'POST',
@@ -634,7 +635,7 @@ async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, 
       to: toPhone,
       type: 'template',
       template: { name, language: { code: language }, components },
-      ...(mm ? { product_policy: 'CLOUD_API_FALLBACK' } : {}),
+      ...(mm ? { product_policy: 'CLOUD_API_FALLBACK', message_activity_sharing: activitySharing === true } : {}),
     },
   });
   return data.messages?.[0]?.id;

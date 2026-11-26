@@ -717,3 +717,15 @@ Four files failed on master. No app code changed; three tests were stale.
   coexistenceEchoIngestion, messagingTier, broadcastDetail,
   templateCategoryChange, metaMessageErrorMessages, consentTracking,
   apiV1TemplateMediaAndMessagingLimit.
+
+## mm-activity-sharing, 2026-11-26
+- `marketingMessagesApi.test.js` 8/8: new AC8 (default off, Manager reads
+  but gets 403 on change, Agent 403, Owner and Admin change it, audit rows,
+  value sent to Meta, admin sees it); AC1 now asserts an explicit false.
+  Mutation check: without the Admin gate on PUT, AC8 fails.
+- Browser check (Playwright, :4000, disposable client): card shows, toggle
+  saves (db true), "Last changed by the account owner", no page errors.
+- Regression: whatsappQuickWins 11, whatsappQuickWinsUI 2, settingsRedesign 11,
+  adminRoleEnforcement 10, templateApprovalGuard 7, apiV1 14, sendRetryQueue 6,
+  webhookForwarding 8, metaSendPacing 8, broadcastRetry 4,
+  adminFailedSendsSummary 5, teamMemberAuth 12: all pass.

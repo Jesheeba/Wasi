@@ -1,5 +1,11 @@
 # Changelog
 
+## feat(mm-activity-sharing): client chooses whether Meta gets marketing message activity
+- Settings > WhatsApp: "Share marketing message activity with Meta" switch.
+  Owner/Admin only, default Off, sent as `message_activity_sharing` on every
+  Marketing Messages API send. Changes recorded in audit_log; admin card shows
+  it. Migration 115.
+
 ## feat(marketing-messages-api): admin switch to send Marketing templates via Meta's MM API
 - Per-client admin switch (off by default, admin Client Detail > WhatsApp).
   When on, Marketing templates go to `/marketing_messages` with

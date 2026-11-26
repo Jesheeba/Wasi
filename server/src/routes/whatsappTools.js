@@ -9,6 +9,8 @@ const { requireRole } = require('../middleware/requireRole');
 const wabasRepo = require('../repositories/wabasRepo');
 const metaClient = require('../utils/metaClient');
 const { decrypt } = require('../utils/encryption');
+const { pool } = require('../db/pool');
+const auditLogRepo = require('../repositories/auditLogRepo');
 
 const router = Router();
 router.use(requireRole('Admin', 'Manager'));
@@ -133,6 +135,45 @@ router.put('/conversational-automation', asyncHandler(async (req, res) => {
     return metaFailure(res, err, 'WhatsApp did not save these settings');
   }
   res.json(input);
+}));
+
+// ---------- Marketing message activity sharing (marketing-messages-api.md) ----------
+// Whether Meta may use delivery/read/click data from this client's Marketing
+// messages sent via the Marketing Messages API. Read: Admin/Manager (router
+// gate). Change: Owner/Admin only - a data-sharing decision for the business.
+async function mmSharingState(clientId) {
+  const waba = await wabasRepo.findByClientId(clientId);
+  const { rows: [last] } = await pool.query(
+    `select action, actor_type, created_at from audit_log
+     where action in ('mm_activity_sharing_on', 'mm_activity_sharing_off') and target like $1
+     order by created_at desc limit 1`,
+    [`${clientId}:%`]
+  );
+  return {
+    connected: Boolean(waba),
+    enabled: waba?.mm_activity_sharing === true,
+    mmApiOn: waba?.mm_api_enabled === true,
+    changedAt: last?.created_at || null,
+    changedBy: last ? (last.actor_type === 'team_member' ? 'a team member' : 'the account owner') : null,
+  };
+}
+
+router.get('/mm-activity-sharing', asyncHandler(async (req, res) => {
+  res.json(await mmSharingState(req.clientId));
+}));
+
+router.put('/mm-activity-sharing', requireRole('Admin'), asyncHandler(async (req, res) => {
+  const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+  const waba = await wabasRepo.findByClientId(req.clientId);
+  if (!waba) return res.status(409).json({ error: 'Connect your WhatsApp number first.' });
+  await pool.query('update wabas set mm_activity_sharing = $1 where id = $2', [enabled, waba.id]);
+  await auditLogRepo.record({
+    actor_type: req.actorType === 'team_member' ? 'team_member' : 'client',
+    actor_id: req.actorType === 'team_member' ? req.actorId : req.clientId,
+    action: enabled ? 'mm_activity_sharing_on' : 'mm_activity_sharing_off',
+    target: `${req.clientId}: waba ${waba.waba_id}`,
+  });
+  res.json(await mmSharingState(req.clientId));
 }));
 
 // ---------- Green tick ----------

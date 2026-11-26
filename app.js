@@ -5729,6 +5729,47 @@ document.addEventListener('DOMContentLoaded', () => {
   const QUALITY_LABELS = {
     GREEN: ['High', 'badge-success'], YELLOW: ['Medium', 'badge-warning'], RED: ['Low', 'badge-danger'],
   };
+  // Marketing message activity sharing (marketing-messages-api.md). Hidden
+  // for roles the server refuses (Agents); only Owner/Admin may change it.
+  async function renderMmSharingCard() {
+    const card = document.getElementById('settings-mm-sharing-card');
+    if (!card) return;
+    let s;
+    try {
+      s = await authFetch('/api/whatsapp-tools/mm-activity-sharing');
+    } catch {
+      card.hidden = true;
+      return;
+    }
+    if (!s.connected) { card.hidden = true; return; }
+    const input = document.getElementById('mm-sharing-toggle');
+    const canChange = state.actorRole === 'Owner' || state.actorRole === 'Admin';
+    input.checked = s.enabled;
+    input.disabled = !canChange;
+    document.getElementById('mm-sharing-label').textContent = s.enabled ? 'On' : 'Off';
+    const parts = [s.mmApiOn
+      ? "Your Marketing messages are sent through Meta's Marketing Messages API, so this setting is in use."
+      : "This applies once Wasi sends your Marketing messages through Meta's Marketing Messages API. That is off for your account right now."];
+    if (s.changedAt) parts.push(`Last changed by ${s.changedBy} on ${new Date(s.changedAt).toLocaleString()}.`);
+    if (!canChange) parts.push('Only the account owner or an Admin can change this.');
+    document.getElementById('mm-sharing-note').textContent = parts.join(' ');
+    card.hidden = false;
+  }
+
+  document.getElementById('mm-sharing-toggle')?.addEventListener('change', async (e) => {
+    const input = e.target;
+    const enabled = input.checked;
+    input.disabled = true;
+    try {
+      await authFetch('/api/whatsapp-tools/mm-activity-sharing', { method: 'PUT', body: JSON.stringify({ enabled }) });
+      showToast(enabled ? 'Sharing with Meta turned on' : 'Sharing with Meta turned off', 'success');
+    } catch (err) {
+      input.checked = !enabled;
+      reportError(err);
+    }
+    renderMmSharingCard();
+  });
+
   async function renderMessagingLimitCard(el) {
     if (!el) return;
     let s;
@@ -11043,6 +11084,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       refreshIcons();
       renderMessagingLimitCard(document.getElementById('settings-limit-card'));
+      renderMmSharingCard();
       return;
     }
 

@@ -1,5 +1,13 @@
 # Project memory
 
+## 2026-11-26 - MM API activity sharing is the client's choice
+- Owner: add the switch inside Wasi. Built in client Settings > WhatsApp,
+  Owner/Admin only, default Off (privacy policy does not cover the sharing
+  yet), history in audit_log. Wasi now always sends message_activity_sharing
+  true/false, replacing the earlier "omit it, business setting applies".
+- Competitors (AiSensy, Wati, Interakt, Gupshup): nothing public on how they
+  set it; Meta's default after onboarding is to share.
+
 ## 2026-11-26 - Marketing Messages API (MM API, formerly MM Lite)
 - Owner approved; Wasi accepted the MM API terms in the App Dashboard
   (Claude clicked Continue on the owner's instruction). That dialog also

@@ -377,3 +377,16 @@ Status: PENDING
 5. Send a **Utility** template: it arrives and is not counted in the table.
 
 Status: PENDING
+
+## 25. Marketing message activity sharing switch (after deploy)
+
+1. Demo account (as owner) > Settings > WhatsApp: the card "Share marketing
+   message activity with Meta" shows **Off**.
+2. Turn it **On**: toast, and "Last changed by the account owner on ...".
+3. Admin > Wasi Demo Client > WhatsApp: "Share activity with Meta (set by
+   client)" shows **On**.
+4. With the Marketing Messages API switch on (test #24), a Marketing send still
+   arrives on 9092766740.
+5. Turn it back **Off** if you want the default.
+
+Status: PENDING

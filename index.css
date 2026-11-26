@@ -3589,3 +3589,7 @@ details.contact-drawer-section > summary:focus-visible { outline: 2px solid var(
   .wa-form-builder { grid-template-columns: 1fr; }
   .wa-form-preview-pane { position: static; }
 }
+
+/* Marketing message activity sharing card (Settings > WhatsApp) */
+.mm-sharing-row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); }
+.mm-sharing-row .wasi-toggle { flex-shrink: 0; }

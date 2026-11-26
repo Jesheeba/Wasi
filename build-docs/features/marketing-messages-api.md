@@ -9,8 +9,12 @@ Meta. Live check pending (MANUAL_TESTS.md #24).
   can opt out at any time from Business settings."
 - Rollout: per-client admin switch, off by default. Pilot: the Wasi demo
   client, switched on by an admin after deploy.
-- `message_activity_sharing` is not sent, so each business's own setting in
-  WhatsApp Manager applies (Meta's default after onboarding is to share).
+- `message_activity_sharing` (updated, owner 2026-11-26): the client's own
+  choice, Settings > WhatsApp > "Share marketing message activity with Meta".
+  Owner/Admin only (Manager can see it, Agent cannot), default Off, sent
+  explicitly as true/false on every /marketing_messages call so Meta's
+  business-level default (share) never applies silently. Changes are in
+  audit_log (mm_activity_sharing_on/_off). Migration 115. Admin card shows it.
 - Not built from the plan: synchronous resend via /messages after an MM
   rejection (Meta's CLOUD_API_FALLBACK already covers not-onboarded; a stale
   local category fails visibly in Failed sends instead); client-facing

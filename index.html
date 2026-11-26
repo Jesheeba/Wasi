@@ -1354,6 +1354,22 @@
 
                 <section class="messaging-limit-card" id="settings-limit-card" aria-label="WhatsApp daily sending limit" hidden></section>
 
+                <!-- Marketing message activity sharing (build-docs/features/marketing-messages-api.md):
+                     app.js renderMmSharingCard from /api/whatsapp-tools/mm-activity-sharing. -->
+                <section class="profile-form-card" id="settings-mm-sharing-card" aria-labelledby="mm-sharing-title" hidden>
+                  <div class="mm-sharing-row">
+                    <div>
+                      <h3 class="settings-card-title" id="mm-sharing-title">Share marketing message activity with Meta</h3>
+                      <p class="form-hint">Share delivery, read and click data with Meta to help it optimise your marketing messages. Meta may deliver slightly better when this is on.</p>
+                      <p class="form-hint" id="mm-sharing-note"></p>
+                    </div>
+                    <label class="wasi-toggle" for="mm-sharing-toggle">
+                      <input type="checkbox" id="mm-sharing-toggle" />
+                      <span class="wasi-toggle-label" id="mm-sharing-label">Off</span>
+                    </label>
+                  </div>
+                </section>
+
                 <div class="tabs inner-tabs-list" role="tablist" aria-label="WhatsApp channel settings">
                   <button type="button" class="tab inner-tab-btn active" role="tab" aria-selected="true" data-inner-tab="profile">Profile</button>
                   <button type="button" class="tab inner-tab-btn" role="tab" aria-selected="false" tabindex="-1" data-inner-tab="message-link">Message Link</button>
