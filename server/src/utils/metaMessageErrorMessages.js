@@ -15,8 +15,11 @@
 // CLAUDE.md's template-category-mismatch entry already established for
 // content-pattern lists: never build a second, parallel mapping.
 const MESSAGE_ERROR_MESSAGES = {
-  4: 'Meta rate-limited this send - it was retried automatically.',
-  130429: 'Meta rate-limited this send - it was retried automatically.',
+  // A row stored as failed with this code means the retries also ran out.
+  4: 'Meta rate-limited this send: too many messages per second from this number.',
+  130429: 'Meta rate-limited this send: too many messages per second from this number.',
+  130472: "This number is in a Meta experiment, so Meta didn't deliver this marketing message.",
+  131042: "Meta couldn't charge this business. Add or fix the payment method in WhatsApp Manager (Meta Business Suite).",
   131026: "This number can't receive WhatsApp messages (not on WhatsApp, or has an outdated app).",
   131047: "More than 24 hours passed since this contact last messaged you - a session message can't be sent outside that window.",
   131048: "Blocked due to your account's current quality rating.",

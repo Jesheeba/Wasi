@@ -1,5 +1,15 @@
 # Project memory
 
+## 2026-11-26 - Ad Leads back to Coming soon; admin failed sends
+- Owner: show Ad Leads as Coming soon. Leads counting works without Meta
+  approval; only spend/clicks/CPL wait on ads_read review. Kept the code, hidden
+  behind `CTWA_COMING_SOON` (app.js) so it comes back with one line.
+- Leaders Connect failures (investigated read-only): 12 Nov campaign, all 31 =
+  Meta 131042 payment method; 25 Nov n8n send of
+  mirai_2026_early_bird_reminder = 584 x 132000 (n8n sent params the template
+  doesn't have, retried ~4x per contact), 131 x 130429, 66 x 131049. Number is
+  TIER_250. Admin now shows this grouped (Client Detail > Activity).
+
 ## 2026-11-25 - send retry queue
 - Owner: no message may be lost to network/our side; queue and retry.
 - Decisions (owner): retry all network errors, accepting a rare duplicate when

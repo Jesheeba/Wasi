@@ -1461,7 +1461,7 @@ function clientDetailAttention(client, waba) {
 }
 
 function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
-  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections } = detail;
+  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSends } = detail;
   const flags = clientDetailAttention(client, waba);
 
   const statusOptionsHtml = CLIENT_STATUS_OPTIONS.map((s) =>
@@ -1735,6 +1735,24 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       `).join('')
     : `<div class="empty-state"><i data-lucide="ban" class="empty-icon"></i><div class="empty-title">No refused requests</div><div>Wasi has not refused any of this client's Hub API requests in the last 30 days.</div></div>`;
 
+  // Failed sends, last 7 days, grouped by template + source + error
+  // (build-docs/features/admin-failed-sends-summary.md). Attempts above
+  // contacts means the sender retried the same people.
+  const failedSendsHtml = (failedSends && failedSends.length)
+    ? `<div class="table-scroll"><table class="data-table stack-mobile" id="failed-sends-table">
+        <thead><tr><th>Template</th><th>Sent by</th><th>Why it failed</th><th>Attempts</th><th>Contacts</th><th>Last</th></tr></thead>
+        <tbody>${failedSends.map((f) => `
+          <tr>
+            <td data-label="Template">${esc(f.template_name)}</td>
+            <td data-label="Sent by">${esc(f.source)}</td>
+            <td data-label="Why it failed">${esc(f.explanation)}<div class="cell-secondary">${f.meta_error_code ? `Meta ${esc(String(f.meta_error_code))}` : 'No Meta code'}${f.error_reason ? ` &middot; ${esc(f.error_reason)}` : ''}</div></td>
+            <td data-label="Attempts">${esc(String(f.attempts))}</td>
+            <td data-label="Contacts">${esc(String(f.contacts))}</td>
+            <td data-label="Last">${formatDateTime(f.last_at)}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>`
+    : `<div class="empty-state"><i data-lucide="check-circle" class="empty-icon"></i><div class="empty-title">No failed sends</div><div>Nothing this client sent failed in the last 7 days.</div></div>`;
+
   const tabDefs = [
     ['overview', 'Overview', ''],
     ['billing', 'Billing & Service', flags.billing ? ' <span class="tab-flag" title="Needs attention" aria-label="Needs attention">!</span>' : ''],
@@ -1827,6 +1845,10 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
     </div>
 
     <div class="tab-panel" role="tabpanel" id="panel-client-activity" aria-labelledby="tab-client-activity" data-panel="activity" hidden>
+      <div class="detail-card">
+        <h2 class="detail-card-title">Failed sends <span class="detail-card-aside">(last 7 days)</span></h2>
+        ${failedSendsHtml}
+      </div>
       <div class="detail-grid">
         <div class="detail-card">
           <h2 class="detail-card-title">API Keys</h2>

@@ -1,5 +1,15 @@
 # Changelog
 
+## feat(admin-failed-sends-summary): see why a client's sends failed, grouped
+- Admin Client Detail > Activity: "Failed sends (last 7 days)" grouped by
+  template, sender (Campaign / API app / Inbox) and Meta error, with attempts,
+  contacts and a plain-language reason. Error map adds 131042 (payment) and
+  130472; 130429 no longer claims it was retried. No migration.
+
+## feat(ctwa-coming-soon): Ad Leads shows Coming soon
+- Nav item marked Soon, page shows a Coming soon state. The working page is kept
+  hidden behind `CTWA_COMING_SOON` in app.js. No server change.
+
 ## feat(contacts-bulk-tags): tag many contacts at once
 - Contacts selection bar has a Tags button: add or remove a tag (or create one)
   on every selected contact. `POST /api/contacts/bulk-tags`. The Tags column

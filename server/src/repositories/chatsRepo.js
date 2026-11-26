@@ -102,6 +102,37 @@ async function listRecentApiSends(db, clientId, limit = 20) {
   return rows;
 }
 
+// Failed outbound sends for one client in the last `days`, grouped so an
+// admin can read "why did this send fail" at a glance (build-docs/features/
+// admin-failed-sends-summary.md). Template name comes from the
+// `[template: <name>]` placeholder body; source is Campaign (a broadcast
+// recipient row points at the message), the API key's app name, or Inbox /
+// flow. attempts vs contacts shows a retrying integration.
+async function failedSendsSummary(db, clientId, days = 7) {
+  const { rows } = await db.query(
+    `select coalesce(substring(m.body from '^\\[template: ([a-z0-9_]+)\\]$'), '(not a template)') as template_name,
+            case when br.id is not null then 'Campaign'
+                 when ak.app_name is not null then ak.app_name
+                 else 'Inbox / flow' end as source,
+            m.meta_error_code,
+            max(m.error_reason) as error_reason,
+            count(*)::int as attempts,
+            count(distinct m.chat_id)::int as contacts,
+            min(m.sent_at) as first_at,
+            max(m.sent_at) as last_at
+     from messages m
+     left join api_keys ak on ak.id = m.api_key_id
+     left join broadcast_recipients br on br.message_id = m.id
+     where m.client_id = $1 and m.direction = 'out' and m.status = 'failed'
+       and m.sent_at > now() - make_interval(days => $2)
+     group by 1, 2, 3
+     order by attempts desc, last_at desc
+     limit 50`,
+    [clientId, days]
+  );
+  return rows;
+}
+
 // sent_via_app (migration 090's api_key_id, left-joined to api_keys.app_name)
 // - null for anything not sent through the Hub API. Added so the inbox can
 // show "Sent via <app>" instead of this being visible only by correlating
@@ -531,6 +562,7 @@ module.exports = {
   remove,
   listMessages,
   listRecentApiSends,
+  failedSendsSummary,
   findMessageById,
   findMessageByIdForClient,
   lastInboundAt,

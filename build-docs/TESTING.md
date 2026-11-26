@@ -689,3 +689,14 @@ Four files failed on master. No app code changed; three tests were stale.
 - Regression: analyticsTagsMultiTag, apiV1, broadcastTagAudienceMultiTag,
   consentHardeningPhase2, contactSegments, contactTags, contactTagsWrite,
   contactsCsvImport, contactLists, settingsRedesign: 87/87 pass.
+
+## admin-failed-sends-summary + ctwa-coming-soon, 2026-11-26
+- `adminFailedSendsSummary.test.js` AC1-AC5 5/5 (local embedded Postgres;
+  AC5 is a Playwright check of the admin Activity tab, table + empty state).
+- `ctwaAdsPage.test.js`: the "no longer marked Soon" assertion encoded the
+  2026-11-23 decision; now asserts Soon, and the UI test opens the page with
+  `wasi_preview_ctwa=1` so the hidden page keeps its coverage. 6/6.
+- Regression: comingSoonPages 3, ctwaAdMetrics 8, ctwaConversions 5,
+  metaMessageErrorMessages 5, broadcastDetail 6, adminSummaryRedesign 4,
+  adminUiRedesign 9, hubApiParamsAndRejections 6, messagesApiKeyAttribution 3,
+  adminRoleEnforcement 10: all pass.

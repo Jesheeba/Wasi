@@ -13,6 +13,7 @@ const dataDeletionRequestsRepo = require('../repositories/dataDeletionRequestsRe
 const apiKeysRepo = require('../repositories/apiKeysRepo');
 const apiRejectionsRepo = require('../repositories/apiRejectionsRepo');
 const chatsRepo = require('../repositories/chatsRepo');
+const { describeMessageFailure } = require('../utils/metaMessageErrorMessages');
 const metaTemplateLibraryRepo = require('../repositories/metaTemplateLibraryRepo');
 const metaTemplateLibraryRefreshRunner = require('../services/metaTemplateLibraryRefreshRunner');
 const paymentNotificationsRepo = require('../repositories/paymentNotificationsRepo');
@@ -115,7 +116,7 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
   const client = await clientsRepo.findById(pool, id);
   if (!client) return res.status(404).json({ error: 'Not found' });
 
-  const [subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections] = await Promise.all([
+  const [subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSendRows] = await Promise.all([
     subscriptionsRepo.findByClientId(pool, id),
     wabasRepo.findByClientId(id),
     messageTemplatesRepo.listByClientId(pool, id),
@@ -130,11 +131,18 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
     // Requests Wasi refused before Meta (migration 112) - the other half of
     // "why did their integration fail?".
     apiRejectionsRepo.listRecent(pool, id, 30),
+    // Sends Meta (or the send path) failed, grouped by template + error, so
+    // "why did their campaign fail" is one glance (admin-failed-sends-summary.md).
+    chatsRepo.failedSendsSummary(pool, id, 7),
   ]);
+  const failedSends = failedSendRows.map((r) => ({
+    ...r,
+    explanation: describeMessageFailure({ metaErrorCode: r.meta_error_code, errorReason: r.error_reason }),
+  }));
 
   const { password_hash, ...safeClient } = client;
 
-  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections });
+  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSends });
 }));
 
 // --- Manual retry: re-pull phone number status from Meta for a connected WABA ---
