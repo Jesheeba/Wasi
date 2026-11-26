@@ -11,7 +11,8 @@ const FRAMES = path.join(ROOT, 'frames');
 
 (async () => {
   const W = parseInt((process.argv.find((a) => a.startsWith('--workers=')) || '--workers=4').split('=')[1], 10);
-  fs.rmSync(FRAMES, { recursive: true, force: true });
+  // --fresh wipes old frames; otherwise frames already on disk are kept (resumable)
+  if (process.argv.includes('--fresh')) fs.rmSync(FRAMES, { recursive: true, force: true });
   fs.mkdirSync(FRAMES, { recursive: true });
   const browser = await chromium.launch();
   const url = 'file://' + path.join(ROOT, 'scenes', 'film.html').replace(/\\/g, '/');
@@ -28,8 +29,10 @@ const FRAMES = path.join(ROOT, 'frames');
     await page.goto(url);
     await page.waitForFunction('window.__ready === true', null, { timeout: 30000 });
     for (let i = w; i < total; i += W) {
+      const out = path.join(FRAMES, `f_${String(i).padStart(5, '0')}.png`);
+      if (fs.existsSync(out) && fs.statSync(out).size > 0) { done++; continue; }
       await page.evaluate((t) => window.__seek(t), i / FPS);
-      await page.screenshot({ path: path.join(FRAMES, `f_${String(i).padStart(5, '0')}.png`) });
+      try { await page.screenshot({ path: out, timeout: 120000 }); } catch (e) { await page.screenshot({ path: out, timeout: 120000 }); }
       if (++done % 300 === 0) console.log(`  ${done}/${total} frames, ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     }
     await page.close();

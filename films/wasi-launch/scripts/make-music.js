@@ -106,7 +106,7 @@ const C = {
   G: { pad: [43, 50, 55, 59], arp: [59, 62, 67, 71], root: 31 },
 };
 const BEAT = 60 / 96, BAR = BEAT * 4;
-const meet = VO.vo03.start + VO.vo03.dur * 0.52;
+const meet = VO.vo03.words.find((w) => /^Meet/i.test(w.w)).s;
 
 // problem: sparse minor pads + clock
 {
@@ -151,9 +151,9 @@ chord(meet, S.s03.start - meet + 0.4, [38, 50, 54, 57, 62, 66], 0.05, 0.08, 1.6)
   const c0 = S.s10.start - 0.1, hold = DUR - c0 - 1.4;
   chord(c0, hold, [38, 50, 54, 57, 62, 66, 69], 0.04, 0.9, 1.3);
   bass(c0, hold, 38, 0.12);
-  const v = VO.vo11.start;
+  const v = VO.vo13.start;
   [81, 86, 90, 93].forEach((m, i) => pluck(v + 0.1 + i * 0.16, m, 0.2, i % 2 ? 0.35 : -0.35, 0.998, 2.4));
-  [74, 78, 81].forEach((m, i) => pluck(VO.vo12.start + 0.4 + i * 0.22, m, 0.12, 0, 0.998, 2.4));
+  [74, 78, 81].forEach((m, i) => pluck(VO.vo14.start + 0.4 + i * 0.22, m, 0.12, 0, 0.998, 2.4));
 }
 
 // Schroeder reverb on the send bus

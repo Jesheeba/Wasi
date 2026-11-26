@@ -13,6 +13,6 @@ echo "== timing (90.0s) ==";       node scripts/build-timing.js
 echo "== score ==";                node scripts/make-music.js
 echo "== sound design ==";         node scripts/make-sfx.js
 echo "== mix + loudness ==";       node scripts/assemble-audio.js
-echo "== frames (1080p30) ==";     node scripts/capture-frames.js --workers=4
+echo "== frames (1080p30) ==";     node scripts/capture-frames.js --workers=4 --fresh
 echo "== encode ==";               node scripts/render-video.js
 ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of default=noprint_wrappers=1 output/*.mp4

@@ -1,74 +1,86 @@
-// Builds timing.json + scenes/timing-data.js from the VO clip durations.
-// Real measured durations (vo-durations.json, written by generate-vo.js) are used
-// when present; otherwise each line is ESTIMATED from its word count so the
-// picture can be built and reviewed before the voice exists. Every scene then
-// stretches its own hold so the film lands on exactly TARGET seconds (1.5 min).
+// Builds timing.json + scenes/timing-data.js from the continuous VO take.
+// The take (vo-take.json, from generate-vo.js) is split into one segment per scene,
+// cut only in the middle of the natural pause between scenes; inside a scene the
+// performance is untouched. Each scene then gets its share of the spare time as a
+// hold AFTER its voice, so the film lands on exactly TARGET seconds.
+// Without a take, word timings are estimated so the picture can be previewed.
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const TARGET = 90.0;
 const LINES = require(path.join(ROOT, 'lines.json'));
-const durFile = path.join(ROOT, 'vo-durations.json');
-const measured = fs.existsSync(durFile) ? require(durFile) : {};
+const takeFile = path.join(ROOT, 'vo-take.json');
+const take = fs.existsSync(takeFile) ? require(takeFile) : null;
 
-// pre = picture before the first line, gap = between lines, post = hold after the
-// last line, weight = this scene's share of any spare time.
+// pre = picture before the scene's voice, post = hold after it,
+// weight = share of spare time (added to post).
 const SCENES = [
-  { id: 's01', pre: 1.0, gap: 0.5, post: 0.3, weight: 0.4 }, // hook + problem
-  { id: 's02', pre: 0.9, gap: 0, post: 1.6, weight: 0.8 },   // the turn + reveal
-  { id: 's03', pre: 0.4, gap: 0, post: 0.8, weight: 1 },     // connect
-  { id: 's04', pre: 0.4, gap: 0, post: 0.8, weight: 1 },     // inbox
-  { id: 's05', pre: 0.4, gap: 0, post: 0.9, weight: 1.2 },   // campaigns
-  { id: 's06', pre: 0.4, gap: 0, post: 0.8, weight: 1 },     // templates
-  { id: 's07', pre: 0.4, gap: 0, post: 0.8, weight: 1 },     // automation
-  { id: 's08', pre: 0.3, gap: 0, post: 0.6, weight: 0.8 },   // integrations
-  { id: 's09', pre: 0.3, gap: 0, post: 0.5, weight: 0.6 },   // recap
-  { id: 's10', pre: 0.5, gap: 0.9, post: 3.0, weight: 1.4 }, // close + CTA
+  { id: 's01', pre: 1.5, post: 0.0, weight: 0.6 },  // hook: cold open on the agent
+  { id: 's02', pre: 0.0, post: 0.9, weight: 0.8 },  // turn + reveal
+  { id: 's03', pre: 0.0, post: 0.2, weight: 1.2 },  // built-in assistant
+  { id: 's04', pre: 0.0, post: 0.2, weight: 1.2 },  // handover
+  { id: 's05', pre: 0.0, post: 0.2, weight: 1.2 },  // bring your own agent
+  { id: 's06', pre: 0.0, post: 0.2, weight: 1.0 },  // guardrails
+  { id: 's07', pre: 0.0, post: 0.2, weight: 1.0 },  // shared inbox
+  { id: 's08', pre: 0.0, post: 0.2, weight: 0.8 },  // campaigns + flows
+  { id: 's09', pre: 0.0, post: 0.3, weight: 0.5 },  // recap
+  { id: 's10', pre: 0.0, post: 3.2, weight: 0.6 },  // close + CTA
 ];
+const LEAD = 0.32, TAIL = 0.42; // max breath kept either side of a scene's voice
 
-// pauses inside each measured clip -> phrase boundaries the picture can key to
-const { execSync } = require('child_process');
-function pausesOf(id) {
-  const wav = path.join(ROOT, 'audio', `${id}.wav`);
-  if (!measured[id] || !fs.existsSync(wav)) return [];
-  const out = execSync(`ffmpeg -hide_banner -i "${wav}" -af silencedetect=n=-38dB:d=0.12 -f null - 2>&1`, { shell: true }).toString();
-  const st = [...out.matchAll(/silence_start: ([\d.]+)/g)].map((m) => +m[1]);
-  const en = [...out.matchAll(/silence_end: ([\d.]+)/g)].map((m) => +m[1]);
-  return st.map((x, i) => [+x.toFixed(3), +(en[i] ?? x).toFixed(3)]).filter(([x, y]) => y < measured[id] - 0.05);
+// --- per-line words in take time (real or estimated) ---
+const words = {};
+let estimated = false;
+if (take) {
+  LINES.forEach((l) => { words[l.id] = take.lines[l.id].words; });
+} else {
+  estimated = true;
+  let t = 0, scene = null;
+  LINES.forEach((l) => {
+    t += l.scene === scene ? 0.45 : 0.7;
+    scene = l.scene;
+    const ws = l.text.split(/\s+/), per = 0.36;
+    words[l.id] = ws.map((w, i) => ({ w, s: +(t + i * per).toFixed(3), e: +(t + i * per + per * 0.85).toFixed(3) }));
+    t += ws.length * per;
+  });
 }
+const lineStart = (id) => words[id][0].s;
+const lineEnd = (id) => words[id][words[id].length - 1].e;
+const takeEnd = take ? take.duration : lineEnd(LINES[LINES.length - 1].id) + 0.3;
 
-const estimated = [];
-function durOf(line) {
-  if (measured[line.id]) return measured[line.id];
-  estimated.push(line.id);
-  return line.text.split(/\s+/).length / 2.6 + 0.35;
-}
+// --- one segment per scene, cut mid-pause ---
+const segs = SCENES.map((s) => {
+  const ids = LINES.filter((l) => l.scene === s.id).map((l) => l.id);
+  return { id: s.id, ids, s0: lineStart(ids[0]), e1: lineEnd(ids[ids.length - 1]) };
+});
+segs.forEach((g, i) => {
+  const prev = segs[i - 1], next = segs[i + 1];
+  const midBefore = prev ? (prev.e1 + g.s0) / 2 : 0;
+  const midAfter = next ? (g.e1 + next.s0) / 2 : takeEnd;
+  g.a = Math.max(midBefore, g.s0 - LEAD, 0);
+  g.b = Math.min(midAfter, g.e1 + TAIL, takeEnd);
+});
 
-const lineDur = {};
-LINES.forEach((l) => { lineDur[l.id] = durOf(l); });
-
-function layout(extraPerScene) {
-  const scenes = {};
-  const schedule = [];
+function layout(extra) {
+  const scenes = {}, schedule = [];
   let t = 0;
   SCENES.forEach((s, i) => {
-    const lines = LINES.filter((l) => l.scene === s.id);
+    const g = segs[i];
     const start = t;
     t += s.pre;
-    lines.forEach((l, j) => {
-      if (j > 0) t += s.gap;
-      schedule.push({ id: l.id, scene: s.id, start: +t.toFixed(3), dur: +lineDur[l.id].toFixed(3), end: +(t + lineDur[l.id]).toFixed(3), pauses: pausesOf(l.id) });
-      t += lineDur[l.id];
+    const place = t, shift = place - g.a; // take time -> film time
+    g.ids.forEach((id) => {
+      const ws = words[id].map((w) => ({ w: w.w, s: +(w.s + shift).toFixed(3), e: +(w.e + shift).toFixed(3) }));
+      schedule.push({ id, scene: s.id, start: ws[0].s, end: ws[ws.length - 1].e, dur: +(ws[ws.length - 1].e - ws[0].s).toFixed(3), words: ws });
     });
-    t += s.post + extraPerScene[i];
-    scenes[s.id] = { start: +start.toFixed(3), end: +t.toFixed(3), lines: lines.map((l) => l.id) };
+    t += g.b - g.a + s.post + extra[i];
+    scenes[s.id] = { start: +start.toFixed(3), end: +t.toFixed(3), lines: g.ids, seg: { place: +place.toFixed(3), a: +g.a.toFixed(3), b: +g.b.toFixed(3) } };
   });
   return { scenes, schedule, total: t };
 }
 
-const zero = SCENES.map(() => 0);
-const base = layout(zero);
+const base = layout(SCENES.map(() => 0));
 const slack = TARGET - base.total;
 if (slack < 0) {
   console.error(`VO is ${(-slack).toFixed(2)}s too long for ${TARGET}s. Raise VO_SPEED in generate-vo.js or trim lines.json.`);
@@ -79,21 +91,17 @@ const final = layout(SCENES.map((s) => (slack * s.weight) / wsum));
 
 const timing = {
   FILM_DURATION: TARGET,
-  estimated: estimated.length > 0,
-  estimatedLines: estimated,
-  speechSeconds: +Object.values(lineDur).reduce((a, b) => a + b, 0).toFixed(2),
+  estimated,
+  speechSeconds: +LINES.reduce((a, l) => a + lineEnd(l.id) - lineStart(l.id), 0).toFixed(2),
   scenes: final.scenes,
   schedule: final.schedule,
 };
-
-fs.writeFileSync(path.join(ROOT, 'timing.json'), JSON.stringify(timing, null, 2));
-const byId = {};
-timing.schedule.forEach((s) => { byId[s.id] = s; });
+fs.writeFileSync(path.join(ROOT, 'timing.json'), JSON.stringify(timing, null, 1));
+const byId = Object.fromEntries(timing.schedule.map((s) => [s.id, s]));
 fs.writeFileSync(
   path.join(ROOT, 'scenes', 'timing-data.js'),
   `// GENERATED by scripts/build-timing.js - do not hand-edit.\nwindow.TIMING = ${JSON.stringify(timing)};\nwindow.LINES = ${JSON.stringify(LINES)};\nwindow.VO_BY_ID = ${JSON.stringify(byId)};\n`
 );
 
-console.log(`speech ${timing.speechSeconds}s, slack ${slack.toFixed(2)}s, film ${TARGET}s`);
-Object.entries(final.scenes).forEach(([id, s]) => console.log(`  ${id} ${s.start.toFixed(2)} -> ${s.end.toFixed(2)}  (${(s.end - s.start).toFixed(2)}s)`));
-if (estimated.length) console.log(`ESTIMATED durations (no voice yet): ${estimated.join(', ')}`);
+console.log(`speech ${timing.speechSeconds}s, slack ${slack.toFixed(2)}s, film ${TARGET}s${estimated ? '  (ESTIMATED: no VO take yet)' : ''}`);
+Object.entries(final.scenes).forEach(([id, s]) => console.log(`  ${id} ${s.start.toFixed(2)} -> ${s.end.toFixed(2)}  (${(s.end - s.start).toFixed(2)}s)  voice ${s.seg.a.toFixed(2)}-${s.seg.b.toFixed(2)} @ ${s.seg.place.toFixed(2)}`));
