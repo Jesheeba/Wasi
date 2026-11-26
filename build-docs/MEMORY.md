@@ -1,5 +1,17 @@
 # Project memory
 
+## 2026-11-26 - Marketing Messages API (MM API, formerly MM Lite)
+- Owner approved; Wasi accepted the MM API terms in the App Dashboard
+  (Claude clicked Continue on the owner's instruction). That dialog also
+  agrees to share event activity data with Meta (opt-out in Business
+  settings).
+- Rollout: per-client admin switch, off by default; pilot = demo client,
+  switched on after deploy. `message_activity_sharing` not sent: each
+  business's own WhatsApp Manager setting applies.
+- Meta's claim is up to 9% more delivered in India for engaged messages; it
+  does not remove 131049 or the messaging tier. Measured per route in admin.
+- MM calls pin META_MM_GRAPH_API_VERSION (v24.0); global version untouched.
+
 ## 2026-11-26 - Ad Leads back to Coming soon; admin failed sends
 - Owner: show Ad Leads as Coming soon. Leads counting works without Meta
   approval; only spend/clicks/CPL wait on ads_read review. Kept the code, hidden

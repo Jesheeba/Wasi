@@ -700,3 +700,20 @@ Four files failed on master. No app code changed; three tests were stale.
   metaMessageErrorMessages 5, broadcastDetail 6, adminSummaryRedesign 4,
   adminUiRedesign 9, hubApiParamsAndRejections 6, messagesApiKeyAttribution 3,
   adminRoleEnforcement 10: all pass.
+
+## marketing-messages-api, 2026-11-26
+- `marketingMessagesApi.test.js` AC1, AC2 (x2), AC4-AC7 7/7 (local embedded
+  Postgres, faked Meta). Mutation check: with the route decision disabled,
+  4 fail.
+- Browser check (Playwright, :4000, disposable client): WhatsApp tab card
+  shows status and per-route table; toggle saves (db true), no page errors.
+  Card moved to full width after the first check showed it cramped.
+- Regression 24 files, 198 tests, all pass: templateApprovalGuard, apiV1,
+  sendRetryQueue, metaSendPacing, broadcastRetry, broadcastPacing,
+  webhookForwarding (key set), metaWebhookDispatch, metaWebhookEchoRouting,
+  adminRoleEnforcement, adminFailedSendsSummary, customerLocation,
+  apiV1AuthenticationTemplateSend, marketingConsentAttestation,
+  hubApiParamsAndRejections, messagesApiKeyAttribution, chatsLastAgentReplyAt,
+  coexistenceEchoIngestion, messagingTier, broadcastDetail,
+  templateCategoryChange, metaMessageErrorMessages, consentTracking,
+  apiV1TemplateMediaAndMessagingLimit.

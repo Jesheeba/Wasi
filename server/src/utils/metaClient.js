@@ -6,6 +6,9 @@ const { validateTemplateText, validateHeaderText, defaultExampleFor } = require(
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+// The Marketing Messages API (marketing-messages-api.md) is documented from
+// v24.0; production's general version may be older, so its calls pin their own.
+const MM_GRAPH_VERSION = process.env.META_MM_GRAPH_API_VERSION || 'v24.0';
 
 // Every Graph API call below goes through this instead of raw fetch() so a
 // stalled request (Meta-side network issue, not the normal multi-minute
@@ -51,8 +54,8 @@ function assertConfigured() {
   }
 }
 
-async function graphFetch(path, { method = 'GET', accessToken, body } = {}) {
-  const url = new URL(`${GRAPH_BASE}${path}`);
+async function graphFetch(path, { method = 'GET', accessToken, body, version } = {}) {
+  const url = new URL(`${version ? `https://graph.facebook.com/${version}` : GRAPH_BASE}${path}`);
   if (accessToken && method === 'GET') url.searchParams.set('access_token', accessToken);
 
   const res = await fetchWithTimeout(url, {
@@ -614,18 +617,37 @@ function extractAuthenticationCode(params) {
 // follows Meta's template component array shape - build it with
 // buildNamedBodyComponents() for a template with named body parameters, or
 // pass [] for a template with no variables.
-async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, language = 'en_US', components = [] }) {
-  const data = await graphFetch(`/${phoneNumberId}/messages`, {
+//
+// route 'mm_api': a Marketing template sent through the Marketing Messages
+// API (marketing-messages-api.md). Same payload; product_policy
+// CLOUD_API_FALLBACK makes Meta deliver it via Cloud API when the business
+// isn't onboarded. message_activity_sharing is omitted on purpose, so the
+// business's own setting in WhatsApp Manager applies.
+async function sendTemplateMessage(phoneNumberId, accessToken, toPhone, { name, language = 'en_US', components = [], route } = {}) {
+  const mm = route === 'mm_api';
+  const data = await graphFetch(`/${phoneNumberId}/${mm ? 'marketing_messages' : 'messages'}`, {
     method: 'POST',
     accessToken,
+    version: mm ? MM_GRAPH_VERSION : undefined,
     body: {
       messaging_product: 'whatsapp',
       to: toPhone,
       type: 'template',
       template: { name, language: { code: language }, components },
+      ...(mm ? { product_policy: 'CLOUD_API_FALLBACK' } : {}),
     },
   });
   return data.messages?.[0]?.id;
+}
+
+// The WABA's Marketing Messages API onboarding status (e.g. ELIGIBLE,
+// ONBOARDED). Meta documents it as a WABA field; read defensively whether it
+// comes back as a string or as an object with a status.
+async function getMarketingMessagesStatus(wabaId, accessToken) {
+  const data = await graphFetch(`/${wabaId}?fields=marketing_messages_onboarding_status`, { accessToken, version: MM_GRAPH_VERSION });
+  const v = data.marketing_messages_onboarding_status;
+  if (v == null) return null;
+  return typeof v === 'string' ? v : (v.status || JSON.stringify(v));
 }
 
 // Builds the Meta Graph API request body for template creation - separated
@@ -1409,6 +1431,7 @@ module.exports = {
   sendInteractiveMessage,
   sendListMessage,
   sendTemplateMessage,
+  getMarketingMessagesStatus,
   buildNamedHeaderComponents,
   buildNamedBodyComponents,
   buildAuthenticationSendComponents,

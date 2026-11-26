@@ -1461,7 +1461,7 @@ function clientDetailAttention(client, waba) {
 }
 
 function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
-  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSends } = detail;
+  const { client, subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSends, mmDeliveryByRoute } = detail;
   const flags = clientDetailAttention(client, waba);
 
   const statusOptionsHtml = CLIENT_STATUS_OPTIONS.map((s) =>
@@ -1735,6 +1735,38 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       `).join('')
     : `<div class="empty-state"><i data-lucide="ban" class="empty-icon"></i><div class="empty-title">No refused requests</div><div>Wasi has not refused any of this client's Hub API requests in the last 30 days.</div></div>`;
 
+  // Marketing Messages API (build-docs/features/marketing-messages-api.md):
+  // admin switch, Meta's onboarding status, and delivery by route so the
+  // "more reach" claim is checked on this client's own data.
+  const routeLabel = { cloud: 'Cloud API', mm_api: 'Marketing Messages API', mm_api_fallback: 'MM API, Meta fell back to Cloud API' };
+  const pct = (n, d) => (d ? `${Math.round((n / d) * 100)}%` : '-');
+  const mmApiCardHtml = waba ? `
+    <div class="detail-card" id="mm-api-card">
+      <h2 class="detail-card-title">Marketing Messages API</h2>
+      <div class="detail-row">
+        <span class="detail-row-label">Use for Marketing templates</span>
+        <span class="detail-row-value">
+          <label class="wasi-toggle">
+            <input type="checkbox" id="mm-api-toggle" aria-label="Marketing Messages API on or off" ${waba.mm_api_enabled ? 'checked' : ''}>
+            <span class="wasi-toggle-label">${waba.mm_api_enabled ? 'On' : 'Off'}</span>
+          </label>
+        </span>
+      </div>
+      ${detailRow('Meta status', esc(waba.mm_api_status || 'Not checked'))}
+      ${detailRow('Last checked', waba.mm_api_checked_at ? formatDateTime(waba.mm_api_checked_at) : 'Never')}
+      <p class="cell-secondary">Utility, OTP and chat replies always use Cloud API. If the business has not accepted Meta's terms, Meta delivers through Cloud API instead.</p>
+      ${(mmDeliveryByRoute && mmDeliveryByRoute.length) ? `<div class="table-scroll"><table class="data-table" id="mm-api-route-table">
+        <thead><tr><th>Route (Marketing, 30 days)</th><th>Sent</th><th>Delivered</th><th>Meta per-user limit (131049)</th></tr></thead>
+        <tbody>${mmDeliveryByRoute.map((r) => `<tr>
+          <td data-label="Route">${esc(routeLabel[r.route] || r.route)}</td>
+          <td data-label="Sent">${esc(String(r.sent))}</td>
+          <td data-label="Delivered">${pct(r.delivered, r.sent)}</td>
+          <td data-label="131049">${pct(r.per_user_limit, r.sent)}</td>
+        </tr>`).join('')}</tbody></table></div>` : '<div class="cell-secondary">No Marketing template sends in the last 30 days.</div>'}
+      <div id="mm-api-result"></div>
+      <button class="btn-secondary btn-sm btn-block-center" id="mm-api-check-btn"><i data-lucide="refresh-cw" class="icon-14"></i> Check status with Meta</button>
+    </div>` : '';
+
   // Failed sends, last 7 days, grouped by template + source + error
   // (build-docs/features/admin-failed-sends-summary.md). Attempts above
   // contacts means the sender retried the same people.
@@ -1835,6 +1867,7 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
       <div class="detail-grid">
         ${wabaCardsHtml}
       </div>
+      ${mmApiCardHtml}
     </div>
 
     <div class="tab-panel" role="tabpanel" id="panel-client-templates" aria-labelledby="tab-client-templates" data-panel="templates" hidden>
@@ -1883,6 +1916,8 @@ function renderClientDetail(detail, { revealedForwardSecret = null } = {}) {
   // rather than assumed present, unlike the other buttons on this page.
   document.getElementById('retry-provisioning-btn')?.addEventListener('click', () => retryProvisioning(client.id));
   document.getElementById('refresh-messaging-tier-btn')?.addEventListener('click', () => refreshMessagingTier(client.id));
+  document.getElementById('mm-api-toggle')?.addEventListener('change', (e) => toggleMmApi(client, e.target));
+  document.getElementById('mm-api-check-btn')?.addEventListener('click', () => checkMmApi(client.id));
   document.getElementById('check-sendability-btn')?.addEventListener('click', () => checkSendability(client.id));
   document.getElementById('delete-client-btn').addEventListener('click', () => confirmDeleteClient(client));
   document.getElementById('reset-client-password-btn').addEventListener('click', () => confirmResetClientPassword(client));
@@ -2008,6 +2043,41 @@ function toggleClientService(client, checkboxEl) {
       checkboxEl.checked = false;
     },
   });
+}
+
+function toggleMmApi(client, checkboxEl) {
+  const enabled = checkboxEl.checked;
+  const resultEl = document.getElementById('mm-api-result');
+  resultEl.innerHTML = '';
+  apiFetch(`/api/admin/clients/${client.id}/mm-api`, { method: 'PATCH', body: JSON.stringify({ enabled }) })
+    .then(() => {
+      showToast(`Marketing Messages API ${enabled ? 'on' : 'off'} for ${client.name}.`, 'success');
+      loadClientDetail(client.id, { quiet: true });
+    })
+    .catch((err) => {
+      if (err.status === 401) return;
+      checkboxEl.checked = !enabled;
+      resultEl.innerHTML = `<div class="inline-error" role="alert">${esc(err.message)}</div>`;
+      reportError(err, 'Failed to change the Marketing Messages API setting');
+    });
+}
+
+async function checkMmApi(clientId) {
+  const btn = document.getElementById('mm-api-check-btn');
+  const resultEl = document.getElementById('mm-api-result');
+  resultEl.innerHTML = '';
+  btn.disabled = true;
+  try {
+    const res = await apiFetch(`/api/admin/clients/${clientId}/mm-api/check`, { method: 'POST' });
+    showToast(`Meta status: ${res.waba.mm_api_status}`, 'success');
+    loadClientDetail(clientId, { quiet: true });
+  } catch (err) {
+    if (err.status === 401) return;
+    const detail = err.data && err.data.detail ? `: ${err.data.detail}` : '';
+    resultEl.innerHTML = `<div class="inline-warning" role="alert">${esc(err.message + detail)}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function toggleClientPayment(client, checkboxEl) {

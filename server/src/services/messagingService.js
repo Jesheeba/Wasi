@@ -348,9 +348,12 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
     // `template.language` (the real local row) wins over the caller-supplied
     // `templateLanguage`, which is only the fallback when no local row exists
     // - a stale caller value would otherwise reach Meta as the wrong language.
+    // Marketing templates go through the Marketing Messages API when an
+    // admin switched it on for this client (marketing-messages-api.md).
+    const route = waba.mm_api_enabled && template?.category === 'Marketing' ? 'mm_api' : undefined;
     call = {
       fn: 'sendTemplateMessage',
-      args: [toPhone, { name: templateName, language: template?.language || templateLanguage, components: finalComponents }],
+      args: [toPhone, { name: templateName, language: template?.language || templateLanguage, components: finalComponents, ...(route ? { route } : {}) }],
     };
   }
 
@@ -400,7 +403,7 @@ async function sendChatMessage(db, clientId, chat, { type, body, buttons, header
   // error surfaces as a plain 500, distinct from send_failed, rather than
   // lying to the caller that the message never reached the recipient.
   if (connectionHooks.reacquire) db = await connectionHooks.reacquire();
-  const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId);
+  const sent = await chatsRepo.markSent(db, clientId, message.id, metaMessageId, call.args[1]?.route);
   await usageRepo.incrementSent(db, clientId);
   return sent;
 }

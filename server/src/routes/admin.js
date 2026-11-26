@@ -116,7 +116,7 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
   const client = await clientsRepo.findById(pool, id);
   if (!client) return res.status(404).json({ error: 'Not found' });
 
-  const [subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSendRows] = await Promise.all([
+  const [subscription, waba, templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSendRows, mmDeliveryByRoute] = await Promise.all([
     subscriptionsRepo.findByClientId(pool, id),
     wabasRepo.findByClientId(id),
     messageTemplatesRepo.listByClientId(pool, id),
@@ -134,6 +134,9 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
     // Sends Meta (or the send path) failed, grouped by template + error, so
     // "why did their campaign fail" is one glance (admin-failed-sends-summary.md).
     chatsRepo.failedSendsSummary(pool, id, 7),
+    // Marketing template delivery by route, last 30 days: checks Meta's
+    // "more reach" claim on this client's own data (marketing-messages-api.md).
+    chatsRepo.marketingDeliveryByRoute(pool, id, 30),
   ]);
   const failedSends = failedSendRows.map((r) => ({
     ...r,
@@ -142,7 +145,7 @@ router.get('/clients/:id', asyncHandler(async (req, res) => {
 
   const { password_hash, ...safeClient } = client;
 
-  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSends });
+  res.json({ client: safeClient, subscription, waba: maskWaba(waba), templates, auditTrail, apiKeys, hubApiActivity, hubApiRejections, failedSends, mmDeliveryByRoute });
 }));
 
 // --- Manual retry: re-pull phone number status from Meta for a connected WABA ---
@@ -203,6 +206,37 @@ router.post('/clients/:id/refresh-messaging-tier', supportOrFull, asyncHandler(a
   await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'messaging_tier_refreshed', target: `${id}: ${result.tier}` });
   const updated = await wabasRepo.findByClientId(id);
   res.json({ refreshed: true, waba: maskWaba(updated) });
+}));
+
+// --- Marketing Messages API (build-docs/features/marketing-messages-api.md) ---
+// Read Meta's onboarding status for this client's WABA.
+router.post('/clients/:id/mm-api/check', supportOrFull, asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const waba = await wabasRepo.findByClientId(id);
+  if (!waba || !waba.access_token_encrypted) {
+    return res.status(400).json({ error: 'No WhatsApp connection to check - client must complete Embedded Signup first' });
+  }
+  let status;
+  try {
+    status = await metaClient.getMarketingMessagesStatus(waba.waba_id, decrypt(waba.access_token_encrypted));
+  } catch (err) {
+    return res.status(502).json({ error: 'Marketing Messages API status check failed', detail: err.message });
+  }
+  await pool.query('update wabas set mm_api_status = $1, mm_api_checked_at = now() where id = $2', [status || 'NOT_RETURNED', waba.id]);
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: 'mm_api_status_checked', target: `${id}: ${status || 'NOT_RETURNED'}` });
+  res.json({ waba: maskWaba(await wabasRepo.findByClientId(id)) });
+}));
+
+// Turn the route on or off for one client. Full admins only: it changes how
+// Meta bills this client's marketing messages.
+router.patch('/clients/:id/mm-api', fullOnly, asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+  const waba = await wabasRepo.findByClientId(id);
+  if (!waba) return res.status(400).json({ error: 'No WhatsApp connection - client must complete Embedded Signup first' });
+  await pool.query('update wabas set mm_api_enabled = $1 where id = $2', [enabled, waba.id]);
+  await auditLogRepo.record({ actor_type: 'admin', actor_id: req.adminId, action: enabled ? 'mm_api_enabled' : 'mm_api_disabled', target: `${id}: waba ${waba.waba_id}` });
+  res.json({ waba: maskWaba(await wabasRepo.findByClientId(id)) });
 }));
 
 // --- Manual check: all three sendability layers plus the combined verdict

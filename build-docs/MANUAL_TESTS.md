@@ -362,3 +362,18 @@ Status: PENDING
 4. **Tags** > pick the new tag > **Remove tag**: it disappears from all 3.
 
 Status: PENDING
+
+## 24. Marketing Messages API on the demo client (after deploy)
+
+1. Admin > Clients > Wasi Demo Client > WhatsApp tab > Marketing Messages API:
+   click **Check status with Meta**. Note the status (ELIGIBLE / ONBOARDED /
+   an error). If it errors, send me the text.
+2. Turn the switch **On**.
+3. From the demo account, send an approved **Marketing** template to
+   9092766740 only.
+4. It arrives on the phone. After it is delivered, the card's table shows a
+   "Marketing Messages API" row (billed as marketing_lite) or "MM API, Meta fell
+   back to Cloud API" (demo business not onboarded yet).
+5. Send a **Utility** template: it arrives and is not counted in the table.
+
+Status: PENDING

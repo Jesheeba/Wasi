@@ -42,7 +42,7 @@ async function processRow(row) {
     const accessToken = decrypt(waba.access_token_encrypted);
     const metaMessageId = await runPaced(waba.phone_number_id,
       () => metaClient[call.fn](waba.phone_number_id, accessToken, ...call.args));
-    await chatsRepo.markSent(pool, clientId, id, metaMessageId);
+    await chatsRepo.markSent(pool, clientId, id, metaMessageId, call.args[1]?.route);
     await usageRepo.incrementSent(pool, clientId);
     return 'sent';
   } catch (err) {

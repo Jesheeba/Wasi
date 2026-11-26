@@ -108,6 +108,38 @@ async function listRecentApiSends(db, clientId, limit = 20) {
 // `[template: <name>]` placeholder body; source is Campaign (a broadcast
 // recipient row points at the message), the API key's app name, or Inbox /
 // flow. attempts vs contacts shows a retrying integration.
+// Marketing Messages API status webhook: Meta bills an MM API send as
+// marketing_lite, or as marketing when it fell back to Cloud API. Only rows
+// already sent through the MM route change.
+async function setSendRouteFromPricing(db, clientId, metaMessageId, pricingCategory) {
+  if (pricingCategory !== 'marketing_lite' && pricingCategory !== 'marketing') return;
+  await db.query(
+    `update messages set send_route = $3
+     where client_id = $1 and meta_message_id = $2 and send_route is not null and send_route <> $3`,
+    [clientId, metaMessageId, pricingCategory === 'marketing_lite' ? 'mm_api' : 'mm_api_fallback']
+  );
+}
+
+// Delivery by send route for one client, last `days` days: sent, delivered
+// (delivered or read), 131049 (Meta's per-user marketing limit), failed.
+// Marketing templates only, so the Cloud row compares like with like.
+async function marketingDeliveryByRoute(db, clientId, days = 30) {
+  const { rows } = await db.query(
+    `select coalesce(m.send_route, 'cloud') as route,
+            count(*)::int as sent,
+            count(*) filter (where m.status in ('delivered', 'read'))::int as delivered,
+            count(*) filter (where m.meta_error_code = 131049)::int as per_user_limit,
+            count(*) filter (where m.status = 'failed')::int as failed
+     from messages m
+     where m.client_id = $1 and m.direction = 'out' and m.sent_at > now() - make_interval(days => $2)
+       and exists (select 1 from message_templates t where t.client_id = m.client_id and t.category = 'Marketing'
+                   and m.body = '[template: ' || t.name || ']')
+     group by 1 order by 1`,
+    [clientId, days]
+  );
+  return rows;
+}
+
 async function failedSendsSummary(db, clientId, days = 7) {
   const { rows } = await db.query(
     `select coalesce(substring(m.body from '^\\[template: ([a-z0-9_]+)\\]$'), '(not a template)') as template_name,
@@ -254,11 +286,13 @@ async function setReaction(db, clientId, messageId, direction, emoji) {
   return rows[0] || null;
 }
 
-async function markSent(db, clientId, messageId, metaMessageId) {
+// sendRoute: 'mm_api' when sent to the Marketing Messages API, else null.
+async function markSent(db, clientId, messageId, metaMessageId, sendRoute = null) {
   const { rows } = await db.query(
-    `update messages set status = 'sent', meta_message_id = $3, error_reason = null, send_request = null, next_retry_at = null
+    `update messages set status = 'sent', meta_message_id = $3, error_reason = null, send_request = null, next_retry_at = null,
+       send_route = $4
      where client_id = $1 and id = $2 returning *`,
-    [clientId, messageId, metaMessageId]
+    [clientId, messageId, metaMessageId, sendRoute]
   );
   return rows[0] || null;
 }
@@ -563,6 +597,8 @@ module.exports = {
   listMessages,
   listRecentApiSends,
   failedSendsSummary,
+  setSendRouteFromPricing,
+  marketingDeliveryByRoute,
   findMessageById,
   findMessageByIdForClient,
   lastInboundAt,

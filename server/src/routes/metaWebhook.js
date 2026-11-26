@@ -492,6 +492,9 @@ async function handleInboundMessages(waba, value) {
         reply_to_message_id: _replyToMessageId,
         customer_reaction_emoji: _customerReactionEmoji,
         agent_reaction_emoji: _agentReactionEmoji,
+        // send_route (migration 114) - internal: which Meta API sent an
+        // outbound message; always null on an inbound row.
+        send_route: _sendRoute,
         ...forwardableMessage
       } = inserted;
       await enqueueForwards(waba, 'message.received', {
@@ -562,6 +565,13 @@ async function handleStatuses(waba, value) {
   for (const status of value.statuses || []) {
     const error = status.errors?.[0];
     await chatsRepo.updateStatusByMetaId(pool, waba.client_id, status.id, status.status, error?.title || null, error?.code || null);
+    // Marketing Messages API: did Meta deliver it as marketing_lite, or fall
+    // back to Cloud API (marketing-messages-api.md). Never breaks the handler.
+    try {
+      await chatsRepo.setSendRouteFromPricing(pool, waba.client_id, status.id, status.pricing?.category);
+    } catch (err) {
+      console.error('metaWebhook: send_route update failed:', err.message);
+    }
     // Wasi's own billing messages (payment_notifications) - a no-op for any
     // message id that isn't one of ours. Never allowed to break the handler.
     try {
@@ -698,6 +708,14 @@ async function handleTemplateCategoryUpdate(waba, value) {
 }
 
 async function handleAccountUpdate(waba, value) {
+  // A business accepted the Marketing Messages API terms (Meta's documented
+  // event; payload carries waba_info, no phone_number). Admin "Check now"
+  // reads the full status from Meta.
+  if (value?.event === 'MM_LITE_TERMS_SIGNED') {
+    await pool.query('update wabas set mm_api_status = $1, mm_api_checked_at = now() where id = $2', ['MM_LITE_TERMS_SIGNED', waba.id]);
+    await auditLogRepo.record({ actor_type: 'meta_webhook', actor_id: null, action: 'mm_api_terms_signed', target: `${waba.client_id}: waba ${waba.waba_id}` });
+    return true;
+  }
   if (!value?.phone_number) return false;
   // restriction_info/ban_info are Meta's documented field names for this
   // payload, but - like the phone_number_quality_update etc. fields below -

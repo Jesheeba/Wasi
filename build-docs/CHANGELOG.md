@@ -1,5 +1,13 @@
 # Changelog
 
+## feat(marketing-messages-api): admin switch to send Marketing templates via Meta's MM API
+- Per-client admin switch (off by default, admin Client Detail > WhatsApp).
+  When on, Marketing templates go to `/marketing_messages` with
+  `product_policy: CLOUD_API_FALLBACK`; everything else stays on `/messages`.
+  Status check, `MM_LITE_TERMS_SIGNED` webhook, real route recorded from the
+  status webhook's pricing category, delivery and 131049 rates by route.
+  Migration 114.
+
 ## feat(admin-failed-sends-summary): see why a client's sends failed, grouped
 - Admin Client Detail > Activity: "Failed sends (last 7 days)" grouped by
   template, sender (Campaign / API app / Inbox) and Meta error, with attempts,
