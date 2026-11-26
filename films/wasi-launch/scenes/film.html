@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Wasi launch film</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- The real WASI design system: tokens (breakpoints.css) + components (design-system.css) -->
+<link rel="stylesheet" href="../../../breakpoints.css">
+<link rel="stylesheet" href="../../../design-system.css">
+<style>
+  /* ---------- film frame ---------- */
+  *{box-sizing:border-box}
+  /* GSAP owns all motion; CSS transitions/animations would make seeked frames depend on wall-clock time */
+  *,*::before,*::after{transition:none !important;animation-play-state:paused !important}
+  html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#0B1F0E}
+  body{font-family:'Inter','Poppins',sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;font-size:14px}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:#0B1F0E}
+  .scene{position:absolute;inset:0;visibility:hidden;opacity:0;overflow:hidden}
+  .bg-dark{background:radial-gradient(1100px 760px at 50% 46%,#1E4A24 0%,#143518 50%,#0B1F0E 100%)}
+  .bg-light{background:linear-gradient(180deg,#FFFFFF 0%,var(--bg-sidebar) 100%)}
+  .bg-light .wash{position:absolute;inset:0;background:radial-gradient(900px 720px at 76% 52%,var(--brand-soft) 0%,rgba(237,250,238,0) 72%)}
+  .bg-light .dots{position:absolute;inset:0;background-image:radial-gradient(var(--border-strong) 1.2px,transparent 1.2px);background-size:32px 32px;opacity:.45;
+    -webkit-mask-image:radial-gradient(900px 700px at 76% 52%,#000 0%,transparent 75%)}
+  .glow{position:absolute;width:900px;height:900px;border-radius:50%;left:50%;top:50%;margin:-450px 0 0 -450px;
+    background:radial-gradient(circle,rgba(74,201,89,.28) 0%,rgba(74,201,89,0) 62%);opacity:0}
+  #cutflash{position:absolute;inset:0;background:#0B1F0E;opacity:0;pointer-events:none;z-index:90}
+  #wipe{position:absolute;top:0;bottom:0;width:240px;left:-260px;background:linear-gradient(90deg,rgba(74,201,89,0),rgba(74,201,89,.9),rgba(74,201,89,0));z-index:80;opacity:0}
+  #footnote{position:absolute;left:110px;bottom:26px;font-size:15px;color:var(--text-faint);z-index:70;opacity:0;letter-spacing:.01em}
+
+  /* ---------- copy column (light product scenes) ---------- */
+  .copy{position:absolute;left:110px;top:0;bottom:0;width:480px;display:flex;flex-direction:column;justify-content:center}
+  .kicker{display:flex;align-items:center;gap:12px;font-size:18px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1F8A34;margin-bottom:24px}
+  .kicker i{width:22px;height:22px;display:inline-flex}
+  .headline{font-family:'Poppins',sans-serif;font-weight:600;font-size:64px;line-height:1.08;letter-spacing:-0.015em;color:var(--brand-dark);margin:0}
+  .headline .w{display:inline-block;margin-right:.22em}
+  .sub{margin-top:26px;font-size:26px;line-height:1.45;color:var(--text-muted)}
+  .proof{display:flex;flex-wrap:wrap;gap:10px;margin-top:34px}
+  .proof .badge{font-size:17px;padding:6px 16px;gap:8px}
+  .proof .badge i{width:16px;height:16px;display:inline-flex}
+
+  /* ---------- product window (real UI at 1x, zoomed for video legibility) ---------- */
+  .cam{position:absolute;left:720px;top:130px;width:1110px;height:820px;transform-origin:50% 50%}
+  .win{position:relative;width:740px;height:546px;zoom:1.5;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+    box-shadow:0 24px 60px rgba(20,53,24,.16),0 2px 8px rgba(17,24,39,.06);display:flex;flex-direction:column}
+  .topbar{height:42px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-card)}
+  .topbar-title{font-size:15px;font-weight:600;color:var(--text)}
+  .topbar .crumb{font-size:12.5px;color:var(--text-muted)}
+  .topbar .grow{flex:1}
+  .shell{display:flex;flex:1;min-height:0}
+  .sidebar{width:150px;background:var(--bg-sidebar);border-right:1px solid var(--border);padding:8px 8px;flex-shrink:0}
+  .ws-row{display:flex;align-items:center;gap:8px;height:32px;padding:0 6px;margin-bottom:2px;font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:var(--brand-dark)}
+  .ws-row svg{width:24px;height:17px}
+  .sidebar .nav-group-label{padding:9px 8px 3px;font-size:9.5px}
+  .nav-item{display:flex;align-items:center;gap:8px;height:27px;padding:0 8px;border-radius:8px;color:var(--text-muted);font-size:12px;font-weight:500}
+  .nav-item i{width:14px;height:14px;display:inline-flex}
+  .nav-item.active{background:#fff;color:var(--text);box-shadow:inset 0 0 0 1px var(--border)}
+  .nav-item.active i{color:#1F8A34}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .body{flex:1;min-height:0;padding:16px;position:relative}
+  i[data-icon] svg{width:100%;height:100%}
+
+  .btn-primary{height:32px;padding:0 16px;background:var(--brand);color:#fff;font:inherit;font-weight:600;font-size:12.5px;border:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto;white-space:nowrap}
+  .btn-secondary{height:30px;padding:0 12px;background:#fff;border:1px solid var(--border-strong);color:var(--text);font:inherit;font-weight:500;font-size:12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .btn-secondary i{width:13px;height:13px;display:inline-flex}
+  .form-label{display:block;font-size:11.5px;margin-bottom:5px}
+  .form-input{display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-md);background:#fff;font-size:12.5px;color:var(--text)}
+  .form-input.focus{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+  .mono{font-family:'JetBrains Mono',var(--font-mono);font-size:12px}
+  .badge i{width:11px;height:11px;display:inline-flex}
+  .toast{position:absolute;right:14px;bottom:14px;padding:10px 14px;font-size:12.5px;align-items:center;z-index:40;opacity:0}
+  .toast i{width:14px;height:14px;display:inline-flex}
+  .cursor{position:absolute;left:0;top:0;width:20px;height:20px;z-index:60;opacity:0;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
+  .ripple{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px solid var(--brand);opacity:0;z-index:59;pointer-events:none}
+
+  /* ================= s01 hook ================= */
+  .hook-copy{position:absolute;left:150px;top:0;bottom:0;width:860px}
+  .hook-line{position:absolute;left:0;top:50%;font-family:'Poppins',sans-serif;font-weight:600;font-size:86px;line-height:1.08;letter-spacing:-0.02em;color:#fff}
+  .hook-line .w{display:inline-block;margin-right:.22em;opacity:0}
+  .hook-line .accent{color:var(--brand)}
+  .hook-meta{position:absolute;left:150px;top:200px;display:flex;align-items:center;gap:14px;font-size:22px;color:rgba(255,255,255,.62);letter-spacing:.02em;opacity:0}
+  .hook-meta i{width:22px;height:22px;display:inline-flex}
+  .phone{position:absolute;left:1190px;top:110px;width:430px;height:860px;border-radius:56px;background:#0E1A10;padding:14px;
+    box-shadow:0 40px 90px rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,255,255,.08)}
+  .phone-screen{width:100%;height:100%;border-radius:44px;background:#fff;overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .phone-head{height:112px;flex-shrink:0;display:flex;align-items:flex-end;gap:12px;padding:0 22px 14px;background:#fff;border-bottom:1px solid var(--border)}
+  .phone-head .t{flex:1}
+  .phone-head b{display:block;font-size:22px;color:var(--wa-ink)}
+  .phone-head small{font-size:14px;color:var(--wa-muted)}
+  .unread-pill{background:var(--brand);color:#fff;font-weight:600;font-size:16px;padding:4px 12px;border-radius:999px;font-variant-numeric:tabular-nums;margin-bottom:4px}
+  .chatlist{position:relative;flex:1;overflow:hidden}
+  .crow{position:absolute;left:0;right:0;top:0;height:80px;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid #F0F2F5;background:#fff;opacity:0}
+  .crow .avatar-initials{width:48px;height:48px;font-size:16px}
+  .crow .m{flex:1;min-width:0}
+  .crow .n{display:flex;justify-content:space-between;font-size:17px;font-weight:600;color:var(--wa-ink)}
+  .crow .n span{font-size:13px;font-weight:500;color:#1F8A34}
+  .crow .p{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px;font-size:15px;color:var(--wa-muted)}
+  .crow .p em{font-style:normal;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .crow .cnt{min-width:22px;height:22px;border-radius:11px;background:var(--brand);color:#fff;font-size:12px;font-weight:600;display:grid;place-items:center;padding:0 6px;flex-shrink:0}
+  .dim-layer{position:absolute;inset:0;background:rgba(14,26,16,.0);pointer-events:none}
+
+  /* ================= s02 reveal / s10 close: lockup ================= */
+  .lockup{position:absolute;left:50%;top:50%;display:flex;align-items:center;gap:72px}
+  .lockup svg{width:257px;height:180px;overflow:visible}
+  .lockup .wordmark{font-family:'Poppins',sans-serif;font-weight:700;font-size:154px;line-height:1;color:#fff;letter-spacing:-0.01em}
+  .reveal-pre{position:absolute;left:0;right:0;top:50%;text-align:center;font-size:52px;font-weight:500;color:rgba(255,255,255,.86);opacity:0;letter-spacing:-0.01em}
+  .descriptor{position:absolute;left:0;right:0;top:680px;text-align:center;font-size:28px;color:rgba(255,255,255,.66);opacity:0;letter-spacing:.01em}
+  .descriptor b{color:#fff;font-weight:600}
+
+  /* ================= s03 connect ================= */
+  .connect-grid{display:grid;grid-template-columns:1fr 196px;gap:14px}
+  .card-box{background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
+  .card-title{font-size:14px;font-weight:600;margin:0 0 4px}
+  .card-lede{font-size:12px;color:var(--text-muted);margin:0 0 14px}
+  .connect-steps li{font-size:12.5px;padding-left:40px;min-height:30px}
+  .connect-steps li strong{font-size:13px}
+  .connect-steps{gap:12px}
+  .step-done{position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;opacity:0;transform:scale(.6)}
+  .step-done i{width:16px;height:16px;display:inline-flex}
+  .side-note{font-size:12px}
+  .side-note h3{font-size:12.5px}
+  .connect-actions{display:flex;align-items:center;gap:10px;margin-top:16px}
+  .spin-wrap{display:flex;align-items:center;gap:8px;opacity:0}
+  .alert{margin-top:14px;font-size:12.5px;opacity:0}
+  .alert i{width:16px;height:16px;display:inline-flex;flex-shrink:0;margin-top:2px}
+  .meta-modal{position:absolute;left:50%;top:52%;width:300px;background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-overlay);border:1px solid var(--border);padding:16px;opacity:0;z-index:30}
+  .meta-modal .mh{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;margin-bottom:10px}
+  .meta-modal .mh .fb{width:20px;height:20px;border-radius:50%;background:#1877F2;color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;font-family:Arial,sans-serif}
+  .meta-bar{height:6px;border-radius:3px;background:var(--neutral-bg);overflow:hidden;margin:10px 0 8px}
+  .meta-bar span{display:block;height:100%;width:0;background:#1877F2}
+  .meta-modal small{font-size:11.5px;color:var(--text-muted)}
+  .modal-scrim{position:absolute;inset:0;background:rgba(17,24,39,.28);opacity:0;z-index:29}
+
+  /* ================= s04 inbox ================= */
+  .inbox{display:flex;flex:1;min-height:0}
+  .clist{width:206px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+  .clist .tabs{padding:0 6px}
+  .clist .tab{padding:8px 7px;font-size:11.5px}
+  .clist .list-row{padding:9px 10px;gap:9px}
+  .clist .list-row.sel{background:var(--brand-soft)}
+  .clist .avatar-initials{width:30px;height:30px;font-size:11px}
+  .clist .list-row-title{font-size:12px}
+  .clist .list-row-sub{font-size:11px}
+  .clist .meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:10.5px;color:var(--text-faint)}
+  .clist .cnt{min-width:17px;height:17px;border-radius:9px;background:var(--brand);color:#fff;font-size:10px;font-weight:600;display:grid;place-items:center;padding:0 4px}
+  .thread{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .thread-head{height:48px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .thread-head .avatar-initials{width:30px;height:30px;font-size:11px}
+  .thread-head .t{flex:1;min-width:0}
+  .thread-head b{display:block;font-size:13px}
+  .thread-head small{font-size:11px;color:var(--text-muted)}
+  .assign-swap{position:relative;height:22px;min-width:118px}
+  .assign-swap .badge{position:absolute;right:0;top:0;font-size:11px}
+  .thread-body{flex:1;min-height:0;background:var(--wa-wallpaper);padding:12px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden}
+  .thread-body .wa-bubble{font-size:12.5px;max-width:78%;align-self:flex-start}
+  .thread-body .wa-bubble.out{align-self:flex-end}
+  .ticks{display:inline-flex;width:15px;height:11px;margin-left:3px;vertical-align:-1px;color:var(--wa-muted)}
+  .ticks.read{color:var(--wa-tick-read)}
+  .note{align-self:stretch;background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning);border-radius:var(--r-md);padding:7px 10px;font-size:11.5px;opacity:0}
+  .note b{display:flex;align-items:center;gap:5px;font-size:11px;margin-bottom:2px}
+  .note b i{width:12px;height:12px;display:inline-flex}
+  .composer{height:50px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 10px;flex-shrink:0;background:#fff}
+  .composer .form-input{flex:1;min-height:32px;font-size:12px;overflow:hidden;white-space:nowrap}
+  .composer .caret{display:inline-block;width:1.5px;height:15px;background:var(--text);margin-left:1px;vertical-align:-3px}
+  .send-btn{width:32px;height:32px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;flex-shrink:0}
+  .send-btn i{width:15px;height:15px;display:inline-flex}
+  .menu-list{display:block;right:12px;top:44px;opacity:0;min-width:160px}
+  .menu-item{font-size:12px;padding:6px 8px}
+  .menu-item .avatar-initials{width:22px;height:22px;font-size:9.5px}
+  .out-bubble{opacity:0}
+
+  /* ================= s05 campaigns ================= */
+  /* wizard stepper: exact rules from index.css (not part of design-system.css) */
+  .wizard-stepper{list-style:none;display:flex;align-items:center;gap:var(--sp-1);margin:0 0 16px;padding:0}
+  .wizard-step-indicator{display:flex;align-items:center;gap:var(--sp-2);flex:1 1 0;min-width:0;font-size:11.5px;color:var(--text-muted)}
+  .wizard-step-indicator:last-child{flex:0 0 auto}
+  .wizard-step-indicator:not(:last-child)::after{content:'';flex:1 1 8px;height:2px;background:var(--border);border-radius:2px;min-width:8px}
+  .wizard-step-indicator.done:not(:last-child)::after{background:var(--brand)}
+  .wizard-step-num{width:24px;height:24px;border-radius:50%;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;background:var(--neutral-bg);color:var(--text-muted);font-weight:600;font-size:var(--fs-caption);border:1px solid var(--border)}
+  .wizard-step-indicator.active .wizard-step-num{background:var(--brand);border-color:var(--brand);color:#fff}
+  .wizard-step-indicator.active{color:var(--text);font-weight:600}
+  .wizard-step-indicator.done .wizard-step-num{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-dark)}
+  .wizard-step-label{white-space:nowrap}
+  .wpanels{position:relative;height:300px}
+  .wpanel{position:absolute;inset:0;opacity:0}
+  .wizard-panel-title{font-size:14px;margin-bottom:12px}
+  .option-cards{grid-template-columns:repeat(3,1fr)}
+  .option-card-title{font-size:12.5px}
+  .option-card-title i{width:14px;height:14px;display:inline-flex}
+  .option-card-desc{font-size:11px}
+  .option-card-body.on{border-color:var(--brand-dark);background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand-dark)}
+  .list-card .list-row-title{font-size:12.5px}
+  .list-card .list-row-sub{font-size:11px}
+  .list-row-icon i{width:16px;height:16px;display:inline-flex}
+  .map-row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  .var-chip{display:inline-flex;align-items:center;padding:1px 7px;border-radius:5px;background:var(--wa-variable-bg);color:var(--wa-variable-ink);font-family:'JetBrains Mono',var(--font-mono);font-size:11.5px;font-weight:500}
+  .review-rows{display:grid;gap:8px;font-size:12.5px}
+  .review-rows div{display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:7px}
+  .review-rows span{color:var(--text-muted)}
+  .detail{position:absolute;inset:0;opacity:0;display:flex;flex-direction:column;background:#fff}
+  .stat-tiles{grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .stat-tile{padding:12px}
+  .stat-tile-label{font-size:11.5px}
+  .stat-tile-label i{width:13px;height:13px;display:inline-flex}
+  .stat-tile-value{font-size:24px;font-variant-numeric:tabular-nums}
+  .stat-tile-hint{font-size:11px}
+  .chip-row{margin-bottom:10px}
+  .chip-btn{height:27px;font-size:11.5px;padding:0 12px;display:inline-flex;align-items:center}
+  .rtable .list-row{padding:8px 12px}
+  .rtable .list-row-meta{font-size:11px}
+  .rtable .avatar-initials{width:26px;height:26px;font-size:10px}
+
+  /* ================= s06 templates ================= */
+  .tpl-grid{display:grid;grid-template-columns:1fr 268px;gap:16px;height:100%}
+  .field{margin-bottom:11px}
+  .tpl-grid .option-cards{margin-bottom:0;gap:6px}
+  .tpl-grid .option-card-body{padding:7px 9px}
+  .tpl-grid .option-card-title{font-size:11.5px}
+  .textarea{min-height:92px;align-items:flex-start;padding:8px 10px;line-height:1.55;white-space:pre-wrap;display:block}
+  .textarea .var-chip{font-size:11px;padding:0 5px}
+  .textarea .bad{background:var(--danger-bg);color:var(--danger);border-radius:4px;padding:0 3px}
+  .valid{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:11px;position:relative;height:16px}
+  .valid > div{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;opacity:0;white-space:nowrap}
+  .valid i{width:12px;height:12px;display:inline-flex}
+  .valid .ok{color:var(--success)}
+  .valid .err{color:var(--danger)}
+  .qr-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px dashed var(--border-control);border-radius:var(--r-md);font-size:12px}
+  .qr-chip i{width:13px;height:13px;display:inline-flex}
+  .pv{display:flex;flex-direction:column;height:100%}
+  .pv-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12.5px;font-weight:600}
+  .wa-preview{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:14px 12px;position:relative}
+  .wa-preview .wa-bubble{font-size:12.5px}
+  .wa-var{background:var(--wa-variable-bg);color:var(--wa-variable-ink);border-radius:3px;padding:0 2px}
+  .wa-btn{margin-top:4px;background:#fff;border-radius:8px;text-align:center;padding:8px;font-size:12.5px;font-weight:500;color:var(--wa-link);box-shadow:0 1px 0.5px rgba(11,20,26,.13);display:flex;align-items:center;justify-content:center;gap:6px}
+  .wa-btn i{width:13px;height:13px;display:inline-flex}
+  .status-swap{position:relative;width:96px;height:22px}
+  .status-swap .badge{position:absolute;right:0;top:0;font-size:11px;opacity:0}
+
+  /* ================= s07 automation ================= */
+  .canvas{flex:1;position:relative;background-color:var(--bg-subtle);background-image:radial-gradient(var(--border-strong) 1px,transparent 1px);background-size:16px 16px;overflow:hidden}
+  .canvas svg.edges{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .canvas path.edge{fill:none;stroke:var(--border-control);stroke-width:1.6}
+  .canvas path.edge.live{stroke:var(--brand)}
+  .fnode{position:absolute;width:170px;background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);padding:9px 10px;box-shadow:0 2px 6px rgba(17,24,39,.05);opacity:0}
+  .fnode.lit{border-color:var(--brand);box-shadow:0 0 0 2px rgba(74,201,89,.25)}
+  .fnode .fh{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+  .fnode .fh i{width:13px;height:13px;display:inline-flex;color:#1F8A34}
+  .fnode .fb{font-size:12px;color:var(--text);line-height:1.4}
+  .fnode .fbtns{display:flex;gap:5px;margin-top:6px}
+  .fnode .fbtns span{flex:1;text-align:center;font-size:10.5px;border:1px solid var(--border);border-radius:6px;padding:3px 0;color:var(--wa-link)}
+  .pulse{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px rgba(74,201,89,.25);opacity:0}
+  .after-hours{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-muted)}
+  .after-hours i{width:13px;height:13px;display:inline-flex}
+  .chatcard{position:absolute;right:-30px;bottom:-60px;width:340px;height:460px;border-radius:22px;background:#0E1A10;padding:8px;box-shadow:0 30px 70px rgba(20,53,24,.28);opacity:0}
+  .chatcard .scr{width:100%;height:100%;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;background:var(--wa-wallpaper)}
+  .chatcard .hd{height:54px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 14px;font-size:17px;font-weight:600;color:var(--wa-ink);flex-shrink:0}
+  .chatcard .hd .avatar-initials{width:28px;height:28px;font-size:10.5px}
+  .chatcard .msgs{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:7px;padding:12px}
+  .chatcard .wa-bubble{font-size:15.5px;max-width:85%;align-self:flex-start;opacity:0}
+  .chatcard .wa-bubble.out{align-self:flex-end}
+  .chatcard .wa-btn{opacity:0;align-self:flex-start;width:62%;padding:6px;font-size:15px;margin-top:0}
+
+  /* ================= s08 integrations ================= */
+  .int-title{position:absolute;left:0;right:0;top:120px;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:64px;color:#fff;letter-spacing:-0.015em}
+  .int-title .accent{color:var(--brand)}
+  .int-title .w{display:inline-block;margin-right:.22em;opacity:0}
+  .hub{position:absolute;left:810px;top:486px;width:300px;height:300px}
+  .hub-core{position:absolute;left:90px;top:90px;width:120px;height:120px;border-radius:28px;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 10px rgba(74,201,89,.12),0 20px 50px rgba(0,0,0,.35);opacity:0}
+  .hub-core svg{width:72px;height:51px}
+  .ring{position:absolute;left:150px;top:150px;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;border:2px solid rgba(74,201,89,.6);opacity:0}
+  svg.spokes{position:absolute;inset:0;width:1920px;height:1080px;pointer-events:none}
+  svg.spokes line{stroke:rgba(134,219,144,.45);stroke-width:2;stroke-dasharray:4 6}
+  .ichip{position:absolute;display:flex;align-items:center;gap:14px;background:#fff;border-radius:16px;padding:16px 22px;box-shadow:0 18px 40px rgba(0,0,0,.3);opacity:0;white-space:nowrap}
+  .ichip .ic{width:46px;height:46px;border-radius:12px;background:var(--brand-soft);color:var(--brand-dark);display:grid;place-items:center}
+  .ichip .ic i{width:24px;height:24px;display:inline-flex}
+  .ichip b{display:block;font-size:22px;color:var(--text)}
+  .ichip small{font-size:16px;color:var(--text-muted)}
+  .code{position:absolute;left:1240px;top:770px;width:560px;background:#0F172A;color:#E2E8F0;border-radius:14px;padding:20px 24px;font-family:'JetBrains Mono',var(--font-mono);font-size:17px;line-height:1.6;box-shadow:0 24px 60px rgba(0,0,0,.4);opacity:0;white-space:pre}
+  .code .k{color:#86DB90}.code .s{color:#FCD98A}.code .c{color:#94A3B8}
+
+  /* ================= s09 recap ================= */
+  .recap-words{position:absolute;left:0;right:0;top:150px;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:62px;color:var(--brand-dark);letter-spacing:-0.015em;height:80px}
+  .recap-words > span{position:absolute;left:0;right:0;opacity:0}
+  .recap-words .accent{color:#1F8A34}
+  .rcard{position:absolute;top:330px;width:500px;height:500px;opacity:0}
+  .rcard .win{width:333px;height:333px;zoom:1.5}
+  .rcard .cap{position:absolute;left:0;right:0;bottom:-58px;text-align:center;font-size:24px;font-weight:600;color:var(--brand-dark)}
+  .mini-pad{padding:12px;display:flex;flex-direction:column;gap:8px;height:100%}
+  .one-place{position:absolute;left:0;right:0;top:50%;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:110px;color:var(--brand-dark);letter-spacing:-0.02em;opacity:0}
+  .one-place .accent{color:#1F8A34}
+
+  /* ================= s10 close ================= */
+  #s10 .lockup{top:380px}
+  .tagline{position:absolute;left:0;right:0;top:560px;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:64px;color:#fff;letter-spacing:-0.015em}
+  .tagline .w{display:inline-block;margin-right:.22em;opacity:0}
+  .tagline .accent{color:var(--brand)}
+  .cta-row{position:absolute;left:0;right:0;top:700px;display:flex;justify-content:center;align-items:center;gap:30px;opacity:0}
+  .cta-row .btn-primary{zoom:2;height:32px;padding:0 20px;font-size:13px}
+  .url{font-family:'JetBrains Mono',var(--font-mono);font-size:34px;color:#fff;letter-spacing:0}
+  .close-badges{position:absolute;left:0;right:0;top:830px;display:flex;justify-content:center;gap:14px;opacity:0}
+  .close-badges span{display:inline-flex;align-items:center;gap:9px;font-size:19px;color:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:8px 18px}
+  .close-badges i{width:18px;height:18px;display:inline-flex;color:var(--brand)}
+  .copy .kicker,.copy .headline .w,.copy .sub,.copy .proof,.cam,#phone,#reveal-pre,#lockup1 path,#wm1,.int-title .w,.rcard,.recap-words > span,#lockup2,.tagline .w,.chatcard .wa-btn{opacity:0}
+  .wasi-toggle input.on{background:var(--brand)}
+  .wasi-toggle input.on::before{transform:translateX(16px)}
+  #endblack{position:absolute;inset:0;background:#000;opacity:0;z-index:95}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ===================== s01 · hook + problem ===================== -->
+  <section class="scene bg-dark" id="s01">
+    <div class="glow" id="s01-glow"></div>
+    <div class="hook-meta" id="hook-meta"><i data-icon="smartphone"></i><span>One phone. One business. Every customer.</span></div>
+    <div class="hook-copy">
+      <div class="hook-line" id="h1"><span class="w">Your</span><span class="w">customers</span><span class="w">are</span><br><span class="w accent">on</span><span class="w accent">WhatsApp.</span></div>
+      <div class="hook-line" id="h2"><span class="w">Most</span><span class="w">of</span><span class="w">them</span><br><span class="w accent">just</span><span class="w accent">wait.</span></div>
+    </div>
+    <div class="phone" id="phone">
+      <div class="phone-screen">
+        <div class="phone-head">
+          <div class="avatar-initials" style="width:52px;height:52px;font-size:17px">MS</div>
+          <div class="t"><b>Meera Silks</b><small>WhatsApp Business</small></div>
+          <div class="unread-pill" id="unread">0 unread</div>
+        </div>
+        <div class="chatlist" id="chatlist"></div>
+        <div class="dim-layer" id="dim"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== s02 · the turn + reveal ===================== -->
+  <section class="scene bg-dark" id="s02">
+    <div class="glow" id="s02-glow"></div>
+    <div class="reveal-pre" id="reveal-pre">Today, that changes.</div>
+    <div class="lockup" id="lockup1">
+      <svg viewBox="0 0 40 28" aria-hidden="true"><path class="leaf-l" d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path class="leaf-r" d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#2E9E3B"/></svg>
+      <div class="wordmark" id="wm1">Wasi</div>
+    </div>
+    <div class="descriptor" id="descriptor">The WhatsApp Business CRM on <b>Meta's official Cloud API</b></div>
+  </section>
+
+  <!-- ===================== s03 · connect ===================== -->
+  <section class="scene bg-light" id="s03">
+    <div class="wash"></div><div class="dots"></div>
+    <div class="copy" data-rc="copy">
+      <div class="kicker"><i data-icon="plug"></i>Connect</div>
+      <h2 class="headline"><span class="w">Live</span><span class="w">in</span><span class="w">minutes.</span></h2>
+      <div class="sub">Your own number, on Meta's official Cloud API. No paperwork, no middleman.</div>
+      <div class="proof"><span class="badge badge-success"><i data-icon="shield-check"></i>Official Cloud API</span><span class="badge badge-neutral"><i data-icon="clock"></i>Self-serve setup</span></div>
+    </div>
+    <div class="cam" id="cam03">
+      <div class="win">
+        <div class="topbar"><span class="topbar-title">Settings</span><span class="grow"></span>
+          <div class="status-swap" style="width:110px"><span class="badge badge-neutral" id="s03-off" style="opacity:1">Not connected</span><span class="badge badge-success" id="s03-on"><i data-icon="check"></i>Connected</span></div>
+        </div>
+        <div class="shell">
+          <div class="sidebar">
+            <div class="ws-row"><svg viewBox="0 0 40 28"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#2E9E3B"/></svg>Wasi</div>
+            <div class="nav-group-label">Inbox</div><div class="nav-item"><i data-icon="message-circle"></i>Chat</div>
+            <div class="nav-group-label">Audience</div><div class="nav-item"><i data-icon="users"></i>Contacts</div>
+            <div class="nav-group-label">Engage</div><div class="nav-item"><i data-icon="megaphone"></i>Campaigns</div><div class="nav-item"><i data-icon="file-text"></i>Templates</div><div class="nav-item"><i data-icon="workflow"></i>Automation</div>
+            <div class="nav-group-label">Settings</div><div class="nav-item active"><i data-icon="sliders"></i>Settings</div>
+          </div>
+          <div class="main">
+            <div class="tabs" style="padding:0 12px"><button class="tab active">WhatsApp</button><button class="tab">Team</button><button class="tab">Developer</button><button class="tab">Billing</button></div>
+            <div class="body">
+              <div class="connect-grid">
+                <div class="card-box">
+                  <div class="card-title">Connect your WhatsApp number</div>
+                  <div class="card-lede">Three steps in Meta's own signup window.</div>
+                  <ol class="connect-steps">
+                    <li><span class="step-done" id="sd1"><i data-icon="check"></i></span><strong>Sign in with Facebook</strong>Use the account that manages your business.</li>
+                    <li><span class="step-done" id="sd2"><i data-icon="check"></i></span><strong>Choose your business</strong>Pick it from your Meta business portfolio.</li>
+                    <li><span class="step-done" id="sd3"><i data-icon="check"></i></span><strong>Pick your number</strong>Your existing WhatsApp number works.</li>
+                  </ol>
+                  <div class="connect-actions">
+                    <button class="btn-primary" id="s03-btn"><i data-icon="message-circle" style="width:14px;height:14px;display:inline-flex"></i><span id="s03-btn-label">Connect WhatsApp</span></button>
+                    <span class="spin-wrap" id="s03-spin"><span class="spinner"></span><span style="font-size:12px;color:var(--text-muted)">Connecting…</span></span>
+                  </div>
+                  <div class="alert alert-success" id="s03-alert"><i data-icon="check-circle"></i><div><b>WhatsApp connected.</b> +91 90000 12345 is live on the Cloud API.</div></div>
+                </div>
+                <div class="side-note">
+                  <h3><i data-icon="info" style="width:16px;height:16px;display:inline-flex"></i>What you need</h3>
+                  <ul><li>A Facebook account</li><li>Your business details</li><li>A phone number</li></ul>
+                  <p style="margin-top:8px">No documents to email. No waiting days for approval.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-scrim" id="s03-scrim"></div>
+        <div class="meta-modal" id="s03-modal">
+          <div class="mh"><span class="fb">f</span>WhatsApp Business signup</div>
+          <div style="font-size:12.5px" id="s03-modal-step">Signing in…</div>
+          <div class="meta-bar"><span id="s03-bar"></span></div>
+          <small>Hosted by Meta</small>
+        </div>
+        <div class="toast toast-success" id="s03-toast"><i data-icon="check"></i><span class="toast-msg">WhatsApp connected</span></div>
+        <svg class="cursor" id="cur03" viewBox="0 0 24 24"><path d="M5 3l14 8-6.5 1.5L10 19z" fill="#111827" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div class="ripple" id="rip03"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== s04 · shared inbox ===================== -->
+  <section class="scene bg-light" id="s04">
+    <div class="wash"></div><div class="dots"></div>
+    <div class="copy" data-rc="copy">
+      <div class="kicker"><i data-icon="message-circle"></i>Shared inbox</div>
+      <h2 class="headline"><span class="w">One</span><span class="w">inbox</span><span class="w">for</span><span class="w">the</span><span class="w">whole</span><span class="w">team.</span></h2>
+      <div class="sub">Assign a chat, leave a private note, and reply in seconds.</div>
+    </div>
+    <div class="cam" id="cam04">
+      <div class="win">
+        <div class="shell">
+          <div class="sidebar">
+            <div class="ws-row"><svg viewBox="0 0 40 28"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#2E9E3B"/></svg>Wasi</div>
+            <div class="nav-group-label">Inbox</div><div class="nav-item active"><i data-icon="message-circle"></i>Chat</div>
+            <div class="nav-group-label">Audience</div><div class="nav-item"><i data-icon="users"></i>Contacts</div>
+            <div class="nav-group-label">Engage</div><div class="nav-item"><i data-icon="megaphone"></i>Campaigns</div><div class="nav-item"><i data-icon="file-text"></i>Templates</div><div class="nav-item"><i data-icon="workflow"></i>Automation</div>
+            <div class="nav-group-label">Business</div><div class="nav-item"><i data-icon="bar-chart"></i>Analytics</div>
+            <div class="nav-group-label">Settings</div><div class="nav-item"><i data-icon="sliders"></i>Settings</div>
+          </div>
+          <div class="inbox">
+            <div class="clist">
+              <div class="tabs"><button class="tab">Unassigned</button><button class="tab">Mine</button><button class="tab active">All</button></div>
+              <div class="list-row sel"><div class="avatar-initials">KS</div><div class="list-row-main"><div class="list-row-title">Karthik S</div><div class="list-row-sub">Fees for the weekend batch?</div></div><div class="meta">9:14<span class="cnt" id="kcnt">1</span></div></div>
+              <div class="list-row"><div class="avatar-initials">AR</div><div class="list-row-main"><div class="list-row-title">Ananya R</div><div class="list-row-sub">Is the blue kurta in stock?</div></div><div class="meta">9:10<span class="cnt">2</span></div></div>
+              <div class="list-row"><div class="avatar-initials">FN</div><div class="list-row-main"><div class="list-row-title">Fathima N</div><div class="list-row-sub">Order #4821 status</div></div><div class="meta">9:02</div></div>
+              <div class="list-row"><div class="avatar-initials">RV</div><div class="list-row-main"><div class="list-row-title">Rahul V</div><div class="list-row-sub">Saturday at 11 works</div></div><div class="meta">8:57</div></div>
+              <div class="list-row"><div class="avatar-initials">VS</div><div class="list-row-main"><div class="list-row-title">Vignesh S</div><div class="list-row-sub">Do you deliver to Coimbatore?</div></div><div class="meta">8:41</div></div>
+              <div class="list-row"><div class="avatar-initials">DK</div><div class="list-row-main"><div class="list-row-title">Divya K</div><div class="list-row-sub">Thanks, received it</div></div><div class="meta">Tue</div></div>
+            </div>
+            <div class="thread">
+              <div class="thread-head"><div class="avatar-initials">KS</div><div class="t"><b>Karthik S</b><small>+91 98400 21377</small></div>
+                <div class="assign-swap"><span class="badge badge-neutral" id="as-off">Unassigned</span><span class="badge badge-info" id="as-on" style="opacity:0"><i data-icon="user-check"></i>Assigned to Priya</span></div>
+                <button class="btn-secondary" id="assign-btn"><i data-icon="user-plus"></i>Assign</button>
+              </div>
+              <div class="thread-body">
+                <div class="wa-bubble">Hi! What are the fees for the weekend batch? And is Saturday morning still open?<span class="wa-bubble-time">9:14 am</span></div>
+                <div class="note" id="note"><b><i data-icon="lock"></i>Private note · Priya</b>Saturday 10 am has 4 seats left. Share the brochure.</div>
+                <div class="wa-bubble out out-bubble" id="outb">Hi Karthik! The weekend batch starts 6 December, and Saturday 10 am still has seats. Sending the brochure now.<span class="wa-bubble-time">9:15 am<i class="ticks" id="tk" data-icon="check-check"></i></span></div>
+              </div>
+              <div class="composer"><div class="form-input" id="comp"><span id="comp-text" style="color:var(--text-faint)">Type a reply</span><span class="caret" id="caret" style="opacity:0"></span></div><div class="send-btn" id="send"><i data-icon="send"></i></div></div>
+              <div class="menu-list" id="assign-menu">
+                <div class="menu-item" id="mi-priya" ><span class="avatar-initials">PR</span>Priya · Sales</div>
+                <div class="menu-item"><span class="avatar-initials">AM</span>Arun · Support</div>
+                <div class="menu-item"><span class="avatar-initials">KV</span>Kavya · Admissions</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="toast toast-success" id="s04-toast"><i data-icon="check"></i><span class="toast-msg">Assigned to Priya</span></div>
+        <svg class="cursor" id="cur04" viewBox="0 0 24 24"><path d="M5 3l14 8-6.5 1.5L10 19z" fill="#111827" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div class="ripple" id="rip04"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== s05 · campaigns ===================== -->
+  <section class="scene bg-light" id="s05">
+    <div class="wash"></div><div class="dots"></div>
+    <div class="copy" data-rc="copy">
+      <div class="kicker"><i data-icon="megaphone"></i>Campaigns</div>
+      <h2 class="headline"><span class="w">Reach</span><span class="w">everyone.</span><br><span class="w">See</span><span class="w">every</span><span class="w">result.</span></h2>
+      <div class="sub">Five simple steps to launch, then delivery and read status for every recipient.</div>
+    </div>
+    <div class="cam" id="cam05">
+      <div class="win">
+        <div class="topbar"><span class="crumb">Campaigns ›</span><span class="topbar-title" id="s05-title">New campaign</span><span class="grow"></span>
+          <div class="status-swap" style="width:100px"><span class="badge badge-info" id="s05-sending"><span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>Sending</span><span class="badge badge-success" id="s05-done"><i data-icon="check"></i>Completed</span></div>
+        </div>
+        <div class="main" style="flex:1">
+          <div class="body">
+            <ol class="wizard-stepper" id="wiz">
+              <li class="wizard-step-indicator" data-s="1"><span class="wizard-step-num">1</span><span class="wizard-step-label">Audience</span></li>
+              <li class="wizard-step-indicator" data-s="2"><span class="wizard-step-num">2</span><span class="wizard-step-label">Template</span></li>
+              <li class="wizard-step-indicator" data-s="3"><span class="wizard-step-num">3</span><span class="wizard-step-label">Content</span></li>
+              <li class="wizard-step-indicator" data-s="4"><span class="wizard-step-num">4</span><span class="wizard-step-label">Schedule</span></li>
+              <li class="wizard-step-indicator" data-s="5"><span class="wizard-step-num">5</span><span class="wizard-step-label">Review</span></li>
+            </ol>
+            <div class="wpanels">
+              <div class="wpanel" id="wp1">
+                <div class="wizard-panel-title">Who should receive this?</div>
+                <div class="option-cards">
+                  <label class="option-card"><span class="option-card-body"><span class="option-card-title"><i data-icon="tag"></i>Tag</span><span class="option-card-desc">Contacts with one tag</span></span></label>
+                  <label class="option-card"><span class="option-card-body"><span class="option-card-title"><i data-icon="list"></i>Contact list</span><span class="option-card-desc">An imported CSV list</span></span></label>
+                  <label class="option-card"><span class="option-card-body on"><span class="option-card-title"><i data-icon="filter"></i>Segment</span><span class="option-card-desc">Tags and attributes</span></span></label>
+                </div>
+                <div class="list-card"><div class="list-row"><div class="list-row-icon"><i data-icon="users"></i></div><div class="list-row-main"><div class="list-row-title">Weekend batch leads</div><div class="list-row-sub">Tag is lead · Batch is weekend</div></div><span class="badge badge-success">2,480 contacts</span></div></div>
+              </div>
+              <div class="wpanel" id="wp2">
+                <div class="wizard-panel-title">Choose an approved template</div>
+                <div class="list-card">
+                  <div class="list-row" style="background:var(--brand-soft)"><div class="list-row-icon"><i data-icon="file-text"></i></div><div class="list-row-main"><div class="list-row-title mono">admission_open</div><div class="list-row-sub">Marketing · English</div></div><span class="badge badge-success">Approved</span></div>
+                  <div class="list-row"><div class="list-row-icon"><i data-icon="file-text"></i></div><div class="list-row-main"><div class="list-row-title mono">fee_reminder</div><div class="list-row-sub">Utility · English</div></div><span class="badge badge-success">Approved</span></div>
+                  <div class="list-row"><div class="list-row-icon"><i data-icon="file-text"></i></div><div class="list-row-main"><div class="list-row-title mono">demo_class_invite</div><div class="list-row-sub">Marketing · Tamil</div></div><span class="badge badge-success">Approved</span></div>
+                </div>
+              </div>
+              <div class="wpanel" id="wp3">
+                <div class="wizard-panel-title">Fill in the variables</div>
+                <div class="list-card"><div class="list-row"><div class="map-row"><span class="var-chip">{{name}}</span><i data-icon="arrow-right" style="width:14px;height:14px;display:inline-flex;color:var(--text-faint)"></i><span>Contact name</span></div></div><div class="list-row"><div class="map-row"><span class="var-chip">{{batch}}</span><i data-icon="arrow-right" style="width:14px;height:14px;display:inline-flex;color:var(--text-faint)"></i><span>Attribute: Batch</span></div></div></div>
+              </div>
+              <div class="wpanel" id="wp4">
+                <div class="wizard-panel-title">When should it go out?</div>
+                <div class="option-cards" style="grid-template-columns:repeat(2,1fr)">
+                  <label class="option-card"><span class="option-card-body on"><span class="option-card-title"><i data-icon="send"></i>Send now</span><span class="option-card-desc">Paced to protect your number</span></span></label>
+                  <label class="option-card"><span class="option-card-body"><span class="option-card-title"><i data-icon="calendar"></i>Schedule</span><span class="option-card-desc">Pick a date and time</span></span></label>
+                </div>
+              </div>
+              <div class="wpanel" id="wp5">
+                <div class="wizard-panel-title">Review and launch</div>
+                <div class="review-rows"><div><span>Audience</span>Weekend batch leads · 2,480</div><div><span>Template</span><b class="mono" style="font-weight:500">admission_open</b></div><div><span>Send</span>Now</div></div>
+                <div style="margin-top:16px;display:flex;justify-content:flex-end"><button class="btn-primary" id="launch"><i data-icon="send" style="width:13px;height:13px;display:inline-flex"></i>Launch campaign</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="detail" id="s05-detail">
+            <div class="body">
+              <div class="stat-tiles">
+                <div class="stat-tile" id="st-sent"><div class="stat-tile-label"><i data-icon="send"></i>Sent</div><div class="stat-tile-value" id="v-sent">0</div><div class="stat-tile-hint">of 2,480</div></div>
+                <div class="stat-tile" id="st-del"><div class="stat-tile-label"><i data-icon="check"></i>Delivered</div><div class="stat-tile-value" id="v-del">0</div><div class="stat-tile-hint" id="h-del">0%</div></div>
+                <div class="stat-tile" id="st-read"><div class="stat-tile-label"><i data-icon="check-check"></i>Read</div><div class="stat-tile-value" id="v-read">0</div><div class="stat-tile-hint" id="h-read">0%</div></div>
+                <div class="stat-tile" id="st-fail"><div class="stat-tile-label"><i data-icon="alert-circle"></i>Failed</div><div class="stat-tile-value" id="v-fail">0</div><div class="stat-tile-hint" id="h-fail">0%</div></div>
+              </div>
+              <div class="chip-row"><button class="chip-btn" id="ch-all" aria-pressed="true">All</button><button class="chip-btn" id="ch-read">Read</button><button class="chip-btn">Delivered</button><button class="chip-btn" id="ch-fail">Failed</button></div>
+              <div class="list-card rtable">
+                <div class="list-row rr ok"><span class="avatar-initials">AR</span><div class="list-row-main"><div class="list-row-title">Ananya R</div></div><span class="list-row-meta">9:31 am</span><span class="badge badge-success">Read</span></div>
+                <div class="list-row rr ok"><span class="avatar-initials">KS</span><div class="list-row-main"><div class="list-row-title">Karthik S</div></div><span class="list-row-meta">9:31 am</span><span class="badge badge-success">Read</span></div>
+                <div class="list-row rr ok"><span class="avatar-initials">RV</span><div class="list-row-main"><div class="list-row-title">Rahul V</div></div><span class="list-row-meta">9:32 am</span><span class="badge badge-info">Delivered</span></div>
+                <div class="list-row rr bad"><span class="avatar-initials">SM</span><div class="list-row-main"><div class="list-row-title">Sneha M</div><div class="list-row-sub">Number is not on WhatsApp</div></div><span class="list-row-meta">9:32 am</span><span class="badge badge-danger">Failed</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg class="cursor" id="cur05" viewBox="0 0 24 24"><path d="M5 3l14 8-6.5 1.5L10 19z" fill="#111827" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div class="ripple" id="rip05"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== s06 · templates ===================== -->
+  <section class="scene bg-light" id="s06">
+    <div class="wash"></div><div class="dots"></div>
+    <div class="copy" data-rc="copy">
+      <div class="kicker"><i data-icon="file-text"></i>Templates</div>
+      <h2 class="headline"><span class="w">See</span><span class="w">it</span><span class="w">before</span><br><span class="w">they</span><span class="w">do.</span></h2>
+      <div class="sub">Live checks as you type, and the exact WhatsApp message your customer will get.</div>
+    </div>
+    <div class="cam" id="cam06">
+      <div class="win">
+        <div class="topbar"><span class="crumb">Templates ›</span><span class="topbar-title">Create template</span><span class="grow"></span>
+          <div class="status-swap"><span class="badge badge-neutral" id="tp-draft" style="opacity:1">Draft</span><span class="badge badge-warning" id="tp-review">In review</span><span class="badge badge-success" id="tp-ok"><i data-icon="check"></i>Approved</span></div>
+          <button class="btn-primary" id="tp-submit" style="height:28px;font-size:12px">Submit for review</button>
+        </div>
+        <div class="body">
+          <div class="tpl-grid">
+            <div>
+              <div class="field"><label class="form-label">Template name</label><div class="form-input mono">admission_open</div></div>
+              <div class="field"><label class="form-label">Category</label>
+                <div class="option-cards">
+                  <label class="option-card"><span class="option-card-body on"><span class="option-card-title"><i data-icon="megaphone"></i>Marketing</span></span></label>
+                  <label class="option-card"><span class="option-card-body"><span class="option-card-title"><i data-icon="bell"></i>Utility</span></span></label>
+                  <label class="option-card"><span class="option-card-body"><span class="option-card-title"><i data-icon="key"></i>Authentication</span></span></label>
+                </div>
+              </div>
+              <div class="field"><label class="form-label">Body</label>
+                <div class="form-input textarea focus" id="tp-body"></div>
+                <div class="valid"><div class="err" id="v-err"><i data-icon="alert-circle"></i>Variable names can only use letters, numbers and underscores.</div><div class="ok" id="v-ok"><i data-icon="check-circle"></i>Looks good. 1 variable, sample value set.</div></div>
+              </div>
+              <div class="field"><label class="form-label">Buttons</label><span class="qr-chip"><i data-icon="reply"></i>Book a visit</span></div>
+            </div>
+            <div class="pv">
+              <div class="pv-head"><span>Preview</span><span style="font-weight:400;color:var(--text-muted);font-size:11.5px">As your customer sees it</span></div>
+              <div class="wa-preview">
+                <div class="wa-bubble" id="pv-bubble"><span id="pv-text"></span><span class="wa-bubble-time">9:30 am</span></div>
+                <div class="wa-btn" id="pv-btn"><i data-icon="reply"></i>Book a visit</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg class="cursor" id="cur06" viewBox="0 0 24 24"><path d="M5 3l14 8-6.5 1.5L10 19z" fill="#111827" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div class="ripple" id="rip06"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== s07 · automation ===================== -->
+  <section class="scene bg-light" id="s07">
+    <div class="wash"></div><div class="dots"></div>
+    <div class="copy" data-rc="copy">
+      <div class="kicker"><i data-icon="workflow"></i>Automation</div>
+      <h2 class="headline"><span class="w">Works</span><span class="w">the</span><br><span class="w">night</span><span class="w">shift.</span></h2>
+      <div class="sub">Visual flows greet, ask questions and capture answers. No code needed.</div>
+    </div>
+    <div class="cam" id="cam07">
+      <div class="win">
+        <div class="topbar"><span class="crumb">Automation ›</span><span class="topbar-title">Admissions enquiry</span><span class="grow"></span>
+          <span class="after-hours"><i data-icon="moon"></i>11:30 pm</span>
+          <label class="wasi-toggle" style="margin-left:10px"><input type="checkbox" id="flow-toggle"><span class="wasi-toggle-label" style="font-size:12.5px" id="flow-toggle-label">Off</span></label>
+        </div>
+        <div class="canvas" id="canvas">
+          <svg class="edges" id="edges">
+            <path class="edge" id="e1" d="M190 82 C 215 82, 215 82, 240 82"/>
+            <path class="edge" id="e2" d="M410 82 C 445 82, 445 82, 470 82"/>
+            <path class="edge" id="e3" d="M555 172 C 555 210, 555 210, 555 250"/>
+            <path class="edge" id="e4" d="M325 172 C 325 230, 190 240, 105 300"/>
+          </svg>
+          <div class="fnode" id="n1" style="left:20px;top:40px"><div class="fh"><i data-icon="zap"></i>Trigger</div><div class="fb">Keyword: <b>fees</b>, <b>admission</b></div></div>
+          <div class="fnode" id="n2" style="left:240px;top:30px"><div class="fh"><i data-icon="message-square"></i>Send buttons</div><div class="fb">Which batch are you interested in?</div><div class="fbtns"><span>Weekday</span><span>Weekend</span></div></div>
+          <div class="fnode" id="n3" style="left:470px;top:40px"><div class="fh"><i data-icon="edit"></i>Capture reply</div><div class="fb">Ask the student's name. Save to <b>Student name</b>.</div></div>
+          <div class="fnode" id="n4" style="left:240px;top:250px"><div class="fh"><i data-icon="send"></i>Send message</div><div class="fb">Thanks! Here is the weekend batch brochure.</div></div>
+          <div class="fnode" id="n5" style="left:20px;top:345px"><div class="fh"><i data-icon="tag"></i>Add tag</div><div class="fb">Tag the contact <b>weekend lead</b></div></div>
+          <div class="pulse" id="pulse"></div>
+        </div>
+      </div>
+      <div class="chatcard" id="chatcard">
+        <div class="scr">
+          <div class="hd"><span class="avatar-initials">MS</span>Meera Academy</div>
+          <div class="msgs">
+            <div class="wa-bubble out" id="cm1">What are the fees?</div>
+            <div class="wa-bubble" id="cm2">Which batch are you interested in?</div>
+            <div class="wa-btn" id="cm2b">Weekend</div>
+            <div class="wa-bubble out" id="cm3">Weekend</div>
+            <div class="wa-bubble" id="cm4">Great. What's the student's name?</div>
+            <div class="wa-bubble out" id="cm5">Diya</div>
+            <div class="wa-bubble" id="cm6">Thanks! Here is the weekend batch brochure.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== s08 · integrations ===================== -->
+  <section class="scene bg-dark" id="s08">
+    <div class="glow" id="s08-glow" style="opacity:.7"></div>
+    <div class="int-title" data-rc="copy"><span class="w">Fits</span><span class="w">the</span><span class="w">tools</span><span class="w">you</span><span class="w accent">already</span><span class="w accent">run.</span></div>
+    <svg class="spokes" id="spokes"></svg>
+    <div class="hub" id="hub"><div class="ring" id="ring1"></div><div class="ring" id="ring2"></div>
+      <div class="hub-core" id="hub-core"><svg viewBox="0 0 40 28"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#2E9E3B"/></svg></div>
+    </div>
+    <div class="ichip" id="ic1" style="left:250px;top:400px"><span class="ic"><i data-icon="code"></i></span><div><b>Developer API</b><small>Send and read from your own app</small></div></div>
+    <div class="ichip" id="ic2" style="left:300px;top:640px"><span class="ic"><i data-icon="webhook"></i></span><div><b>Webhooks</b><small>Every reply, pushed to your CRM</small></div></div>
+    <div class="ichip" id="ic3" style="left:1310px;top:330px"><span class="ic"><i data-icon="zap"></i></span><div><b>Zapier</b><small>Connect thousands of apps</small></div></div>
+    <div class="ichip" id="ic4" style="left:1330px;top:540px"><span class="ic"><i data-icon="bot"></i></span><div><b>MCP server</b><small>Let AI assistants send for you</small></div></div>
+    <div class="ichip" id="ic5" style="left:330px;top:860px"><span class="ic"><i data-icon="target"></i></span><div><b>Ad leads</b><small>Click-to-WhatsApp ads, tracked</small></div></div>
+    <div class="code" id="code"><span class="c"># Send a template from any system</span>
+<span class="k">POST</span> /api/v1/messages
+<span class="k">Authorization:</span> Bearer wasi_••••••••
+{ <span class="s">"to"</span>: <span class="s">"919000012345"</span>,
+  <span class="s">"type"</span>: <span class="s">"template"</span>,
+  <span class="s">"template"</span>: <span class="s">"admission_open"</span>,
+  <span class="s">"params"</span>: { <span class="s">"name"</span>: <span class="s">"Ananya"</span> } }</div>
+  </section>
+
+  <!-- ===================== s09 · recap ===================== -->
+  <section class="scene bg-light" id="s09">
+    <div class="wash" style="background:radial-gradient(1100px 700px at 50% 60%,var(--brand-soft) 0%,rgba(237,250,238,0) 72%)"></div><div class="dots" style="-webkit-mask-image:radial-gradient(1100px 700px at 50% 60%,#000 0%,transparent 75%)"></div>
+    <div class="recap-words" data-rc="copy"><span id="rw1">Every <span class="accent">conversation.</span></span><span id="rw2">Every <span class="accent">campaign.</span></span><span id="rw3">Every <span class="accent">customer.</span></span></div>
+    <div class="rcard" id="rc1" style="left:160px"><div class="win"><div class="mini-pad" style="background:var(--wa-wallpaper)">
+      <div class="wa-bubble" style="font-size:12.5px;max-width:80%">What are the fees for the weekend batch?</div>
+      <div class="wa-bubble out" style="font-size:12.5px;max-width:80%">Saturday 10 am still has seats. Sending the brochure now.<span class="wa-bubble-time">9:15 am<i class="ticks read" data-icon="check-check"></i></span></div>
+      <div class="note" style="opacity:1"><b><i data-icon="lock"></i>Private note · Priya</b>Follow up on Friday.</div>
+    </div></div><div class="cap">Shared inbox</div></div>
+    <div class="rcard" id="rc2" style="left:710px"><div class="win"><div class="mini-pad">
+      <div class="stat-tiles" style="grid-template-columns:1fr 1fr;margin:0"><div class="stat-tile"><div class="stat-tile-label">Delivered</div><div class="stat-tile-value">2,431</div><div class="stat-tile-hint">98%</div></div><div class="stat-tile"><div class="stat-tile-label">Read</div><div class="stat-tile-value">1,962</div><div class="stat-tile-hint">79%</div></div></div>
+      <div class="list-card"><div class="list-row"><span class="avatar-initials" style="width:26px;height:26px;font-size:10px">AR</span><div class="list-row-main"><div class="list-row-title" style="font-size:12px">Ananya R</div></div><span class="badge badge-success">Read</span></div><div class="list-row"><span class="avatar-initials" style="width:26px;height:26px;font-size:10px">RV</span><div class="list-row-main"><div class="list-row-title" style="font-size:12px">Rahul V</div></div><span class="badge badge-info">Delivered</span></div></div>
+    </div></div><div class="cap">Campaigns</div></div>
+    <div class="rcard" id="rc3" style="left:1260px"><div class="win"><div class="mini-pad">
+      <div class="list-card">
+        <div class="list-row"><span class="avatar-initials">DY</span><div class="list-row-main"><div class="list-row-title" style="font-size:12.5px">Diya</div><div class="list-row-sub">Batch: Weekend</div></div></div>
+        <div class="list-row"><div class="list-row-main"><div class="list-row-sub">Tags</div><div style="display:flex;gap:5px;margin-top:4px"><span class="badge badge-success">weekend lead</span><span class="badge badge-neutral">admissions</span></div></div></div>
+        <div class="list-row"><div class="list-row-main"><div class="list-row-sub">Marketing consent</div><div style="margin-top:4px"><span class="badge badge-success"><i data-icon="check"></i>Opted in</span></div></div></div>
+      </div>
+    </div></div><div class="cap">Contacts</div></div>
+    <div class="one-place" id="one-place">One <span class="accent">place.</span></div>
+  </section>
+
+  <!-- ===================== s10 · close ===================== -->
+  <section class="scene bg-dark" id="s10">
+    <div class="glow" id="s10-glow"></div>
+    <div class="lockup" id="lockup2" style="gap:48px">
+      <svg viewBox="0 0 40 28" aria-hidden="true" style="width:171px;height:120px"><path d="M3 5c0-2 1.4-3.5 3.5-3.5C14 1.5 19 8 19 15c0 6-3 11-8 11C6 26 3 19 3 5z" fill="#4AC959"/><path d="M37 5c0-2-1.4-3.5-3.5-3.5C26 1.5 21 8 21 15c0 6 3 11 8 11 5 0 8-7 8-21z" fill="#2E9E3B"/></svg>
+      <div class="wordmark" style="font-size:103px">Wasi</div>
+    </div>
+    <div class="tagline" data-rc="copy"><span class="w">Turn</span><span class="w">conversations</span><span class="w">into</span><span class="w accent">customers.</span></div>
+    <div class="cta-row" id="cta"><button class="btn-primary">Get started</button><span class="url">wasi.sirahagents.com</span></div>
+    <div class="close-badges" id="cbadges"><span><i data-icon="shield-check"></i>Official Meta Cloud API</span><span><i data-icon="message-circle"></i>Shared team inbox</span><span><i data-icon="workflow"></i>No-code automation</span></div>
+  </section>
+
+  <div id="wipe"></div>
+  <div id="footnote">Product UI shown with illustrative data</div>
+  <div id="cutflash"></div>
+  <div id="endblack"></div>
+</div>
+
+<script src="gsap.min.js"></script>
+<script src="timing-data.js"></script>
+<script src="timeline.js"></script>
+</body>
+</html>

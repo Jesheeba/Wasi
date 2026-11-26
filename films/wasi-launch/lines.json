@@ -1,0 +1,14 @@
+[
+  { "id": "vo01", "scene": "s01", "text": "Right now, your customers are on WhatsApp. Asking about prices, orders, and appointments.", "sub": "Right now, your customers are on WhatsApp. Asking about prices, orders, and appointments." },
+  { "id": "vo02", "scene": "s01", "text": "Every message is a sale waiting to happen. But on one busy phone, most of them just wait.", "sub": "Every message is a sale waiting to happen. But on one busy phone, most of them just wait." },
+  { "id": "vo03", "scene": "s02", "text": "Today, that changes. Meet Wasi.", "sub": "Today, that changes. Meet Wasi." },
+  { "id": "vo04", "scene": "s03", "text": "Connect your own WhatsApp number in minutes, on Meta's official Cloud API. No paperwork. No middleman.", "sub": "Connect your own WhatsApp number in minutes, on Meta's official Cloud API. No paperwork. No middleman." },
+  { "id": "vo05", "scene": "s04", "text": "Your whole team answers from one shared inbox. Assign a chat, leave a private note, and reply in seconds.", "sub": "Your whole team answers from one shared inbox. Assign a chat, leave a private note, and reply in seconds." },
+  { "id": "vo06", "scene": "s05", "text": "Launch a campaign to your whole list in five simple steps. Then see exactly who it reached, who read it, and who didn't.", "sub": "Launch a campaign to your whole list in five simple steps. Then see exactly who it reached, who read it, and who didn't." },
+  { "id": "vo07", "scene": "s06", "text": "Write templates with live checks as you type, and preview the exact message your customer will see.", "sub": "Write templates with live checks as you type, and preview the exact message your customer will see." },
+  { "id": "vo08", "scene": "s07", "text": "When the day ends, automation takes over. Visual flows greet, ask questions, and capture answers. No code needed.", "sub": "When the day ends, automation takes over. Visual flows greet, ask questions, and capture answers. No code needed." },
+  { "id": "vo09", "scene": "s08", "text": "And Wasi plugs into the tools you already run, through a developer API, webhooks, and Zapier.", "sub": "And Wasi plugs into the tools you already run, through a developer API, webhooks, and Zapier." },
+  { "id": "vo10", "scene": "s09", "text": "Every conversation. Every campaign. Every customer. One place.", "sub": "Every conversation. Every campaign. Every customer. One place." },
+  { "id": "vo11", "scene": "s10", "text": "Wasi. Turn conversations into customers.", "sub": "Wasi. Turn conversations into customers." },
+  { "id": "vo12", "scene": "s10", "text": "Get started today, at wasi dot sirah agents dot com.", "sub": "Get started today at wasi.sirahagents.com" }
+]
